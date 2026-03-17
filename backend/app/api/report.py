@@ -952,10 +952,10 @@ def search_graph_tool():
                 "error": "请提供 graph_id 和 query"
             }), 400
         
-        from ..services.zep_tools import ZepToolsService
-        
-        tools = ZepToolsService()
-        result = tools.search_graph(
+        from ..services.memory_factory import get_memory_provider
+
+        provider = get_memory_provider()
+        result = provider.search_graph(
             graph_id=graph_id,
             query=query,
             limit=limit
@@ -996,10 +996,10 @@ def get_graph_statistics_tool():
                 "error": "请提供 graph_id"
             }), 400
         
-        from ..services.zep_tools import ZepToolsService
-        
-        tools = ZepToolsService()
-        result = tools.get_graph_statistics(graph_id)
+        from ..services.memory_factory import get_memory_provider
+
+        provider = get_memory_provider()
+        result = provider.get_graph_statistics(graph_id)
         
         return jsonify({
             "success": True,

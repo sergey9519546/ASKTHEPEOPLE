@@ -13,8 +13,11 @@ flask-cors>=6.0.0
 # OpenAI SDK（统一使用 OpenAI 格式调用 LLM）
 openai>=1.0.0
 
-# ============= Zep Cloud =============
+# ============= 记忆提供者 =============
+# Zep Cloud (默认)
 zep-cloud==3.13.0
+# Mem0 (可选: 仅 MEMORY_PROVIDER=mem0 时需要安装)
+# pip install mem0ai>=1.0.5
 
 # ============= OASIS 社交媒体模拟 =============
 # OASIS 社交模拟框架

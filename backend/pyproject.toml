@@ -35,6 +35,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mem0 = [
+    "mem0ai>=1.0.5",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",

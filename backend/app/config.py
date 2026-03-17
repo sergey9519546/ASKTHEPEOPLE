@@ -34,7 +34,11 @@ class Config:
     
     # Zep配置
     ZEP_API_KEY = os.environ.get('ZEP_API_KEY')
-    
+
+    # Memory Provider配置
+    MEMORY_PROVIDER = os.environ.get('MEMORY_PROVIDER', 'zep')  # 'zep' or 'mem0'
+    MEM0_API_KEY = os.environ.get('MEM0_API_KEY')
+
     # 文件上传配置
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '../uploads')
@@ -69,7 +73,9 @@ class Config:
         errors = []
         if not cls.LLM_API_KEY:
             errors.append("LLM_API_KEY 未配置")
-        if not cls.ZEP_API_KEY:
-            errors.append("ZEP_API_KEY 未配置")
+        if cls.MEMORY_PROVIDER == 'zep' and not cls.ZEP_API_KEY:
+            errors.append("ZEP_API_KEY 未配置 (MEMORY_PROVIDER=zep)")
+        if cls.MEMORY_PROVIDER == 'mem0' and not cls.MEM0_API_KEY and not os.environ.get('OPENAI_API_KEY'):
+            errors.append("MEM0_API_KEY 或 OPENAI_API_KEY 未配置 (MEMORY_PROVIDER=mem0)")
         return errors
 

@@ -122,10 +122,27 @@ LLM_API_KEY=your_api_key
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL_NAME=qwen-plus
 
-# Zep Cloud 配置
+# Zep Cloud 配置（默认记忆提供者）
 # 每月免费额度即可支撑简单使用：https://app.getzep.com/
 ZEP_API_KEY=your_zep_api_key
+
+# 或使用 Mem0 作为记忆提供者（可选）
+# MEMORY_PROVIDER=mem0
+# MEM0_API_KEY=your_mem0_api_key
 ```
+
+#### 记忆提供者配置
+
+MiroFish 支持两种记忆后端：
+
+| 提供者 | 配置 | 优势 |
+|--------|------|------|
+| **Zep Cloud**（默认） | `.env` 中设置 `ZEP_API_KEY` | 内置本体定义、时序事实 |
+| **Mem0** | `.env` 中设置 `MEMORY_PROVIDER=mem0` + `MEM0_API_KEY` | 可自托管、按Agent隔离、无节点上限 |
+
+使用 Mem0 替代 Zep：
+1. 在 `.env` 中设置 `MEMORY_PROVIDER=mem0`
+2. 设置 `MEM0_API_KEY`（Platform模式）或 `OPENAI_API_KEY`（OSS模式）
 
 #### 2. 安装依赖
 
