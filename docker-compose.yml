@@ -1,0 +1,14 @@
+services:
+  askthepeople:
+    image: ghcr.io/sergey9519546/askthepeople:latest
+    # Mirror image (use if pulling is slow)
+    # image: ghcr.nju.edu.cn/sergey9519546/askthepeople:latest
+    container_name: askthepeople
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+      - "5001:5001"
+    restart: unless-stopped
+    volumes:
+      - ./backend/uploads:/app/backend/uploads
