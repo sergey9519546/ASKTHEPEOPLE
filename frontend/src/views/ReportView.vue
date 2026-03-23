@@ -3,7 +3,7 @@
     <!-- Header -->
     <header class="app-header">
       <div class="header-left">
-        <div class="brand" @click="router.push('/')">ASKTHEPEOPLE</div>
+        <div class="brand" @click="router.push('/')">MiroFish</div>
       </div>
       
       <div class="header-center">
@@ -214,25 +214,35 @@ onMounted(() => {
 
 <style scoped>
 .main-view {
-  height: 100vh;
+  height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
-  background: #FFF;
+  background: var(--bau-bg);
   overflow: hidden;
-  font-family: 'Space Grotesk', 'Noto Sans SC', system-ui, sans-serif;
+  font-family: var(--font-sans);
+  color: var(--bau-black);
 }
 
 /* Header */
 .app-header {
   height: 60px;
-  border-bottom: 1px solid #EAEAEA;
+  border-bottom: 2px solid var(--bau-black);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 40px;
   background: #FFF;
   z-index: 100;
   position: relative;
+}
+
+.brand {
+  font-family: var(--font-mono);
+  font-weight: 900;
+  font-size: 1.2rem;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--bau-black);
 }
 
 .header-center {
@@ -241,19 +251,11 @@ onMounted(() => {
   transform: translateX(-50%);
 }
 
-.brand {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 1px;
-  cursor: pointer;
-}
-
 .view-switcher {
   display: flex;
-  background: #F5F5F5;
+  background: var(--bau-bg);
   padding: 4px;
-  border-radius: 6px;
+  border: 2px solid var(--bau-black);
   gap: 4px;
 }
 
@@ -261,71 +263,82 @@ onMounted(() => {
   border: none;
   background: transparent;
   padding: 6px 16px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #666;
-  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--bau-black);
   cursor: pointer;
-  transition: all 0.2s;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
 }
 
 .switch-btn.active {
-  background: #FFF;
-  color: #000;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  background: var(--bau-black);
+  color: #FFF;
+}
+
+.switch-btn:hover:not(.active) {
+  background: var(--bau-yellow);
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 20px;
 }
 
 .workflow-step {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
+  gap: 12px;
+  font-size: 0.85rem;
 }
 
 .step-num {
-  font-family: 'JetBrains Mono', monospace;
-  font-weight: 700;
-  color: #999;
+  font-family: var(--font-mono);
+  font-weight: 900;
+  color: var(--bau-red);
 }
 
 .step-name {
-  font-weight: 700;
-  color: #000;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .step-divider {
-  width: 1px;
-  height: 14px;
-  background-color: #E0E0E0;
+  width: 2px;
+  height: 20px;
+  background-color: var(--bau-black);
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  color: #666;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #CCC;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--bau-black);
+  background: #DDD;
 }
 
-.status-indicator.processing .dot { background: #FF9800; animation: pulse 1s infinite; }
-.status-indicator.completed .dot { background: #4CAF50; }
-.status-indicator.error .dot { background: #F44336; }
+.status-indicator.processing .dot {
+  background: var(--bau-red);
+  animation: pulse 1s infinite step-end;
+}
+.status-indicator.completed .dot {
+  background: var(--bau-blue);
+}
+.status-indicator.error .dot {
+  background: var(--bau-black);
+}
 
-@keyframes pulse { 50% { opacity: 0.5; } }
+@keyframes pulse { 50% { opacity: 0; } }
 
 /* Content */
 .content-area {
@@ -333,16 +346,22 @@ onMounted(() => {
   display: flex;
   position: relative;
   overflow: hidden;
+  padding: 20px;
+  gap: 20px;
 }
 
 .panel-wrapper {
   height: 100%;
+  background: #FFF;
+  border: 2px solid var(--bau-black);
   overflow: hidden;
-  transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease, transform 0.3s ease;
-  will-change: width, opacity, transform;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-.panel-wrapper.left {
-  border-right: 1px solid #EAEAEA;
+.panel-wrapper.left { border-right: 2px solid var(--bau-black); }
+
+@media (max-width: 1024px) {
+  .content-area { flex-direction: column; }
+  .panel-wrapper { width: 100% !important; height: 50% !important; }
 }
 </style>
