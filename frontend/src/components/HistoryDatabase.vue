@@ -779,7 +779,7 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.6rem;
   color: #6B7280;
-  background: rgba(255, 255, 255, 0.5);
+  background: #FFFFFF;
   border-radius: 3px;
   letter-spacing: 0.3px;
 }
@@ -789,13 +789,13 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
-  background: rgba(255, 255, 255, 0.7);
+  background: #FFFFFF;
   border-radius: 3px;
   transition: all 0.2s ease;
 }
 
 .file-item:hover {
-  background: rgba(255, 255, 255, 1);
+  background: #FFFFFF;
   transform: translateX(2px);
   border-color: #e5e7eb;
 }
@@ -1018,12 +1018,11 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  backdrop-filter: blur(4px);
 }
 
 .modal-content {
@@ -1102,8 +1101,8 @@ onUnmounted(() => {
   background: #F9FAFB;
 }
 
-.modal-progress.completed { color: #10B981; background: rgba(16, 185, 129, 0.1); }
-.modal-progress.in-progress { color: #F59E0B; background: rgba(245, 158, 11, 0.1); }
+.modal-progress.completed { color: #10B981; background: #FFFFFF; }
+.modal-progress.in-progress { color: #F59E0B; background: #FFFFFF; }
 .modal-progress.not-started { color: #9CA3AF; background: #F3F4F6; }
 
 .modal-create-time {

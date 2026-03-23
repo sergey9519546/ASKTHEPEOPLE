@@ -612,4 +612,3 @@ watch(() => props.systemLogs.length, () => {
 @keyframes spin { 100% { transform: rotate(360deg); } }
 </style>
 
-</style>

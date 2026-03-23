@@ -536,7 +536,7 @@ const toolConfig = {
   },
   'quick_search': {
     name: 'Quick Search',
-    color: 'orange',
+    color: 'blue',
     icon: 'zap' // 闪电图标 - 代表快速
   },
   'get_graph_statistics': {
@@ -3021,14 +3021,15 @@ watch(() => props.reportId, (newId) => {
   stroke: #16A34A;
 }
 
-/* Tool Colors - Orange (Quick Search) */
+/* Tool Colors - Blue (Quick Search) */
 .tool-badge.tool-orange {
-  background: linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%);
-  border-color: #FDBA74;
-  color: #C2410C;
+  background: var(--bauhaus-cream);
+  border-color: var(--bauhaus-blue);
+  color: var(--bauhaus-blue);
+  box-shadow: 2px 2px 0 var(--bauhaus-black);
 }
 .tool-badge.tool-orange .tool-icon {
-  stroke: #EA580C;
+  stroke: var(--bauhaus-blue);
 }
 
 /* Tool Colors - Cyan (Graph Stats) */

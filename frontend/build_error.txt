@@ -1,0 +1,22 @@
+
+> frontend@0.1.0 build
+> vite build
+
+[36mvite v7.2.7 [32mbuilding client environment for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 22 modules transformed.
+Γ£ù Build failed in 144ms
+error during build:
+[vite:vue] [plugin vite:vue] src/components/Step1GraphBuild.vue (615:1): Invalid end tag.
+file: C:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/components/Step1GraphBuild.vue:615:1
+SyntaxError: [plugin vite:vue] src/components/Step1GraphBuild.vue (615:1): Invalid end tag.
+    at createCompilerError (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1360:17)
+    at emitError (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2963:5)
+    at Object.onclosetag (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2370:9)
+    at Tokenizer.stateInClosingTagName (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:785:16)
+    at Tokenizer.parse (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1143:16)
+    at Object.baseParse (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2995:13)
+    at Object.parse (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-dom\dist\compiler-dom.cjs.prod.js:665:23)
+    at Object.parse$1 [as parse] (C:\Users\serge\OneDrive\Documents\GitHub\ASKTHEPEOPLE\frontend\node_modules\@vue\compiler-sfc\dist\compiler-sfc.cjs.js:1801:24)
+    at createDescriptor (file:///C:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:79:42)
+    at transformMain (file:///C:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/node_modules/@vitejs/plugin-vue/dist/index.mjs:1632:33)
