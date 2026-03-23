@@ -4,12 +4,16 @@
     <header class="workbench-header">
       <div class="header-left">
         <h1 class="workbench-title">STEP 4: INTERPRETATION & REPORT</h1>
-        <p class="workbench-subtitle">Synthesizing findings from {{ simulationId }}</p>
+        <p class="workbench-subtitle">
+          Synthesizing findings from {{ simulationId }}
+        </p>
       </div>
       <div class="header-right">
         <div class="status-indicator" :class="{ 'is-complete': isComplete }">
           <span class="status-dot"></span>
-          <span class="status-text">{{ isComplete ? 'COMPLETED' : 'GENERAING REPORT...' }}</span>
+          <span class="status-text">{{
+            isComplete ? "COMPLETED" : "GENERAING REPORT..."
+          }}</span>
         </div>
       </div>
     </header>
@@ -20,44 +24,63 @@
         <div class="panel-header">
           <h2 class="panel-title">REPORT CANVAS</h2>
           <div class="panel-actions">
-            <button class="action-btn" @click="goToInteraction" :disabled="!isComplete">
+            <button
+              class="action-btn"
+              @click="goToInteraction"
+              :disabled="!isComplete"
+            >
               GO TO INTERACTION
             </button>
           </div>
         </div>
 
         <div class="report-canvas">
-          <div v-if="!reportOutline && !generatedSections[1]" class="empty-report">
+          <div
+            v-if="!reportOutline && !generatedSections[1]"
+            class="empty-report"
+          >
             <div class="bauhaus-loader"></div>
             <p>Initializing analysis pipeline...</p>
           </div>
 
           <div v-else class="sections-list">
-            <div 
-              v-for="(section, idx) in (reportOutline || [])" 
+            <div
+              v-for="(section, idx) in reportOutline || []"
               :key="idx"
               class="report-section"
-              :class="{ 
+              :class="{
                 'is-generating': currentSectionIndex === idx + 1,
                 'is-complete': generatedSections[idx + 1],
-                'is-collapsed': collapsedSections.has(idx)
+                'is-collapsed': collapsedSections.has(idx),
               }"
             >
               <div class="section-header" @click="toggleSectionCollapse(idx)">
                 <span class="section-number">{{ idx + 1 }}</span>
                 <h3 class="section-title">{{ section }}</h3>
                 <div class="section-status">
-                  <span v-if="generatedSections[idx + 1]" class="status-label">DONE</span>
-                  <span v-else-if="currentSectionIndex === idx + 1" class="status-label pulse">WRITING</span>
+                  <span v-if="generatedSections[idx + 1]" class="status-label"
+                    >DONE</span
+                  >
+                  <span
+                    v-else-if="currentSectionIndex === idx + 1"
+                    class="status-label pulse"
+                    >WRITING</span
+                  >
                   <span v-else class="status-label pending">PENDING</span>
                 </div>
               </div>
 
               <div v-if="!collapsedSections.has(idx)" class="section-body">
                 <div v-if="generatedSections[idx + 1]" class="body-content">
-                  <div class="content-text" v-html="generatedSections[idx + 1]"></div>
+                  <div
+                    class="content-text"
+                    v-html="generatedSections[idx + 1]"
+                  ></div>
                 </div>
-                <div v-else-if="currentSectionIndex === idx + 1" class="writing-indicator">
+                <div
+                  v-else-if="currentSectionIndex === idx + 1"
+                  class="writing-indicator"
+                >
                   <div class="text-cursor"></div>
                   <p>Agent is synthesizing evidence...</p>
                 </div>
@@ -71,15 +94,15 @@
       <main class="evidence-panel" ref="rightPanel">
         <div class="panel-header">
           <nav class="evidence-tabs">
-            <button 
-              class="tab-btn" 
+            <button
+              class="tab-btn"
               :class="{ active: activeTab === 'workflow' }"
               @click="activeTab = 'workflow'"
             >
               WORKFLOW LOGS
             </button>
-            <button 
-              class="tab-btn" 
+            <button
+              class="tab-btn"
               :class="{ active: activeTab === 'reading' }"
               @click="activeTab = 'reading'"
             >
@@ -95,28 +118,46 @@
               <div class="empty-pulse"></div>
               <p>Waiting for agent signals...</p>
             </div>
-            
+
             <transition-group name="timeline-item">
-              <div 
-                v-for="(log, idx) in agentLogs" 
+              <div
+                v-for="(log, idx) in agentLogs"
                 :key="log.timestamp + idx"
                 class="timeline-item"
-                :class="[log.action, { 'is-expanded': expandedLogs.has(log.timestamp) }]"
+                :class="[
+                  log.action,
+                  { 'is-expanded': expandedLogs.has(log.timestamp) },
+                ]"
               >
                 <div class="item-marker">
-                  <div class="marker-dot" :class="getToolColor(log.tool_name)"></div>
+                  <div
+                    class="marker-dot"
+                    :class="getToolColor(log.tool_name)"
+                  ></div>
                   <div class="marker-line"></div>
                 </div>
 
                 <div class="item-content">
                   <div class="item-header" @click="toggleLogExpand(log)">
-                    <span class="item-time">{{ new Date(log.timestamp).toLocaleTimeString() }}</span>
+                    <span class="item-time">{{
+                      new Date(log.timestamp).toLocaleTimeString()
+                    }}</span>
                     <div class="item-action-badge" :class="log.action">
-                      {{ log.action.toUpperCase().replace('_', ' ') }}
+                      {{ log.action.toUpperCase().replace("_", " ") }}
                     </div>
-                    
-                    <div v-if="log.action === 'tool_call' || log.action === 'tool_result'" class="tool-badge" :class="'tool-' + getToolColor(log.tool_name)">
-                      <i :class="'icon-' + getToolIcon(log.tool_name)" class="tool-icon"></i>
+
+                    <div
+                      v-if="
+                        log.action === 'tool_call' ||
+                        log.action === 'tool_result'
+                      "
+                      class="tool-badge"
+                      :class="'tool-' + getToolColor(log.tool_name)"
+                    >
+                      <i
+                        :class="'icon-' + getToolIcon(log.tool_name)"
+                        class="tool-icon"
+                      ></i>
                       <span>{{ getToolDisplayName(log.tool_name) }}</span>
                     </div>
 
@@ -128,36 +169,58 @@
 
                   <div v-if="!isLogCollapsed(log)" class="item-details">
                     <!-- Tool Call Params -->
-                    <div v-if="log.action === 'tool_call' && log.params" class="tool-params">
-                      <pre>{{ typeof log.params === 'string' ? log.params : JSON.stringify(log.params, null, 2) }}</pre>
+                    <div
+                      v-if="log.action === 'tool_call' && log.params"
+                      class="tool-params"
+                    >
+                      <pre>{{
+                        typeof log.params === "string"
+                          ? log.params
+                          : JSON.stringify(log.params, null, 2)
+                      }}</pre>
                     </div>
 
                     <!-- Tool Result - Structured Display -->
-                    <div v-if="log.action === 'tool_result' && log.result" class="result-wrapper">
+                    <div
+                      v-if="log.action === 'tool_result' && log.result"
+                      class="result-wrapper"
+                    >
                       <!-- Deep Insight -->
-                      <InsightDisplay 
-                        v-if="log.tool_name === 'insight_forge' && log.structured_result" 
+                      <InsightDisplay
+                        v-if="
+                          log.tool_name === 'insight_forge' &&
+                          log.structured_result
+                        "
                         :result="log.structured_result"
                         :result-length="log.result.length"
                       />
-                      
+
                       <!-- Panorama Search -->
-                      <PanoramaDisplay 
-                        v-else-if="log.tool_name === 'panorama_search' && log.structured_result" 
+                      <PanoramaDisplay
+                        v-else-if="
+                          log.tool_name === 'panorama_search' &&
+                          log.structured_result
+                        "
                         :result="log.structured_result"
                         :result-length="log.result.length"
                       />
-                      
+
                       <!-- Agent Interview -->
-                      <InterviewDisplay 
-                        v-else-if="log.tool_name === 'interview_agents' && log.structured_result" 
+                      <InterviewDisplay
+                        v-else-if="
+                          log.tool_name === 'interview_agents' &&
+                          log.structured_result
+                        "
                         :result="log.structured_result"
                         :result-length="log.result.length"
                       />
 
                       <!-- Quick Search -->
-                      <QuickSearchDisplay 
-                        v-else-if="log.tool_name === 'quick_search' && log.structured_result" 
+                      <QuickSearchDisplay
+                        v-else-if="
+                          log.tool_name === 'quick_search' &&
+                          log.structured_result
+                        "
                         :result="log.structured_result"
                         :result-length="log.result.length"
                       />
@@ -166,12 +229,24 @@
                       <div v-else class="raw-result">
                         <div class="result-meta">
                           <span class="result-tool">{{ log.tool_name }}</span>
-                          <span class="result-size">{{ log.result.length }} chars</span>
-                          <button class="action-btn" @click="toggleRawResult(log.timestamp, $event)">
-                            {{ showRawResult[log.timestamp] ? 'HIDE RAW' : 'VIEW RAW' }}
+                          <span class="result-size"
+                            >{{ log.result.length }} chars</span
+                          >
+                          <button
+                            class="action-btn"
+                            @click="toggleRawResult(log.timestamp, $event)"
+                          >
+                            {{
+                              showRawResult[log.timestamp]
+                                ? "HIDE RAW"
+                                : "VIEW RAW"
+                            }}
                           </button>
                         </div>
-                        <div v-if="showRawResult[log.timestamp]" class="result-raw">
+                        <div
+                          v-if="showRawResult[log.timestamp]"
+                          class="result-raw"
+                        >
                           <pre>{{ log.result }}</pre>
                         </div>
                         <div v-else class="raw-preview">
@@ -181,14 +256,30 @@
                     </div>
 
                     <!-- LLM Response -->
-                    <div v-if="log.action === 'llm_response'" class="llm-response">
+                    <div
+                      v-if="log.action === 'llm_response'"
+                      class="llm-response"
+                    >
                       <div class="llm-meta">
-                        <span v-if="log.thinking" class="meta-tag active">ANALYZING</span>
-                        <span v-if="log.final_answer" class="meta-tag final-answer">READY</span>
+                        <span v-if="log.thinking" class="meta-tag active"
+                          >ANALYZING</span
+                        >
+                        <span
+                          v-if="log.final_answer"
+                          class="meta-tag final-answer"
+                          >READY</span
+                        >
                       </div>
                       <div v-if="log.final_answer" class="final-answer-hint">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M20 6L9 17l-5-5"/>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                        >
+                          <path d="M20 6L9 17l-5-5" />
                         </svg>
                         Report section synthesis ready
                       </div>
@@ -204,33 +295,41 @@
 
           <!-- Source Evidence Tab -->
           <div v-else-if="activeTab === 'reading'" class="evidence-list">
-             <div v-if="!reportId" class="evidence-empty">
-               <p>No report ID specified.</p>
-             </div>
-             <div v-else-if="!reportId" class="evidence-loading">
-               <div class="bauhaus-loader"></div>
-               <p>Retrieving source evidence...</p>
-             </div>
-             <div v-else-if="reportEvidenceError" class="evidence-error">
-               <p>{{ reportEvidenceError }}</p>
-             </div>
-             <div v-else-if="reportEvidence.length === 0" class="evidence-empty">
-               <p>No source evidence found.</p>
-             </div>
-             <div v-else class="evidence-grid">
-               <div v-for="(ev, idx) in reportEvidence" :key="idx" class="evidence-card bauhaus-card">
-                 <div class="card-header">
-                   <span class="evidence-type">{{ ev.type }}</span>
-                   <span class="evidence-ref">#{{ ev.id?.slice(-4) }}</span>
-                 </div>
-                 <div class="card-body">
-                   <p class="evidence-preview">{{ ev.content?.slice(0, 150) }}...</p>
-                 </div>
-                 <div class="card-footer">
-                   <span class="evidence-meta">RELIABILITY: {{ ev.reliability || 'HIGH' }}</span>
-                 </div>
-               </div>
-             </div>
+            <div v-if="!reportId" class="evidence-empty">
+              <p>No report ID specified.</p>
+            </div>
+            <div v-else-if="!reportId" class="evidence-loading">
+              <div class="bauhaus-loader"></div>
+              <p>Retrieving source evidence...</p>
+            </div>
+            <div v-else-if="reportEvidenceError" class="evidence-error">
+              <p>{{ reportEvidenceError }}</p>
+            </div>
+            <div v-else-if="reportEvidence.length === 0" class="evidence-empty">
+              <p>No source evidence found.</p>
+            </div>
+            <div v-else class="evidence-grid">
+              <div
+                v-for="(ev, idx) in reportEvidence"
+                :key="idx"
+                class="evidence-card bauhaus-card"
+              >
+                <div class="card-header">
+                  <span class="evidence-type">{{ ev.type }}</span>
+                  <span class="evidence-ref">#{{ ev.id?.slice(-4) }}</span>
+                </div>
+                <div class="card-body">
+                  <p class="evidence-preview">
+                    {{ ev.content?.slice(0, 150) }}...
+                  </p>
+                </div>
+                <div class="card-footer">
+                  <span class="evidence-meta"
+                    >RELIABILITY: {{ ev.reliability || "HIGH" }}</span
+                  >
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -242,7 +341,9 @@
           </div>
           <div class="log-content" ref="consoleLogContent">
             <div v-for="(log, idx) in consoleLogs" :key="idx" class="log-line">
-              <span class="log-timestamp">[{{ new Date(log.timestamp).toLocaleTimeString() }}]</span>
+              <span class="log-timestamp"
+                >[{{ new Date(log.timestamp).toLocaleTimeString() }}]</span
+              >
               <span class="log-msg" :class="log.type">{{ log.message }}</span>
             </div>
           </div>
@@ -253,238 +354,290 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, h, reactive } from 'vue'
-import { useRouter } from 'vue-router'
-import { getAgentLog, getConsoleLog, getReportEvidence } from '../api/report'
+import { h, onMounted, onUnmounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
+import { getAgentLog, getConsoleLog, getReportEvidence } from "../api/report";
 
-const router = useRouter()
+const router = useRouter();
 
 const props = defineProps({
   reportId: String,
   simulationId: String,
-  systemLogs: Array
-})
+  systemLogs: Array,
+});
 
-const emit = defineEmits(['add-log', 'update-status'])
+const emit = defineEmits(["add-log", "update-status"]);
 
 // State
-const agentLogs = ref([])
-const consoleLogs = ref([])
-const agentLogLine = ref(0)
-const consoleLogLine = ref(0)
-const reportOutline = ref(null)
-const generatedSections = ref({})
-const currentSectionIndex = ref(null)
-const isComplete = ref(false)
-const isLoading = ref(false)
+const agentLogs = ref([]);
+const consoleLogs = ref([]);
+const agentLogLine = ref(0);
+const consoleLogLine = ref(0);
+const reportOutline = ref(null);
+const generatedSections = ref({});
+const currentSectionIndex = ref(null);
+const isComplete = ref(false);
+const isLoading = ref(false);
 
-const activeTab = ref('workflow')
-const expandedLogs = ref(new Set())
-const collapsedSections = ref(new Set())
-const reportEvidence = ref([])
-const reportEvidenceError = ref('')
-const showRawResult = reactive({})
+const activeTab = ref("workflow");
+const expandedLogs = ref(new Set());
+const collapsedSections = ref(new Set());
+const reportEvidence = ref([]);
+const reportEvidenceError = ref("");
+const showRawResult = reactive({});
 
-const leftPanel = ref(null)
-const rightPanel = ref(null)
+const leftPanel = ref(null);
+const rightPanel = ref(null);
 
 // Navigation
 const goToInteraction = () => {
   if (props.reportId) {
-    router.push({ name: 'Interaction', params: { reportId: props.reportId } })
+    router.push({ name: "Interaction", params: { reportId: props.reportId } });
   }
-}
+};
 
 // Parser Functions
 const parseInsightForge = (text) => {
-  const result = { query: '', simulationRequirement: '', stats: { facts: 0, entities: 0, relationships: 0 }, subQueries: [], facts: [], entities: [], relations: [] }
+  const result = {
+    query: "",
+    simulationRequirement: "",
+    stats: { facts: 0, entities: 0, relationships: 0 },
+    subQueries: [],
+    facts: [],
+    entities: [],
+    relations: [],
+  };
   try {
-    const queryMatch = text.match(/分析问题:\s*(.+?)(?:\n|$)/) || text.match(/Question:\s*(.+?)(?:\n|$)/)
-    if (queryMatch) result.query = queryMatch[1].trim()
-    const reqMatch = text.match(/预测场景:\s*(.+?)(?:\n|$)/) || text.match(/Scenario:\s*(.+?)(?:\n|$)/)
-    if (reqMatch) result.simulationRequirement = reqMatch[1].trim()
-    const factMatch = text.match(/事实:\s*(\d+)/) || text.match(/Facts:\s*(\d+)/)
-    if (factMatch) result.stats.facts = parseInt(factMatch[1])
-  } catch (e) { console.warn('Parse insight_forge failed:', e) }
-  return result
-}
+    const queryMatch = text.match(/Question:\s*(.+?)(?:\n|$)/);
+    if (queryMatch) result.query = queryMatch[1].trim();
+    const reqMatch = text.match(/Scenario:\s*(.+?)(?:\n|$)/);
+    if (reqMatch) result.simulationRequirement = reqMatch[1].trim();
+    const factMatch = text.match(/Facts:\s*(\d+)/);
+    if (factMatch) result.stats.facts = parseInt(factMatch[1]);
+  } catch (e) {
+    console.warn("Parse insight_forge failed:", e);
+  }
+  return result;
+};
 
 const parsePanorama = (text) => {
-  const result = { query: '', stats: { nodes: 0, edges: 0, activeFacts: 0, historicalFacts: 0 }, activeFacts: [], historicalFacts: [], entities: [] }
+  const result = {
+    query: "",
+    stats: { nodes: 0, edges: 0, activeFacts: 0, historicalFacts: 0 },
+    activeFacts: [],
+    historicalFacts: [],
+    entities: [],
+  };
   try {
-    const queryMatch = text.match(/查询:\s*(.+?)(?:\n|$)/) || text.match(/Query:\s*(.+?)(?:\n|$)/)
-    if (queryMatch) result.query = queryMatch[1].trim()
-  } catch (e) { console.warn('Parse panorama failed:', e) }
-  return result
-}
+    const queryMatch = text.match(/Query:\s*(.+?)(?:\n|$)/);
+    if (queryMatch) result.query = queryMatch[1].trim();
+  } catch (e) {
+    console.warn("Parse panorama failed:", e);
+  }
+  return result;
+};
 
 const parseInterview = (text) => {
-  const result = { topic: '', agentCount: '', successCount: 0, totalCount: 0, selectionReason: '', interviews: [], summary: '' }
+  const result = {
+    topic: "",
+    agentCount: "",
+    successCount: 0,
+    totalCount: 0,
+    selectionReason: "",
+    interviews: [],
+    summary: "",
+  };
   try {
-    const topicMatch = text.match(/\*\*采访主题:\*\*\s*(.+?)(?:\n|$)/) || text.match(/\*\*Topic:\*\*\s*(.+?)(?:\n|$)/)
-    if (topicMatch) result.topic = topicMatch[1].trim()
-  } catch (e) { console.warn('Parse interview failed:', e) }
-  return result
-}
+    const topicMatch = text.match(/\*\*Topic:\*\*\s*(.+?)(?:\n|$)/);
+    if (topicMatch) result.topic = topicMatch[1].trim();
+  } catch (e) {
+    console.warn("Parse interview failed:", e);
+  }
+  return result;
+};
 
 const parseQuickSearch = (text) => {
-  const result = { query: '', count: 0, facts: [], edges: [], nodes: [] }
+  const result = { query: "", count: 0, facts: [], edges: [], nodes: [] };
   try {
-    const queryMatch = text.match(/搜索查询:\s*(.+?)(?:\n|$)/) || text.match(/Search Query:\s*(.+?)(?:\n|$)/)
-    if (queryMatch) result.query = queryMatch[1].trim()
-  } catch (e) { console.warn('Parse quick_search failed:', e) }
-  return result
-}
+    const queryMatch = text.match(/Search Query:\s*(.+?)(?:\n|$)/);
+    if (queryMatch) result.query = queryMatch[1].trim();
+  } catch (e) {
+    console.warn("Parse quick_search failed:", e);
+  }
+  return result;
+};
 
 // ========== Sub Components ==========
 const InsightDisplay = {
-  props: ['result', 'resultLength'],
+  props: ["result", "resultLength"],
   setup(props) {
-    return () => h('div', { class: 'insight-display bauhaus-sub' }, [
-      h('div', { class: 'sub-header' }, 'DEEP INSIGHT'),
-      h('div', { class: 'sub-body' }, [
-        h('p', props.result.query),
-        h('div', { class: 'sub-stats' }, `FACTS: ${props.result.stats.facts}`)
-      ])
-    ])
-  }
-}
+    return () =>
+      h("div", { class: "insight-display bauhaus-sub" }, [
+        h("div", { class: "sub-header" }, "DEEP INSIGHT"),
+        h("div", { class: "sub-body" }, [
+          h("p", props.result.query),
+          h(
+            "div",
+            { class: "sub-stats" },
+            `FACTS: ${props.result.stats.facts}`,
+          ),
+        ]),
+      ]);
+  },
+};
 
 const PanoramaDisplay = {
-  props: ['result', 'resultLength'],
+  props: ["result", "resultLength"],
   setup(props) {
-    return () => h('div', { class: 'panorama-display bauhaus-sub' }, [
-      h('div', { class: 'sub-header' }, 'PANORAMA SEARCH'),
-      h('div', { class: 'sub-body' }, h('p', props.result.query))
-    ])
-  }
-}
+    return () =>
+      h("div", { class: "panorama-display bauhaus-sub" }, [
+        h("div", { class: "sub-header" }, "PANORAMA SEARCH"),
+        h("div", { class: "sub-body" }, h("p", props.result.query)),
+      ]);
+  },
+};
 
 const InterviewDisplay = {
-  props: ['result', 'resultLength'],
+  props: ["result", "resultLength"],
   setup(props) {
-    return () => h('div', { class: 'interview-display bauhaus-sub' }, [
-      h('div', { class: 'sub-header' }, 'AGENT INTERVIEW'),
-      h('div', { class: 'sub-body' }, h('p', props.result.topic))
-    ])
-  }
-}
+    return () =>
+      h("div", { class: "interview-display bauhaus-sub" }, [
+        h("div", { class: "sub-header" }, "AGENT INTERVIEW"),
+        h("div", { class: "sub-body" }, h("p", props.result.topic)),
+      ]);
+  },
+};
 
 const QuickSearchDisplay = {
-  props: ['result', 'resultLength'],
+  props: ["result", "resultLength"],
   setup(props) {
-    return () => h('div', { class: 'quick-search-display bauhaus-sub' }, [
-      h('div', { class: 'sub-header' }, 'QUICK SEARCH'),
-      h('div', { class: 'sub-body' }, h('p', props.result.query))
-    ])
-  }
-}
+    return () =>
+      h("div", { class: "quick-search-display bauhaus-sub" }, [
+        h("div", { class: "sub-header" }, "QUICK SEARCH"),
+        h("div", { class: "sub-body" }, h("p", props.result.query)),
+      ]);
+  },
+};
 
 // Logic
 const toolConfig = {
-  'insight_forge': { name: 'Deep Insight', color: 'blue', icon: 'lightbulb' },
-  'panorama_search': { name: 'Panorama', color: 'blue', icon: 'globe' },
-  'interview_agents': { name: 'Interview', color: 'blue', icon: 'users' },
-  'quick_search': { name: 'Search', color: 'blue', icon: 'zap' }
-}
+  insight_forge: { name: "Deep Insight", color: "blue", icon: "lightbulb" },
+  panorama_search: { name: "Panorama", color: "blue", icon: "globe" },
+  interview_agents: { name: "Interview", color: "blue", icon: "users" },
+  quick_search: { name: "Search", color: "blue", icon: "zap" },
+};
 
-const getToolDisplayName = (n) => toolConfig[n]?.name || n
-const getToolColor = (n) => toolConfig[n]?.color || 'black'
-const getToolIcon = (n) => toolConfig[n]?.icon || 'tool'
+const getToolDisplayName = (n) => toolConfig[n]?.name || n;
+const getToolColor = (n) => toolConfig[n]?.color || "black";
+const getToolIcon = (n) => toolConfig[n]?.icon || "tool";
 
 const toggleRawResult = (ts, ev) => {
-  showRawResult[ts] = !showRawResult[ts]
-}
+  showRawResult[ts] = !showRawResult[ts];
+};
 
 const toggleSectionCollapse = (idx) => {
-  const s = new Set(collapsedSections.value)
-  if (s.has(idx)) s.delete(idx)
-  else s.add(idx)
-  collapsedSections.value = s
-}
+  const s = new Set(collapsedSections.value);
+  if (s.has(idx)) s.delete(idx);
+  else s.add(idx);
+  collapsedSections.value = s;
+};
 
 const toggleLogExpand = (log) => {
-  const s = new Set(expandedLogs.value)
-  if (s.has(log.timestamp)) s.delete(log.timestamp)
-  else s.add(log.timestamp)
-  expandedLogs.value = s
-}
+  const s = new Set(expandedLogs.value);
+  if (s.has(log.timestamp)) s.delete(log.timestamp);
+  else s.add(log.timestamp);
+  expandedLogs.value = s;
+};
 
 const isLogCollapsed = (log) => {
-  if (['tool_call', 'tool_result', 'llm_response'].includes(log.action)) {
-    return !expandedLogs.value.has(log.timestamp)
+  if (["tool_call", "tool_result", "llm_response"].includes(log.action)) {
+    return !expandedLogs.value.has(log.timestamp);
   }
-  return false
-}
+  return false;
+};
 
 // Fetching
-let timer = null
+let timer = null;
 const fetchLogs = async () => {
-  if (!props.reportId) return
+  if (!props.reportId) return;
   try {
-    const res = await getAgentLog(props.reportId, agentLogLine.value)
+    const res = await getAgentLog(props.reportId, agentLogLine.value);
     if (res.data && res.data.length > 0) {
-      const newLogs = res.data.map(log => {
-        let structured = null
-        if (log.action === 'tool_result') {
-          if (log.tool_name === 'insight_forge') structured = parseInsightForge(log.result)
-          else if (log.tool_name === 'panorama_search') structured = parsePanorama(log.result)
-          else if (log.tool_name === 'interview_agents') structured = parseInterview(log.result)
-          else if (log.tool_name === 'quick_search') structured = parseQuickSearch(log.result)
+      const newLogs = res.data.map((log) => {
+        let structured = null;
+        if (log.action === "tool_result") {
+          if (log.tool_name === "insight_forge")
+            structured = parseInsightForge(log.result);
+          else if (log.tool_name === "panorama_search")
+            structured = parsePanorama(log.result);
+          else if (log.tool_name === "interview_agents")
+            structured = parseInterview(log.result);
+          else if (log.tool_name === "quick_search")
+            structured = parseQuickSearch(log.result);
         }
-        
+
         // Handle Report Synthesis
-        if (log.action === 'llm_response' && log.final_answer) {
-          const sectionMatch = log.content.match(/REPORT_SECTION_(\d+)/)
+        if (log.action === "llm_response" && log.final_answer) {
+          const sectionMatch = log.content.match(/REPORT_SECTION_(\d+)/);
           if (sectionMatch) {
-            const num = parseInt(sectionMatch[1])
-            generatedSections.value[num] = log.content.replace(/REPORT_SECTION_\d+:\s*/, '')
+            const num = parseInt(sectionMatch[1]);
+            generatedSections.value[num] = log.content.replace(
+              /REPORT_SECTION_\d+:\s*/,
+              "",
+            );
           }
         }
 
-        return { ...log, structured_result: structured }
-      })
-      agentLogs.value = [...agentLogs.value, ...newLogs]
-      agentLogLine.value += res.data.length
+        return { ...log, structured_result: structured };
+      });
+      agentLogs.value = [...agentLogs.value, ...newLogs];
+      agentLogLine.value += res.data.length;
     }
 
-    const consoleRes = await getConsoleLog(props.reportId, consoleLogLine.value)
+    const consoleRes = await getConsoleLog(
+      props.reportId,
+      consoleLogLine.value,
+    );
     if (consoleRes.data && consoleRes.data.length > 0) {
-      consoleLogs.value = [...consoleLogs.value, ...consoleRes.data]
-      consoleLogLine.value += consoleRes.data.length
+      consoleLogs.value = [...consoleLogs.value, ...consoleRes.data];
+      consoleLogLine.value += consoleRes.data.length;
     }
 
     // Check completion
-    const lastLog = agentLogs.value[agentLogs.value.length - 1]
-    if (lastLog?.action === 'status_update' && lastLog.status === 'completed') {
-      isComplete.value = true
-      clearInterval(timer)
+    const lastLog = agentLogs.value[agentLogs.value.length - 1];
+    if (lastLog?.action === "status_update" && lastLog.status === "completed") {
+      isComplete.value = true;
+      clearInterval(timer);
     }
-  } catch (e) { console.error(e) }
-}
+  } catch (e) {
+    console.error(e);
+  }
+};
 
 onMounted(() => {
-  timer = setInterval(fetchLogs, 3000)
-  fetchLogs()
+  timer = setInterval(fetchLogs, 3000);
+  fetchLogs();
   if (props.reportId) {
-    getReportEvidence(props.reportId).then(res => {
-      reportEvidence.value = res.data || []
-    }).catch(e => reportEvidenceError.value = 'Failed to load evidence')
+    getReportEvidence(props.reportId)
+      .then((res) => {
+        reportEvidence.value = res.data || [];
+      })
+      .catch((e) => (reportEvidenceError.value = "Failed to load evidence"));
   }
-})
+});
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
-})
+  if (timer) clearInterval(timer);
+});
 </script>
 
 <style scoped>
 :root {
   --atp-black: #000000;
-  --atp-white: #FFFFFF;
-  --atp-blue: #0026FE;
-  --atp-red: #FF331F;
-  --atp-yellow: #E5FF00;
+  --atp-white: #ffffff;
+  --atp-blue: #0026fe;
+  --atp-red: #ff331f;
+  --atp-yellow: #e5ff00;
 }
 
 .step4-report-workbench {
@@ -493,7 +646,7 @@ onUnmounted(() => {
   flex-direction: column;
   background: var(--atp-white);
   color: var(--atp-black);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   overflow: hidden;
 }
 
@@ -667,7 +820,7 @@ onUnmounted(() => {
 }
 
 .item-time {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 10px;
   font-weight: 600;
 }
@@ -684,7 +837,7 @@ onUnmounted(() => {
 .item-details {
   border: 3px solid var(--atp-black);
   padding: 12px;
-  background: #F0F0F0;
+  background: #f0f0f0;
 }
 
 .bauhaus-sub {
@@ -710,7 +863,7 @@ onUnmounted(() => {
   background: var(--atp-black);
   color: var(--atp-white);
   padding: 15px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
 }
 
 .log-line {
@@ -733,7 +886,9 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .action-btn {

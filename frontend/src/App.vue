@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-// 使用 Vue Router 来管理页面
+// Use Vue Router to manage navigation
 </script>
 
 <style>
@@ -39,7 +39,7 @@
   --gap: 24px;
 }
 
-/* 全局样式重置 */
+/* Global Style Reset */
 * {
   margin: 0;
   padding: 0;

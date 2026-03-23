@@ -826,6 +826,10 @@ IMPORTANT:
         """
         Batch generate Agent Profiles from entities (supports parallel generation)
         
+        Supports checkpointing: if generation is interrupted, previously completed
+        profiles are loaded from a checkpoint file on the next run, avoiding
+        redundant LLM calls.
+        
         Args:
             entities: Entity list
             use_llm: Whether to use LLM for detailed persona generation
@@ -839,6 +843,7 @@ IMPORTANT:
             List of Agent Profiles
         """
         import concurrent.futures
+        import os
         from threading import Lock
         
         # Set graph_id for Zep retrieval
@@ -849,6 +854,62 @@ IMPORTANT:
         profiles = [None] * total  # Pre-allocate list to maintain order
         completed_count = [0]  # Use list for modification in closure
         lock = Lock()
+        
+        # ---- Checkpoint support ----
+        checkpoint_path = None
+        if realtime_output_path:
+            checkpoint_dir = os.path.dirname(realtime_output_path)
+            checkpoint_path = os.path.join(checkpoint_dir, ".profiles_checkpoint.json")
+        
+        # Load checkpoint if exists
+        skipped_indices = set()
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            try:
+                with open(checkpoint_path, 'r', encoding='utf-8') as f:
+                    checkpoint_data = json.load(f)
+                for entry in checkpoint_data:
+                    idx = entry.get("user_id")
+                    if idx is not None and idx < total:
+                        profiles[idx] = OasisAgentProfile(
+                            user_id=entry.get("user_id", idx),
+                            user_name=entry.get("user_name", ""),
+                            name=entry.get("name", ""),
+                            bio=entry.get("bio", ""),
+                            persona=entry.get("persona", ""),
+                            karma=entry.get("karma", 1000),
+                            friend_count=entry.get("friend_count", 100),
+                            follower_count=entry.get("follower_count", 150),
+                            statuses_count=entry.get("statuses_count", 500),
+                            age=entry.get("age"),
+                            gender=entry.get("gender"),
+                            mbti=entry.get("mbti"),
+                            country=entry.get("country"),
+                            profession=entry.get("profession"),
+                            interested_topics=entry.get("interested_topics", []),
+                            source_entity_uuid=entry.get("source_entity_uuid"),
+                            source_entity_type=entry.get("source_entity_type"),
+                        )
+                        skipped_indices.add(idx)
+                        completed_count[0] += 1
+                if skipped_indices:
+                    logger.info(f"Checkpoint loaded: {len(skipped_indices)}/{total} profiles restored, resuming remaining")
+            except Exception as e:
+                logger.warning(f"Failed to load checkpoint, starting fresh: {e}")
+                skipped_indices.clear()
+                completed_count[0] = 0
+                profiles = [None] * total
+        
+        def save_checkpoint():
+            """Save completed profiles to checkpoint file"""
+            if not checkpoint_path:
+                return
+            with lock:
+                existing = [p.to_dict() for p in profiles if p is not None]
+            try:
+                with open(checkpoint_path, 'w', encoding='utf-8') as f:
+                    json.dump(existing, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning(f"Failed to write checkpoint: {e}")
         
         # Real-time save helper function
         def save_profiles_realtime():
@@ -916,12 +977,21 @@ IMPORTANT:
         print(f"Generating Agent personas - {total} entities total, parallel: {parallel_count}")
         print(f"{'='*60}\n")
         
+        # Filter out already-checkpointed entities
+        entities_to_process = [
+            (idx, entity) for idx, entity in enumerate(entities)
+            if idx not in skipped_indices
+        ]
+        
+        if skipped_indices:
+            print(f"  Checkpoint: {len(skipped_indices)} profiles restored, {len(entities_to_process)} remaining")
+        
         # Parallel execution using thread pool
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_count) as executor:
-            # Submit all tasks
+            # Submit only non-checkpointed tasks
             future_to_entity = {
                 executor.submit(generate_single_profile, idx, entity): (idx, entity)
-                for idx, entity in enumerate(entities)
+                for idx, entity in entities_to_process
             }
             
             # Collect results
@@ -937,8 +1007,9 @@ IMPORTANT:
                         completed_count[0] += 1
                         current = completed_count[0]
                     
-                    # Write file in real-time
+                    # Write file in real-time and save checkpoint
                     save_profiles_realtime()
+                    save_checkpoint()
                     
                     if progress_callback:
                         progress_callback(
@@ -965,12 +1036,21 @@ IMPORTANT:
                         source_entity_uuid=entity.uuid,
                         source_entity_type=entity_type,
                     )
-                    # Write file in real-time (even for fallback)
+                    # Write file in real-time (even for fallback) and save checkpoint
                     save_profiles_realtime()
+                    save_checkpoint()
         
         print(f"\n{'='*60}")
         print(f"Persona generation completed! Total {len([p for p in profiles if p])} Agents generated")
         print(f"{'='*60}\n")
+        
+        # Clean up checkpoint on successful completion
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            try:
+                os.remove(checkpoint_path)
+                logger.debug("Checkpoint file cleaned up after successful completion")
+            except Exception:
+                pass
         
         return profiles
     
