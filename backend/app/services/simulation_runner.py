@@ -124,7 +124,7 @@ class SimulationRunState:
     twitter_actions_count: int = 0
     reddit_actions_count: int = 0
     
-    # Platform completion status (detected via simulation_end event in actions.jsonl)
+    # Platform completion status (via simulation_end event in actions.jsonl)
     twitter_completed: bool = False
     reddit_completed: bool = False
     
@@ -218,13 +218,13 @@ class SimulationRunner:
         '../../scripts'
     )
     
-    # In-memory run states
+    # In-memory run state
     _run_states: Dict[str, SimulationRunState] = {}
     _processes: Dict[str, subprocess.Popen] = {}
     _action_queues: Dict[str, Queue] = {}
     _monitor_threads: Dict[str, threading.Thread] = {}
-    _stdout_files: Dict[str, Any] = {}  # Stores stdout file handles
-    _stderr_files: Dict[str, Any] = {}  # Stores stderr file handles
+    _stdout_files: Dict[str, Any] = {}  # stdout file handles
+    _stderr_files: Dict[str, Any] = {}  # stderr file handles
     
     # Graph memory update configuration
     _graph_memory_enabled: Dict[str, bool] = {}  # simulation_id -> enabled
@@ -448,28 +448,27 @@ class SimulationRunner:
             if max_rounds is not None and max_rounds > 0:
                 cmd.extend(["--max-rounds", str(max_rounds)])
             
-            # Create main log file to prevent stdout/stderr pipe buffer from blocking process
+            # Create main log file (prevents stdout/stderr blocking)
             main_log_path = os.path.join(sim_dir, "simulation.log")
             main_log_file = open(main_log_path, 'w', encoding='utf-8')
             
-            # Set subprocess environment variables to ensure UTF-8 encoding on Windows
-            # This fixes issues where third-party libraries (like OASIS) read files without specifying encoding
+            # Set child process env for UTF-8 on Windows
             env = os.environ.copy()
-            env['PYTHONUTF8'] = '1'  # Python 3.7+ support, makes all open() default to UTF-8
+            env['PYTHONUTF8'] = '1'  # Python 3.7+ support
             env['PYTHONIOENCODING'] = 'utf-8'  # Ensure stdout/stderr use UTF-8
             
-            # Set working directory to simulation directory (database files will be generated here)
-            # Use start_new_session=True to create a new process group, ensuring all child processes can be terminated via os.killpg
+            # Set working dir to simulation dir
+            # start_new_session=True to ensure process group termination
             process = subprocess.Popen(
                 cmd,
                 cwd=sim_dir,
                 stdout=main_log_file,
-                stderr=subprocess.STDOUT,  # stderr also written to the same file
+                stderr=subprocess.STDOUT,  # stderr to same file
                 text=True,
                 encoding='utf-8',  # Explicitly specify encoding
                 bufsize=1,
-                env=env,  # Pass environment variables with UTF-8 settings
-                start_new_session=True,  # Create new process group to ensure all related processes are terminated when server closes
+                env=env,
+                start_new_session=True,  # New session for termination
             )
             
             # Save file handles for later closing
@@ -551,16 +550,16 @@ class SimulationRunner:
                 logger.info(f"Simulation completed: {simulation_id}")
             else:
                 state.runner_status = RunnerStatus.FAILED
-                # Read error message from main log file
+                # Read error from main log
                 main_log_path = os.path.join(sim_dir, "simulation.log")
                 error_info = ""
                 try:
                     if os.path.exists(main_log_path):
                         with open(main_log_path, 'r', encoding='utf-8') as f:
-                            error_info = f.read()[-2000:]  # Get last 2000 characters
+                            error_info = f.read()[-2000:]  # Last 2000 chars
                 except Exception:
                     pass
-                state.error = f"Process exit code: {exit_code}, Error: {error_info}"
+                state.error = f"Exit code: {exit_code}, error: {error_info}"
                 logger.error(f"Simulation failed: {simulation_id}, error={state.error}")
             
             state.twitter_running = False
@@ -615,6 +614,138 @@ class SimulationRunner:
         logger.info(f"Simulation stopped: {simulation_id}")
         return state
     
+    @classmethod
+    def _read_action_log(
+        cls, 
+        log_path: str, 
+        position: int, 
+        state: SimulationRunState,
+        platform: str
+    ) -> int:
+        """
+        Read action log file
+        
+        Args:
+            log_path: Log file path
+            position: Last read position
+            state: Run state object
+            platform: Platform name (twitter/reddit)
+            
+        Returns:
+            New read position
+        """
+        if not os.path.exists(log_path):
+            return position
+        
+        with open(log_path, 'r', encoding='utf-8') as f:
+            f.seek(position)
+            
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    action_data = json.loads(line)
+                    
+                    # Handle event entries
+                    if "event_type" in action_data:
+                        event_type = action_data.get("event_type")
+                        
+                        # Detect simulation_end, mark platform completed
+                        if event_type == "simulation_end":
+                            if platform == "twitter":
+                                state.twitter_completed = True
+                                state.twitter_running = False
+                                logger.info(f"Twitter simulation completed: {state.simulation_id}, total_rounds={action_data.get('total_rounds')}, total_actions={action_data.get('total_actions')}")
+                            elif platform == "reddit":
+                                state.reddit_completed = True
+                                state.reddit_running = False
+                                logger.info(f"Reddit simulation completed: {state.simulation_id}, total_rounds={action_data.get('total_rounds')}, total_actions={action_data.get('total_actions')}")
+                            
+                            # Check if all enabled platforms completed
+                            all_completed = cls._check_all_platforms_completed(state)
+                            if all_completed:
+                                state.runner_status = RunnerStatus.COMPLETED
+                                state.completed_at = datetime.now().isoformat()
+                                logger.info(f"All platform simulations completed: {state.simulation_id}")
+                        
+                        # Update round info (from round_end event)
+                        elif event_type == "round_end":
+                            round_num = action_data.get("round", 0)
+                            simulated_hours = action_data.get("simulated_hours", 0)
+                            
+                            # Update per-platform rounds/time
+                            if platform == "twitter":
+                                if round_num > state.twitter_current_round:
+                                    state.twitter_current_round = round_num
+                                state.twitter_simulated_hours = simulated_hours
+                            elif platform == "reddit":
+                                if round_num > state.reddit_current_round:
+                                    state.reddit_current_round = round_num
+                                state.reddit_simulated_hours = simulated_hours
+                            
+                            # Overall round is max of platforms
+                            if round_num > state.current_round:
+                                state.current_round = round_num
+                            # Overall time is max of platforms
+                            state.simulated_hours = max(state.twitter_simulated_hours, state.reddit_simulated_hours)
+                        
+                        continue # Skip event entries for action processing
+                    
+                    # Skip records without agent_id (non-Agent actions)
+                    if "agent_id" not in action_data:
+                        continue
+                    
+                    action = AgentAction(
+                        round_num=action_data.get("round", 0),
+                        timestamp=action_data.get("timestamp", ""),
+                        platform=platform,
+                        agent_id=action_data.get("agent_id", 0),
+                        agent_name=action_data.get("agent_name", ""),
+                        action_type=action_data.get("action_type", ""),
+                        action_args=action_data.get("action_args", {}),
+                        result=action_data.get("result"),
+                        success=action_data.get("success", True),
+                    )
+                    state.add_action(action)
+                    
+                    # Update graph memory
+                    if cls._graph_memory_enabled.get(state.simulation_id, False):
+                        ZepGraphMemoryManager.update_memory(state.simulation_id, action)
+                    
+                except json.JSONDecodeError as e:
+                    logger.warning(f"Failed to parse action log line: {line}, error: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing action log line: {line}, error: {e}")
+            
+            position = f.tell()
+        return position
+    
+    @classmethod
+    def _check_all_platforms_completed(cls, state: SimulationRunState) -> bool:
+        """
+        Check if all enabled platforms have completed
+        
+        Detects enabled platforms by checking for actions.jsonl presence.
+        
+        Returns:
+            True if all enabled platforms completed
+        """
+        sim_dir = os.path.join(cls.RUN_STATE_DIR, state.simulation_id)
+        
+        twitter_log_exists = os.path.exists(os.path.join(sim_dir, "twitter", "actions.jsonl"))
+        reddit_log_exists = os.path.exists(os.path.join(sim_dir, "reddit", "actions.jsonl"))
+        
+        all_completed = True
+        
+        if twitter_log_exists and not state.twitter_completed:
+            all_completed = False
+        if reddit_log_exists and not state.reddit_completed:
+            all_completed = False
+            
+        return all_completed
+
     @classmethod
     def _read_actions_from_file(
         cls,
@@ -977,6 +1108,61 @@ class SimulationRunner:
     # Flag to prevent duplicate cleanup
     _cleanup_done = False
     
+    @classmethod
+    def _terminate_process(cls, process: subprocess.Popen, simulation_id: str, timeout: int = 10):
+        """
+        Cross-platform termination of process and children
+        
+        Args:
+            process: Process to terminate
+            simulation_id: Simulation ID
+            timeout: Timeout to wait for exit
+        """
+        if IS_WINDOWS:
+            # Windows: use taskkill to terminate process tree
+            # /F = Force, /T = Tree
+            logger.info(f"Terminating process tree (Windows): simulation={simulation_id}, pid={process.pid}")
+            try:
+                # Try graceful termination first
+                subprocess.run(
+                    ['taskkill', '/PID', str(process.pid), '/T'],
+                    capture_output=True,
+                    timeout=5
+                )
+                try:
+                    process.wait(timeout=timeout)
+                except subprocess.TimeoutExpired:
+                    # Force termination
+                    logger.warning(f"Process unresponsive, force terminating: {simulation_id}")
+                    subprocess.run(
+                        ['taskkill', '/F', '/PID', str(process.pid), '/T'],
+                        capture_output=True,
+                        timeout=5
+                    )
+                    process.wait(timeout=5)
+            except Exception as e:
+                logger.warning(f"taskkill failed, trying terminate: {e}")
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+        else:
+            # Unix: use process group termination
+            pgid = os.getpgid(process.pid)
+            logger.info(f"Terminating process group (Unix): simulation={simulation_id}, pgid={pgid}")
+            
+            # Send SIGTERM to entire process group
+            os.killpg(pgid, signal.SIGTERM)
+            
+            try:
+                process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                # Force SIGKILL if still running
+                logger.warning(f"Process group unresponsive to SIGTERM, force killing: {simulation_id}")
+                os.killpg(pgid, signal.SIGKILL)
+                process.wait(timeout=5)
+
     @classmethod
     def cleanup_all_simulations(cls):
         """
