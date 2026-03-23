@@ -220,8 +220,8 @@ Based on the above, design entity types and relationship types suitable for soci
 1. Output exactly 10 entity types
 2. The last 2 must be the fallback types: Person (individual fallback) and Organization (organization fallback)
 3. The first 8 are specific types designed based on the document content
-4. All entity types must be real-world actors that can speak/post — no abstract concepts
-5. Attribute names must NOT use reserved words: name, uuid, group_id — use full_name, org_name, etc.
+4. All entity types must be real-world actors that can speak/post - no abstract concepts
+5. Attribute names must NOT use reserved words: name, uuid, group_id - use full_name, org_name, etc.
 """
 
         return message

@@ -187,13 +187,13 @@ class InsightForgeResult:
         
         # Semantic search results
         if self.semantic_facts:
-            text_parts.append(f"\n### 【Key Facts】(Please cite these original texts in the report)")
+            text_parts.append(f"\n### [Key Facts] (Please cite these original texts in the report)")
             for i, fact in enumerate(self.semantic_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Entity insights
         if self.entity_insights:
-            text_parts.append(f"\n### 【Core Entities】")
+            text_parts.append(f"\n### [Core Entities]")
             for entity in self.entity_insights:
                 text_parts.append(f"- **{entity.get('name', 'Unknown')}** ({entity.get('type', 'Entity')})")
                 if entity.get('summary'):
@@ -260,19 +260,19 @@ class PanoramaResult:
         
         # Currently active facts (full output, no truncation)
         if self.active_facts:
-            text_parts.append(f"\n### 【Currently Active Facts】 (Simulation Result Originals)")
+            text_parts.append(f"\n### [Currently Active Facts] (Simulation Result Originals)")
             for i, fact in enumerate(self.active_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Historical/Expired facts (full output, no truncation)
         if self.historical_facts:
-            text_parts.append(f"\n### 【Historical/Expired Facts】 (Evolutionary Record)")
+            text_parts.append(f"\n### [Historical/Expired Facts] (Evolutionary Record)")
             for i, fact in enumerate(self.historical_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Key entities (full output, no truncation)
         if self.all_nodes:
-            text_parts.append(f"\n### 【Involved Entities】")
+            text_parts.append(f"\n### [Involved Entities]")
             for node in self.all_nodes:
                 entity_type = next((l for l in node.labels if l not in ["Entity", "Node"]), "Entity")
                 text_parts.append(f"- **{node.name}** ({entity_type})")
@@ -401,13 +401,13 @@ class ZepToolsService:
     """
     Zep Retrieval Tool Service
     
-    【Core Retrieval Tools - Optimized】
+    [Core Retrieval Tools - Optimized]
     1. insight_forge - Deep insight retrieval (Most powerful, auto-generates sub-queries, multi-dimensional retrieval)
     2. panorama_search - Wide search (Get full picture, including historical/expired content)
     3. quick_search - Simple search (Fast, direct retrieval)
     4. interview_agents - Deep interview (Interview simulated Agents to obtain multi-perspective views)
     
-    【Basic Tools】
+    [Basic Tools]
     - search_graph - Graph semantic search
     - get_all_nodes - Retrieve all nodes in the graph
     - get_all_edges - Retrieve all edges in the graph (including temporal info)
@@ -951,7 +951,7 @@ class ZepToolsService:
         max_sub_queries: int = 5
     ) -> InsightForgeResult:
         """
-        【InsightForge - Deep Insight Retrieval】
+        [InsightForge - Deep Insight Retrieval]
         
         Most powerful hybrid retrieval function, automatically decomposes questions and performs multi-dimensional retrieval:
         1. Uses LLM to decompose the problem into multiple sub-queries
@@ -1150,7 +1150,7 @@ Return the list of sub-queries in JSON format."""
         limit: int = 50
     ) -> PanoramaResult:
         """
-        【PanoramaSearch - Wide Search】
+        [PanoramaSearch - Wide Search]
         
         Get a full picture view, including all related content and historical/expired info:
         1. Get all relevant nodes
@@ -1241,7 +1241,7 @@ Return the list of sub-queries in JSON format."""
         limit: int = 10
     ) -> SearchResult:
         """
-        【QuickSearch - Simple Search】
+        [QuickSearch - Simple Search]
         
         Fast, lightweight retrieval tool:
         1. Directly calls Zep semantic search
@@ -1278,7 +1278,7 @@ Return the list of sub-queries in JSON format."""
         custom_questions: List[str] = None
     ) -> InterviewResult:
         """
-        【InterviewAgents - Deep Interview】
+        [InterviewAgents - Deep Interview]
         
         Call real OASIS interview API to interview currently running simulated Agents:
         1. Automatically load persona files to understand all simulated Agents
@@ -1287,9 +1287,9 @@ Return the list of sub-queries in JSON format."""
         4. Call /api/simulation/interview/batch interface for real interviews (dual-platform)
         5. Integrate all interview results into a report
         
-        【Important】 This function requires the simulation environment to be active (OASIS environment not closed).
+        [Important] This function requires the simulation environment to be active (OASIS environment not closed).
         
-        【Scenarios】
+        [Scenarios]
         - Understand perspectives from different role viewpoints
         - Collect multi-party opinions and viewpoints
         - Obtain real answers from simulated Agents (not LLM simulations)
@@ -1417,7 +1417,7 @@ Return the list of sub-queries in JSON format."""
                 # Always output dual-platform tags
                 twitter_text = twitter_response if twitter_response else "(No response from this platform)"
                 reddit_text = reddit_response if reddit_response else "(No response from this platform)"
-                response_text = f"【Twitter Response】\n{twitter_text}\n\n【Reddit Response】\n{reddit_text}"
+                response_text = f"[Twitter Response]\n{twitter_text}\n\n[Reddit Response]\n{reddit_text}"
 
                 # Extract key quotes (from both platforms' answers)
                 import re
@@ -1427,7 +1427,7 @@ Return the list of sub-queries in JSON format."""
                 clean_text = re.sub(r'#{1,6}\s+', '', combined_responses)
                 clean_text = re.sub(r'\{[^}]*tool_name[^}]*\}', '', clean_text)
                 clean_text = re.sub(r'[*_`|>~\-]{2,}', '', clean_text)
-                clean_text = re.sub(r'(Question|Question)\d+[：:]\s*', '', clean_text)
+                clean_text = re.sub(r'(Question|Question)\d+[:]\s*', '', clean_text)
                 clean_text = re.sub(r'\[[^\]]+\]', '', clean_text)
 
                 # Strategy 1 (Main): Extract complete sentences with substance

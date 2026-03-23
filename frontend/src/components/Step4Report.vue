@@ -298,7 +298,7 @@
             <div v-if="!reportId" class="evidence-empty">
               <p>No report ID specified.</p>
             </div>
-            <div v-else-if="!reportId" class="evidence-loading">
+            <div v-else-if="isEvidenceLoading" class="evidence-loading">
               <div class="bauhaus-loader"></div>
               <p>Retrieving source evidence...</p>
             </div>
@@ -384,6 +384,7 @@ const expandedLogs = ref(new Set());
 const collapsedSections = ref(new Set());
 const reportEvidence = ref([]);
 const reportEvidenceError = ref("");
+const isEvidenceLoading = ref(false);
 const showRawResult = reactive({});
 
 const leftPanel = ref(null);
@@ -618,11 +619,15 @@ onMounted(() => {
   timer = setInterval(fetchLogs, 3000);
   fetchLogs();
   if (props.reportId) {
+    isEvidenceLoading.value = true;
     getReportEvidence(props.reportId)
       .then((res) => {
         reportEvidence.value = res.data || [];
       })
-      .catch((e) => (reportEvidenceError.value = "Failed to load evidence"));
+      .catch((e) => (reportEvidenceError.value = "Failed to load evidence"))
+      .finally(() => {
+        isEvidenceLoading.value = false;
+      });
   }
 });
 
