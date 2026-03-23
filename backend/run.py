@@ -1,5 +1,5 @@
 """
-MiroFish Backend 启动入口
+ASKTHEPEOPLE Backend Entry Point
 """
 
 import os

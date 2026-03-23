@@ -1,9 +1,9 @@
 services:
-  mirofish:
-    image: ghcr.io/666ghj/mirofish:latest
-    # 加速镜像（如拉取缓慢可替换上方地址）
-    # image: ghcr.nju.edu.cn/666ghj/mirofish:latest
-    container_name: mirofish
+  askthepeople:
+    image: ghcr.io/sergey9519546/askthepeople:latest
+    # Mirror image (use if pulling is slow)
+    # image: ghcr.nju.edu.cn/sergey9519546/askthepeople:latest
+    container_name: askthepeople
     env_file:
       - .env
     ports:

@@ -2,10 +2,10 @@
   <div class="home-container">
     <!-- 顶部导航栏 -->
     <nav class="navbar">
-      <div class="nav-brand">MIROFISH</div>
+      <div class="nav-brand">ASKTHEPEOPLE</div>
       <div class="nav-links">
-        <a href="https://github.com/666ghj/MiroFish" target="_blank" class="github-link">
-          访问我们的Github主页 <span class="arrow">↗</span>
+        <a href="https://github.com/sergey9519546/ASKTHEPEOPLE" target="_blank" class="github-link">
+          Visit our GitHub <span class="arrow">↗</span>
         </a>
       </div>
     </nav>
@@ -15,21 +15,21 @@
       <section class="hero-section">
         <div class="hero-left">
           <div class="tag-row">
-            <span class="orange-tag">简洁通用的群体智能引擎</span>
-            <span class="version-text">/ v0.1-预览版</span>
+            <span class="orange-tag">Crowd Intelligence Engine</span>
+            <span class="version-text">/ v0.1-preview</span>
           </div>
           
           <h1 class="main-title">
-            上传任意报告<br>
-            <span class="gradient-text">即刻推演未来</span>
+            Upload Any Report<br>
+            <span class="gradient-text">Predict What Happens Next</span>
           </h1>
           
           <div class="hero-desc">
             <p>
-              即使只有一段文字，<span class="highlight-bold">MiroFish</span> 也能基于其中的现实种子，全自动生成与之对应的至多<span class="highlight-orange">百万级Agent</span>构成的平行世界。通过上帝视角注入变量，在复杂的群体交互中寻找动态环境下的<span class="highlight-code">“局部最优解”</span>
+              Even from a single document, <span class="highlight-bold">ASKTHEPEOPLE</span> extracts reality seeds and auto-generates up to <span class="highlight-orange">millions of Agents</span> in a parallel world. Inject variables from a god's-eye view and find the <span class="highlight-code">"local optimum"</span> within complex crowd dynamics.
             </p>
             <p class="slogan-text">
-              让未来在 Agent 群中预演，让决策在百战后胜出<span class="blinking-cursor">_</span>
+              Let the future rehearse among Agents, let decisions win after a hundred battles<span class="blinking-cursor">_</span>
             </p>
           </div>
            
@@ -37,9 +37,9 @@
         </div>
         
         <div class="hero-right">
-          <!-- Logo 区域 -->
+          <!-- Logo Area -->
           <div class="logo-container">
-            <img src="../assets/logo/MiroFish_logo_left.jpeg" alt="MiroFish Logo" class="hero-logo" />
+            <div class="atp-logo-mark">ATP</div>
           </div>
           
           <button class="scroll-down-btn" @click="scrollToBottom">
@@ -56,9 +56,9 @@
             <span class="status-dot">■</span> 系统状态
           </div>
           
-          <h2 class="section-title">准备就绪</h2>
+          <h2 class="section-title">Ready</h2>
           <p class="section-desc">
-            预测引擎待命中，可上传多份非结构化数据以初始化模拟序列
+            Simulation engine standing by — upload unstructured documents to initialize a simulation sequence
           </p>
           
           <!-- 数据指标卡片 -->
@@ -180,7 +180,7 @@
                   rows="6"
                   :disabled="loading"
                 ></textarea>
-                <div class="model-badge">引擎: MiroFish-V1.0</div>
+                <div class="model-badge">Engine: ASKTHEPEOPLE-V1.0</div>
               </div>
             </div>
 
