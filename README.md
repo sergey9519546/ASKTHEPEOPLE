@@ -8,7 +8,7 @@
 [![GitHub Forks](https://img.shields.io/github/forks/sergey9519546/ASKTHEPEOPLE?style=flat-square)](https://github.com/sergey9519546/ASKTHEPEOPLE/network)
 [![Docker](https://img.shields.io/badge/Docker-Build-2496ED?style=flat-square&logo=docker&logoColor=white)](https://hub.docker.com/)
 
-[English](./README-EN.md) | [中文文档](./README.md)
+[English](./README-EN.md) | [Chinese Documentation](./README.md)
 
 </div>
 

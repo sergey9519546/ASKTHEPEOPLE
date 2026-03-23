@@ -10,7 +10,7 @@ This is a **multi-agent social simulation engine**. Users upload documents (news
 4. **Produces a prediction report** via a ReportAgent that analyzes the simulation
 5. **Allows interactive Q&A** with individual agents and the ReportAgent
 
-The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "Predict Everything"), affiliated with **Shanda Group** and GitHub user **666ghj**.
+The entire UI is in **Chinese**. The brand is **MiroFish** ("Predict Everything"), affiliated with **Shanda Group** and GitHub user **666ghj**.
 
 ---
 
@@ -28,8 +28,8 @@ The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "
 | [frontend/src/views/ReportView.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/views/ReportView.vue) | Navbar `MIROFISH` |
 | [frontend/src/views/InteractionView.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/views/InteractionView.vue) | Navbar `MIROFISH` |
 | [frontend/src/views/Process.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/views/Process.vue) | Navbar `MIROFISH` |
-| [frontend/src/components/Step2EnvSetup.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/components/Step2EnvSetup.vue) | `MiroFish 自动规划推演现实...` description text |
-| [frontend/src/components/Step5Interaction.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/components/Step5Interaction.vue) | `拥有MiroFish的完整记忆` description text |
+| [frontend/src/components/Step2EnvSetup.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/components/Step2EnvSetup.vue) | `Automated planning simulating reality...` description text |
+| [frontend/src/components/Step5Interaction.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/components/Step5Interaction.vue) | `Has the complete memory of the simulation` description text |
 | [package.json](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/package.json) | `"name": "mirofish"`, `"description"` |
 | [docker-compose.yml](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/docker-compose.yml) | `image: ghcr.io/666ghj/mirofish`, `container_name: mirofish` |
 | [.github/workflows/docker-image.yml](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/.github/workflows/docker-image.yml) | `images: ghcr.io/.../mirofish` |
@@ -43,12 +43,12 @@ The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "
 | [backend/app/**init**.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/__init__.py) | Docstring, [setup_logger('mirofish')](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py#30-89), startup logs `MiroFish Backend`, health check `'service': 'MiroFish Backend'` |
 | [backend/app/config.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/config.py) | Comment `MiroFish/.env`, `SECRET_KEY` default `'mirofish-secret-key'` |
 | [backend/app/utils/logger.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py) | Default logger name `'mirofish'` in [setup_logger()](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py#30-89) and [get_logger()](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py#91-105) |
-| [backend/run.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/run.py) | Docstring `MiroFish Backend 启动入口` |
+| [backend/run.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/run.py) | Docstring `MiroFish Backend Startup Entry` |
 | [backend/app/api/graph.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/api/graph.py) | Logger `'mirofish.api'`, default graph name `'MiroFish Graph'`, build logger `'mirofish.build'` |
 | [backend/app/api/simulation.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/api/simulation.py) | Logger `'mirofish.api.simulation'`, docstring examples `"graph_id": "mirofish_xxxx"` |
 | [backend/app/api/report.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/api/report.py) | Logger `'mirofish.api.report'`, docstring examples `"graph_id": "mirofish_xxxx"` |
 | [backend/app/services/graph_builder.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/graph_builder.py) | Default `graph_name = "MiroFish Graph"`, ID prefix `mirofish_`, description `"MiroFish Social Simulation Graph"` |
-| [backend/app/services/ontology_generator.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/ontology_generator.py) | `'由MiroFish自动生成，用于社会舆论模拟'` |
+| [backend/app/services/ontology_generator.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/ontology_generator.py) | `'Automatically generated for social simulation'` |
 | [backend/app/services/simulation_manager.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/simulation_manager.py) | `conda activate MiroFish`, logger `'mirofish.simulation'` |
 | [backend/app/services/simulation_runner.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/simulation_runner.py) | Logger `'mirofish.simulation_runner'` |
 | [backend/app/services/simulation_config_generator.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/simulation_config_generator.py) | Logger `'mirofish.simulation_config'` |
@@ -78,7 +78,7 @@ The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "
 The **entire frontend UI** is in Chinese. Every view and component contains Chinese text:
 
 - Navigation labels, button text, form labels, status messages, error messages
-- Workflow step descriptions (图谱构建, 环境搭建, 开始模拟, 报告生成, 深度互动)
+- Workflow step descriptions (Graph Building, Env Setup, Start Simulation, Report Generation, Deep Interaction)
 - Placeholder text, tooltips, headings
 - [index.html](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/index.html) `lang="zh-CN"` → `lang="en"`
 
