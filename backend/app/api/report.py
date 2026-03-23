@@ -11,12 +11,28 @@ from flask import request, jsonify, send_file
 from . import report_bp
 from ..config import Config
 from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
+from ..services.report_evidence import load_report_evidence
 from ..services.simulation_manager import SimulationManager
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
 from ..utils.logger import get_logger
 
 logger = get_logger('askthepeople.api.report')
+
+
+def _get_status_request_data():
+    if request.method == 'GET':
+        return {
+            "task_id": request.args.get('task_id'),
+            "simulation_id": request.args.get('simulation_id'),
+            "report_id": request.args.get('report_id'),
+        }
+    data = request.get_json(silent=True) or {}
+    return {
+        "task_id": data.get('task_id'),
+        "simulation_id": data.get('simulation_id'),
+        "report_id": data.get('report_id'),
+    }
 
 
 # ============== 报告生成接口 ==============
@@ -195,7 +211,7 @@ def generate_report():
         }), 500
 
 
-@report_bp.route('/generate/status', methods=['POST'])
+@report_bp.route('/generate/status', methods=['GET', 'POST'])
 def get_generate_status():
     """
     查询报告生成任务进度
@@ -218,10 +234,38 @@ def get_generate_status():
         }
     """
     try:
-        data = request.get_json() or {}
-        
+        data = _get_status_request_data()
+
         task_id = data.get('task_id')
         simulation_id = data.get('simulation_id')
+        report_id = data.get('report_id')
+
+        if report_id:
+            report = ReportManager.get_report(report_id)
+            progress = ReportManager.get_progress(report_id)
+            if report:
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "report_id": report_id,
+                        "simulation_id": report.simulation_id,
+                        "status": report.status.value,
+                        "progress": 100 if report.status == ReportStatus.COMPLETED else (progress or {}).get("progress", 0),
+                        "message": (progress or {}).get("message") or ("报告已生成" if report.status == ReportStatus.COMPLETED else "报告处理中"),
+                        "already_completed": report.status == ReportStatus.COMPLETED,
+                    }
+                })
+            if progress:
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "report_id": report_id,
+                        "status": progress.get("status", "generating"),
+                        "progress": progress.get("progress", 0),
+                        "message": progress.get("message", "报告处理中"),
+                        "already_completed": False,
+                    }
+                })
         
         # 如果提供了simulation_id，先检查是否已有完成的报告
         if simulation_id:
@@ -242,7 +286,7 @@ def get_generate_status():
         if not task_id:
             return jsonify({
                 "success": False,
-                "error": "请提供 task_id 或 simulation_id"
+                "error": "请提供 task_id、simulation_id 或 report_id"
             }), 400
         
         task_manager = TaskManager()
@@ -268,6 +312,38 @@ def get_generate_status():
 
 
 # ============== 报告获取接口 ==============
+
+@report_bp.route('/<report_id>/evidence', methods=['GET'])
+def get_report_evidence(report_id: str):
+    """获取报告章节证据映射"""
+    try:
+        report = ReportManager.get_report(report_id)
+
+        if not report:
+            return jsonify({
+                "success": False,
+                "error": f"报告不存在: {report_id}"
+            }), 404
+
+        report_dir = ReportManager._get_report_folder(report_id)
+        evidence = load_report_evidence(report_dir)
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "report_id": report_id,
+                "count": len(evidence),
+                "evidence": evidence
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"获取报告证据失败: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 @report_bp.route('/<report_id>', methods=['GET'])
 def get_report(report_id: str):

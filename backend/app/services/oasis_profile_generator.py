@@ -60,60 +60,34 @@ class OasisAgentProfile:
     def to_reddit_format(self) -> Dict[str, Any]:
         """Convert to Reddit platform format."""
         profile = {
-            "user_id": self.user_id,
-            "username": self.user_name,  # OASIS library requires 'username' (no underscore)
-            "name": self.name,
-            "bio": self.bio,
-            "persona": self.persona,
-            "karma": self.karma,
-            "created_at": self.created_at,
+            "realname": self.name,
+            "username": self.user_name,
+            "bio": (self.bio or self.name).replace("\n", " ").replace("\r", " "),
+            "persona": (self.persona or self.bio or self.name).replace("\n", " ").replace("\r", " "),
+            "age": self.age if self.age else 30,
+            "gender": self.gender if self.gender else "other",
+            "mbti": self.mbti if self.mbti else "ISTJ",
+            "country": self.country if self.country else "Unknown",
         }
-        
-        # Add extra persona fields if present
-        if self.age:
-            profile["age"] = self.age
-        if self.gender:
-            profile["gender"] = self.gender
-        if self.mbti:
-            profile["mbti"] = self.mbti
-        if self.country:
-            profile["country"] = self.country
+
         if self.profession:
             profile["profession"] = self.profession
         if self.interested_topics:
             profile["interested_topics"] = self.interested_topics
-        
+
         return profile
     
     def to_twitter_format(self) -> Dict[str, Any]:
         """Convert to Twitter platform format."""
-        profile = {
+        user_char = (self.persona or self.bio or self.name).replace("\n", " ").replace("\r", " ")
+        description = (self.bio or self.name).replace("\n", " ").replace("\r", " ")
+        return {
             "user_id": self.user_id,
-            "username": self.user_name,  # OASIS library requires 'username' (no underscore)
             "name": self.name,
-            "bio": self.bio,
-            "persona": self.persona,
-            "friend_count": self.friend_count,
-            "follower_count": self.follower_count,
-            "statuses_count": self.statuses_count,
-            "created_at": self.created_at,
+            "username": self.user_name,
+            "user_char": user_char,
+            "description": description,
         }
-        
-        # Add extra persona fields if present
-        if self.age:
-            profile["age"] = self.age
-        if self.gender:
-            profile["gender"] = self.gender
-        if self.mbti:
-            profile["mbti"] = self.mbti
-        if self.country:
-            profile["country"] = self.country
-        if self.profession:
-            profile["profession"] = self.profession
-        if self.interested_topics:
-            profile["interested_topics"] = self.interested_topics
-        
-        return profile
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to full dictionary format."""
@@ -806,7 +780,7 @@ IMPORTANT:
                 "age": 30,  # 机构虚拟年龄
                 "gender": "other",  # 机构使用other
                 "mbti": "ISTJ",  # 机构风格：严谨保守
-                "country": "中国",
+                "country": "Unknown",
                 "profession": "Media",
                 "interested_topics": ["General News", "Current Events", "Public Affairs"],
             }
@@ -818,7 +792,7 @@ IMPORTANT:
                 "age": 30,  # 机构虚拟年龄
                 "gender": "other",  # 机构使用other
                 "mbti": "ISTJ",  # 机构风格：严谨保守
-                "country": "中国",
+                "country": "Unknown",
                 "profession": entity_type,
                 "interested_topics": ["Public Policy", "Community", "Official Announcements"],
             }
@@ -1085,15 +1059,8 @@ IMPORTANT:
             
             # 写入数据行
             for idx, profile in enumerate(profiles):
-                # user_char: 完整人设（bio + persona），用于LLM系统提示
-                user_char = profile.bio
-                if profile.persona and profile.persona != profile.bio:
-                    user_char = f"{profile.bio} {profile.persona}"
-                # 处理换行符（CSV中用空格替代）
-                user_char = user_char.replace('\n', ' ').replace('\r', ' ')
-                
-                # description: 简短简介，用于外部显示
-                description = profile.bio.replace('\n', ' ').replace('\r', ' ')
+                user_char = (profile.persona or profile.bio or profile.name).replace('\n', ' ').replace('\r', ' ')
+                description = (profile.bio or profile.name).replace('\n', ' ').replace('\r', ' ')
                 
                 row = [
                     idx,                    # user_id: 从0开始的顺序ID
@@ -1134,51 +1101,29 @@ IMPORTANT:
     def _save_reddit_json(self, profiles: List[OasisAgentProfile], file_path: str):
         """
         保存Reddit Profile为JSON格式
-        
-        使用与 to_reddit_format() 一致的格式，确保 OASIS 能正确读取。
-        必须包含 user_id 字段，这是 OASIS agent_graph.get_agent() 匹配的关键！
-        
-        必需字段：
-        - user_id: 用户ID（整数，用于匹配 initial_posts 中的 poster_agent_id）
-        - username: 用户名
-        - name: 显示名称
-        - bio: 简介
-        - persona: 详细人设
-        - age: 年龄（整数）
-        - gender: "male", "female", 或 "other"
-        - mbti: MBTI类型
-        - country: 国家
         """
         data = []
-        for idx, profile in enumerate(profiles):
-            # 使用与 to_reddit_format() 一致的格式
+        for profile in profiles:
             item = {
-                "user_id": profile.user_id if profile.user_id is not None else idx,  # 关键：必须包含 user_id
+                "realname": profile.name,
                 "username": profile.user_name,
-                "name": profile.name,
                 "bio": profile.bio[:150] if profile.bio else f"{profile.name}",
                 "persona": profile.persona or f"{profile.name} is a participant in social discussions.",
-                "karma": profile.karma if profile.karma else 1000,
-                "created_at": profile.created_at,
-                # OASIS必需字段 - 确保都有默认值
                 "age": profile.age if profile.age else 30,
                 "gender": self._normalize_gender(profile.gender),
                 "mbti": profile.mbti if profile.mbti else "ISTJ",
-                "country": profile.country if profile.country else "中国",
+                "country": profile.country if profile.country else "Unknown",
             }
-            
-            # 可选字段
             if profile.profession:
                 item["profession"] = profile.profession
             if profile.interested_topics:
                 item["interested_topics"] = profile.interested_topics
-            
             data.append(item)
-        
+
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        
-        logger.info(f"已保存 {len(profiles)} 个Reddit Profile到 {file_path} (JSON格式，包含user_id字段)")
+
+        logger.info(f"已保存 {len(profiles)} 个Reddit Profile到 {file_path} (JSON格式)")
     
     # 保留旧方法名作为别名，保持向后兼容
     def save_profiles_to_json(

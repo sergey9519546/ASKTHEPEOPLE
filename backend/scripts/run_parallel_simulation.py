@@ -156,6 +156,15 @@ def init_logging_for_simulation(simulation_dir: str):
 
 
 from action_logger import SimulationLogManager, PlatformActionLogger
+from app.services.simulation_runtime_contract import (
+    apply_bootstrap_actions,
+    apply_scheduled_events,
+    bootstrap_boost_agent_ids,
+    build_agent_name_lookup,
+    create_actor_model_for_runtime,
+    scheduled_event_boost_agent_ids,
+    select_active_agent_ids,
+)
 
 try:
     from camel.models import ModelFactory
@@ -981,7 +990,7 @@ def _get_comment_info(
     return None
 
 
-def create_model(config: Dict[str, Any], use_boost: bool = False):
+def create_model(simulation_dir: str, use_boost: bool = False):
     """
     创建LLM模型
     
@@ -995,99 +1004,36 @@ def create_model(config: Dict[str, Any], use_boost: bool = False):
         config: 模拟配置字典
         use_boost: 是否使用加速 LLM 配置（如果可用）
     """
-    # 检查是否有加速配置
-    boost_api_key = os.environ.get("LLM_BOOST_API_KEY", "")
-    boost_base_url = os.environ.get("LLM_BOOST_BASE_URL", "")
-    boost_model = os.environ.get("LLM_BOOST_MODEL_NAME", "")
-    has_boost_config = bool(boost_api_key)
-    
-    # 根据参数和配置情况选择使用哪个 LLM
-    if use_boost and has_boost_config:
-        # 使用加速配置
-        llm_api_key = boost_api_key
-        llm_base_url = boost_base_url
-        llm_model = boost_model or os.environ.get("LLM_MODEL_NAME", "")
-        config_label = "[加速LLM]"
-    else:
-        # 使用通用配置
-        llm_api_key = os.environ.get("LLM_API_KEY", "")
-        llm_base_url = os.environ.get("LLM_BASE_URL", "")
-        llm_model = os.environ.get("LLM_MODEL_NAME", "")
-        config_label = "[通用LLM]"
-    
-    # 如果 .env 中没有模型名，则使用 config 作为备用
-    if not llm_model:
-        llm_model = config.get("llm_model", "gpt-4o-mini")
-    
-    # 设置 camel-ai 所需的环境变量
-    if llm_api_key:
-        os.environ["OPENAI_API_KEY"] = llm_api_key
-    
-    if not os.environ.get("OPENAI_API_KEY"):
-        raise ValueError("缺少 API Key 配置，请在项目根目录 .env 文件中设置 LLM_API_KEY")
-    
-    if llm_base_url:
-        os.environ["OPENAI_API_BASE_URL"] = llm_base_url
-    
-    print(f"{config_label} model={llm_model}, base_url={llm_base_url[:40] if llm_base_url else '默认'}...")
-    
-    return ModelFactory.create(
-        model_platform=ModelPlatformType.OPENAI,
-        model_type=llm_model,
+    model, settings = create_actor_model_for_runtime(
+        simulation_dir,
+        prefer_boost=use_boost,
     )
+    provider_mode = settings.get("provider_mode", "unknown")
+    model_name = settings.get("model_name", "unknown")
+    base_url = settings.get("base_url", "")
+    semaphore = settings.get("semaphore", 30)
+    print(
+        f"[actor-model] provider={provider_mode}, model={model_name}, "
+        f"base_url={base_url[:60] if base_url else 'default'}, semaphore={semaphore}"
+    )
+    return model, settings
 
 
 def get_active_agents_for_round(
-    env,
     config: Dict[str, Any],
+    platform: str,
     current_hour: int,
-    round_num: int
+    round_num: int,
+    event_boost_agent_ids: Optional[List[int]] = None,
 ) -> List:
     """根据时间和配置决定本轮激活哪些Agent"""
-    time_config = config.get("time_config", {})
-    agent_configs = config.get("agent_configs", [])
-    
-    base_min = time_config.get("agents_per_hour_min", 5)
-    base_max = time_config.get("agents_per_hour_max", 20)
-    
-    peak_hours = time_config.get("peak_hours", [9, 10, 11, 14, 15, 20, 21, 22])
-    off_peak_hours = time_config.get("off_peak_hours", [0, 1, 2, 3, 4, 5])
-    
-    if current_hour in peak_hours:
-        multiplier = time_config.get("peak_activity_multiplier", 1.5)
-    elif current_hour in off_peak_hours:
-        multiplier = time_config.get("off_peak_activity_multiplier", 0.3)
-    else:
-        multiplier = 1.0
-    
-    target_count = int(random.uniform(base_min, base_max) * multiplier)
-    
-    candidates = []
-    for cfg in agent_configs:
-        agent_id = cfg.get("agent_id", 0)
-        active_hours = cfg.get("active_hours", list(range(8, 23)))
-        activity_level = cfg.get("activity_level", 0.5)
-        
-        if current_hour not in active_hours:
-            continue
-        
-        if random.random() < activity_level:
-            candidates.append(agent_id)
-    
-    selected_ids = random.sample(
-        candidates, 
-        min(target_count, len(candidates))
-    ) if candidates else []
-    
-    active_agents = []
-    for agent_id in selected_ids:
-        try:
-            agent = env.agent_graph.get_agent(agent_id)
-            active_agents.append((agent_id, agent))
-        except Exception:
-            pass
-    
-    return active_agents
+    return select_active_agent_ids(
+        config=config,
+        platform=platform,
+        current_hour=current_hour,
+        round_num=round_num,
+        event_boost_agent_ids=event_boost_agent_ids,
+    )
 
 
 class PlatformSimulation:
@@ -1126,8 +1072,8 @@ async def run_twitter_simulation(
     
     log_info("初始化...")
     
-    # Twitter 使用通用 LLM 配置
-    model = create_model(config, use_boost=False)
+    # Twitter actor model
+    model, actor_settings = create_model(simulation_dir, use_boost=False)
     
     # OASIS Twitter使用CSV格式
     profile_path = os.path.join(simulation_dir, "twitter_profiles.csv")
@@ -1142,7 +1088,7 @@ async def run_twitter_simulation(
     )
     
     # 从配置文件获取 Agent 真实名称映射（使用 entity_name 而非默认的 Agent_X）
-    agent_names = get_agent_names_from_config(config)
+    agent_names = build_agent_name_lookup(config)
     # 如果配置中没有某个 agent，则使用 OASIS 的默认名称
     for agent_id, agent in result.agent_graph.get_agents():
         if agent_id not in agent_names:
@@ -1156,7 +1102,7 @@ async def run_twitter_simulation(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.TWITTER,
         database_path=db_path,
-        semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+        semaphore=actor_settings.get("semaphore", 30),
     )
     
     await result.env.reset()
@@ -1168,43 +1114,37 @@ async def run_twitter_simulation(
     total_actions = 0
     last_rowid = 0  # 跟踪数据库中最后处理的行号（使用 rowid 避免 created_at 格式差异）
     
-    # 执行初始事件
-    event_config = config.get("event_config", {})
-    initial_posts = event_config.get("initial_posts", [])
-    
     # 记录 round 0 开始（初始事件阶段）
     if action_logger:
         action_logger.log_round_start(0, 0)  # round 0, simulated_hour 0
     
+    initial_action_count = await apply_bootstrap_actions(
+        env=result.env,
+        simulation_dir=simulation_dir,
+        config=config,
+        platform="twitter",
+        agent_names=agent_names,
+        manual_action_cls=ManualAction,
+        action_type_cls=ActionType,
+        action_logger=None,
+    )
+    bootstrap_actions, last_rowid = fetch_new_actions_from_db(
+        db_path, last_rowid, agent_names
+    )
     initial_action_count = 0
-    if initial_posts:
-        initial_actions = {}
-        for post in initial_posts:
-            agent_id = post.get("poster_agent_id", 0)
-            content = post.get("content", "")
-            try:
-                agent = result.env.agent_graph.get_agent(agent_id)
-                initial_actions[agent] = ManualAction(
-                    action_type=ActionType.CREATE_POST,
-                    action_args={"content": content}
-                )
-                
-                if action_logger:
-                    action_logger.log_action(
-                        round_num=0,
-                        agent_id=agent_id,
-                        agent_name=agent_names.get(agent_id, f"Agent_{agent_id}"),
-                        action_type="CREATE_POST",
-                        action_args={"content": content}
-                    )
-                    total_actions += 1
-                    initial_action_count += 1
-            except Exception:
-                pass
-        
-        if initial_actions:
-            await result.env.step(initial_actions)
-            log_info(f"已发布 {len(initial_actions)} 条初始帖子")
+    for action_data in bootstrap_actions:
+        if action_logger:
+            action_logger.log_action(
+                round_num=0,
+                agent_id=action_data['agent_id'],
+                agent_name=action_data['agent_name'],
+                action_type=action_data['action_type'],
+                action_args=action_data['action_args']
+            )
+        total_actions += 1
+        initial_action_count += 1
+    if initial_action_count:
+        log_info(f"已执行 {initial_action_count} 条 round 0 bootstrap 动作")
     
     # 记录 round 0 结束
     if action_logger:
@@ -1235,22 +1175,67 @@ async def run_twitter_simulation(
         simulated_minutes = round_num * minutes_per_round
         simulated_hour = (simulated_minutes // 60) % 24
         simulated_day = simulated_minutes // (60 * 24) + 1
-        
-        active_agents = get_active_agents_for_round(
-            result.env, config, simulated_hour, round_num
-        )
-        
+
         # 无论是否有活跃agent，都记录round开始
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
         
-        if not active_agents:
+        scheduled_count = await apply_scheduled_events(
+            env=result.env,
+            simulation_dir=simulation_dir,
+            config=config,
+            platform="twitter",
+            current_round=round_num + 1,
+            agent_names=agent_names,
+            manual_action_cls=ManualAction,
+            action_type_cls=ActionType,
+            action_logger=None,
+        )
+        scheduled_actions, last_rowid = fetch_new_actions_from_db(
+            db_path, last_rowid, agent_names
+        )
+        scheduled_count = 0
+        for action_data in scheduled_actions:
+            if action_logger:
+                action_logger.log_action(
+                    round_num=round_num + 1,
+                    agent_id=action_data['agent_id'],
+                    agent_name=action_data['agent_name'],
+                    action_type=action_data['action_type'],
+                    action_args=action_data['action_args']
+                )
+            total_actions += 1
+            scheduled_count += 1
+        event_boost_agent_ids = []
+        if round_num == 0:
+            event_boost_agent_ids.extend(bootstrap_boost_agent_ids(simulation_dir, config, "twitter"))
+        event_boost_agent_ids.extend(
+            scheduled_event_boost_agent_ids(simulation_dir, config, "twitter", round_num + 1)
+        )
+        active_agent_ids = get_active_agents_for_round(
+            config,
+            "twitter",
+            simulated_hour,
+            round_num,
+            event_boost_agent_ids=list(sorted(set(event_boost_agent_ids))),
+        )
+        
+        if not active_agent_ids:
             # 没有活跃agent时也记录round结束（actions_count=0）
             if action_logger:
-                action_logger.log_round_end(round_num + 1, 0)
+                action_logger.log_round_end(round_num + 1, scheduled_count)
             continue
         
-        actions = {agent: LLMAction() for _, agent in active_agents}
+        actions = {}
+        for agent_id in active_agent_ids:
+            try:
+                actions[result.env.agent_graph.get_agent(agent_id)] = LLMAction()
+            except Exception:
+                pass
+        if not actions:
+            if action_logger:
+                action_logger.log_round_end(round_num + 1, scheduled_count)
+            continue
         await result.env.step(actions)
         
         # 从数据库获取实际执行的动作并记录
@@ -1258,7 +1243,7 @@ async def run_twitter_simulation(
             db_path, last_rowid, agent_names
         )
         
-        round_action_count = 0
+        round_action_count = scheduled_count
         for action_data in actual_actions:
             if action_logger:
                 action_logger.log_action(
@@ -1318,8 +1303,8 @@ async def run_reddit_simulation(
     
     log_info("初始化...")
     
-    # Reddit 使用加速 LLM 配置（如果有的话，否则回退到通用配置）
-    model = create_model(config, use_boost=True)
+    # Reddit actor model
+    model, actor_settings = create_model(simulation_dir, use_boost=True)
     
     profile_path = os.path.join(simulation_dir, "reddit_profiles.json")
     if not os.path.exists(profile_path):
@@ -1333,7 +1318,7 @@ async def run_reddit_simulation(
     )
     
     # 从配置文件获取 Agent 真实名称映射（使用 entity_name 而非默认的 Agent_X）
-    agent_names = get_agent_names_from_config(config)
+    agent_names = build_agent_name_lookup(config)
     # 如果配置中没有某个 agent，则使用 OASIS 的默认名称
     for agent_id, agent in result.agent_graph.get_agents():
         if agent_id not in agent_names:
@@ -1347,7 +1332,7 @@ async def run_reddit_simulation(
         agent_graph=result.agent_graph,
         platform=oasis.DefaultPlatformType.REDDIT,
         database_path=db_path,
-        semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+        semaphore=actor_settings.get("semaphore", 30),
     )
     
     await result.env.reset()
@@ -1359,51 +1344,37 @@ async def run_reddit_simulation(
     total_actions = 0
     last_rowid = 0  # 跟踪数据库中最后处理的行号（使用 rowid 避免 created_at 格式差异）
     
-    # 执行初始事件
-    event_config = config.get("event_config", {})
-    initial_posts = event_config.get("initial_posts", [])
-    
     # 记录 round 0 开始（初始事件阶段）
     if action_logger:
         action_logger.log_round_start(0, 0)  # round 0, simulated_hour 0
     
+    initial_action_count = await apply_bootstrap_actions(
+        env=result.env,
+        simulation_dir=simulation_dir,
+        config=config,
+        platform="reddit",
+        agent_names=agent_names,
+        manual_action_cls=ManualAction,
+        action_type_cls=ActionType,
+        action_logger=None,
+    )
+    bootstrap_actions, last_rowid = fetch_new_actions_from_db(
+        db_path, last_rowid, agent_names
+    )
     initial_action_count = 0
-    if initial_posts:
-        initial_actions = {}
-        for post in initial_posts:
-            agent_id = post.get("poster_agent_id", 0)
-            content = post.get("content", "")
-            try:
-                agent = result.env.agent_graph.get_agent(agent_id)
-                if agent in initial_actions:
-                    if not isinstance(initial_actions[agent], list):
-                        initial_actions[agent] = [initial_actions[agent]]
-                    initial_actions[agent].append(ManualAction(
-                        action_type=ActionType.CREATE_POST,
-                        action_args={"content": content}
-                    ))
-                else:
-                    initial_actions[agent] = ManualAction(
-                        action_type=ActionType.CREATE_POST,
-                        action_args={"content": content}
-                    )
-                
-                if action_logger:
-                    action_logger.log_action(
-                        round_num=0,
-                        agent_id=agent_id,
-                        agent_name=agent_names.get(agent_id, f"Agent_{agent_id}"),
-                        action_type="CREATE_POST",
-                        action_args={"content": content}
-                    )
-                    total_actions += 1
-                    initial_action_count += 1
-            except Exception:
-                pass
-        
-        if initial_actions:
-            await result.env.step(initial_actions)
-            log_info(f"已发布 {len(initial_actions)} 条初始帖子")
+    for action_data in bootstrap_actions:
+        if action_logger:
+            action_logger.log_action(
+                round_num=0,
+                agent_id=action_data['agent_id'],
+                agent_name=action_data['agent_name'],
+                action_type=action_data['action_type'],
+                action_args=action_data['action_args']
+            )
+        total_actions += 1
+        initial_action_count += 1
+    if initial_action_count:
+        log_info(f"已执行 {initial_action_count} 条 round 0 bootstrap 动作")
     
     # 记录 round 0 结束
     if action_logger:
@@ -1434,22 +1405,68 @@ async def run_reddit_simulation(
         simulated_minutes = round_num * minutes_per_round
         simulated_hour = (simulated_minutes // 60) % 24
         simulated_day = simulated_minutes // (60 * 24) + 1
-        
-        active_agents = get_active_agents_for_round(
-            result.env, config, simulated_hour, round_num
-        )
-        
+
         # 无论是否有活跃agent，都记录round开始
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
         
-        if not active_agents:
+        scheduled_count = await apply_scheduled_events(
+            env=result.env,
+            simulation_dir=simulation_dir,
+            config=config,
+            platform="reddit",
+            current_round=round_num + 1,
+            agent_names=agent_names,
+            manual_action_cls=ManualAction,
+            action_type_cls=ActionType,
+            action_logger=None,
+        )
+        scheduled_actions, last_rowid = fetch_new_actions_from_db(
+            db_path, last_rowid, agent_names
+        )
+        scheduled_count = 0
+        for action_data in scheduled_actions:
+            if action_logger:
+                action_logger.log_action(
+                    round_num=round_num + 1,
+                    agent_id=action_data['agent_id'],
+                    agent_name=action_data['agent_name'],
+                    action_type=action_data['action_type'],
+                    action_args=action_data['action_args']
+                )
+            total_actions += 1
+            scheduled_count += 1
+        event_boost_agent_ids = []
+        if round_num == 0:
+            event_boost_agent_ids.extend(bootstrap_boost_agent_ids(simulation_dir, config, "reddit"))
+        event_boost_agent_ids.extend(
+            scheduled_event_boost_agent_ids(simulation_dir, config, "reddit", round_num + 1)
+        )
+        active_agent_ids = get_active_agents_for_round(
+            config,
+            "reddit",
+            simulated_hour,
+            round_num,
+            event_boost_agent_ids=list(sorted(set(event_boost_agent_ids))),
+        )
+        
+        if not active_agent_ids:
             # 没有活跃agent时也记录round结束（actions_count=0）
             if action_logger:
-                action_logger.log_round_end(round_num + 1, 0)
+                action_logger.log_round_end(round_num + 1, scheduled_count)
             continue
         
-        actions = {agent: LLMAction() for _, agent in active_agents}
+        actions = {}
+        for agent_id in active_agent_ids:
+            try:
+                agent = result.env.agent_graph.get_agent(agent_id)
+            except Exception:
+                continue
+            actions[agent] = LLMAction()
+        if not actions:
+            if action_logger:
+                action_logger.log_round_end(round_num + 1, scheduled_count)
+            continue
         await result.env.step(actions)
         
         # 从数据库获取实际执行的动作并记录
@@ -1457,7 +1474,7 @@ async def run_reddit_simulation(
             db_path, last_rowid, agent_names
         )
         
-        round_action_count = 0
+        round_action_count = scheduled_count
         for action_data in actual_actions:
             if action_logger:
                 action_logger.log_action(

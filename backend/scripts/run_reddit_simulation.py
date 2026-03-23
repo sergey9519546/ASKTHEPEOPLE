@@ -49,6 +49,16 @@ else:
 
 import re
 
+from app.services.simulation_runtime_contract import (
+    apply_bootstrap_actions,
+    apply_scheduled_events,
+    bootstrap_boost_agent_ids,
+    build_agent_name_lookup,
+    create_actor_model_for_runtime,
+    scheduled_event_boost_agent_ids,
+    select_active_agent_ids,
+)
+
 
 class UnicodeFormatter(logging.Formatter):
     """自定义格式化器，将 Unicode 转义序列转换为可读字符"""
@@ -440,31 +450,13 @@ class RedditSimulationRunner:
         - LLM_BASE_URL: API基础URL
         - LLM_MODEL_NAME: 模型名称
         """
-        # 优先从 .env 读取配置
-        llm_api_key = os.environ.get("LLM_API_KEY", "")
-        llm_base_url = os.environ.get("LLM_BASE_URL", "")
-        llm_model = os.environ.get("LLM_MODEL_NAME", "")
-        
-        # 如果 .env 中没有，则使用 config 作为备用
-        if not llm_model:
-            llm_model = self.config.get("llm_model", "gpt-4o-mini")
-        
-        # 设置 camel-ai 所需的环境变量
-        if llm_api_key:
-            os.environ["OPENAI_API_KEY"] = llm_api_key
-        
-        if not os.environ.get("OPENAI_API_KEY"):
-            raise ValueError("缺少 API Key 配置，请在项目根目录 .env 文件中设置 LLM_API_KEY")
-        
-        if llm_base_url:
-            os.environ["OPENAI_API_BASE_URL"] = llm_base_url
-        
-        print(f"LLM配置: model={llm_model}, base_url={llm_base_url[:40] if llm_base_url else '默认'}...")
-        
-        return ModelFactory.create(
-            model_platform=ModelPlatformType.OPENAI,
-            model_type=llm_model,
+        model, settings = create_actor_model_for_runtime(self.simulation_dir, prefer_boost=True)
+        print(
+            f"LLM配置: provider={settings.get('provider_mode', 'unknown')}, "
+            f"model={settings.get('model_name', 'unknown')}, "
+            f"base_url={str(settings.get('base_url', ''))[:40] if settings.get('base_url') else '默认'}..."
         )
+        return model, settings
     
     def _get_active_agents_for_round(
         self, 
@@ -475,50 +467,12 @@ class RedditSimulationRunner:
         """
         根据时间和配置决定本轮激活哪些Agent
         """
-        time_config = self.config.get("time_config", {})
-        agent_configs = self.config.get("agent_configs", [])
-        
-        base_min = time_config.get("agents_per_hour_min", 5)
-        base_max = time_config.get("agents_per_hour_max", 20)
-        
-        peak_hours = time_config.get("peak_hours", [9, 10, 11, 14, 15, 20, 21, 22])
-        off_peak_hours = time_config.get("off_peak_hours", [0, 1, 2, 3, 4, 5])
-        
-        if current_hour in peak_hours:
-            multiplier = time_config.get("peak_activity_multiplier", 1.5)
-        elif current_hour in off_peak_hours:
-            multiplier = time_config.get("off_peak_activity_multiplier", 0.3)
-        else:
-            multiplier = 1.0
-        
-        target_count = int(random.uniform(base_min, base_max) * multiplier)
-        
-        candidates = []
-        for cfg in agent_configs:
-            agent_id = cfg.get("agent_id", 0)
-            active_hours = cfg.get("active_hours", list(range(8, 23)))
-            activity_level = cfg.get("activity_level", 0.5)
-            
-            if current_hour not in active_hours:
-                continue
-            
-            if random.random() < activity_level:
-                candidates.append(agent_id)
-        
-        selected_ids = random.sample(
-            candidates, 
-            min(target_count, len(candidates))
-        ) if candidates else []
-        
-        active_agents = []
-        for agent_id in selected_ids:
-            try:
-                agent = env.agent_graph.get_agent(agent_id)
-                active_agents.append((agent_id, agent))
-            except Exception:
-                pass
-        
-        return active_agents
+        return select_active_agent_ids(
+            config=self.config,
+            platform="reddit",
+            current_hour=current_hour,
+            round_num=round_num,
+        )
     
     async def run(self, max_rounds: int = None):
         """运行Reddit模拟
@@ -554,7 +508,7 @@ class RedditSimulationRunner:
         print(f"  - Agent数量: {len(self.config.get('agent_configs', []))}")
         
         print("\n初始化LLM模型...")
-        model = self._create_model()
+        model, actor_settings = self._create_model()
         
         print("加载Agent Profile...")
         profile_path = self._get_profile_path()
@@ -578,7 +532,7 @@ class RedditSimulationRunner:
             agent_graph=self.agent_graph,
             platform=oasis.DefaultPlatformType.REDDIT,
             database_path=db_path,
-            semaphore=30,  # 限制最大并发 LLM 请求数，防止 API 过载
+            semaphore=actor_settings.get("semaphore", 30),
         )
         
         await self.env.reset()
@@ -588,36 +542,18 @@ class RedditSimulationRunner:
         self.ipc_handler = IPCHandler(self.simulation_dir, self.env, self.agent_graph)
         self.ipc_handler.update_status("running")
         
-        # 执行初始事件
-        event_config = self.config.get("event_config", {})
-        initial_posts = event_config.get("initial_posts", [])
-        
-        if initial_posts:
-            print(f"执行初始事件 ({len(initial_posts)}条初始帖子)...")
-            initial_actions = {}
-            for post in initial_posts:
-                agent_id = post.get("poster_agent_id", 0)
-                content = post.get("content", "")
-                try:
-                    agent = self.env.agent_graph.get_agent(agent_id)
-                    if agent in initial_actions:
-                        if not isinstance(initial_actions[agent], list):
-                            initial_actions[agent] = [initial_actions[agent]]
-                        initial_actions[agent].append(ManualAction(
-                            action_type=ActionType.CREATE_POST,
-                            action_args={"content": content}
-                        ))
-                    else:
-                        initial_actions[agent] = ManualAction(
-                            action_type=ActionType.CREATE_POST,
-                            action_args={"content": content}
-                        )
-                except Exception as e:
-                    print(f"  警告: 无法为Agent {agent_id}创建初始帖子: {e}")
-            
-            if initial_actions:
-                await self.env.step(initial_actions)
-                print(f"  已发布 {len(initial_actions)} 条初始帖子")
+        agent_names = build_agent_name_lookup(self.config)
+        bootstrap_count = await apply_bootstrap_actions(
+            env=self.env,
+            simulation_dir=self.simulation_dir,
+            config=self.config,
+            platform="reddit",
+            agent_names=agent_names,
+            manual_action_cls=ManualAction,
+            action_type_cls=ActionType,
+        )
+        if bootstrap_count:
+            print(f"执行了 {bootstrap_count} 条 round 0 bootstrap 动作")
         
         # 主模拟循环
         print("\n开始模拟循环...")
@@ -628,17 +564,41 @@ class RedditSimulationRunner:
             simulated_hour = (simulated_minutes // 60) % 24
             simulated_day = simulated_minutes // (60 * 24) + 1
             
-            active_agents = self._get_active_agents_for_round(
-                self.env, simulated_hour, round_num
+            await apply_scheduled_events(
+                env=self.env,
+                simulation_dir=self.simulation_dir,
+                config=self.config,
+                platform="reddit",
+                current_round=round_num + 1,
+                agent_names=agent_names,
+                manual_action_cls=ManualAction,
+                action_type_cls=ActionType,
+            )
+            event_boost_agent_ids = []
+            if round_num == 0:
+                event_boost_agent_ids.extend(bootstrap_boost_agent_ids(self.simulation_dir, self.config, "reddit"))
+            event_boost_agent_ids.extend(
+                scheduled_event_boost_agent_ids(self.simulation_dir, self.config, "reddit", round_num + 1)
+            )
+            active_agent_ids = select_active_agent_ids(
+                config=self.config,
+                platform="reddit",
+                current_hour=simulated_hour,
+                round_num=round_num,
+                event_boost_agent_ids=list(sorted(set(event_boost_agent_ids))),
             )
             
-            if not active_agents:
+            if not active_agent_ids:
                 continue
             
-            actions = {
-                agent: LLMAction()
-                for _, agent in active_agents
-            }
+            actions = {}
+            for agent_id in active_agent_ids:
+                try:
+                    actions[self.env.agent_graph.get_agent(agent_id)] = LLMAction()
+                except Exception:
+                    pass
+            if not actions:
+                continue
             
             await self.env.step(actions)
             
@@ -647,7 +607,7 @@ class RedditSimulationRunner:
                 progress = (round_num + 1) / total_rounds * 100
                 print(f"  [Day {simulated_day}, {simulated_hour:02d}:00] "
                       f"Round {round_num + 1}/{total_rounds} ({progress:.1f}%) "
-                      f"- {len(active_agents)} agents active "
+                      f"- {len(actions)} agents active "
                       f"- elapsed: {elapsed:.1f}s")
         
         total_elapsed = (datetime.now() - start_time).total_seconds()

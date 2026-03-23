@@ -21,6 +21,7 @@ from enum import Enum
 from ..config import Config
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
+from .report_evidence import build_report_evidence
 from .zep_tools import (
     ZepToolsService, 
     SearchResult, 
@@ -572,6 +573,10 @@ PLAN_SYSTEM_PROMPT = """\
 - 不需要子章节，每个章节直接撰写完整内容
 - 内容要精炼，聚焦于核心预测发现
 - 章节结构由你根据预测结果自主设计
+- 报告必须显式覆盖这三类分析：
+  1. Seed vs Emergence
+  2. Platform Divergence
+  3. Uncertainty / Weak Evidence
 
 请输出JSON格式的报告大纲，格式如下：
 {
@@ -879,6 +884,11 @@ class ReportAgent:
     
     # 对话中的最大工具调用次数
     MAX_TOOL_CALLS_PER_CHAT = 2
+    REQUIRED_SECTION_TITLES = [
+        "Seed vs Emergence",
+        "Platform Divergence",
+        "Uncertainty / Weak Evidence",
+    ]
     
     def __init__(
         self, 
@@ -1132,6 +1142,51 @@ class ReportAgent:
             if params_desc:
                 desc_parts.append(f"  参数: {params_desc}")
         return "\n".join(desc_parts)
+
+    def _normalize_section_title(self, title: str) -> str:
+        return re.sub(r"[^a-z0-9]+", "", (title or "").lower())
+
+    def _ensure_required_outline_sections(self, outline: ReportOutline) -> ReportOutline:
+        normalized_required = {
+            self._normalize_section_title(title): title
+            for title in self.REQUIRED_SECTION_TITLES
+        }
+        existing = {
+            self._normalize_section_title(section.title): section
+            for section in outline.sections
+        }
+
+        merged_sections: List[ReportSection] = list(outline.sections)
+        for key, title in normalized_required.items():
+            if key not in existing:
+                merged_sections.append(ReportSection(title=title))
+
+        if len(merged_sections) > 5:
+            required_keys = set(normalized_required.keys())
+            preserved_non_required: List[ReportSection] = []
+            required_sections: List[ReportSection] = []
+
+            for section in merged_sections:
+                normalized = self._normalize_section_title(section.title)
+                if normalized in required_keys:
+                    required_sections.append(section)
+                elif len(preserved_non_required) < max(0, 5 - len(required_sections)):
+                    preserved_non_required.append(section)
+
+            merged_sections = preserved_non_required + required_sections
+
+        if len(merged_sections) < 2:
+            for title in self.REQUIRED_SECTION_TITLES:
+                if len(merged_sections) >= 2:
+                    break
+                if self._normalize_section_title(title) not in {
+                    self._normalize_section_title(section.title)
+                    for section in merged_sections
+                }:
+                    merged_sections.append(ReportSection(title=title))
+
+        outline.sections = merged_sections[:5]
+        return outline
     
     def plan_outline(
         self, 
@@ -1197,17 +1252,18 @@ class ReportAgent:
                 summary=response.get("summary", ""),
                 sections=sections
             )
+            outline = self._ensure_required_outline_sections(outline)
             
             if progress_callback:
                 progress_callback("planning", 100, "大纲规划完成")
             
-            logger.info(f"大纲规划完成: {len(sections)} 个章节")
+            logger.info(f"大纲规划完成: {len(outline.sections)} 个章节")
             return outline
             
         except Exception as e:
             logger.error(f"大纲规划失败: {str(e)}")
             # 返回默认大纲（3个章节，作为fallback）
-            return ReportOutline(
+            return self._ensure_required_outline_sections(ReportOutline(
                 title="未来预测报告",
                 summary="基于模拟预测的未来趋势与风险分析",
                 sections=[
@@ -1215,7 +1271,7 @@ class ReportAgent:
                     ReportSection(title="人群行为预测分析"),
                     ReportSection(title="趋势展望与风险提示")
                 ]
-            )
+            ))
     
     def _generate_section_react(
         self, 
@@ -1707,6 +1763,18 @@ class ReportAgent:
             report.markdown_content = ReportManager.assemble_full_report(report_id, outline)
             report.status = ReportStatus.COMPLETED
             report.completed_at = datetime.now().isoformat()
+
+            simulation_dir = os.path.join(Config.UPLOAD_FOLDER, "simulations", self.simulation_id)
+            report_dir = ReportManager._get_report_folder(report_id)
+            if os.path.isdir(simulation_dir):
+                build_report_evidence(
+                    report_id=report_id,
+                    report_dir=report_dir,
+                    simulation_dir=simulation_dir,
+                    outline=outline,
+                )
+            else:
+                logger.warning(f"跳过报告证据生成，模拟目录不存在: {simulation_dir}")
             
             # 计算总耗时
             total_time_seconds = (datetime.now() - start_time).total_seconds()

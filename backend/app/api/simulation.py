@@ -12,6 +12,7 @@ from ..config import Config
 from ..services.zep_entity_reader import ZepEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
+from ..services.simulation_observation_store import search_observations
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
 from ..utils.logger import get_logger
 from ..models.project import ProjectManager
@@ -265,8 +266,11 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     required_files = [
         "state.json",
         "simulation_config.json",
+        "agent_profiles.canonical.json",
+        "entity_type_registry.json",
         "reddit_profiles.json",
-        "twitter_profiles.csv"
+        "twitter_profiles.csv",
+        "preflight.json",
     ]
     
     # 检查文件是否存在
@@ -307,8 +311,15 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         # - completed: 运行完成，说明准备早就完成了
         # - stopped: 已停止，说明准备早就完成了
         # - failed: 运行失败（但准备是完成的）
-        prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "failed"]
-        if status in prepared_statuses and config_generated:
+        prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "interrupted", "failed"]
+        preflight_file = os.path.join(simulation_dir, "preflight.json")
+        preflight_passed = False
+        if os.path.exists(preflight_file):
+            with open(preflight_file, 'r', encoding='utf-8') as pf:
+                preflight_data = json.load(pf)
+            preflight_passed = preflight_data.get("status") == "passed"
+
+        if status in prepared_statuses and config_generated and preflight_passed:
             # 获取文件统计信息
             profiles_file = os.path.join(simulation_dir, "reddit_profiles.json")
             config_file = os.path.join(simulation_dir, "simulation_config.json")
@@ -339,6 +350,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                 "profiles_count": profiles_count,
                 "entity_types": state_data.get("entity_types", []),
                 "config_generated": config_generated,
+                "preflight_passed": preflight_passed,
                 "created_at": state_data.get("created_at"),
                 "updated_at": state_data.get("updated_at"),
                 "existing_files": existing_files
@@ -348,7 +360,8 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
             return False, {
                 "reason": f"状态不在已准备列表中或config_generated为false: status={status}, config_generated={config_generated}",
                 "status": status,
-                "config_generated": config_generated
+                "config_generated": config_generated,
+                "preflight_passed": preflight_passed,
             }
             
     except Exception as e:
@@ -1228,10 +1241,11 @@ def get_simulation_config_realtime(simulation_id: str):
             response_data["summary"] = {
                 "total_agents": len(config.get("agent_configs", [])),
                 "simulation_hours": config.get("time_config", {}).get("total_simulation_hours"),
-                "initial_posts_count": len(config.get("event_config", {}).get("initial_posts", [])),
+                "initial_posts_count": len(config.get("bootstrap_posts", config.get("event_config", {}).get("initial_posts", []))),
                 "hot_topics_count": len(config.get("event_config", {}).get("hot_topics", [])),
                 "has_twitter_config": "twitter_config" in config,
                 "has_reddit_config": "reddit_config" in config,
+                "has_context_profile": "context_profile" in config,
                 "generated_at": config.get("generated_at"),
                 "llm_model": config.get("llm_model")
             }
@@ -1279,6 +1293,76 @@ def get_simulation_config(simulation_id: str):
         
     except Exception as e:
         logger.error(f"获取配置失败: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/<simulation_id>/preflight', methods=['GET'])
+def get_simulation_preflight(simulation_id: str):
+    try:
+        manager = SimulationManager()
+        preflight = manager.get_preflight(simulation_id)
+        if not preflight:
+            return jsonify({
+                "success": False,
+                "error": "preflight.json 不存在，请先完成 /prepare"
+            }), 404
+        return jsonify({
+            "success": True,
+            "data": preflight
+        })
+    except Exception as e:
+        logger.error(f"获取 preflight 失败: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/<simulation_id>/diagnostics', methods=['GET'])
+def get_simulation_diagnostics(simulation_id: str):
+    try:
+        manager = SimulationManager()
+        diagnostics = manager.get_diagnostics(simulation_id)
+        return jsonify({
+            "success": True,
+            "data": diagnostics
+        })
+    except Exception as e:
+        logger.error(f"获取 diagnostics 失败: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/<simulation_id>/observations/search', methods=['GET'])
+def search_simulation_observations(simulation_id: str):
+    try:
+        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        if not os.path.exists(sim_dir):
+            return jsonify({
+                "success": False,
+                "error": f"模拟不存在: {simulation_id}"
+            }), 404
+        result = search_observations(
+            simulation_dir=sim_dir,
+            query=request.args.get('q', ''),
+            platform=request.args.get('platform'),
+            agent_id=request.args.get('agent_id', type=int),
+            limit=request.args.get('limit', 50, type=int),
+        )
+        return jsonify({
+            "success": True,
+            "data": result
+        })
+    except Exception as e:
+        logger.error(f"搜索 observation 失败: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),

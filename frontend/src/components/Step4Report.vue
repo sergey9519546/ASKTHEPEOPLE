@@ -13,6 +13,7 @@
             </div>
             <h1 class="main-title">{{ reportOutline.title }}</h1>
             <p class="sub-title">{{ reportOutline.summary }}</p>
+            <p v-if="reportEvidenceError && isComplete" class="evidence-error">{{ reportEvidenceError }}</p>
             <div class="header-divider"></div>
           </div>
 
@@ -49,6 +50,27 @@
               <div class="section-body" v-show="!collapsedSections.has(idx)">
                 <!-- Completed Content -->
                 <div v-if="generatedSections[idx + 1]" class="generated-content" v-html="renderMarkdown(generatedSections[idx + 1])"></div>
+
+                <div v-if="getSectionEvidence(idx + 1).length > 0" class="evidence-panel">
+                  <div class="evidence-panel-header">
+                    <span class="evidence-label">Evidence</span>
+                    <span class="evidence-count mono">{{ getSectionEvidence(idx + 1).length }}</span>
+                  </div>
+                  <div
+                    v-for="item in getSectionEvidence(idx + 1)"
+                    :key="item.claim_id"
+                    class="evidence-item"
+                  >
+                    <div class="evidence-item-meta">
+                      <span class="evidence-source">{{ item.source_type }}</span>
+                      <span v-if="item.platform" class="evidence-platform mono">{{ item.platform }}</span>
+                      <span v-if="item.agent_id !== null && item.agent_id !== undefined" class="evidence-agent mono">A{{ item.agent_id }}</span>
+                      <span v-if="item.round_num !== null && item.round_num !== undefined" class="evidence-round mono">R{{ item.round_num }}</span>
+                    </div>
+                    <div class="evidence-item-excerpt">{{ item.excerpt }}</div>
+                    <div class="evidence-item-trace mono">{{ item.trace_ref }}</div>
+                  </div>
+                </div>
                 
                 <!-- Loading State -->
                 <div v-else-if="currentSectionIndex === idx + 1" class="loading-state">
@@ -392,7 +414,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, h, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { getAgentLog, getConsoleLog } from '../api/report'
+import { getAgentLog, getConsoleLog, getReportEvidence } from '../api/report'
 
 const router = useRouter()
 
@@ -419,6 +441,9 @@ const consoleLogLine = ref(0)
 const reportOutline = ref(null)
 const currentSectionIndex = ref(null)
 const generatedSections = ref({})
+const reportEvidence = ref([])
+const reportEvidenceLoaded = ref(false)
+const reportEvidenceError = ref('')
 const expandedContent = ref(new Set())
 const expandedLogs = ref(new Set())
 const collapsedSections = ref(new Set())
@@ -1827,6 +1852,10 @@ const addLog = (msg) => {
   emit('add-log', msg)
 }
 
+const getSectionEvidence = (sectionIndex) => {
+  return reportEvidence.value.filter(item => item.section_index === sectionIndex)
+}
+
 const isSectionCompleted = (sectionIndex) => {
   return !!generatedSections.value[sectionIndex]
 }
@@ -2052,6 +2081,7 @@ const fetchAgentLog = async () => {
             currentSectionIndex.value = null  // 确保清除 loading 状态
             emit('update-status', 'completed')
             stopPolling()
+            fetchReportEvidence(true)
             // 滚动逻辑统一在循环结束后的 nextTick 中处理
           }
           
@@ -2076,6 +2106,22 @@ const fetchAgentLog = async () => {
     }
   } catch (err) {
     console.warn('Failed to fetch agent log:', err)
+  }
+}
+
+const fetchReportEvidence = async (force = false) => {
+  if (!props.reportId) return
+  if (reportEvidenceLoaded.value && !force) return
+
+  try {
+    const res = await getReportEvidence(props.reportId)
+    reportEvidence.value = res.data?.evidence || []
+    reportEvidenceLoaded.value = true
+    reportEvidenceError.value = ''
+  } catch (err) {
+    reportEvidence.value = []
+    reportEvidenceLoaded.value = false
+    reportEvidenceError.value = err?.message || 'Failed to fetch report evidence'
   }
 }
 
@@ -2175,6 +2221,7 @@ onMounted(() => {
   if (props.reportId) {
     addLog(`Report Agent initialized: ${props.reportId}`)
     startPolling()
+    fetchReportEvidence()
   }
 })
 
@@ -2191,6 +2238,9 @@ watch(() => props.reportId, (newId) => {
     reportOutline.value = null
     currentSectionIndex.value = null
     generatedSections.value = {}
+    reportEvidence.value = []
+    reportEvidenceLoaded.value = false
+    reportEvidenceError.value = ''
     expandedContent.value = new Set()
     expandedLogs.value = new Set()
     collapsedSections.value = new Set()
@@ -2198,6 +2248,7 @@ watch(() => props.reportId, (newId) => {
     startTime.value = null
     
     startPolling()
+    fetchReportEvidence()
   }
 }, { immediate: true })
 </script>
@@ -2357,6 +2408,13 @@ watch(() => props.reportId, (newId) => {
   font-weight: 500;
 }
 
+.evidence-error {
+  margin: 16px 0 0 0;
+  font-size: 13px;
+  color: var(--bauhaus-red);
+  font-weight: 600;
+}
+
 /* Sections List */
 .sections-list {
   display: flex;
@@ -2409,6 +2467,76 @@ watch(() => props.reportId, (newId) => {
 .generated-content {
   font-size: 16px;
   line-height: 1.6;
+}
+
+.evidence-panel {
+  margin-top: 24px;
+  border-top: 2px solid var(--bauhaus-black);
+  padding-top: 16px;
+}
+
+.evidence-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.evidence-label {
+  background: var(--bauhaus-yellow);
+  color: var(--bauhaus-black);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.evidence-count {
+  font-size: 12px;
+  color: var(--bauhaus-black);
+}
+
+.evidence-item {
+  border: 2px solid var(--bauhaus-black);
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.evidence-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.evidence-source {
+  background: var(--bauhaus-black);
+  color: var(--bauhaus-cream);
+  padding: 2px 6px;
+  font-weight: 700;
+}
+
+.evidence-platform,
+.evidence-agent,
+.evidence-round,
+.evidence-item-trace {
+  color: #4b5563;
+}
+
+.evidence-item-excerpt {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--bauhaus-black);
+  margin-bottom: 8px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.evidence-item-trace {
+  font-size: 11px;
 }
 
 .generated-content :deep(.md-p) { margin-bottom: 20px; }

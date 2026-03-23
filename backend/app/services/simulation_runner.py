@@ -22,6 +22,8 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .zep_graph_memory_updater import ZepGraphMemoryManager
 from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
+from .simulation_observation_store import sync_observation_store
+from .simulation_preflight import run_preflight
 
 logger = get_logger('askthepeople.simulation_runner')
 
@@ -41,6 +43,7 @@ class RunnerStatus(str, Enum):
     STOPPING = "stopping"
     STOPPED = "stopped"
     COMPLETED = "completed"
+    INTERRUPTED = "interrupted"
     FAILED = "failed"
 
 
@@ -225,6 +228,15 @@ class SimulationRunner:
     
     # 图谱记忆更新配置
     _graph_memory_enabled: Dict[str, bool] = {}  # simulation_id -> enabled
+
+    @classmethod
+    def _mark_interrupted(cls, simulation_id: str, state: SimulationRunState, reason: str) -> None:
+        state.runner_status = RunnerStatus.INTERRUPTED
+        state.twitter_running = False
+        state.reddit_running = False
+        state.completed_at = datetime.now().isoformat()
+        state.error = reason
+        cls._save_run_state(state)
     
     @classmethod
     def get_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
@@ -288,7 +300,13 @@ class SimulationRunner:
                     result=a.get("result"),
                     success=a.get("success", True),
                 ))
-            
+
+            if state.runner_status in [RunnerStatus.RUNNING, RunnerStatus.STARTING, RunnerStatus.STOPPING]:
+                cls._mark_interrupted(
+                    simulation_id,
+                    state,
+                    "interrupted by restart before the runtime completed",
+                )
             return state
         except Exception as e:
             logger.error(f"加载运行状态失败: {str(e)}")
@@ -344,6 +362,10 @@ class SimulationRunner:
         
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
+
+        preflight = run_preflight(sim_dir)
+        if preflight.get("status") != "passed":
+            raise ValueError(f"模拟 preflight 未通过: {preflight.get('failed_checks', [])}")
         
         # 初始化运行状态
         time_config = config.get("time_config", {})
@@ -540,12 +562,14 @@ class SimulationRunner:
             state.twitter_running = False
             state.reddit_running = False
             cls._save_run_state(state)
+            sync_observation_store(sim_dir, run_state=state.to_detail_dict())
             
         except Exception as e:
             logger.error(f"监控线程异常: {simulation_id}, error={str(e)}")
             state.runner_status = RunnerStatus.FAILED
             state.error = str(e)
             cls._save_run_state(state)
+            sync_observation_store(sim_dir, run_state=state.to_detail_dict())
         
         finally:
             # 停止图谱记忆更新器
@@ -803,6 +827,7 @@ class SimulationRunner:
         state.reddit_running = False
         state.completed_at = datetime.now().isoformat()
         cls._save_run_state(state)
+        sync_observation_store(os.path.join(cls.RUN_STATE_DIR, simulation_id), run_state=state.to_detail_dict())
         
         # 停止图谱记忆更新器
         if cls._graph_memory_enabled.get(simulation_id, False):
@@ -1228,12 +1253,13 @@ class SimulationRunner:
                     # 更新 run_state.json
                     state = cls.get_run_state(simulation_id)
                     if state:
-                        state.runner_status = RunnerStatus.STOPPED
+                        state.runner_status = RunnerStatus.INTERRUPTED
                         state.twitter_running = False
                         state.reddit_running = False
                         state.completed_at = datetime.now().isoformat()
-                        state.error = "服务器关闭，模拟被终止"
+                        state.error = "interrupted by server shutdown"
                         cls._save_run_state(state)
+                        sync_observation_store(os.path.join(cls.RUN_STATE_DIR, simulation_id), run_state=state.to_detail_dict())
                     
                     # 同时更新 state.json，将状态设为 stopped
                     try:
@@ -1243,7 +1269,7 @@ class SimulationRunner:
                         if os.path.exists(state_file):
                             with open(state_file, 'r', encoding='utf-8') as f:
                                 state_data = json.load(f)
-                            state_data['status'] = 'stopped'
+                            state_data['status'] = 'interrupted'
                             state_data['updated_at'] = datetime.now().isoformat()
                             with open(state_file, 'w', encoding='utf-8') as f:
                                 json.dump(state_data, f, indent=2, ensure_ascii=False)

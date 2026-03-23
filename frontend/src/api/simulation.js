@@ -67,6 +67,14 @@ export const getSimulationConfigRealtime = (simulationId) => {
   return service.get(`/api/simulation/${simulationId}/config/realtime`)
 }
 
+export const getSimulationPreflight = (simulationId) => {
+  return service.get(`/api/simulation/${simulationId}/preflight`)
+}
+
+export const getSimulationDiagnostics = (simulationId) => {
+  return service.get(`/api/simulation/${simulationId}/diagnostics`)
+}
+
 /**
  * 列出所有模拟
  * @param {string} projectId - 可选，按项目ID过滤

@@ -10,10 +10,10 @@ export const generateReport = (data) => {
 
 /**
  * 获取报告生成状态
- * @param {string} reportId
+ * @param {Object} params - { report_id?, task_id?, simulation_id? }
  */
-export const getReportStatus = (reportId) => {
-  return service.get(`/api/report/generate/status`, { params: { report_id: reportId } })
+export const getReportStatus = (params = {}) => {
+  return service.get(`/api/report/generate/status`, { params })
 }
 
 /**
@@ -40,6 +40,14 @@ export const getConsoleLog = (reportId, fromLine = 0) => {
  */
 export const getReport = (reportId) => {
   return service.get(`/api/report/${reportId}`)
+}
+
+/**
+ * 获取报告证据
+ * @param {string} reportId
+ */
+export const getReportEvidence = (reportId) => {
+  return service.get(`/api/report/${reportId}/evidence`)
 }
 
 /**

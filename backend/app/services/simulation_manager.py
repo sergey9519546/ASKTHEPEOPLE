@@ -17,6 +17,8 @@ from ..utils.logger import get_logger
 from .zep_entity_reader import ZepEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
+from .simulation_artifacts import read_json, save_prepare_artifacts, write_exports_from_canonical
+from .simulation_preflight import run_preflight
 
 logger = get_logger('askthepeople.simulation')
 
@@ -30,6 +32,7 @@ class SimulationStatus(str, Enum):
     PAUSED = "paused"
     STOPPED = "stopped"      # 模拟被手动停止
     COMPLETED = "completed"  # 模拟自然完成
+    INTERRUPTED = "interrupted"
     FAILED = "failed"
 
 
@@ -346,9 +349,13 @@ class SimulationManager:
             )
             
             state.profiles_count = len(profiles)
+
+            artifacts = save_prepare_artifacts(
+                simulation_dir=sim_dir,
+                entities=filtered.entities,
+                profiles=profiles,
+            )
             
-            # 保存Profile文件（注意：Twitter使用CSV格式，Reddit使用JSON格式）
-            # Reddit 已经在生成过程中实时保存了，这里再保存一次确保完整性
             if progress_callback:
                 progress_callback(
                     "generating_profiles", 95, 
@@ -357,20 +364,10 @@ class SimulationManager:
                     total=total_entities
                 )
             
-            if state.enable_reddit:
-                generator.save_profiles(
-                    profiles=profiles,
-                    file_path=os.path.join(sim_dir, "reddit_profiles.json"),
-                    platform="reddit"
-                )
-            
-            if state.enable_twitter:
-                # Twitter使用CSV格式！这是OASIS的要求
-                generator.save_profiles(
-                    profiles=profiles,
-                    file_path=os.path.join(sim_dir, "twitter_profiles.csv"),
-                    platform="twitter"
-                )
+            write_exports_from_canonical(
+                simulation_dir=sim_dir,
+                canonical_agents=artifacts["canonical_agents"],
+            )
             
             if progress_callback:
                 progress_callback(
@@ -406,6 +403,7 @@ class SimulationManager:
                 simulation_requirement=simulation_requirement,
                 document_text=document_text,
                 entities=filtered.entities,
+                canonical_agents=artifacts["canonical_agents"],
                 enable_twitter=state.enable_twitter,
                 enable_reddit=state.enable_reddit
             )
@@ -422,6 +420,10 @@ class SimulationManager:
             config_path = os.path.join(sim_dir, "simulation_config.json")
             with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(sim_params.to_json())
+
+            preflight = run_preflight(sim_dir)
+            if preflight.get("status") != "passed":
+                raise ValueError(f"Simulation preflight failed: {preflight.get('failed_checks', [])}")
             
             state.config_generated = True
             state.config_reasoning = sim_params.generation_reasoning
@@ -484,11 +486,17 @@ class SimulationManager:
             raise ValueError(f"模拟不存在: {simulation_id}")
         
         sim_dir = self._get_simulation_dir(simulation_id)
-        profile_path = os.path.join(sim_dir, f"{platform}_profiles.json")
-        
+        if platform == "twitter":
+            profile_path = os.path.join(sim_dir, "twitter_profiles.csv")
+            if not os.path.exists(profile_path):
+                return []
+            import csv
+            with open(profile_path, 'r', encoding='utf-8', newline='') as f:
+                return list(csv.DictReader(f))
+
+        profile_path = os.path.join(sim_dir, "reddit_profiles.json")
         if not os.path.exists(profile_path):
             return []
-        
         with open(profile_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     
@@ -502,6 +510,20 @@ class SimulationManager:
         
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
+
+    def get_preflight(self, simulation_id: str) -> Optional[Dict[str, Any]]:
+        sim_dir = self._get_simulation_dir(simulation_id)
+        return read_json(os.path.join(sim_dir, "preflight.json"))
+
+    def get_diagnostics(self, simulation_id: str) -> Dict[str, Any]:
+        sim_dir = self._get_simulation_dir(simulation_id)
+        return {
+            "canonical_agents": read_json(os.path.join(sim_dir, "agent_profiles.canonical.json"), default=[]),
+            "entity_type_registry": read_json(os.path.join(sim_dir, "entity_type_registry.json"), default=[]),
+            "relationship_bootstrap": read_json(os.path.join(sim_dir, "agent_relationship_bootstrap.json"), default=[]),
+            "model_resolution": read_json(os.path.join(sim_dir, "model_resolution.json"), default={}),
+            "preflight": read_json(os.path.join(sim_dir, "preflight.json"), default=None),
+        }
     
     def get_run_instructions(self, simulation_id: str) -> Dict[str, str]:
         """获取运行说明"""

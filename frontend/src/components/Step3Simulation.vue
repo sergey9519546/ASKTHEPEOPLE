@@ -93,13 +93,51 @@
       <div class="action-controls">
         <button 
           class="action-btn primary"
-          :disabled="phase !== 2 || isGeneratingReport"
+          :disabled="!canGenerateReport || isGeneratingReport"
           @click="handleNextStep"
         >
           <span v-if="isGeneratingReport" class="loading-spinner-small"></span>
           {{ isGeneratingReport ? '启动中...' : '开始生成结果报告' }} 
           <span v-if="!isGeneratingReport" class="arrow-icon">→</span>
         </button>
+      </div>
+    </div>
+
+    <div class="contract-strip" v-if="preflight || diagnostics || diagnosticsError">
+      <div class="contract-card" :class="preflight?.status === 'failed' ? 'contract-failed' : 'contract-ok'">
+        <div class="contract-label">Preflight</div>
+        <div class="contract-value">{{ preflight?.status || 'loading' }}</div>
+        <div class="contract-meta" v-if="preflight">
+          {{ preflight.failed_checks?.length || 0 }} failed checks
+        </div>
+      </div>
+
+      <div class="contract-card" v-if="diagnostics">
+        <div class="contract-label">Canonical Agents</div>
+        <div class="contract-value">{{ diagnostics.canonical_agents?.length || 0 }}</div>
+        <div class="contract-meta">
+          {{ diagnostics.entity_type_registry?.length || 0 }} normalized roles
+        </div>
+      </div>
+
+      <div class="contract-card" v-if="diagnostics">
+        <div class="contract-label">Bootstrap Graph</div>
+        <div class="contract-value">{{ diagnostics.relationship_bootstrap?.length || 0 }}</div>
+        <div class="contract-meta">relationship seeds</div>
+      </div>
+
+      <div class="contract-card" v-if="diagnostics?.model_resolution?.actor">
+        <div class="contract-label">Actor Model</div>
+        <div class="contract-value">{{ diagnostics.model_resolution.actor.model_name || 'unknown' }}</div>
+        <div class="contract-meta">
+          {{ diagnostics.model_resolution.actor.provider_mode || 'unknown' }}
+        </div>
+      </div>
+
+      <div class="contract-card contract-error" v-if="diagnosticsError">
+        <div class="contract-label">Diagnostics</div>
+        <div class="contract-value">unavailable</div>
+        <div class="contract-meta">{{ diagnosticsError }}</div>
       </div>
     </div>
 
@@ -292,7 +330,9 @@ import {
   startSimulation, 
   stopSimulation,
   getRunStatus, 
-  getRunStatusDetail
+  getRunStatusDetail,
+  getSimulationDiagnostics,
+  getSimulationPreflight
 } from '../api/simulation'
 import { generateReport } from '../api/report'
 
@@ -322,6 +362,9 @@ const runStatus = ref({})
 const allActions = ref([]) // 所有动作（增量累积）
 const actionIds = ref(new Set()) // 用于去重的动作ID集合
 const scrollContainer = ref(null)
+const preflight = ref(null)
+const diagnostics = ref(null)
+const diagnosticsError = ref(null)
 
 // Computed
 // 按时间顺序显示动作（最新的在最后面，即底部）
@@ -357,9 +400,37 @@ const redditElapsedTime = computed(() => {
   return formatElapsedTime(runStatus.value.reddit_current_round || 0)
 })
 
+const canGenerateReport = computed(() => {
+  return phase.value === 2 && runStatus.value.runner_status !== 'interrupted'
+})
+
 // Methods
 const addLog = (msg) => {
   emit('add-log', msg)
+}
+
+const fetchExecutionContracts = async () => {
+  if (!props.simulationId) return
+
+  diagnosticsError.value = null
+  try {
+    const [preflightRes, diagnosticsRes] = await Promise.all([
+      getSimulationPreflight(props.simulationId),
+      getSimulationDiagnostics(props.simulationId)
+    ])
+
+    if (preflightRes.success) {
+      preflight.value = preflightRes.data
+    }
+
+    if (diagnosticsRes.success) {
+      diagnostics.value = diagnosticsRes.data
+    } else {
+      diagnosticsError.value = diagnosticsRes.error || 'failed to load diagnostics'
+    }
+  } catch (err) {
+    diagnosticsError.value = err.message || 'failed to load diagnostics'
+  }
 }
 
 // 重置所有状态（用于重新启动模拟）
@@ -496,6 +567,14 @@ const fetchRunStatus = async () => {
       const data = res.data
       
       runStatus.value = data
+
+      if (data.runner_status === 'interrupted') {
+        addLog(`模拟已中断: ${data.error || 'runtime interrupted'}`)
+        phase.value = 2
+        stopPolling()
+        emit('update-status', 'error')
+        return
+      }
       
       // 分别检测各平台的轮次变化并输出日志
       if (data.twitter_current_round > prevTwitterRound.value) {
@@ -684,8 +763,16 @@ watch(() => props.systemLogs?.length, () => {
   })
 })
 
+watch(() => props.simulationId, () => {
+  preflight.value = null
+  diagnostics.value = null
+  diagnosticsError.value = null
+  fetchExecutionContracts()
+})
+
 onMounted(() => {
   addLog('Step3 模拟运行初始化')
+  fetchExecutionContracts()
   if (props.simulationId) {
     doStartSimulation()
   }
@@ -832,6 +919,54 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+.contract-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 24px;
+  background: #fff;
+  border-bottom: 2px solid var(--bau-black);
+}
+
+.contract-card {
+  min-width: 160px;
+  padding: 10px 14px;
+  background: var(--bau-bg);
+  border: 2px solid var(--bau-black);
+}
+
+.contract-label {
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+}
+
+.contract-value {
+  margin-top: 4px;
+  font-size: 16px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--bau-black);
+}
+
+.contract-meta {
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #444;
+}
+
+.contract-ok {
+  background: #e5ff8a;
+}
+
+.contract-failed,
+.contract-error {
+  background: #ffd7d1;
+}
+
 /* --- Main Content --- */
 .main-content-area {
   flex: 1;
@@ -947,4 +1082,4 @@ onUnmounted(() => {
 .log-msg { color: #FFF; }
 
 .mono { font-family: var(--font-mono); }
-</style>
+</style>

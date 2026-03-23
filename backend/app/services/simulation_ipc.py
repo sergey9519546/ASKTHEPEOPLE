@@ -27,6 +27,11 @@ class CommandType(str, Enum):
     INTERVIEW = "interview"           # 单个Agent采访
     BATCH_INTERVIEW = "batch_interview"  # 批量采访
     CLOSE_ENV = "close_env"           # 关闭环境
+    INJECT_POST = "inject_post"
+    INJECT_EVENT = "inject_event"
+    PAUSE_AFTER_ROUND = "pause_after_round"
+    RESUME = "resume"
+    STOP = "stop"
 
 
 class CommandStatus(str, Enum):
@@ -266,6 +271,18 @@ class SimulationIPCClient:
             args={},
             timeout=timeout
         )
+
+    def send_runtime_control(
+        self,
+        command_type: CommandType,
+        args: Optional[Dict[str, Any]] = None,
+        timeout: float = 60.0,
+    ) -> IPCResponse:
+        return self.send_command(
+            command_type=command_type,
+            args=args or {},
+            timeout=timeout,
+        )
     
     def check_env_alive(self) -> bool:
         """
@@ -280,7 +297,7 @@ class SimulationIPCClient:
         try:
             with open(status_file, 'r', encoding='utf-8') as f:
                 status = json.load(f)
-            return status.get("status") == "alive"
+            return status.get("status") in {"alive", "running", "paused", "pausing_after_round"}
         except (json.JSONDecodeError, OSError):
             return False
 
