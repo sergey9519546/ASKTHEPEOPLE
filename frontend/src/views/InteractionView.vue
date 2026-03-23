@@ -1,42 +1,42 @@
 <template>
-  <div class="main-view">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="header-left">
-        <div class="brand" @click="router.push('/')">MiroFish</div>
+  <div class="bauhaus-view-root">
+    <!-- HEADER -->
+    <header class="bauhaus-header">
+      <div class="header-left" @click="router.push('/')">
+        <span class="brand-monogram">ATP</span>
+        <span class="brand-full">ASK THE PEOPLE</span>
       </div>
       
       <div class="header-center">
-        <div class="view-switcher">
+        <div class="view-mode-selector">
           <button 
-            v-for="mode in ['graph', 'split', 'workbench']" 
-            :key="mode"
-            class="switch-btn"
-            :class="{ active: viewMode === mode }"
-            @click="viewMode = mode"
+            v-for="m in ['graph', 'split', 'workbench']" 
+            :key="m"
+            class="mode-btn"
+            :class="{ 'is-active': viewMode === m }"
+            @click="viewMode = m"
           >
-            {{ { graph: '图谱', split: '双栏', workbench: '工作台' }[mode] }}
+            {{ m.toUpperCase() }}
           </button>
         </div>
       </div>
 
       <div class="header-right">
-        <div class="workflow-step">
-          <span class="step-num">Step 5/5</span>
-          <span class="step-name">深度互动</span>
+        <div class="step-indicator">
+          <span class="step-val">STEP 05/05</span>
+          <span class="step-label">DEEP_INTERACTION</span>
         </div>
-        <div class="step-divider"></div>
-        <span class="status-indicator" :class="statusClass">
-          <span class="dot"></span>
-          {{ statusText }}
-        </span>
+        <div class="status-box" :class="currentStatus">
+          <span class="status-dot"></span>
+          <span class="status-msg">{{ currentStatus.toUpperCase() }}</span>
+        </div>
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="content-area">
-      <!-- Left Panel: Graph -->
-      <div class="panel-wrapper left" :style="leftPanelStyle">
+    <!-- CONTENT -->
+    <main class="workbench-viewport">
+      <!-- LEFT: GRAPH -->
+      <div class="panel-container left" :style="leftPanelStyle">
         <GraphPanel 
           :graphData="graphData"
           :loading="graphLoading"
@@ -47,17 +47,30 @@
         />
       </div>
 
-      <!-- Right Panel: Step5 深度互动 -->
-      <div class="panel-wrapper right" :style="rightPanelStyle">
-        <Step5Interaction
-          :reportId="currentReportId"
-          :simulationId="simulationId"
-          :systemLogs="systemLogs"
-          @add-log="addLog"
-          @update-status="updateStatus"
-        />
+      <!-- RIGHT: WORKBENCH -->
+      <div class="panel-container right" :style="rightPanelStyle">
+        <div class="workbench-frame">
+          <header class="workbench-header">
+            <span class="wb-label">WORKBENCH_INTERACTIVE</span>
+          </header>
+          <div class="wb-content">
+            <Step5Interaction
+              :reportId="currentReportId"
+              :simulationId="simulationId"
+              :systemLogs="systemLogs"
+              @add-log="addLog"
+              @update-status="updateStatus"
+            />
+          </div>
+        </div>
       </div>
     </main>
+
+    <!-- FOOTER -->
+    <footer class="bauhaus-footer-mini">
+      <div class="f-block">SYS_STATUS: READY</div>
+      <div class="f-block">LOC: WORKSPACE_DEEP_INTERACTION</div>
+    </footer>
   </div>
 </template>
 
@@ -73,133 +86,72 @@ import { getReport } from '../api/report'
 const route = useRoute()
 const router = useRouter()
 
-// Props
-const props = defineProps({
-  reportId: String
-})
-
-// Layout State - 默认切换到工作台视角
 const viewMode = ref('workbench')
-
-// Data State
 const currentReportId = ref(route.params.reportId)
 const simulationId = ref(null)
 const projectData = ref(null)
 const graphData = ref(null)
 const graphLoading = ref(false)
 const systemLogs = ref([])
-const currentStatus = ref('ready') // ready | processing | completed | error
+const currentStatus = ref('ready')
 
-// --- Computed Layout Styles ---
+// Layout Styles
 const leftPanelStyle = computed(() => {
   if (viewMode.value === 'graph') return { width: '100%', opacity: 1, transform: 'translateX(0)' }
-  if (viewMode.value === 'workbench') return { width: '0%', opacity: 0, transform: 'translateX(-20px)' }
+  if (viewMode.value === 'workbench') return { width: '0%', opacity: 0, transform: 'translateX(-20px)', pointerEvents: 'none' }
   return { width: '50%', opacity: 1, transform: 'translateX(0)' }
 })
 
 const rightPanelStyle = computed(() => {
   if (viewMode.value === 'workbench') return { width: '100%', opacity: 1, transform: 'translateX(0)' }
-  if (viewMode.value === 'graph') return { width: '0%', opacity: 0, transform: 'translateX(20px)' }
+  if (viewMode.value === 'graph') return { width: '0%', opacity: 0, transform: 'translateX(20px)', pointerEvents: 'none' }
   return { width: '50%', opacity: 1, transform: 'translateX(0)' }
 })
 
-// --- Status Computed ---
-const statusClass = computed(() => {
-  return currentStatus.value
-})
-
-const statusText = computed(() => {
-  if (currentStatus.value === 'error') return 'Error'
-  if (currentStatus.value === 'completed') return 'Completed'
-  if (currentStatus.value === 'processing') return 'Processing'
-  return 'Ready'
-})
-
-// --- Helpers ---
 const addLog = (msg) => {
-  const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + new Date().getMilliseconds().toString().padStart(3, '0')
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
   systemLogs.value.push({ time, msg })
-  if (systemLogs.value.length > 200) {
-    systemLogs.value.shift()
-  }
+  if (systemLogs.value.length > 200) systemLogs.value.shift()
 }
 
-const updateStatus = (status) => {
-  currentStatus.value = status
-}
+const updateStatus = (status) => currentStatus.value = status
 
-// --- Layout Methods ---
-const toggleMaximize = (target) => {
-  if (viewMode.value === target) {
-    viewMode.value = 'split'
-  } else {
-    viewMode.value = target
-  }
-}
+const toggleMaximize = (target) => viewMode.value = (viewMode.value === target ? 'split' : target)
 
-// --- Data Logic ---
 const loadReportData = async () => {
   try {
-    addLog(`加载报告数据: ${currentReportId.value}`)
-    
-    // 获取 report 信息以获取 simulation_id
+    addLog(`Accessing interaction layer: ${currentReportId.value}`)
     const reportRes = await getReport(currentReportId.value)
     if (reportRes.success && reportRes.data) {
       const reportData = reportRes.data
       simulationId.value = reportData.simulation_id
-      
       if (simulationId.value) {
-        // 获取 simulation 信息
         const simRes = await getSimulation(simulationId.value)
         if (simRes.success && simRes.data) {
           const simData = simRes.data
-          
-          // 获取 project 信息
           if (simData.project_id) {
             const projRes = await getProject(simData.project_id)
             if (projRes.success && projRes.data) {
               projectData.value = projRes.data
-              addLog(`项目加载成功: ${projRes.data.project_id}`)
-              
-              // 获取 graph 数据
-              if (projRes.data.graph_id) {
-                await loadGraph(projRes.data.graph_id)
-              }
+              if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id)
             }
           }
         }
       }
-    } else {
-      addLog(`获取报告信息失败: ${reportRes.error || '未知错误'}`)
     }
-  } catch (err) {
-    addLog(`加载异常: ${err.message}`)
-  }
+  } catch (err) { addLog(`DB Error: ${err.message}`) }
 }
 
-const loadGraph = async (graphId) => {
+const loadGraph = async (id) => {
   graphLoading.value = true
-  
   try {
-    const res = await getGraphData(graphId)
-    if (res.success) {
-      graphData.value = res.data
-      addLog('图谱数据加载成功')
-    }
-  } catch (err) {
-    addLog(`图谱加载失败: ${err.message}`)
-  } finally {
-    graphLoading.value = false
-  }
+    const res = await getGraphData(id)
+    if (res.success) graphData.value = res.data
+  } finally { graphLoading.value = false }
 }
 
-const refreshGraph = () => {
-  if (projectData.value?.graph_id) {
-    loadGraph(projectData.value.graph_id)
-  }
-}
+const refreshGraph = () => projectData.value?.graph_id && loadGraph(projectData.value.graph_id)
 
-// Watch route params
 watch(() => route.params.reportId, (newId) => {
   if (newId && newId !== currentReportId.value) {
     currentReportId.value = newId
@@ -208,151 +160,62 @@ watch(() => route.params.reportId, (newId) => {
 }, { immediate: true })
 
 onMounted(() => {
-  addLog('InteractionView 初始化')
+  addLog('Interaction View Initialized')
   loadReportData()
 })
 </script>
 
 <style scoped>
-.main-view {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bau-bg);
-  overflow: hidden;
-  font-family: var(--font-sans);
-  color: var(--bau-black);
+.bauhaus-view-root {
+  height: 100vh; background: white; color: black;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 
-/* Header */
-.app-header {
-  height: 60px;
-  border-bottom: 2px solid var(--bau-black);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 40px;
-  background: #FFF;
-  z-index: 100;
-  position: relative;
+.bauhaus-header {
+  height: 70px; background: white; border-bottom: 4px solid #000;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 40px; z-index: 100;
 }
 
-.brand {
-  font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 1.2rem;
-  text-transform: uppercase;
-  cursor: pointer;
-  color: var(--bau-black);
+.header-left { display: flex; align-items: center; gap: 15px; cursor: pointer; }
+.brand-monogram { background: #000; color: white; padding: 4px 8px; font-weight: 950; font-size: 1.2rem; }
+.brand-full { font-weight: 950; font-size: 1rem; letter-spacing: -0.5px; }
+
+.view-mode-selector { display: flex; border: 3px solid #000; background: #f0f0f0; padding: 4px; gap: 4px; }
+.mode-btn { 
+  border: none; background: transparent; padding: 6px 15px; 
+  font-family: var(--font-mono); font-weight: 950; font-size: 10px; cursor: pointer;
+}
+.mode-btn.is-active { background: #000; color: white; }
+.mode-btn:hover:not(.is-active) { background: #E5FF00; }
+
+.header-right { display: flex; align-items: center; gap: 25px; }
+.step-indicator { display: flex; align-items: center; gap: 10px; font-weight: 950; font-size: 11px; }
+.step-val { color: #FF331F; font-family: var(--font-mono); }
+.status-box { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-weight: 950; font-size: 10px; }
+.status-dot { width: 10px; height: 10px; border: 2px solid #000; }
+.status-box.processing .status-dot { background: #FF331F; animation: flash 0.8s infinite; }
+.status-box.ready .status-dot { background: #0026FE; }
+@keyframes flash { 50% { opacity: 0; } }
+
+.workbench-viewport { flex: 1; display: flex; padding: 20px; gap: 20px; overflow: hidden; position: relative; }
+.panel-container { 
+  height: 100%; transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  background: white; border: 4px solid #000; overflow: hidden;
 }
 
-.header-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+.workbench-frame { height: 100%; display: flex; flex-direction: column; }
+.workbench-header { height: 50px; border-bottom: 4px solid #000; display: flex; align-items: center; padding: 0 20px; background: #f9f9f9; }
+.wb-label { font-weight: 950; font-size: 11px; letter-spacing: 1px; }
+.wb-content { flex: 1; overflow-y: auto; padding: 0px; }
+
+.bauhaus-footer-mini {
+  height: 40px; padding: 0 40px; border-top: 4px solid #000;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono); font-weight: 950; font-size: 10px;
 }
 
-.view-switcher {
-  display: flex;
-  background: var(--bau-bg);
-  padding: 4px;
-  border: 2px solid var(--bau-black);
-  gap: 4px;
-}
-
-.switch-btn {
-  border: none;
-  background: transparent;
-  padding: 6px 16px;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--bau-black);
-  cursor: pointer;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-
-.switch-btn.active {
-  background: var(--bau-black);
-  color: #FFF;
-}
-
-.switch-btn:hover:not(.active) {
-  background: var(--bau-yellow);
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.workflow-step {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.85rem;
-}
-
-.step-num {
-  font-family: var(--font-mono);
-  font-weight: 900;
-  color: var(--bau-red);
-}
-
-.step-name {
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.step-divider {
-  width: 2px;
-  height: 20px;
-  background-color: var(--bau-black);
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
-  font-weight: 800;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--bau-black);
-  background: #DDD;
-}
-
-.status-indicator.processing .dot {
-  background: var(--bau-red);
-  animation: pulse 1s infinite step-end;
-}
-.status-indicator.completed .dot {
-  background: var(--bau-blue);
-}
-.status-indicator.error .dot {
-  background: var(--bau-black);
-}
-
-@keyframes pulse { 50% { opacity: 0; } }
-
-/* Content */
-.content-area {
-  flex: 1;
-  display: flex;
-  position: relative;
-  overflow: hidden;
-  padding: 20px;
-  gap: 20px;
-}
-
-.panel-wrapper {
-  height: 100%;
-  border-right: 1px solid var(--border-color);
+@media (max-width: 1100px) {
+  .workbench-viewport { flex-direction: column; }
+  .panel-container { width: 100% !important; height: 50% !important; }
 }
 </style>

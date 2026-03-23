@@ -3,6 +3,7 @@
 ## What This App Does (Current State)
 
 This is a **multi-agent social simulation engine**. Users upload documents (news articles, reports), and the system:
+
 1. **Builds a knowledge graph** from the document (entities, relationships)
 2. **Generates AI agent profiles** (simulated people with personalities & memories)
 3. **Runs a social media simulation** (agents post, comment, react on Twitter/Reddit-like platforms)
@@ -18,7 +19,7 @@ The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "
 ### Layer 1: Surface Text (40+ files)
 
 | Location | What to change |
-|---|---|
+| :--- | :--- |
 | [frontend/index.html](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/index.html) | Title, meta description |
 | [frontend/src/views/Home.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/views/Home.vue) | Navbar brand `MIROFISH`, hero text, logo `<img>`, GitHub link, engine badge `MiroFish-V1.0`, all Chinese marketing copy |
 | [frontend/src/views/MainView.vue](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/src/views/MainView.vue) | Navbar `MIROFISH` |
@@ -36,10 +37,10 @@ The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "
 ### Layer 2: Internal Code References (Backend)
 
 | File | What to change |
-|---|---|
+| :--- | :--- |
 | [backend/pyproject.toml](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/pyproject.toml) | `name = "mirofish-backend"`, description, authors |
 | [backend/requirements.txt](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/requirements.txt) | Header comment `MiroFish Backend Dependencies` |
-| [backend/app/__init__.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/__init__.py) | Docstring, [setup_logger('mirofish')](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py#30-89), startup logs `MiroFish Backend`, health check `'service': 'MiroFish Backend'` |
+| [backend/app/**init**.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/__init__.py) | Docstring, [setup_logger('mirofish')](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py#30-89), startup logs `MiroFish Backend`, health check `'service': 'MiroFish Backend'` |
 | [backend/app/config.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/config.py) | Comment `MiroFish/.env`, `SECRET_KEY` default `'mirofish-secret-key'` |
 | [backend/app/utils/logger.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py) | Default logger name `'mirofish'` in [setup_logger()](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py#30-89) and [get_logger()](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/utils/logger.py#91-105) |
 | [backend/run.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/run.py) | Docstring `MiroFish Backend 启动入口` |
@@ -61,7 +62,7 @@ The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "
 ### Layer 3: External Affiliations to Purge
 
 | Item | Action |
-|---|---|
+| :--- | :--- |
 | [README.md](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/README.md) / [README-EN.md](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/README-EN.md) | **Rewrite from scratch.** Remove ALL: Trendshift badge, Shanda logo + link, GitHub badge URLs (`666ghj/MiroFish`), DeepWiki link, X/Instagram handles (`mirofish_ai`), Bilibili video embeds, hiring section (`mirofish@shanda.com`), Star History chart, QQ group, OASIS/CAMEL-AI acknowledgment |
 | [static/image/MiroFish_logo.jpeg](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/static/image/MiroFish_logo.jpeg) | **Delete** |
 | [static/image/MiroFish_logo_compressed.jpeg](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/static/image/MiroFish_logo_compressed.jpeg) | **Delete** |
@@ -75,27 +76,39 @@ The entire UI is in **Chinese**. The brand is **MiroFish** ("预测万物" — "
 ### Layer 4: Language Localization (Chinese → English)
 
 The **entire frontend UI** is in Chinese. Every view and component contains Chinese text:
+
 - Navigation labels, button text, form labels, status messages, error messages
 - Workflow step descriptions (图谱构建, 环境搭建, 开始模拟, 报告生成, 深度互动)
 - Placeholder text, tooltips, headings
 - [index.html](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/frontend/index.html) `lang="zh-CN"` → `lang="en"`
 
 Backend Chinese text:
+
 - [.env.example](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/.env.example) comments
 - Config comments, error messages, log messages
 - LLM prompt instructions in [ontology_generator.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/ontology_generator.py), [simulation_config_generator.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/simulation_config_generator.py), [oasis_profile_generator.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/oasis_profile_generator.py), [report_agent.py](file:///c:/Users/serge/OneDrive/Documents/GitHub/ASKTHEPEOPLE/backend/app/services/report_agent.py)
 
-### Layer 5: Visual Redesign
+### Layer 5: Visual Redesign (Bauhaus Pivot)
 
-Current design: White background, black/orange accent, JetBrains Mono font. Functional but generic.
+The design is moving away from the "Premium Dark" theme towards a **Creative Studio Minimalistic Bauhaus** aesthetic.
 
-**New "ASKTHEPEOPLE" identity:**
-- **Dark mode** with deep slate/charcoal (#0f1117) base
-- **Accent palette:** Electric cyan (#00d4ff) + vivid purple (#7c3aed) gradient for CTAs and highlights
-- **Glass panels:** Semi-transparent card backgrounds with backdrop-blur for data sections
-- **Typography:** Keep Inter/Space Grotesk but switch to light-on-dark contrast
-- **Micro-animations:** Subtle fade-in on route transitions, pulse on live simulation data, hover glow on buttons
-- **New logo:** Generate an ASKTHEPEOPLE text-mark or icon via `generate_image`
+**Core Design Principles:**
+
+- **Background:** Stark White (`#FFFFFF`) or off-white/bone (`#F9F9F8`).
+- **Typography:** High-contrast sans-serif.
+  - Primary: `Space Grotesk` or `Inter`.
+  - Secondary (Mono): `JetBrains Mono` for data and IDs.
+  - Large, bold headings with generous letter spacing.
+- **Color Palette:** High-contrast black/white base with primary color accents used sparingly for functionality:
+  - **Accent Red:** `#FF3333` (Alerts, critical status)
+  - **Accent Blue:** `#448FFF` (Primary actions, active states)
+  - **Accent Yellow:** `#FFD700` (Information, warnings)
+- **Geometry & Borders:**
+  - Sharp 90-degree corners (No `border-radius`).
+  - Visible grid structure using thin black lines (`1px solid #000000`).
+  - No shadows, no gradients, no blurs (Flat design).
+- **Layout:** Asymmetric but balanced grid system. Significant white space ("Negative space").
+- **Animations:** Snap-to-place transitions, no easing-out fuzziness. Functional transitions only.
 
 ---
 
@@ -103,6 +116,7 @@ Current design: White background, black/orange accent, JetBrains Mono font. Func
 
 > [!IMPORTANT]
 > **Big decisions that need your input:**
+>
 > 1. **LLM prompts are in Chinese** — the AI agents are instructed in Chinese to simulate Chinese social media (Weibo-style). Should I translate all LLM prompts to English, or keep them bilingual?
 > 2. **README rewrite** — Should I write a completely new English-only README, or maintain a bilingual version?
 > 3. **Conda environment name** — Code references `conda activate MiroFish`. Should I change this to `askthepeople`?

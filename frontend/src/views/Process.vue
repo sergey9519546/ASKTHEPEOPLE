@@ -1,152 +1,115 @@
 <template>
-  <div class="process-page">
-    <!-- Navbar -->
-    <nav class="navbar">
-      <div class="nav-brand" @click="goHome">Miro<span>Fish</span></div>
+  <div class="bauhaus-process-root">
+    <!-- TOP BAR -->
+    <nav class="bauhaus-header">
+      <div class="header-left" @click="goHome">
+        <span class="brand-monogram">ATP</span>
+        <span class="brand-full">ASK THE PEOPLE</span>
+      </div>
       
-      <div class="nav-center">
-        <div class="step-badge">STEP {{ currentStep.toString().padStart(2, '0') }}</div>
-        <div class="step-name">{{ stepNames[currentStep - 1] }}</div>
+      <div class="header-center">
+        <div class="phase-indicator">
+          <span class="phase-label">PHASE_01</span>
+          <span class="phase-name">KNOWLEDGE_CONSTRUCTION</span>
+        </div>
       </div>
 
-      <div class="nav-status">
-        <span class="status-dot" :class="statusClass"></span>
-        <span class="status-text">{{ statusText }}</span>
+      <div class="header-right">
+        <div class="system-status" :class="statusClass">
+          <span class="status-dot"></span>
+          <span class="status-msg">{{ statusText }}</span>
+        </div>
       </div>
     </nav>
 
-    <!-- Main Content Area -->
-    <div class="main-content">
-      <!-- Left Panel: Graph -->
-      <div class="left-panel" :class="{ 'full-screen': isFullScreen }">
-        <div class="panel-header">
-          <div class="header-left">
-            <span class="header-title">REAL-TIME KNOWLEDGE GRAPH</span>
-          </div>
-          <div class="header-right">
-            <template v-if="graphData">
-              <span class="stat-item">{{ nodes.length }} NODES</span>
-              <span class="stat-divider">|</span>
-              <span class="stat-item">{{ edges.length }} RELS</span>
-              <span class="stat-divider">|</span>
-            </template>
-            <div class="action-buttons">
-                <button class="action-btn" @click="refreshGraph" :disabled="graphLoading">↻</button>
-                <button class="action-btn" @click="toggleFullScreen">{{ isFullScreen ? '↙' : '↗' }}</button>
-            </div>
-          </div>
-        </div>
-        
-        <div class="graph-container" ref="graphContainer">
-          <div v-if="graphData" class="graph-view">
-            <svg ref="graphSvg" class="graph-svg"></svg>
-            <div v-if="currentPhase === 1" class="graph-building-hint">
-              <span class="building-dot"></span> BUILDING...
-            </div>
-            
-            <!-- Detail Panel -->
-            <div v-if="selectedItem" class="detail-panel">
-              <div class="detail-panel-header">
-                <span class="detail-title">{{ selectedItem.type === 'node' ? 'NODE' : 'RELATION' }}</span>
-                <button class="detail-close" @click="closeDetailPanel">×</button>
-              </div>
-              
-              <div class="detail-content">
-                <div v-if="selectedItem.type === 'node'">
-                  <div class="detail-row">
-                    <span class="detail-label">NAME</span>
-                    <span class="detail-value highlight">{{ selectedItem.data.name }}</span>
-                  </div>
-                  <div class="detail-row">
-                    <span class="detail-label">TYPE</span>
-                    <span class="detail-value">{{ selectedItem.entityType }}</span>
-                  </div>
-                  <div v-if="selectedItem.data.summary" class="detail-summary">
-                    {{ selectedItem.data.summary }}
-                  </div>
-                </div>
-                <div v-else>
-                  <div class="edge-relation">
-                    <span class="edge-source">{{ selectedItem.source_name }}</span>
-                    <span class="edge-arrow">→</span>
-                    <span class="edge-type">{{ selectedItem.fact_type }}</span>
-                    <span class="edge-arrow">→</span>
-                    <span class="edge-target">{{ selectedItem.target_name }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div v-else-if="graphLoading" class="graph-loading">LOADING GRAPH...</div>
-          <div v-else class="graph-waiting">STAGING REALITY...</div>
-        </div>
-      </div>
+    <!-- WORKSPACE -->
+    <main class="workbench-layout">
+      <!-- LEFT: ONTOLOGY VISUALIZATION -->
+      <section class="workbench-panel graph-panel-v2" :class="{ 'is-maximized': isFullScreen }">
+        <GraphPanel 
+          :graphData="graphData"
+          :loading="graphLoading"
+          :currentPhase="1"
+          @refresh="loadGraphData"
+          @toggle-maximize="toggleFullScreen"
+        />
+      </section>
 
-      <!-- Right Panel: Steps -->
-      <div class="right-panel" :class="{ 'hidden': isFullScreen }">
-        <div class="panel-header">
-          <span class="header-title">EXECUTION PIPELINE</span>
-        </div>
+      <!-- RIGHT: EXECUTION PIPELINE -->
+      <section class="workbench-panel pipeline-panel" v-if="!isFullScreen">
+        <header class="panel-label-bar">
+          <span class="label">EXECUTION_PIPELINE</span>
+        </header>
         
-        <div class="process-content">
+        <div class="pipeline-scroll">
           <div 
             v-for="phase in phases" 
             :key="phase.id" 
-            class="process-phase"
-            :class="{ active: currentPhase === phase.id, completed: currentPhase > phase.id }"
+            class="pipeline-step"
+            :class="{ 'is-active': currentPhase === phase.id, 'is-done': currentPhase > phase.id }"
           >
-            <div class="phase-header">
-              <span class="phase-num">{{ phase.id.toString().padStart(2, '0') }}</span>
-              <div class="phase-info">
-                <div class="phase-title">{{ phase.title }}</div>
-                <div class="phase-status" :class="{ active: currentPhase === phase.id, completed: currentPhase > phase.id }">
-                  {{ currentPhase === phase.id ? 'PROCESSING' : (currentPhase > phase.id ? 'COMPLETED' : 'PENDING') }}
+            <div class="step-meta">
+              <span class="step-id">0{{ phase.id }}</span>
+              <div class="step-info">
+                <h4 class="step-title">{{ phase.title }}</h4>
+                <div class="step-status-tag">
+                  {{ currentPhase === phase.id ? 'PROCESSING' : (currentPhase > phase.id ? 'TERMINATED' : 'STAGED') }}
                 </div>
               </div>
             </div>
             
-            <div v-if="currentPhase === phase.id" class="phase-detail">
-               <div v-if="phase.id === 1">
-                  <div class="progress-bar">
-                    <div class="progress-fill" :style="{ width: (buildProgress?.progress || 0) + '%' }"></div>
-                  </div>
-                  <div class="progress-info">
-                    <span>{{ buildProgress?.message || 'Extracting seeds...' }}</span>
-                    <span>{{ buildProgress?.progress || 0 }}%</span>
-                  </div>
-               </div>
-               <div v-else-if="phase.id === 2">
-                  <div class="ontology-hint">GRAPH DATA INTEGRATED. READY FOR ENVIRONMENT INJECTION.</div>
-               </div>
-            </div>
+            <Transition name="fade">
+              <div v-if="currentPhase === phase.id" class="step-runtime-view">
+                <!-- Build Progress for Phase 1 -->
+                 <div v-if="phase.id === 1" class="progress-container-bauhaus">
+                    <div class="progress-track">
+                      <div class="progress-thumb" :style="{ width: (buildProgress?.progress || 0) + '%' }"></div>
+                    </div>
+                    <div class="progress-stats">
+                      <span class="stat-msg">{{ buildProgress?.message || 'AWAITING_INPUT...' }}</span>
+                      <span class="stat-pct">{{ buildProgress?.progress || 0 }}%</span>
+                    </div>
+                 </div>
+                 <!-- Info for Phase 2/3 -->
+                 <div v-else class="ontology-status-box">
+                    CORE_ONTOLOGY SYNTHESIZED. READY FOR INJECTION PROXY.
+                 </div>
+              </div>
+            </Transition>
           </div>
 
-          <div class="next-step-section" v-if="currentPhase >= 2">
-            <button class="next-step-btn" @click="goToNextStep">
-              INITIALIZE ENVIRONMENT <span>→</span>
+          <!-- LAUNCH CTA -->
+          <div class="launch-sequence-box" v-if="currentPhase >= 2">
+            <button class="bauhaus-cta-btn" @click="goToNextStep">
+              INITIALIZE_ENVIRONMENT <span class="arrow">→</span>
             </button>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
+
+    <!-- FOOTER STATUS -->
+    <footer class="bauhaus-footer-bar">
+      <div class="f-left">LOC: WORKSPACE_PHASE_01</div>
+      <div class="f-right">SYSTEM_TIME: {{ new Date().toLocaleTimeString() }}</div>
+    </footer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import * as d3 from 'd3'
+import GraphPanel from '../components/GraphPanel.vue'
 import { getProject, buildGraph, getTaskStatus, getGraphData } from '../api/graph'
 
 const route = useRoute()
 const router = useRouter()
 
 const currentStep = ref(1)
-const stepNames = ['GRAPH BUILD', 'ENV SETUP', 'RUNTIME', 'REPORTING', 'INTERACTION']
 const phases = [
-  { id: 1, title: 'GRAPHRAG CONSTRUCTION' },
-  { id: 2, title: 'REALITY SEED EXTRACTION' },
-  { id: 3, title: 'ENTITY RELATION MAPPING' }
+  { id: 1, title: 'GRAPHRAG_CONSTRUCTION' },
+  { id: 2, title: 'REALITY_SEED_EXTRACTION' },
+  { id: 3, title: 'ENTITY_RELATIONAL_MAP' }
 ]
 
 const currentPhase = ref(1)
@@ -156,39 +119,29 @@ const buildProgress = ref(null)
 const graphLoading = ref(false)
 const error = ref('')
 const isFullScreen = ref(false)
-const selectedItem = ref(null)
-const graphSvg = ref(null)
-const graphContainer = ref(null)
 
 const currentProjectId = computed(() => route.params.projectId)
 
 const statusClass = computed(() => {
   if (error.value) return 'error'
-  if (currentPhase.value < 3) return 'processing'
-  return 'completed'
+  return currentPhase.value < 3 ? 'processing' : 'ready'
 })
 
 const statusText = computed(() => {
-  if (error.value) return 'ERROR'
-  if (currentPhase.value < 3) return 'PROCESSING'
-  return 'READY'
+  if (error.value) return 'SYS_ERROR'
+  return currentPhase.value < 3 ? 'EXECUTING' : 'SEQUENCE_READY'
 })
 
-// Navigation
 const goHome = () => router.push('/')
 const goToNextStep = () => {
   router.push({ name: 'Main', query: { step: 2, projectId: currentProjectId.value }})
 }
 
-// Logic
 let pollTimer = null
 const initProject = async () => {
   const result = await getProject(currentProjectId.value)
   if (result.success) {
     projectData.value = result.data
-    if (route.params.projectId === 'new') {
-       // Should have been handled by redirect or state, but let's assume we have files
-    }
     startGraphBuild()
   }
 }
@@ -225,218 +178,101 @@ const loadGraphData = async () => {
     const gRes = await getGraphData(result.data.graph_id)
     if (gRes.success) {
       graphData.value = gRes.data
-      nextTick(renderGraph)
     }
     graphLoading.value = false
   }
 }
 
-const nodes = computed(() => graphData.value?.nodes || [])
-const edges = computed(() => graphData.value?.edges || [])
-
-const renderGraph = () => {
-  if (!graphSvg.value || !graphData.value) return
-  const container = graphContainer.value
-  const rect = container.getBoundingClientRect()
-  const width = rect.width
-  const height = rect.height
-  
-  const svg = d3.select(graphSvg.value)
-    .attr('width', width)
-    .attr('height', height)
-  svg.selectAll('*').remove()
-
-  const simulation = d3.forceSimulation(nodes.value)
-    .force('link', d3.forceLink(edges.value).id(d => d.uuid).distance(100))
-    .force('charge', d3.forceManyBody().strength(-200))
-    .force('center', d3.forceCenter(width / 2, height / 2))
-
-  const g = svg.append('g')
-  svg.call(d3.zoom().on('zoom', (event) => g.attr('transform', event.transform)))
-
-  const link = g.append('g')
-    .selectAll('line')
-    .data(edges.value)
-    .enter().append('line')
-    .attr('stroke', '#000')
-    .attr('stroke-width', 1)
-    .attr('stroke-opacity', 0.2)
-
-  const node = g.append('g')
-    .selectAll('circle')
-    .data(nodes.value)
-    .enter().append('circle')
-    .attr('r', 8)
-    .attr('fill', d => d.color || '#E14B3B')
-    .attr('stroke', '#000')
-    .attr('stroke-width', 2)
-    .call(d3.drag()
-      .on('start', dragstarted)
-      .on('drag', dragged)
-      .on('end', dragended))
-    .on('click', (event, d) => {
-      event.stopPropagation()
-      selectedItem.value = { type: 'node', data: d, entityType: d.labels?.[0] }
-    })
-
-  simulation.on('tick', () => {
-    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-        .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
-    node.attr('cx', d => d.x).attr('cy', d => d.y)
-  })
-
-  function dragstarted(event) {
-    if (!event.active) simulation.alphaTarget(0.3).restart()
-    event.subject.fx = event.subject.x
-    event.subject.fy = event.subject.y
-  }
-  function dragged(event) {
-    event.subject.fx = event.x
-    event.subject.fy = event.y
-  }
-  function dragended(event) {
-    if (!event.active) simulation.alphaTarget(0)
-    event.subject.fx = null
-    event.subject.fy = null
-  }
-}
-
 const toggleFullScreen = () => isFullScreen.value = !isFullScreen.value
-const closeDetailPanel = () => selectedItem.value = null
-const refreshGraph = () => loadGraphData()
 
 onMounted(initProject)
 onUnmounted(() => pollTimer && clearInterval(pollTimer))
 </script>
 
 <style scoped>
-.process-page {
-  min-height: 100vh;
-  background-color: var(--bau-bg);
-  color: var(--bau-black);
-  font-family: var(--font-sans);
+.bauhaus-process-root {
+  height: 100vh;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  color: black;
+  overflow: hidden;
 }
 
-.navbar {
-  height: 60px;
-  background: #FFF;
-  border-bottom: 2px solid var(--bau-black);
+.bauhaus-header {
+  height: 70px;
+  background: white;
+  border-bottom: 4px solid #000;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 40px;
+  z-index: 100;
 }
 
-.nav-brand { font-family: var(--font-mono); font-weight: 900; text-transform: uppercase; cursor: pointer; }
-.nav-brand span { color: var(--bau-red); }
+.header-left { display: flex; align-items: center; gap: 15px; cursor: pointer; }
+.brand-monogram { background: #000; color: white; padding: 4px 8px; font-weight: 950; font-size: 1.2rem; }
+.brand-full { font-weight: 950; font-size: 1rem; letter-spacing: -0.5px; }
 
-.nav-center {
-  background: var(--bau-bg);
-  border: 2px solid var(--bau-black);
-  padding: 4px 16px;
-  display: flex;
-  gap: 12px;
+.phase-indicator { 
+  display: flex; align-items: center; gap: 12px;
+  background: #f0f0f0; border: 3px solid #000; padding: 6px 20px;
+}
+.phase-label { font-family: var(--font-mono); font-weight: 950; font-size: 11px; color: #FF331F; }
+.phase-name { font-weight: 950; font-size: 12px; }
+
+.status-dot { width: 12px; height: 12px; border: 2.5px solid #000; }
+.system-status { display: flex; align-items: center; gap: 10px; font-weight: 950; font-size: 10px; font-family: var(--font-mono); }
+.system-status.processing .status-dot { background: #FF331F; animation: flash 0.8s infinite; }
+.system-status.ready .status-dot { background: #0026FE; }
+.system-status.error .status-dot { background: #000; }
+
+@keyframes flash { 50% { opacity: 0; } }
+
+.workbench-layout { flex: 1; display: flex; overflow: hidden; padding: 25px; gap: 25px; }
+.workbench-panel { background: white; border: 4px solid #000; display: flex; flex-direction: column; overflow: hidden; height: 100%; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.graph-panel-v2 { flex: 1.6; }
+.pipeline-panel { flex: 1; padding: 30px; }
+
+.graph-panel-v2.is-maximized { position: absolute; top: 95px; left: 25px; right: 25px; bottom: 85px; z-index: 50; }
+
+.panel-label-bar { border-bottom: 4px solid #000; padding-bottom: 15px; margin-bottom: 30px; }
+.panel-label-bar .label { font-weight: 950; font-size: 13px; letter-spacing: 1px; color: #000; }
+
+.pipeline-scroll { flex: 1; overflow-y: auto; }
+.pipeline-step { border: 3px solid #000; margin-bottom: 25px; transition: 0.3s; padding: 20px; }
+.pipeline-step.is-active { background: #E5FF00; box-shadow: 8px 8px 0 #000; transform: translate(-4px, -4px); }
+.pipeline-step.is-done { opacity: 0.6; grayscale: 1; }
+
+.step-meta { display: flex; gap: 15px; align-items: flex-start; }
+.step-id { font-family: var(--font-mono); font-weight: 950; font-size: 1.5rem; color: #FF331F; }
+.step-title { font-weight: 950; font-size: 0.95rem; margin-bottom: 5px; }
+.step-status-tag { display: inline-block; font-family: var(--font-mono); font-weight: 900; font-size: 9px; padding: 2px 6px; border: 1.5px solid #000; }
+
+.step-runtime-view { margin-top: 20px; }
+
+.progress-container-bauhaus { margin-top: 15px; }
+.progress-track { height: 12px; background: white; border: 3px solid #000; margin-bottom: 8px; }
+.progress-thumb { height: 100%; background: #FF331F; }
+.progress-stats { display: flex; justify-content: space-between; font-weight: 950; font-size: 10px; font-family: var(--font-mono); }
+
+.ontology-status-box { background: rgba(0,0,0,0.05); padding: 15px; border-left: 6px solid #0026FE; font-weight: 900; font-size: 11px; }
+
+.bauhaus-cta-btn {
+  width: 100%; height: 60px; background: #000; color: white; border: none;
+  font-weight: 950; font-size: 1.1rem; cursor: pointer; transition: 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 15px;
+}
+.bauhaus-cta-btn:hover { background: #FF331F; transform: translate(-5px, -5px); box-shadow: 8px 8px 0 #000; }
+
+.bauhaus-footer-bar {
+  height: 40px; padding: 0 30px; border-top: 4px solid #000;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono); font-weight: 950; font-size: 10px;
 }
 
-.step-badge { font-family: var(--font-mono); font-weight: 900; color: var(--bau-red); font-size: 0.8rem; }
-.step-name { font-weight: 800; text-transform: uppercase; font-size: 0.9rem; }
-
-.nav-status { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-weight: 800; font-size: 0.75rem; }
-.status-dot { width: 10px; height: 10px; border: 1px solid var(--bau-black); }
-.status-dot.processing { background: var(--bau-red); animation: pulse 1s infinite step-end; }
-.status-dot.completed { background: var(--bau-blue); }
-.status-dot.error { background: var(--bau-black); }
-
-@keyframes pulse { 50% { opacity: 0; } }
-
-.main-content {
-  display: flex;
-  height: calc(100vh - 60px);
-  padding: 20px;
-  gap: 20px;
-}
-
-.left-panel {
-  flex: 1;
-  background: #FFF;
-  border: 2px solid var(--bau-black);
-  display: flex;
-  flex-direction: column;
-}
-
-.panel-header {
-  height: 50px;
-  background: var(--bau-bg);
-  border-bottom: 2px solid var(--bau-black);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-}
-
-.header-title { font-weight: 800; font-size: 0.8rem; text-transform: uppercase; }
-
-.action-btn { width: 32px; height: 32px; border: 2px solid var(--bau-black); background: #FFF; cursor: pointer; font-weight: 900; }
-.action-btn:hover { background: var(--bau-yellow); }
-
-.graph-container { flex: 1; position: relative; }
-.graph-svg { width: 100%; height: 100%; }
-
-.detail-panel {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 300px;
-  background: #FFF;
-  border: 2px solid var(--bau-black);
-  padding: 20px;
-}
-
-.detail-panel-header { display: flex; justify-content: space-between; border-bottom: 2px solid var(--bau-black); margin-bottom: 15px; padding-bottom: 10px; font-weight: 900; }
-.detail-close { cursor: pointer; border: none; background: none; font-size: 1.2rem; font-weight: 900; }
-
-.detail-row { margin-bottom: 10px; font-size: 0.8rem; }
-.detail-label { font-family: var(--font-mono); opacity: 0.5; margin-right: 8px; font-weight: 700; }
-.detail-value { font-weight: 800; }
-.detail-summary { background: var(--bau-bg); padding: 12px; border: 1px solid var(--bau-black); font-size: 0.85rem; line-height: 1.4; }
-
-.right-panel {
-  width: 450px;
-  background: #FFF;
-  border: 2px solid var(--bau-black);
-  padding: 30px;
-  overflow-y: auto;
-}
-
-.process-phase { border: 2px solid var(--bau-black); margin-bottom: 20px; }
-.phase-header { padding: 16px; border-bottom: 2px solid var(--bau-black); display: flex; gap: 15px; }
-.phase-num { font-family: var(--font-mono); font-weight: 900; font-size: 1.4rem; color: var(--bau-red); }
-.phase-title { font-weight: 800; font-size: 0.9rem; text-transform: uppercase; }
-.phase-status { margin-left: auto; font-family: var(--font-mono); font-size: 0.7rem; padding: 2px 8px; border: 1px solid var(--bau-black); font-weight: 800; }
-.phase-status.active { background: var(--bau-yellow); }
-.phase-status.completed { background: var(--bau-blue); color: #FFF; }
-
-.phase-detail { padding: 20px; font-size: 0.85rem; }
-
-.progress-bar { height: 10px; background: var(--bau-bg); border: 2px solid var(--bau-black); margin-bottom: 8px; }
-.progress-fill { height: 100%; background: var(--bau-red); }
-.progress-info { display: flex; justify-content: space-between; font-family: var(--font-mono); font-weight: 700; font-size: 0.75rem; }
-
-.next-step-btn {
-  width: 100%;
-  height: 60px;
-  background: var(--bau-black);
-  color: #FFF;
-  font-weight: 900;
-  font-family: var(--font-mono);
-  font-size: 1.1rem;
-  cursor: pointer;
-}
-
-.next-step-btn:hover { background: var(--bau-red); box-shadow: 4px 4px 0 var(--bau-black); }
-
-@media (max-width: 1024px) {
-  .main-content { flex-direction: column; height: auto; }
-  .left-panel, .right-panel { width: 100%; height: 500px; }
+@media (max-width: 1100px) {
+  .workbench-layout { flex-direction: column; }
+  .graph-panel-v2 { height: 400px; flex: none; }
 }
 </style>

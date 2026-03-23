@@ -1,42 +1,42 @@
 <template>
-  <div class="main-view">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="header-left">
-        <div class="brand" @click="router.push('/')">MiroFish</div>
+  <div class="bauhaus-view-root">
+    <!-- HEADER -->
+    <header class="bauhaus-header">
+      <div class="header-left" @click="router.push('/')">
+        <span class="brand-monogram">ATP</span>
+        <span class="brand-full">ASK THE PEOPLE</span>
       </div>
       
       <div class="header-center">
-        <div class="view-switcher">
+        <div class="view-mode-selector">
           <button 
-            v-for="mode in ['graph', 'split', 'workbench']" 
-            :key="mode"
-            class="switch-btn"
-            :class="{ active: viewMode === mode }"
-            @click="viewMode = mode"
+            v-for="m in ['graph', 'split', 'workbench']" 
+            :key="m"
+            class="mode-btn"
+            :class="{ 'is-active': viewMode === m }"
+            @click="viewMode = m"
           >
-            {{ { graph: '图谱', split: '双栏', workbench: '工作台' }[mode] }}
+            {{ m.toUpperCase() }}
           </button>
         </div>
       </div>
 
       <div class="header-right">
-        <div class="workflow-step">
-          <span class="step-num">Step 3/5</span>
-          <span class="step-name">开始模拟</span>
+        <div class="step-indicator">
+          <span class="step-val">STEP 03/05</span>
+          <span class="step-label">SIMULATION_RUNTIME</span>
         </div>
-        <div class="step-divider"></div>
-        <span class="status-indicator" :class="statusClass">
-          <span class="dot"></span>
-          {{ statusText }}
-        </span>
+        <div class="status-box" :class="currentStatus">
+          <span class="status-dot"></span>
+          <span class="status-msg">{{ statusText.toUpperCase() }}</span>
+        </div>
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="content-area">
-      <!-- Left Panel: Graph -->
-      <div class="panel-wrapper left" :style="leftPanelStyle">
+    <!-- CONTENT -->
+    <main class="workbench-viewport">
+      <!-- LEFT: GRAPH -->
+      <div class="panel-container left" :style="leftPanelStyle">
         <GraphPanel 
           :graphData="graphData"
           :loading="graphLoading"
@@ -47,22 +47,35 @@
         />
       </div>
 
-      <!-- Right Panel: Step3 开始模拟 -->
-      <div class="panel-wrapper right" :style="rightPanelStyle">
-        <Step3Simulation
-          :simulationId="currentSimulationId"
-          :maxRounds="maxRounds"
-          :minutesPerRound="minutesPerRound"
-          :projectData="projectData"
-          :graphData="graphData"
-          :systemLogs="systemLogs"
-          @go-back="handleGoBack"
-          @next-step="handleNextStep"
-          @add-log="addLog"
-          @update-status="updateStatus"
-        />
+      <!-- RIGHT: WORKBENCH -->
+      <div class="panel-container right" :style="rightPanelStyle">
+        <div class="workbench-frame">
+          <header class="workbench-header">
+            <span class="wb-label">RUNTIME_EXECUTOR</span>
+          </header>
+          <div class="wb-content">
+            <Step3Simulation
+              :simulationId="currentSimulationId"
+              :maxRounds="maxRounds"
+              :minutesPerRound="minutesPerRound"
+              :projectData="projectData"
+              :graphData="graphData"
+              :systemLogs="systemLogs"
+              @go-back="handleGoBack"
+              @next-step="handleNextStep"
+              @add-log="addLog"
+              @update-status="updateStatus"
+            />
+          </div>
+        </div>
       </div>
     </main>
+
+    <!-- FOOTER -->
+    <footer class="bauhaus-footer-mini">
+      <div class="f-block">RUNTIME: {{ isSimulating ? 'ACTIVE' : 'IDLE' }}</div>
+      <div class="f-block">LOC: WORKSPACE_SIMULATION_RUN</div>
+    </footer>
   </div>
 </template>
 
@@ -77,41 +90,27 @@ import { getSimulation, getSimulationConfig, stopSimulation, closeSimulationEnv,
 const route = useRoute()
 const router = useRouter()
 
-// Props
-const props = defineProps({
-  simulationId: String
-})
-
-// Layout State
 const viewMode = ref('split')
-
-// Data State
 const currentSimulationId = ref(route.params.simulationId)
-// 直接在初始化时从 query 参数获取 maxRounds，确保子组件能立即获取到值
 const maxRounds = ref(route.query.maxRounds ? parseInt(route.query.maxRounds) : null)
-const minutesPerRound = ref(30) // 默认每轮30分钟
+const minutesPerRound = ref(30)
 const projectData = ref(null)
 const graphData = ref(null)
 const graphLoading = ref(false)
 const systemLogs = ref([])
-const currentStatus = ref('processing') // processing | completed | error
+const currentStatus = ref('processing')
 
-// --- Computed Layout Styles ---
+// Layout Styles
 const leftPanelStyle = computed(() => {
   if (viewMode.value === 'graph') return { width: '100%', opacity: 1, transform: 'translateX(0)' }
-  if (viewMode.value === 'workbench') return { width: '0%', opacity: 0, transform: 'translateX(-20px)' }
+  if (viewMode.value === 'workbench') return { width: '0%', opacity: 0, transform: 'translateX(-20px)', pointerEvents: 'none' }
   return { width: '50%', opacity: 1, transform: 'translateX(0)' }
 })
 
 const rightPanelStyle = computed(() => {
   if (viewMode.value === 'workbench') return { width: '100%', opacity: 1, transform: 'translateX(0)' }
-  if (viewMode.value === 'graph') return { width: '0%', opacity: 0, transform: 'translateX(20px)' }
+  if (viewMode.value === 'graph') return { width: '0%', opacity: 0, transform: 'translateX(20px)', pointerEvents: 'none' }
   return { width: '50%', opacity: 1, transform: 'translateX(0)' }
-})
-
-// --- Status Computed ---
-const statusClass = computed(() => {
-  return currentStatus.value
 })
 
 const statusText = computed(() => {
@@ -122,345 +121,126 @@ const statusText = computed(() => {
 
 const isSimulating = computed(() => currentStatus.value === 'processing')
 
-// --- Helpers ---
 const addLog = (msg) => {
-  const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) + '.' + new Date().getMilliseconds().toString().padStart(3, '0')
+  const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
   systemLogs.value.push({ time, msg })
-  if (systemLogs.value.length > 200) {
-    systemLogs.value.shift()
-  }
+  if (systemLogs.value.length > 200) systemLogs.value.shift()
 }
 
-const updateStatus = (status) => {
-  currentStatus.value = status
-}
+const updateStatus = (status) => currentStatus.value = status
 
-// --- Layout Methods ---
-const toggleMaximize = (target) => {
-  if (viewMode.value === target) {
-    viewMode.value = 'split'
-  } else {
-    viewMode.value = target
-  }
-}
+const toggleMaximize = (target) => viewMode.value = (viewMode.value === target ? 'split' : target)
 
 const handleGoBack = async () => {
-  // 在返回 Step 2 之前，先关闭正在运行的模拟
-  addLog('准备返回 Step 2，正在关闭模拟...')
-  
-  // 停止轮询
+  addLog('Terminating runtime context...')
   stopGraphRefresh()
-  
   try {
-    // 先尝试优雅关闭模拟环境
     const envStatusRes = await getEnvStatus({ simulation_id: currentSimulationId.value })
-    
     if (envStatusRes.success && envStatusRes.data?.env_alive) {
-      addLog('正在关闭模拟环境...')
-      try {
-        await closeSimulationEnv({ 
-          simulation_id: currentSimulationId.value,
-          timeout: 10
-        })
-        addLog('✓ 模拟环境已关闭')
-      } catch (closeErr) {
-        addLog(`关闭模拟环境失败，尝试强制停止...`)
-        try {
-          await stopSimulation({ simulation_id: currentSimulationId.value })
-          addLog('✓ 模拟已强制停止')
-        } catch (stopErr) {
-          addLog(`强制停止失败: ${stopErr.message}`)
-        }
-      }
-    } else {
-      // 环境未运行，检查是否需要停止进程
-      if (isSimulating.value) {
-        addLog('正在停止模拟进程...')
-        try {
-          await stopSimulation({ simulation_id: currentSimulationId.value })
-          addLog('✓ 模拟已停止')
-        } catch (err) {
-          addLog(`停止模拟失败: ${err.message}`)
-        }
-      }
+      await closeSimulationEnv({ simulation_id: currentSimulationId.value, timeout: 5 })
     }
-  } catch (err) {
-    addLog(`检查模拟状态失败: ${err.message}`)
-  }
-  
-  // 返回到 Step 2 (环境搭建)
+  } catch (err) { addLog(`Cleanup error: ${err.message}`) }
   router.push({ name: 'Simulation', params: { simulationId: currentSimulationId.value } })
 }
 
-const handleNextStep = () => {
-  // Step3Simulation 组件会直接处理报告生成和路由跳转
-  // 这个方法仅作为备用
-  addLog('进入 Step 4: 报告生成')
-}
+const handleNextStep = () => addLog('Simulation cycle final. Proceeding to Synthesis.')
 
-// --- Data Logic ---
 const loadSimulationData = async () => {
   try {
-    addLog(`加载模拟数据: ${currentSimulationId.value}`)
-    
-    // 获取 simulation 信息
+    addLog(`Resuming simulation context: ${currentSimulationId.value}`)
     const simRes = await getSimulation(currentSimulationId.value)
     if (simRes.success && simRes.data) {
       const simData = simRes.data
-      
-      // 获取 simulation config 以获取 minutes_per_round
-      try {
-        const configRes = await getSimulationConfig(currentSimulationId.value)
-        if (configRes.success && configRes.data?.time_config?.minutes_per_round) {
-          minutesPerRound.value = configRes.data.time_config.minutes_per_round
-          addLog(`时间配置: 每轮 ${minutesPerRound.value} 分钟`)
-        }
-      } catch (configErr) {
-        addLog(`获取时间配置失败，使用默认值: ${minutesPerRound.value}分钟/轮`)
-      }
-      
-      // 获取 project 信息
       if (simData.project_id) {
         const projRes = await getProject(simData.project_id)
         if (projRes.success && projRes.data) {
           projectData.value = projRes.data
-          addLog(`项目加载成功: ${projRes.data.project_id}`)
-          
-          // 获取 graph 数据
-          if (projRes.data.graph_id) {
-            await loadGraph(projRes.data.graph_id)
-          }
+          if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id)
         }
       }
-    } else {
-      addLog(`加载模拟数据失败: ${simRes.error || '未知错误'}`)
     }
-  } catch (err) {
-    addLog(`加载异常: ${err.message}`)
-  }
+  } catch (err) { addLog(`API Exception: ${err.message}`) }
 }
 
-const loadGraph = async (graphId) => {
-  // 当正在模拟时，自动刷新不显示全屏 loading，以免闪烁
-  // 手动刷新或初始加载时显示 loading
-  if (!isSimulating.value) {
-    graphLoading.value = true
-  }
-  
+const loadGraph = async (id) => {
+  if (!isSimulating.value) graphLoading.value = true
   try {
-    const res = await getGraphData(graphId)
-    if (res.success) {
-      graphData.value = res.data
-      if (!isSimulating.value) {
-        addLog('图谱数据加载成功')
-      }
-    }
-  } catch (err) {
-    addLog(`图谱加载失败: ${err.message}`)
-  } finally {
-    graphLoading.value = false
-  }
+    const res = await getGraphData(id)
+    if (res.success) graphData.value = res.data
+  } finally { graphLoading.value = false }
 }
 
-const refreshGraph = () => {
-  if (projectData.value?.graph_id) {
-    loadGraph(projectData.value.graph_id)
-  }
-}
+const refreshGraph = () => projectData.value?.graph_id && loadGraph(projectData.value.graph_id)
 
-// --- Auto Refresh Logic ---
 let graphRefreshTimer = null
-
 const startGraphRefresh = () => {
   if (graphRefreshTimer) return
-  addLog('开启图谱实时刷新 (30s)')
-  // 立即刷新一次，然后每30秒刷新
   graphRefreshTimer = setInterval(refreshGraph, 30000)
 }
-
 const stopGraphRefresh = () => {
-  if (graphRefreshTimer) {
-    clearInterval(graphRefreshTimer)
-    graphRefreshTimer = null
-    addLog('停止图谱实时刷新')
-  }
+  if (graphRefreshTimer) { clearInterval(graphRefreshTimer); graphRefreshTimer = null; }
 }
 
-watch(isSimulating, (newValue) => {
-  if (newValue) {
-    startGraphRefresh()
-  } else {
-    stopGraphRefresh()
-  }
-}, { immediate: true })
+watch(isSimulating, (val) => val ? startGraphRefresh() : stopGraphRefresh(), { immediate: true })
 
 onMounted(() => {
-  addLog('SimulationRunView 初始化')
-  
-  // 记录 maxRounds 配置（值已在初始化时从 query 参数获取）
-  if (maxRounds.value) {
-    addLog(`自定义模拟轮数: ${maxRounds.value}`)
-  }
-  
+  addLog('Runtime View Active')
   loadSimulationData()
 })
-
-onUnmounted(() => {
-  stopGraphRefresh()
-})
+onUnmounted(stopGraphRefresh)
 </script>
 
 <style scoped>
-.bauhaus-view {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bau-bg);
-  overflow: hidden;
-  font-family: var(--font-sans);
-  color: var(--bau-black);
+.bauhaus-view-root {
+  height: 100vh; background: white; color: black;
+  display: flex; flex-direction: column; overflow: hidden;
 }
 
-/* Header */
-.app-header {
-  height: 60px;
-  border-bottom: 2px solid var(--bau-black);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 40px;
-  background: #FFF;
-  z-index: 100;
-  position: relative;
+.bauhaus-header {
+  height: 70px; background: white; border-bottom: 4px solid #000;
+  display: flex; align-items: center; justify-content: space-between; padding: 0 40px; z-index: 100;
 }
 
-.brand {
-  font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 1.2rem;
-  text-transform: uppercase;
-  cursor: pointer;
-  color: var(--bau-black);
+.header-left { display: flex; align-items: center; gap: 15px; cursor: pointer; }
+.brand-monogram { background: #000; color: white; padding: 4px 8px; font-weight: 950; font-size: 1.2rem; }
+.brand-full { font-weight: 950; font-size: 1rem; letter-spacing: -0.5px; }
+
+.view-mode-selector { display: flex; border: 3px solid #000; background: #f0f0f0; padding: 4px; gap: 4px; }
+.mode-btn { 
+  border: none; background: transparent; padding: 6px 15px; 
+  font-family: var(--font-mono); font-weight: 950; font-size: 10px; cursor: pointer;
+}
+.mode-btn.is-active { background: #000; color: white; }
+.mode-btn:hover:not(.is-active) { background: #E5FF00; }
+
+.header-right { display: flex; align-items: center; gap: 25px; }
+.step-indicator { display: flex; align-items: center; gap: 10px; font-weight: 950; font-size: 11px; }
+.step-val { color: #FF331F; font-family: var(--font-mono); }
+.status-box { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-weight: 950; font-size: 10px; }
+.status-dot { width: 10px; height: 10px; border: 2px solid #000; }
+.status-box.processing .status-dot { background: #FF331F; animation: flash 0.8s infinite; }
+.status-box.completed .status-dot { background: #0026FE; }
+@keyframes flash { 50% { opacity: 0; } }
+
+.workbench-viewport { flex: 1; display: flex; padding: 20px; gap: 20px; overflow: hidden; position: relative; }
+.panel-container { 
+  height: 100%; transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  background: white; border: 4px solid #000; overflow: hidden;
 }
 
-.header-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+.workbench-frame { height: 100%; display: flex; flex-direction: column; }
+.workbench-header { height: 50px; border-bottom: 4px solid #000; display: flex; align-items: center; padding: 0 20px; background: #f9f9f9; }
+.wb-label { font-weight: 950; font-size: 11px; letter-spacing: 1px; }
+.wb-content { flex: 1; overflow-y: auto; padding: 0px; }
+
+.bauhaus-footer-mini {
+  height: 40px; padding: 0 40px; border-top: 4px solid #000;
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono); font-weight: 950; font-size: 10px;
 }
 
-.view-switcher {
-  display: flex;
-  background: var(--bau-bg);
-  padding: 4px;
-  border: 2px solid var(--bau-black);
-  gap: 4px;
-}
-
-.switch-btn {
-  border: none;
-  background: transparent;
-  padding: 6px 16px;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: var(--bau-black);
-  cursor: pointer;
-  text-transform: uppercase;
-  font-family: var(--font-mono);
-}
-
-.switch-btn.active {
-  background: var(--bau-black);
-  color: #FFF;
-}
-
-.switch-btn:hover:not(.active) {
-  background: var(--bau-yellow);
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.workflow-step {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 0.85rem;
-}
-
-.step-num {
-  font-family: var(--font-mono);
-  font-weight: 900;
-  color: var(--bau-red);
-}
-
-.step-name {
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.step-divider {
-  width: 2px;
-  height: 20px;
-  background-color: var(--bau-black);
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.75rem;
-  font-weight: 800;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--bau-black);
-  background: #DDD;
-}
-
-.status-indicator.processing .dot {
-  background: var(--bau-red);
-  animation: pulse 1s infinite step-end;
-}
-.status-indicator.completed .dot {
-  background: var(--bau-blue);
-}
-.status-indicator.error .dot {
-  background: var(--bau-black);
-}
-
-@keyframes pulse { 50% { opacity: 0; } }
-
-/* Content */
-.content-area {
-  flex: 1;
-  display: flex;
-  position: relative;
-  overflow: hidden;
-  padding: 20px;
-  gap: 20px;
-}
-
-.panel-wrapper {
-  height: 100%;
-  background: #FFF;
-  border: 2px solid var(--bau-black);
-  overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
-.panel-wrapper.left { border-right: 2px solid var(--bau-black); }
-
-@media (max-width: 1024px) {
-  .content-area { flex-direction: column; }
-  .panel-wrapper { width: 100% !important; height: 50% !important; }
+@media (max-width: 1100px) {
+  .workbench-viewport { flex-direction: column; }
+  .panel-container { width: 100% !important; height: 50% !important; }
 }
 </style>
-

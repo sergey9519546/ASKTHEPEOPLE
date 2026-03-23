@@ -159,6 +159,9 @@ class SimulationParameters:
     
     # LLM config
     llm_model: str = ""
+    
+    # LLM config
+    llm_model: str = ""
     llm_base_url: str = ""
     
     # Generation metadata
@@ -166,7 +169,7 @@ class SimulationParameters:
     generation_reasoning: str = ""  # LLM reasoning explanation
     
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
+        """Convert to dictionary"""
         time_dict = asdict(self.time_config)
         return {
             "simulation_id": self.simulation_id,
@@ -190,7 +193,7 @@ class SimulationParameters:
         }
     
     def to_json(self, indent: int = 2) -> str:
-        """转换为JSON字符串"""
+        """Convert to JSON string"""
         return json.dumps(self.to_dict(), ensure_ascii=False, indent=indent)
 
 
@@ -439,36 +442,54 @@ class SimulationConfigGenerator:
         confidence = 0.45
         reasoning = "Fallback global context used because locale signals were weak."
 
+        # Language detection
         if any("\u4e00" <= ch <= "\u9fff" for ch in simulation_requirement + document_text):
             language = "zh"
             confidence = 0.72
             reasoning = "Detected CJK characters in source material."
-        elif any(keyword in source for keyword in ("espa", "mexico", "madrid", "latam", "argentina")):
+        elif any(keyword in source for keyword in ("español", "mexico", "madrid", "latam", "argentina", "chile", "colombia")):
             language = "es"
             confidence = 0.65
             reasoning = "Detected Spanish-language regional cues in source material."
+        elif any(keyword in source for keyword in ("français", "france", "paris", "québec")):
+            language = "fr"
+            confidence = 0.65
+            reasoning = "Detected French-language regional cues in source material."
+        else:
+            # Default to English/Global if no strong indicators
+            language = "en"
+            confidence = 0.6
+            reasoning = "Defaulting to English/Global context as primary preference."
 
-        if "china" in source or "beijing" in source or "shanghai" in source:
+        # Geographic and activity norm detection
+        if "china" in source or "beijing" in source or "shanghai" in source or language == "zh":
             country = "China"
             region = "Asia"
             timezone = "Asia/Shanghai"
             activity_norm = "china_urban"
             confidence = max(confidence, 0.8)
-            reasoning = "Detected China-specific geographic references."
-        elif any(token in source for token in ("united states", "usa", "u.s.", "america", "california", "new york")):
+            reasoning = "Detected China-specific geographic references or Chinese language."
+        elif any(token in source for token in ("united states", "usa", "u.s.", "america", "california", "new york", "washington")):
             country = "United States"
             region = "North America"
-            timezone = "America/Los_Angeles"
+            timezone = "America/Los_Angeles" # Default to a common US timezone, could be more specific
             activity_norm = "us_general"
             confidence = max(confidence, 0.78)
             reasoning = "Detected United States geographic references."
-        elif any(token in source for token in ("uk", "united kingdom", "london", "britain")):
+        elif any(token in source for token in ("uk", "united kingdom", "london", "britain", "england", "scotland")):
             country = "United Kingdom"
             region = "Europe"
             timezone = "Europe/London"
             activity_norm = "uk_general"
             confidence = max(confidence, 0.74)
             reasoning = "Detected UK geographic references."
+        elif any(token in source for token in ("india", "mumbai", "delhi", "bangalore")):
+            country = "India"
+            region = "Asia"
+            timezone = "Asia/Kolkata"
+            activity_norm = "india_general"
+            confidence = max(confidence, 0.70)
+            reasoning = "Detected India-specific geographic references."
         elif "reddit" in labels and "twitter" not in labels:
             confidence = max(confidence, 0.55)
             reasoning = "Platform mix suggests discussion-heavy, globally distributed behavior."
@@ -559,34 +580,6 @@ class SimulationConfigGenerator:
                 "style": "threaded_discussion",
             },
         }
-    
-    def _summarize_entities(self, entities: List[EntityNode]) -> str:
-        """Generate a structured entity summary grouped by type."""
-        lines = []
-        
-        # Group by entity type
-        by_type: Dict[str, List[EntityNode]] = {}
-        for e in entities:
-            t = e.get_entity_type() or "Unknown"
-            if t not in by_type:
-                by_type[t] = []
-            by_type[t].append(e)
-        
-        for entity_type, type_entities in by_type.items():
-            lines.append(f"\n### {entity_type} ({len(type_entities)} total)")
-            # 使用配置的显示数量和摘要长度
-            display_count = self.ENTITIES_PER_TYPE_DISPLAY
-            summary_len = self.ENTITY_SUMMARY_LENGTH
-            for e in type_entities[:display_count]:
-                summary_preview = (e.summary[:summary_len] + "...") if len(e.summary) > summary_len else e.summary
-                lines.append(f"- {e.name}: {summary_preview}")
-            if len(type_entities) > display_count:
-                lines.append(f"  ... 还有 {len(type_entities) - display_count} 个")
-        
-        return "\n".join(lines)
-    
-    def _call_llm_with_retry(self, prompt: str, system_prompt: str) -> Dict[str, Any]:
-        """LLM call with retry logic and JSON repair."""
         import re
         
         max_attempts = 3

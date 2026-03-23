@@ -1,548 +1,310 @@
 <template>
-  <div class="home-container">
-    <!-- Bauhaus Grid Background -->
-    <div class="bau-grid"></div>
-    
-    <!-- Navbar -->
-    <nav class="navbar">
-      <div class="nav-brand">Miro<span>Fish</span></div>
-      <div class="nav-links">
-        <a href="https://github.com/sergey9519546/ASKTHEPEOPLE" target="_blank" class="github-link">
-          GITHUB <span class="arrow">↗</span>
+  <div class="bauhaus-home-root">
+    <!-- BAUHAUS DECORATIVE ELEMENTS -->
+    <div class="geo-decoration circle-red"></div>
+    <div class="geo-decoration square-blue"></div>
+    <div class="geo-decoration triangle-yellow"></div>
+
+    <!-- NAVIGATION OVERLAY -->
+    <nav class="bauhaus-nav">
+      <div class="brand-block">
+        <span class="brand-text">ASK THE PEOPLE</span>
+        <span class="brand-version">BETA_V1.1</span>
+      </div>
+      <div class="nav-actions">
+        <a href="https://github.com/sergey9519546/ASKTHEPEOPLE" target="_blank" class="bauhaus-nav-link">
+          SOURCE_CODE_<span class="arrow">↗</span>
         </a>
       </div>
     </nav>
 
-    <div class="main-content">
-      <!-- Hero Section: Bauhaus Geometry -->
-      <section class="hero-section">
-        <div class="hero-left bau-block">
-          <div class="tag-row">
-            <span class="bau-tag red">CROWD INTELLIGENCE</span>
-            <span class="version-text">V0.1-PREVIEW</span>
-          </div>
-          
-          <h1 class="main-title">
-            REALIZE THE<br>
-            <span class="highlight-blue">FUTURE</span>
+    <main class="bauhaus-main">
+      <!-- HERO: THE BRUTALIST STATEMENT -->
+      <section class="hero-brutal">
+        <div class="hero-left">
+          <div class="status-ribbon">ENGINE_ONLINE // SYSTEM_STABLE</div>
+          <h1 class="hero-title">
+            SIMULATE<br />
+            <span class="text-blue">COLLECTIVE</span><br />
+            <span class="text-brutal">REALITY.</span>
           </h1>
-          
-          <div class="hero-desc">
-            <p>
-              MiroFish extracts reality seeds from your data and simulates millions of agents in a parallel world.
-            </p>
-            <div class="slogan-block yellow">
-              FUNCTION FOLLOWS SIMULATION
-            </div>
-          </div>
         </div>
-        
         <div class="hero-right">
-          <!-- MF Geometric Logo -->
-          <div class="bau-logo-mark">
-            <div class="shape-m">
-              <div class="bar red"></div>
-              <div class="bar blue"></div>
-              <div class="bar yellow"></div>
-            </div>
-            <div class="mf-text">MF</div>
-          </div>
+          <p class="hero-manifesto">
+            The first autonomous crowd intelligence engine. 
+            Deploy millions of digital twins. Predict emergent human behavior. 
+            Transform documents into living, breathing simulations.
+          </p>
         </div>
       </section>
 
-      <!-- Dashboard Grid -->
-      <section class="dashboard-grid">
-        <!-- Status Panel -->
-        <div class="status-panel bau-block">
-          <div class="panel-header">
-            <span class="status-indicator">■</span> SYSTEM STATUS
-          </div>
-          <h2 class="section-title">ENGINE STANDBY</h2>
-          <div class="metrics-grid">
-            <div class="metric-box">
-              <div class="label">COST</div>
-              <div class="value">~$5</div>
-            </div>
-            <div class="metric-box">
-              <div class="label">SCALE</div>
-              <div class="value">1M+</div>
-            </div>
-          </div>
-          
-          <div class="workflow-grid">
-            <div v-for="(step, i) in steps" :key="i" class="workflow-step">
-              <span class="step-idx">{{ (i+1).toString().padStart(2, '0') }}</span>
-              <div class="step-body">
-                <div class="step-name">{{ step.item }}</div>
-                <div class="step-desc">{{ step.desc }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Input Console -->
-        <div class="console-panel bau-block">
-          <!-- Step 1: Upload -->
-          <div class="console-step">
-            <div class="console-label">01 / UPLOAD DATA</div>
+      <!-- WORKBENCH INITIALIZATION -->
+      <section class="workbench-init">
+        <div class="init-grid">
+          <!-- LEFT: SEED UPLOAD -->
+          <div class="init-card upload-card">
+            <header class="card-header">
+              <span class="step-tag">STEP_01</span>
+              <h3>KNOWLEDGE SEEDING</h3>
+            </header>
+            
             <div 
-              class="upload-area"
-              :class="{ 'drag-over': isDragOver }"
-              @dragover.prevent="handleDragOver"
-              @dragleave.prevent="handleDragLeave"
+              class="bauhaus-dropzone"
+              :class="{ 'is-active': isDragOver }"
+              @dragover.prevent="isDragOver = true"
+              @dragleave.prevent="isDragOver = false"
               @drop.prevent="handleDrop"
               @click="triggerFileInput"
             >
-              <input
-                ref="fileInput"
-                type="file"
-                multiple
-                accept=".pdf,.md,.txt"
-                @change="handleFileSelect"
-                style="display: none"
-              />
+              <input ref="fileInput" type="file" multiple accept=".pdf,.md,.txt" @change="handleFileSelect" hidden />
               
-              <div v-if="files.length === 0" class="placeholder">
-                <span class="plus">+</span>
-                <div>DROP REALITY SEEDS</div>
+              <div v-if="files.length === 0" class="dropzone-empty">
+                <div class="massive-plus">+</div>
+                <div class="drop-msg">
+                  <span class="primary">ATTACH DATA_SEEDS</span>
+                  <span class="secondary">PDF / MARKDOWN / TXT</span>
+                </div>
               </div>
-              
-              <div v-else class="file-list">
-                <div v-for="(file, index) in files" :key="index" class="file-card">
-                  <span class="name">{{ file.name }}</span>
-                  <button @click.stop="removeFile(index)" class="delete">×</button>
+
+              <div v-else class="file-manifest">
+                <div v-for="(file, i) in files" :key="i" class="file-item-bauhaus">
+                  <span class="f-ext">{{ file.name.split('.').pop().toUpperCase() }}</span>
+                  <span class="f-name">{{ file.name }}</span>
+                  <button class="f-remove" @click.stop="removeFile(i)">×</button>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- Step 2: Prompt -->
-          <div class="console-step">
-            <div class="console-label">02 / INSTRUCTION</div>
-            <textarea
-              v-model="formData.simulationRequirement"
-              class="bau-textarea"
-              placeholder="DEFINE THE FUTURE..."
-              rows="5"
-            ></textarea>
-            <div class="engine-id">ENGINE: MIROFISH-V1.0</div>
-          </div>
+            <div class="input-group-bauhaus">
+              <label>SIMULATION_OBJECTIVE</label>
+              <textarea 
+                v-model="formData.simulationRequirement"
+                placeholder="What reality do you wish to manifest? Define your scenario, audience, or core question..."
+                class="bauhaus-textarea"
+              ></textarea>
+            </div>
 
-          <!-- Action -->
-          <div class="action-footer">
             <button 
-              class="bau-btn-large"
-              @click="startSimulation"
+              class="bauhaus-launch-btn" 
+              @click="startSimulation" 
               :disabled="!canSubmit || loading"
             >
-              INITIALIZE <span class="arrow">→</span>
+              <span v-if="!loading">INITIALIZE ENGINE_SEQUENCE</span>
+              <span v-else class="bauhaus-spinner-small"></span>
+              <span class="launch-arrow" v-if="!loading">→</span>
             </button>
+          </div>
+
+          <!-- RIGHT: SPECS & CAPABILITIES -->
+          <div class="init-card specs-card">
+            <header class="card-header">
+              <span class="step-tag">TECH_SPECS</span>
+              <h3>ARCHITECTURAL FLOW</h3>
+            </header>
+
+            <div class="capability-list">
+              <div v-for="(step, i) in steps" :key="i" class="cap-item">
+                <div class="cap-num">0{{ i + 1 }}</div>
+                <div class="cap-content">
+                  <span class="cap-title">{{ step.item }}</span>
+                  <span class="cap-desc">{{ step.desc }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="system-metrics">
+              <div class="metric-box">
+                <label>ENGINE_MODEL</label>
+                <div class="val">GraphRAG_LTM_V2</div>
+              </div>
+              <div class="metric-box">
+                <label>AGENT_CAPACITY</label>
+                <div class="val">∞ SCALABLE</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      <!-- History -->
-      <HistoryDatabase class="history-section" />
-    </div>
+      <!-- HISTORY / ARCHIVE -->
+      <section class="archive-section">
+        <header class="archive-header">
+          <div class="header-line"></div>
+          <h2>HISTORICAL_DATABASE</h2>
+        </header>
+        <HistoryDatabase borderless />
+      </section>
+    </main>
+
+    <footer class="bauhaus-footer">
+      <div class="footer-block">© 2026 ASK THE PEOPLE // NO_RIGHTS_RESERVED</div>
+      <div class="footer-block">ENCODED IN MODERNIST_BRUTAL</div>
+    </footer>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import HistoryDatabase from '../components/HistoryDatabase.vue'
+import { ref, computed } from "vue";
+import { useRouter } from "vue-router";
+import HistoryDatabase from "../components/HistoryDatabase.vue";
 
-const router = useRouter()
-const formData = ref({ simulationRequirement: '' })
-const files = ref([])
-const loading = ref(false)
-const isDragOver = ref(false)
-const fileInput = ref(null)
+const router = useRouter();
+const formData = ref({ simulationRequirement: "" });
+const files = ref([]);
+const loading = ref(false);
+const isDragOver = ref(false);
+const fileInput = ref(null);
 
 const steps = [
-  { item: 'GRAPH BUILD', desc: 'Extract reality seeds & GraphRAG' },
-  { item: 'ENV SETUP', desc: 'Entity relation & Agent injection' },
-  { item: 'RUNTIME', desc: 'Parallel simulation & memory' },
-  { item: 'REPORTING', desc: 'Recursive agent interaction' },
-  { item: 'INTERACTION', desc: 'Direct dialogue with agents' }
-]
+  { item: "GRAPH_SYNTHESIS", desc: "Recursive extraction of knowledge nodes." },
+  { item: "AGENT_DEPLOYMENT", desc: "Injection of hyper-realistic digital twins." },
+  { item: "SOCIAL_DYNAMICS", desc: "Massively parallel interaction runtime." },
+  { item: "EMERGENT_REPORTS", desc: "Real-time behavior pattern recognition." },
+  { item: "DEEP_DIALOGUE", desc: "Direct interface with simulated crowds." },
+];
 
-const canSubmit = computed(() => formData.value.simulationRequirement.trim() !== '' && files.value.length > 0)
+const canSubmit = computed(() => formData.value.simulationRequirement.trim() !== "" && files.value.length > 0);
 
-const triggerFileInput = () => fileInput.value?.click()
-const handleFileSelect = (e) => addFiles(Array.from(e.target.files))
-const handleDragOver = () => isDragOver.value = true
-const handleDragLeave = () => isDragOver.value = false
-const handleDrop = (e) => {
-  isDragOver.value = false
-  addFiles(Array.from(e.dataTransfer.files))
-}
-
+const triggerFileInput = () => fileInput.value?.click();
+const handleFileSelect = (e) => addFiles(Array.from(e.target.files));
 const addFiles = (newFiles) => {
-  const valid = newFiles.filter(f => ['pdf', 'md', 'txt'].includes(f.name.split('.').pop().toLowerCase()))
-  files.value.push(...valid)
-}
-
-const removeFile = (i) => files.value.splice(i, 1)
+  const valid = newFiles.filter((f) => ["pdf", "md", "txt"].includes(f.name.split(".").pop().toLowerCase()));
+  files.value.push(...valid);
+};
+const removeFile = (i) => files.value.splice(i, 1);
+const handleDrop = (e) => { isDragOver.value = false; addFiles(Array.from(e.dataTransfer.files)); };
 
 const startSimulation = () => {
-  if (!canSubmit.value || loading.value) return
-  import('../store/pendingUpload.js').then(({ setPendingUpload }) => {
-    setPendingUpload(files.value, formData.value.simulationRequirement)
-    router.push({ name: 'Process', params: { projectId: 'new' } })
-  })
-}
+  if (!canSubmit.value || loading.value) return;
+  loading.value = true;
+  import("../store/pendingUpload.js").then(({ setPendingUpload }) => {
+    setPendingUpload(files.value, formData.value.simulationRequirement);
+    router.push({ name: "Process", params: { projectId: "new" } });
+  });
+};
 </script>
 
 <style scoped>
-.home-container {
+.bauhaus-home-root {
   min-height: 100vh;
-  background-color: var(--bau-bg);
-  color: var(--bau-black);
+  background-color: white;
+  color: black;
   font-family: var(--font-sans);
   position: relative;
   overflow-x: hidden;
+  padding-bottom: 60px;
 }
 
-/* Bauhaus Grid */
-.bau-grid {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background-image: 
-    linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px);
-  background-size: 100px 100px;
-  pointer-events: none;
-  z-index: 0;
+/* DECORATIVE SHAPES */
+.geo-decoration { position: absolute; z-index: 0; opacity: 0.8; pointer-events: none; }
+.circle-red { width: 400px; height: 400px; border-radius: 50%; background: #FF331F; top: -100px; right: -100px; }
+.square-blue { width: 300px; height: 300px; background: #0026FE; bottom: 20%; left: -100px; transform: rotate(15deg); }
+.triangle-yellow { 
+  width: 0; height: 0; 
+  border-left: 150px solid transparent; 
+  border-right: 150px solid transparent; 
+  border-bottom: 250px solid #E5FF00;
+  top: 40%; right: 5%; transform: rotate(-10deg);
 }
 
-.main-content {
-  position: relative;
-  z-index: 10;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 60px 40px;
+.bauhaus-nav {
+  height: 80px; padding: 0 40px;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 4px solid #000;
+  background: white; position: sticky; top: 0; z-index: 100;
+}
+.brand-text { font-weight: 950; font-size: 1.5rem; letter-spacing: -1px; }
+.brand-version { font-family: var(--font-mono); font-size: 10px; background: #000; color: white; padding: 2px 8px; margin-left: 15px; }
+
+.bauhaus-nav-link {
+  font-family: var(--font-mono); font-weight: 900; font-size: 12px;
+  text-decoration: none; color: black; border: 3px solid #000; padding: 8px 20px;
+  transition: 0.2s;
+}
+.bauhaus-nav-link:hover { background: #E5FF00; transform: translate(-4px, -4px); box-shadow: 4px 4px 0 #000; }
+
+.bauhaus-main { max-width: 1400px; margin: 0 auto; padding: 60px 40px; position: relative; z-index: 1; }
+
+.hero-brutal { display: flex; gap: 60px; margin-bottom: 100px; align-items: flex-end; }
+.hero-left { flex: 1.4; }
+.hero-right { flex: 1; padding-bottom: 20px; }
+
+.status-ribbon { font-family: var(--font-mono); font-weight: 900; font-size: 11px; margin-bottom: 20px; }
+.hero-title { font-size: clamp(4rem, 10vw, 10rem); line-height: 0.85; font-weight: 950; letter-spacing: -4px; text-transform: uppercase; }
+.text-blue { color: #0026FE; }
+.text-brutal { text-shadow: 4px 4px 0 #E5FF00; }
+
+.hero-manifesto { font-size: 1.4rem; line-height: 1.4; font-weight: 600; color: #333; }
+
+.init-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px; }
+
+.init-card { background: white; border: 4px solid #000; padding: 40px; box-shadow: 15px 15px 0 #000; }
+.card-header { border-bottom: 4px solid #000; padding-bottom: 20px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px; }
+.step-tag { background: #000; color: white; font-family: var(--font-mono); font-weight: 900; font-size: 11px; padding: 4px 10px; }
+.card-header h3 { font-weight: 950; font-size: 1.4rem; letter-spacing: -0.5px; }
+
+.bauhaus-dropzone {
+  height: 200px; border: 3px dashed #000; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: 0.2s; background: #fafafa; margin-bottom: 30px;
+}
+.bauhaus-dropzone:hover, .bauhaus-dropzone.is-active { background: #E5FF00; border-style: solid; }
+.massive-plus { font-size: 50px; font-weight: 950; line-height: 1; }
+.drop-msg { margin-left: 20px; display: flex; flex-direction: column; }
+.drop-msg .primary { font-weight: 950; font-size: 1.1rem; }
+.drop-msg .secondary { font-family: var(--font-mono); font-size: 10px; font-weight: 800; opacity: 0.6; }
+
+.file-manifest { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; width: 100%; padding: 20px; }
+.file-item-bauhaus { 
+  background: white; border: 2.5px solid #000; padding: 6px 10px; display: flex; align-items: center; gap: 10px;
+  font-size: 11px; font-weight: 900;
+}
+.f-ext { color: #0026FE; }
+.f-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f-remove { background: none; border: none; font-size: 18px; font-weight: 950; cursor: pointer; color: #FF331F; }
+
+.input-group-bauhaus label { display: block; font-weight: 950; font-size: 11px; margin-bottom: 10px; letter-spacing: 1px; }
+.bauhaus-textarea {
+  width: 100%; height: 120px; border: 3px solid #000; padding: 15px; font-family: inherit; font-size: 1rem;
+  font-weight: 600; outline: none; transition: 0.2s; resize: none;
+}
+.bauhaus-textarea:focus { background: #fff; box-shadow: 8px 8px 0 #E5FF00; transform: translate(-4px, -4px); }
+
+.bauhaus-launch-btn {
+  width: 100%; height: 70px; margin-top: 30px; background: #000; color: white;
+  border: none; font-weight: 950; font-size: 1.2rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 20px; transition: 0.2s;
+}
+.bauhaus-launch-btn:not(:disabled):hover { background: #0026FE; transform: translate(-6px, -6px); box-shadow: 10px 10px 0 #000; }
+.bauhaus-launch-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+.cap-item { display: flex; gap: 20px; margin-bottom: 25px; }
+.cap-num { 
+  width: 32px; height: 32px; border: 2.5px solid #000; display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-weight: 950; font-size: 13px; flex-shrink: 0;
+}
+.cap-title { display: block; font-weight: 950; font-size: 11px; margin-bottom: 4px; }
+.cap-desc { font-size: 12px; color: #555; font-weight: 600; line-height: 1.4; }
+
+.system-metrics { border-top: 3px solid #000; padding-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.metric-box label { font-size: 9px; font-weight: 950; color: #888; display: block; margin-bottom: 5px; }
+.metric-box .val { font-family: var(--font-mono); font-weight: 950; font-size: 1.1rem; }
+
+.archive-section { margin-top: 100px; }
+.archive-header { display: flex; align-items: center; gap: 20px; margin-bottom: 40px; }
+.header-line { flex: 1; height: 4px; background: #000; }
+.archive-header h2 { font-weight: 950; font-size: 2rem; letter-spacing: -1px; }
+
+.bauhaus-footer {
+  padding: 40px; border-top: 4px solid #000; display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-weight: 900; font-size: 11px;
 }
 
-/* Navbar */
-.navbar {
-  height: 80px;
-  border-bottom: 2px solid var(--bau-black);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 40px;
-  background: #FFF;
-  position: sticky;
-  top: 0;
-  z-index: 100;
+@media (max-width: 1100px) {
+  .hero-brutal { flex-direction: column; align-items: flex-start; gap: 30px; }
+  .init-grid { grid-template-columns: 1fr; }
+  .hero-title { font-size: 5rem; }
 }
 
-.nav-brand {
-  font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 1.5rem;
-  letter-spacing: -1px;
-  text-transform: uppercase;
-}
-
-.nav-brand span {
-  color: var(--bau-red);
-}
-
-.github-link {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  text-decoration: none;
-  color: var(--bau-black);
-  border: 2px solid var(--bau-black);
-  padding: 8px 16px;
-  transition: all 0.2s;
-}
-
-.github-link:hover {
-  background: var(--bau-black);
-  color: #FFF;
-}
-
-/* Hero */
-.hero-section {
-  display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
-  gap: 40px;
-  margin-bottom: 80px;
-  align-items: center;
-}
-
-.bau-block {
-  background: #FFF;
-  border: 2px solid var(--bau-black);
-  padding: 40px;
-  position: relative;
-}
-
-.tag-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-  align-items: center;
-}
-
-.bau-tag {
-  font-family: var(--font-mono);
-  font-weight: 800;
-  font-size: 0.75rem;
-  padding: 4px 12px;
-  color: #FFF;
-}
-
-.bau-tag.red { background: var(--bau-red); }
-
-.version-text {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 0.75rem;
-  opacity: 0.5;
-}
-
-.main-title {
-  font-size: 6rem;
-  line-height: 0.9;
-  font-weight: 900;
-  margin-bottom: 32px;
-  letter-spacing: -4px;
-}
-
-.highlight-blue {
-  color: var(--bau-blue);
-  background: var(--bau-yellow);
-  padding: 0 10px;
-}
-
-.hero-desc {
-  font-size: 1.25rem;
-  line-height: 1.5;
-  max-width: 500px;
-}
-
-.slogan-block {
-  margin-top: 32px;
-  padding: 16px;
-  border: 2px solid var(--bau-black);
-  font-weight: 900;
-  font-family: var(--font-mono);
-  transform: rotate(-2deg);
-  display: inline-block;
-}
-
-.slogan-block.yellow { background: var(--bau-yellow); }
-
-/* MF Geometric Logo */
-.hero-right {
-  display: flex;
-  justify-content: center;
-}
-
-.bau-logo-mark {
-  position: relative;
-  width: 300px;
-  height: 300px;
-}
-
-.shape-m {
-  display: flex;
-  gap: 20px;
-  height: 200px;
-}
-
-.bar {
-  width: 40px;
-  height: 100%;
-}
-
-.bar.red { background: var(--bau-red); }
-.bar.blue { background: var(--bau-blue); transform: translateY(20px); }
-.bar.yellow { background: var(--bau-yellow); transform: translateY(-10px); }
-
-.mf-text {
-  position: absolute;
-  bottom: 0;
-  right: 20px;
-  font-size: 8rem;
-  font-weight: 950;
-  line-height: 1;
-  letter-spacing: -10px;
-  color: var(--bau-black);
-}
-
-/* Dashboard Grid */
-.dashboard-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40px;
-  margin-bottom: 60px;
-}
-
-.panel-header {
-  font-family: var(--font-mono);
-  font-weight: 800;
-  margin-bottom: 24px;
-}
-
-.status-indicator {
-  color: var(--bau-red);
-}
-
-.section-title {
-  font-size: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -1px;
-  margin-bottom: 32px;
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 40px;
-}
-
-.metric-box {
-  border: 2px solid var(--bau-black);
-  padding: 16px;
-}
-
-.metric-box .label {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 700;
-  opacity: 0.5;
-}
-
-.metric-box .value {
-  font-size: 1.5rem;
-  font-weight: 900;
-}
-
-.workflow-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.workflow-step {
-  display: flex;
-  gap: 20px;
-}
-
-.step-idx {
-  font-family: var(--font-mono);
-  font-weight: 800;
-  color: var(--bau-red);
-}
-
-.step-name {
-  font-weight: 800;
-  font-size: 1rem;
-}
-
-.step-desc {
-  font-size: 0.85rem;
-  opacity: 0.6;
-}
-
-/* Console */
-.console-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-.console-step {
-  margin-bottom: 32px;
-}
-
-.console-label {
-  font-family: var(--font-mono);
-  font-weight: 800;
-  font-size: 0.85rem;
-  margin-bottom: 12px;
-}
-
-.upload-area {
-  height: 200px;
-  border: 2px dashed var(--bau-black);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  background: var(--bau-bg);
-}
-
-.upload-area.drag-over {
-  background: var(--bau-yellow);
-}
-
-.upload-area .placeholder {
-  text-align: center;
-  font-weight: 900;
-  font-family: var(--font-mono);
-}
-
-.file-list {
-  padding: 16px;
-  width: 100%;
-}
-
-.file-card {
-  background: #FFF;
-  border: 2px solid var(--bau-black);
-  padding: 8px 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.file-card .name { font-family: var(--font-mono); font-size: 0.85rem; }
-
-.bau-textarea {
-  width: 100%;
-  border: 2px solid var(--bau-black);
-  padding: 16px;
-  font-family: var(--font-mono);
-  background: #FFF;
-  outline: none;
-}
-
-.engine-id {
-  margin-top: 8px;
-  text-align: right;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 700;
-}
-
-.action-footer {
-  margin-top: auto;
-}
-
-.bau-btn-large {
-  width: 100%;
-  height: 60px;
-  background: var(--bau-black);
-  color: #FFF;
-  font-size: 1.25rem;
-}
-
-.bau-btn-large:hover {
-  background: var(--bau-red);
-  box-shadow: 6px 6px 0 var(--bau-black);
-}
-
-.history-section {
-  margin-top: 40px;
-  border: 2px solid var(--bau-black);
-  background: #FFF;
-  padding: 40px;
-}
+.bauhaus-spinner-small { width: 24px; height: 24px; border: 4px solid white; border-top-color: #E5FF00; border-radius: 50%; animation: spin 1s infinite linear; }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
