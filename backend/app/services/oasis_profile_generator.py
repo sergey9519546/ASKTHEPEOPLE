@@ -629,7 +629,7 @@ class OasisProfileGenerator:
                 "_fixed": True
             }
         
-        # 7. Complete failure — return minimal structure
+        # 7. Complete failure - return minimal structure
         logger.warning(f"JSON repair failed, returning minimal structure")
         return {
             "bio": entity_summary[:200] if entity_summary else f"{entity_type}: {entity_name}",
@@ -683,7 +683,7 @@ Return a JSON object with these fields:
 8. interested_topics: Array of topic strings
 
 IMPORTANT:
-- All field values must be strings or numbers — no newline characters in values
+- All field values must be strings or numbers - no newline characters in values
 - persona must be a single block of coherent text
 - Write everything in English (gender must be "male" or "female")
 - Content must be consistent with the entity information provided
@@ -732,7 +732,7 @@ Return a JSON object with these fields:
 8. interested_topics: Array of topic strings
 
 IMPORTANT:
-- All field values must be strings or numbers — no null values, no newlines in values
+- All field values must be strings or numbers - no null values, no newlines in values
 - persona must be a single block of coherent text
 - Write everything in English (gender must be the string "other")
 - age must be the integer 30, gender must be the string "other"
@@ -1067,13 +1067,13 @@ IMPORTANT:
             f"{separator}",
             f"Username: {profile.user_name}",
             f"",
-            f"【Bio】",
+            f"[Bio]",
             f"{profile.bio}",
             f"",
-            f"【Detailed Persona】",
+            f"[Detailed Persona]",
             f"{profile.persona}",
             f"",
-            f"【Attributes】",
+            f"[Attributes]",
             f"Age: {profile.age} | Gender: {profile.gender} | MBTI: {profile.mbti}",
             f"Profession: {profile.profession} | Country: {profile.country}",
             f"Interests: {topics_str}",

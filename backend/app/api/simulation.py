@@ -1996,15 +1996,15 @@ def get_simulation_actions(simulation_id: str):
 @simulation_bp.route('/<simulation_id>/timeline', methods=['GET'])
 def get_simulation_timeline(simulation_id: str):
     """
-    获取模拟时间线（按轮次汇总）
+    Get simulation timeline (summarized by rounds)
     
-    用于前端展示进度条和时间线视图
+    Used for frontend display of progress bars and timeline views
     
     Query parameters:
-        start_round: 起始轮次（默认0）
-        end_round: 结束轮次（默认全部）
+        start_round: starting round (default 0)
+        end_round: ending round (default all)
     
-    返回每轮的汇总信息
+    Returns summary information for each round
     """
     try:
         start_round = request.args.get('start_round', 0, type=int)
@@ -2020,7 +2020,7 @@ def get_simulation_timeline(simulation_id: str):
             "success": True,
             "data": {
                 "rounds_count": len(timeline),
-            "timeline": timeline
+                "timeline": timeline
             }
         })
         
@@ -2036,9 +2036,9 @@ def get_simulation_timeline(simulation_id: str):
 @simulation_bp.route('/<simulation_id>/agent-stats', methods=['GET'])
 def get_agent_stats(simulation_id: str):
     """
-    获取每个Agent的统计信息
+    Get statistics for each Agent
     
-    用于前端展示Agent活跃度排行、动作分布等
+    Used for frontend display of Agent activity ranking, action distribution, etc.
     """
     try:
         stats = SimulationRunner.get_agent_stats(simulation_id)
@@ -2052,7 +2052,7 @@ def get_agent_stats(simulation_id: str):
         })
         
     except Exception as e:
-        logger.error(f"获取Agent统计失败: {str(e)}")
+        logger.error(f"Failed to get Agent statistics: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -2060,19 +2060,19 @@ def get_agent_stats(simulation_id: str):
         }), 500
 
 
-# ============== 数据库查询接口 ==============
+# ============== Database Query Interface ==============
 
 @simulation_bp.route('/<simulation_id>/posts', methods=['GET'])
 def get_simulation_posts(simulation_id: str):
     """
-    获取模拟中的帖子
+    Get posts in the simulation
     
     Query parameters:
-        platform: 平台类型（twitter/reddit）
-        limit: 返回数量（默认50）
-        offset: 偏移量
+        platform: platform type (twitter/reddit)
+        limit: return count (default 50)
+        offset: offset
     
-    返回帖子列表（从SQLite数据库读取）
+    Returns post list (read from SQLite database)
     """
     try:
         platform = request.args.get('platform', 'reddit')
@@ -2094,7 +2094,7 @@ def get_simulation_posts(simulation_id: str):
                     "platform": platform,
                     "count": 0,
                     "posts": [],
-                    "message": "数据库不存在，模拟可能尚未运行"
+                    "message": "Database does not exist, simulation may not have run yet"
                 }
             })
         
@@ -2350,23 +2350,23 @@ def interview_agent():
 def interview_agents_batch():
     """
 
-    请求（JSON）：
+    Request (JSON):
         {
-            "simulation_id": "sim_xxxx",       // Required，模拟ID
-            "interviews": [                    // Required，采访列表
+            "simulation_id": "sim_xxxx",       // Required, simulation ID
+            "interviews": [                    // Required, interview list
                 {
                     "agent_id": 0,
-                    "prompt": "你对A有什么看法？",
-                    "platform": "twitter"      // 可选，指定该Agent的采访平台
+                    "prompt": "What's your opinion on A?",
+                    "platform": "twitter"      // Optional, specify the interview platform for this Agent
                 },
                 {
                     "agent_id": 1,
-                    "prompt": "你对B有什么看法？"  // 不指定platform则使用默认值
+                    "prompt": "What's your opinion on B?"  // If platform is not specified, use default value
                 }
             ],
-            "platform": "reddit",              // 可选，默认平台（被每项的platform覆盖）
-                                               // 不指定时：双平台模拟每个Agent同时采访两个平台
-            "timeout": 120                     // 可选，超时时间（秒），默认120
+            "platform": "reddit",              // Optional, default platform (overridden by individual platform field)
+                                               // When not specified: dual-platform simulation interviews each Agent on both platforms simultaneously
+            "timeout": 120                     // Optional, timeout (seconds), default 120
         }
 
     Returns:
@@ -2392,7 +2392,7 @@ def interview_agents_batch():
 
         simulation_id = data.get('simulation_id')
         interviews = data.get('interviews')
-        platform = data.get('platform')  # 可选：twitter/reddit/None
+        platform = data.get('platform')  # Optional: twitter/reddit/None
         timeout = data.get('timeout', 120)
 
         if not simulation_id:
@@ -2407,11 +2407,11 @@ def interview_agents_batch():
                 "error": "Please provide interviews (interview list)"
             }), 400
 
-        # 验证platform参数
+        # Validate platform parameter
         if platform and platform not in ("twitter", "reddit"):
             return jsonify({
                 "success": False,
-                "error": "platform 参数只能是 'twitter' 或 'reddit'"
+                "error": "platform parameter can only be 'twitter' or 'reddit'"
             }), 400
 
         # Validate each interview item

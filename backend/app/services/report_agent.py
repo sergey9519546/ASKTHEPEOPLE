@@ -471,57 +471,57 @@ class Report:
 # Prompt Template Constants
 # ===============================================================
 
-# ── Tool Descriptions ──
+# -- Tool Descriptions --
 
 TOOL_DESC_INSIGHT_FORGE = """\
-【Deep Insight Search - Powerful Retrieval Tool】
+[Deep Insight Search - Powerful Retrieval Tool]
 This is our most powerful retrieval function, designed for in-depth analysis. It will:
 1. Automatically decompose your query into multiple sub-queries.
 2. Retrieve information from the simulation graph across multiple dimensions.
 3. Integrate results from semantic search, entity analysis, and relationship chain tracking.
 4. Return the most comprehensive and in-depth retrieval content.
 
-【Usage Scenarios】
+[Usage Scenarios]
 - Need in-depth analysis of a specific topic.
 - Need to understand multiple aspects of an event.
 - Need to acquire rich material to support report sections.
 
-【Returned Content】
+[Returned Content]
 - Relevant original facts (can be cited directly).
 - Core entity insights.
 - Relationship chain analysis."""
 
 TOOL_DESC_PANORAMA_SEARCH = """\
-【Panorama Search - Get the Full Picture】
+[Panorama Search - Get the Full Picture]
 This tool is used to acquire a complete overview of the simulation results, especially for understanding the evolution of events. It will:
 1. Retrieve all relevant nodes and relationships.
 2. Distinguish between currently active facts and historical/expired facts.
 3. Help you understand how public opinion has evolved.
 
-【Usage Scenarios】
+[Usage Scenarios]
 - Need to understand the complete development sequence of an event.
 - Need to compare changes in public opinion across different stages.
 - Need to acquire comprehensive entity and relationship information.
 
-【Returned Content】
+[Returned Content]
 - Currently active facts (latest simulation results).
 - Historical/expired facts (evolutionary records).
 - All involved entities."""
 
 TOOL_DESC_QUICK_SEARCH = """\
-【Quick Search - Fast Retrieval】
+[Quick Search - Fast Retrieval]
 A lightweight fast retrieval tool, suitable for simple and direct information queries.
 
-【Usage Scenarios】
+[Usage Scenarios]
 - Need to quickly find a specific piece of information.
 - Need to verify a single fact.
 - Simple information retrieval.
 
-【Returned Content】
+[Returned Content]
 - A list of facts most relevant to the query."""
 
 TOOL_DESC_INTERVIEW_AGENTS = """\
-【Deep Interview - Real Agent Interview (Dual Platform)】
+[Deep Interview - Real Agent Interview (Dual Platform)]
 Calls the interview API of the OASIS simulation environment to conduct a real interview with a running simulation Agent!
 This is not an LLM simulation; it is a call to a real interview interface to get the original responses from the simulation Agents.
 By default, it interviews on both Twitter and Reddit platforms simultaneously to get a more comprehensive perspective.
@@ -533,13 +533,13 @@ Functional Flow:
 4. Calls the /api/simulation/interview/batch interface for real interviews on both platforms.
 5. Integrates all interview results to provide multi-perspective analysis.
 
-【Usage Scenarios】
+[Usage Scenarios]
 - Need to understand event perspectives from different roles (What do students think? What does the media say? What is the official stance?).
 - Need to collect opinions and positions from multiple parties.
 - Need to get real answers from simulation Agents (from the OASIS simulation environment).
 - Want to make the report more vivid, including "Interview Records."
 
-【Returned Content】
+[Returned Content]
 - Identity information of the interviewed Agents.
 - Each Agent's interview responses on Twitter and Reddit.
 - Key quotes (can be cited directly).
@@ -561,14 +561,14 @@ Write a "Future Prediction Report" that answers:
 2. How did various types of Agents (populations) react and act?
 3. What noteworthy future trends and risks does this simulation reveal?
 
-【Report Positioning】
-- ✅ This is a simulation-based future prediction report, revealing "if this happens, what will the future be like."
-- ✅ Focused on prediction results: event progression, group reactions, emergent phenomena, potential risks.
-- ✅ The words and deeds of Agents in the simulated world are predictions of future human behavior.
-- ❌ Not an analysis of the current state of the real world.
-- ❌ Not a general summary of public opinion.
+[Report Positioning]
+- [YES] This is a simulation-based future prediction report, revealing "if this happens, what will the future be like."
+- [YES] Focused on prediction results: event progression, group reactions, emergent phenomena, potential risks.
+- [YES] The words and deeds of Agents in the simulated world are predictions of future human behavior.
+- [NO] Not an analysis of the current state of the real world.
+- [NO] Not a general summary of public opinion.
 
-【Section Quantity Limits】
+[Section Quantity Limits]
 - Minimum 2 sections, maximum 5 sections.
 - No sub-sections needed; each section is written in full.
 - Content must be concise, focusing on core prediction findings.
@@ -593,16 +593,16 @@ Please output the report outline in JSON format as follows:
 Note: the sections array must have 1-5 elements!"""
 
 PLAN_USER_PROMPT_TEMPLATE = """\
-【Prediction Scenario Setting】
+[Prediction Scenario Setting]
 Variables injected into the simulated world (simulation requirements):{simulation_requirement}
 
-【Simulated World Scale】
+[Simulated World Scale]
 - Number of entities participating in the simulation: {total_nodes}
 - Number of relationships generated between entities: {total_edges}
 - Entity type distribution: {entity_types}
 - Number of active Agents: {total_entities}
 
-【Sample Future Facts Predicted by Simulation】
+[Sample Future Facts Predicted by Simulation]
 {related_facts_json}
 
 Please examine this future preview with a "God's View":
@@ -612,9 +612,9 @@ Please examine this future preview with a "God's View":
 
 Design the most appropriate report section structure based on the prediction results.
 
-【Reminder】Number of report sections: minimum 2, maximum 5; content must be concise and focused on core prediction findings."""
+[Reminder]Number of report sections: minimum 2, maximum 5; content must be concise and focused on core prediction findings."""
 
-# ── Section Generation Prompt ──
+# -- Section Generation Prompt --
 
 SECTION_SYSTEM_PROMPT_TEMPLATE = """\
 You are an expert at writing "Future Prediction Reports," currently writing a section of a report.
@@ -625,9 +625,9 @@ Prediction Scenario (Simulation Requirement): {simulation_requirement}
 
 Current Section to write: {section_title}
 
-═══════════════════════════════════════════════════════════════
-【Core Philosophy】
-═══════════════════════════════════════════════════════════════
+===============================================================
+[Core Philosophy]
+===============================================================
 
 The simulated world is a preview of the future. We injected specific conditions (simulation requirements) into the simulated world,
 The behaviors and interactions of Agents in the simulation are predictions of future human behavior.
@@ -637,49 +637,49 @@ Your task is:
 - Predict how various populations (Agents) react and act
 - Discover noteworthy future trends, risks, and opportunities
 
-❌ Do not write as an analysis of the current state of the real world
-✅ Focus on "what the future will be like"—the simulation results are the predicted future
+[NO] Do not write as an analysis of the current state of the real world
+[YES] Focus on "what the future will be like"-the simulation results are the predicted future
 
-═══════════════════════════════════════════════════════════════
-【Most Important Rules - Must Follow】
-═══════════════════════════════════════════════════════════════
+===============================================================
+[Most Important Rules - Must Follow]
+===============================================================
 
-1. 【Must Use Tools to Observe the Simulated World】
+1. [Must Use Tools to Observe the Simulated World]
    - You are observing a preview of the future with a "God's View"
    - All content must come from events and Agent actions/speech occurring in the simulated world
    - Forbidden to use your own knowledge to write report content
    - Call tools at least 3 times per section (maximum 5) to observe the simulated world; it represents the future
 
-2. 【Must Cite Agents' Original Words and Deeds】
+2. [Must Cite Agents' Original Words and Deeds]
    - Agents' speech and behavior are predictions of future human behavior
    - Display these predictions in citation format in the report, for example:
      > "A certain group will state: original content..."
    - These citations are core evidence of the simulation's predictions
 
-3. 【Language Consistency - Citations Must Be Translated to Report Language】
+3. [Language Consistency - Citations Must Be Translated to Report Language]
    - Content returned by tools may include English or mixed Chinese-English expressions.
    - Even if simulation requirements and original materials are in Chinese, the report must be written entirely in English for this localized version.
    - Ensure all citations are in clear English. If the original source is Chinese, translate it to English.
    - Maintain original meaning during translation, ensuring natural flow.
    - This rule applies to both the main text and blockquote citations (">" format).
 
-4. 【Faithfully Present Prediction Results】
+4. [Faithfully Present Prediction Results]
    - Report content must reflect simulation results from the simulated world that represent the future
    - Do not add information that does not exist in the simulation
    - If information is lacking in certain aspects, state so truthfully
 
-═══════════════════════════════════════════════════════════════
-【⚠️ Formatting Specification - Extremely Important!】
-═══════════════════════════════════════════════════════════════
+===============================================================
+[[WARN] Formatting Specification - Extremely Important!]
+===============================================================
 
-【One Section = Minimum Content Unit】
+[One Section = Minimum Content Unit]
 - Each section is the smallest modular unit of the report
-- ❌ Forbidden to use any Markdown headers (#, ##, ###, ####, etc.) within sections
-- ❌ Forbidden to add a main section title at the beginning of the content
-- ✅ Section titles are added automatically; you only need to write pure body text
-- ✅ Use **bold**, paragraph breaks, citations, and lists to organize content, but do not use headers
+- [NO] Forbidden to use any Markdown headers (#, ##, ###, ####, etc.) within sections
+- [NO] Forbidden to add a main section title at the beginning of the content
+- [YES] Section titles are added automatically; you only need to write pure body text
+- [YES] Use **bold**, paragraph breaks, citations, and lists to organize content, but do not use headers
 
-【Correct Example】
+[Correct Example]
 ```
 This section analyzes the public opinion dissemination status of the event. Through in-depth analysis of simulation data, we found...
 
@@ -697,30 +697,30 @@ TikTok further amplified the event's impact:
 - High emotional resonance
 ```
 
-【Error Example】
+[Error Example]
 ```
-## Executive Summary          ← Error! Do not add any headers
-### I. Initial Phase     ← Error! Do not use ### for sub-sections
-#### 1.1 Detailed Analysis   ← Error! Do not use #### for fine-tuning
+## Executive Summary          <-- Error! Do not add any headers
+### I. Initial Phase     <-- Error! Do not use ### for sub-sections
+#### 1.1 Detailed Analysis   <-- Error! Do not use #### for fine-tuning
 
 This section analyzes...
 ```
 
-═══════════════════════════════════════════════════════════════
-【Available Retrieval Tools】 (3-5 calls per section)
-═══════════════════════════════════════════════════════════════
+===============================================================
+[Available Retrieval Tools] (3-5 calls per section)
+===============================================================
 
 {tools_description}
 
-【Tool Usage Suggestions - Please use a mix of different tools, do not rely on just one】
+[Tool Usage Suggestions - Please use a mix of different tools, do not rely on just one]
 - insight_forge: Deep insight analysis; automatically decomposes questions and retrieves facts and relationships across multiple dimensions
 - panorama_search: Wide-angle panorama search; understand the full picture, timeline, and evolution of events
 - quick_search: Quickly verify a specific information point
 - interview_agents: Interview simulation Agents; obtain first-person perspectives and real reactions from different roles
 
-═══════════════════════════════════════════════════════════════
-【Workflow】
-═══════════════════════════════════════════════════════════════
+===============================================================
+[Workflow]
+===============================================================
 
 In each reply, you can only do one of the following two things (not both at once):
 
@@ -734,14 +734,14 @@ The system will execute the tool and return the results to you. You do not need 
 Option B - Output Final Content:
 When you have gathered enough information via tools, output the section content starting with "Final Answer:".
 
-⚠️ Strictly prohibited:
+[WARN] Strictly prohibited:
 - Forbidden to include both a tool call and Final Answer in a single reply
 - Forbidden to make up tool results (Observation); all results are injected by the system
 - Maximum one tool call per reply
 
-═══════════════════════════════════════════════════════════════
-【Section Content Requirements】
-═══════════════════════════════════════════════════════════════
+===============================================================
+[Section Content Requirements]
+===============================================================
 
 1. Content must be based on simulation data retrieved via tools
 2. Cite original texts extensively to demonstrate simulation effects
@@ -749,11 +749,11 @@ When you have gathered enough information via tools, output the section content 
    - Use **bold text** to mark key points (instead of sub-headers)
    - Use lists (- or 1.2.3.) to organize points
    - Use blank lines to separate different paragraphs
-   - ❌ Forbidden to use any header syntax like #, ##, ###, ####, etc.
-4. 【Citation Format Specification - Must Be a Separate Paragraph】
+   - [NO] Forbidden to use any header syntax like #, ##, ###, ####, etc.
+4. [Citation Format Specification - Must Be a Separate Paragraph]
    Citations must be standalone paragraphs with an empty line before and after; do not mix them into text paragraphs:
 
-   ✅ Correct Format:
+   [YES] Correct Format:
    ```
    The university's response was considered lacking in substance.
 
@@ -762,52 +762,52 @@ When you have gathered enough information via tools, output the section content 
    This assessment reflected widespread public dissatisfaction.
    ```
 
-   ❌ Error Format:
+   [NO] Error Format:
    ```
    The university's response was considered lacking in substance.> "The university's response mode..." This evaluation reflects...
    ```
 5. Maintain logical consistency with other sections
-6. 【Avoid Duplication】 Read the completed section content below carefully to avoid repeating the same information
-7. 【Reiterate】 Do not add any headers! Use **bold** instead of sub-headers"""
+6. [Avoid Duplication] Read the completed section content below carefully to avoid repeating the same information
+7. [Reiterate] Do not add any headers! Use **bold** instead of sub-headers"""
 
 SECTION_USER_PROMPT_TEMPLATE = """\
 Completed section content (read carefully to avoid duplication):
 {previous_content}
 
-═══════════════════════════════════════════════════════════════
-【Current Task】 Writing Section: {section_title}
-═══════════════════════════════════════════════════════════════
+===============================================================
+[Current Task] Writing Section: {section_title}
+===============================================================
 
-【Important Reminders】
+[Important Reminders]
 1. Read the completed sections above carefully to avoid repeating the same content!
 2. Must call tools to gather simulation data before starting
 3. Use a mix of different tools, do not rely on just one
 4. Report content must come from retrieval results; do not use your own knowledge
 
-【⚠️ Formatting Warning - Must Follow】
-- ❌ Do not write any headers (#, ##, ###, #### are all disallowed)
-- ❌ Do not write "{section_title}" as an opening
-- ✅ Section titles are added automatically
-- ✅ Write body text directly, using **bold** instead of sub-headers
+[[WARN] Formatting Warning - Must Follow]
+- [NO] Do not write any headers (#, ##, ###, #### are all disallowed)
+- [NO] Do not write "{section_title}" as an opening
+- [YES] Section titles are added automatically
+- [YES] Write body text directly, using **bold** instead of sub-headers
 
 Please start:
 1. First, think (Thought) about what information this section needs
 2. Then, call tools (Action) to gather simulation data
 3. Output Final Answer (pure body text, no headers) after gathering sufficient information"""
 
-# ── Messages for ReACT Loop ──
+# -- Messages for ReACT Loop --
 
 REACT_OBSERVATION_TEMPLATE = """\
 Observation (retrieval results):
 
-═══ Tool {tool_name} returned ═══
+=== Tool {tool_name} returned ===
 {result}
 
-═══════════════════════════════════════════════════════════════
+===============================================================
 Used tool {tool_calls_count}/{max_tool_calls} times (Used: {used_tools_str}) {unused_hint}
 - If info is sufficient: Start with "Final Answer:" and output section content (must cite original text above)
 - If more info is needed: Call a tool to continue retrieval
-═══════════════════════════════════════════════════════════════"""
+==============================================================="""
 
 REACT_INSUFFICIENT_TOOLS_MSG = (
     "[Note] You have only called tools {tool_calls_count} times; at least {min_tool_calls} are required."
@@ -824,11 +824,11 @@ REACT_TOOL_LIMIT_MSG = (
     'Please immediately output section content starting with "Final Answer:" based on the information obtained.'
 )
 
-REACT_UNUSED_TOOLS_HINT = "\n💡 You haven't used: {unused_list} yet; it's recommended to try different tools for multi-perspective info"
+REACT_UNUSED_TOOLS_HINT = "\n[HINT] You haven't used: {unused_list} yet; it's recommended to try different tools for multi-perspective info"
 
 REACT_FORCE_FINAL_MSG = "Tool call limit reached; please output Final Answer: and generate section content directly."
 
-# ── Chat prompt ──
+# -- Chat prompt --
 
 CHAT_SYSTEM_PROMPT_TEMPLATE = """\
 You are a concise and efficient simulation prediction assistant.
@@ -861,9 +861,9 @@ Prediction Scenario: {simulation_requirement}
 CHAT_OBSERVATION_SUFFIX = "\n\nPlease answer the question concisely."
 
 
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 # ReportAgent Main Class
-# ═══════════════════════════════════════════════════════════════
+# ===============================================================
 
 
 class ReportAgent:
@@ -1427,7 +1427,7 @@ class ReportAgent:
                     has_final_answer=has_final_answer
                 )
 
-            # ── Case 1: LLM output Final Answer ──
+            # -- Case 1: LLM output Final Answer --
             if has_final_answer:
                 # Insufficient tool calls, reject and require more tools
                 if tool_calls_count < min_tool_calls:
@@ -1457,7 +1457,7 @@ class ReportAgent:
                     )
                 return final_answer
 
-            # ── Case 2: LLM tries to call tool ──
+            # -- Case 2: LLM tries to call tool --
             if has_tool_calls:
                 # Tool quota exhausted -> notify clearly, require Final Answer
                 if tool_calls_count >= self.MAX_TOOL_CALLS_PER_SECTION:
@@ -1523,7 +1523,7 @@ class ReportAgent:
                 })
                 continue
 
-            # ── Case 3: Neither tool call nor Final Answer ──
+            # -- Case 3: Neither tool call nor Final Answer --
             messages.append({"role": "assistant", "content": response})
 
             if tool_calls_count < min_tool_calls:

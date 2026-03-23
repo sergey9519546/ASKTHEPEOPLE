@@ -1,7 +1,7 @@
 """
 Simulation Configuration Generator.
 Uses an LLM to automatically generate detailed simulation parameters from requirements, document text, and graph data.
-Fully automated — no manual parameter tuning needed.
+Fully automated - no manual parameter tuning needed.
 
 Uses a step-by-step generation strategy to avoid failures from overly long outputs:
 1. Generate time configuration
@@ -71,18 +71,18 @@ class TimeSimulationConfig:
     # Total simulation duration in simulated hours
     total_simulation_hours: int = 72  # Default: 72 hours (3 days)
     
-    # Time represented per round (simulated minutes) — default 60 mins for faster time flow
+    # Time represented per round (simulated minutes) - default 60 mins for faster time flow
     minutes_per_round: int = 60
     
     # Range of agents activated per hour
     agents_per_hour_min: int = 5
     agents_per_hour_max: int = 20
     
-    # Peak hours (19-22h — most active period)
+    # Peak hours (19-22h - most active period)
     peak_hours: List[int] = field(default_factory=lambda: [19, 20, 21, 22])
     peak_activity_multiplier: float = 1.5
     
-    # Off-peak hours (0-5h — almost no activity)
+    # Off-peak hours (0-5h - almost no activity)
     off_peak_hours: List[int] = field(default_factory=lambda: [0, 1, 2, 3, 4, 5])
     off_peak_activity_multiplier: float = 0.05
     
