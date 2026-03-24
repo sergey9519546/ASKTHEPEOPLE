@@ -11,9 +11,12 @@
   /* Modernist Brutal - "Creative Studio" Palette */
   --atp-black: #000000;
   --atp-white: #ffffff;
-  --atp-blue: #0026fe; /* Ultramarine */
+  --atp-blue: #0026fe; /* Ultramarine - Keeping for base */
   --atp-red: #ff331f; /* Vermilion */
   --atp-yellow: #e5ff00; /* Acid Yellow */
+  --atp-cyan: #22d3ee;
+  --atp-purple: #a855f7;
+  --atp-green: #4ade80;
   --atp-light-gray: #f9f9f9;
 
   /* Semantic Variables */
@@ -24,7 +27,7 @@
 
   --text-primary: var(--atp-black);
   --text-secondary: #555555;
-  --accent-color: var(--atp-blue);
+  --accent-color: var(--atp-cyan); /* Default accent is now Cyan */
 
   /* Typography */
   --font-mono: "JetBrains Mono", monospace;
@@ -39,6 +42,20 @@
   /* Spacing */
   --gap: 24px;
 }
+
+/* Custom Selection Color */
+::selection {
+  background: var(--atp-cyan);
+  color: var(--atp-black);
+}
+
+/* Utility Classes for usage */
+.bg-accent-cyan { background-color: var(--atp-cyan) !important; }
+.text-accent-cyan { color: var(--atp-cyan) !important; }
+.bg-accent-purple { background-color: var(--atp-purple) !important; }
+.text-accent-purple { color: var(--atp-purple) !important; }
+.bg-accent-green { background-color: var(--atp-green) !important; }
+.text-accent-green { color: var(--atp-green) !important; }
 
 /* Global Style Reset */
 * {

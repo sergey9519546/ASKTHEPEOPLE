@@ -171,8 +171,8 @@ const dismissFinishedHint = () => showSimulationFinishedHint.value = false
 
 const entityTypes = computed(() => {
   if (!props.graphData?.nodes) return []
-  // Modernist Brutal Palette
-  const palette = ['#0026FE', '#FF331F', '#E5FF00', '#000000', '#AAAAAA', '#555555']
+  // Modernist Brutal Palette with new Accents
+  const palette = ['#22d3ee', '#a855f7', '#4ade80', '#000000', '#AAAAAA', '#555555']
   const map = {}
   props.graphData.nodes.forEach(n => {
     const t = n.labels?.find(l => l !== 'Entity') || 'ENTITY'
@@ -262,12 +262,13 @@ onUnmounted(() => { window.removeEventListener('resize', render); if (currentSim
 
 .status-overlay-hint {
   position: absolute; top: 20px; left: 20px;
-  background: var(--atp-yellow); padding: 8px 15px; border: var(--border-width) solid var(--atp-black);
+  background: var(--atp-cyan); padding: 8px 15px; border: var(--border-width) solid var(--atp-black);
   display: flex; align-items: center; gap: 10px;
   font-weight: 900; font-size: 11px; z-index: 5;
+  color: var(--atp-black);
 }
 
-.pulse-dot { width: 10px; height: 10px; background: var(--atp-red); border-radius: 50%; animation: pulse 1s infinite; }
+.pulse-dot { width: 10px; height: 10px; background: var(--atp-white); border-radius: 50%; animation: pulse 1s infinite; }
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
 .entity-detail-panel {
@@ -287,7 +288,7 @@ onUnmounted(() => { window.removeEventListener('resize', render); if (currentSim
 .attr-row { margin-bottom: 15px; }
 .attr-row label { display: block; font-weight: 900; font-size: 9px; color: #888; margin-bottom: 4px; }
 .attr-value { font-weight: 800; font-size: 14px; }
-.attr-value.title { font-size: 18px; color: var(--atp-blue); text-transform: uppercase; }
+.attr-value.title { font-size: 18px; color: var(--atp-cyan); text-transform: uppercase; }
 .attr-value.mono { font-family: var(--font-mono); font-size: 10px; color: #555; }
 
 .attr-section { margin-top: 20px; padding-top: 15px; border-top: 2px solid #EEE; }
@@ -318,7 +319,7 @@ onUnmounted(() => { window.removeEventListener('resize', render); if (currentSim
   font-weight: 900; font-size: 11px; cursor: pointer; transition: 0.2s;
   font-family: var(--font-mono);
 }
-.bauhaus-btn:hover { background: var(--atp-yellow); transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--atp-black); }
+.bauhaus-btn:hover { background: var(--atp-cyan); transform: translate(-2px, -2px); box-shadow: 4px 4px 0 var(--atp-black); }
 .is-spinning { animation: spin 0.8s infinite linear; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -332,13 +333,13 @@ onUnmounted(() => { window.removeEventListener('resize', render); if (currentSim
   position: absolute; content: ""; height: 10px; width: 10px; left: 2px; bottom: 1.5px;
   background-color: var(--atp-black); transition: .2s;
 }
-input:checked + .switch-slider { background-color: var(--atp-blue); }
+input:checked + .switch-slider { background-color: var(--atp-cyan); }
 input:checked + .switch-slider:before { transform: translateX(15px); background-color: var(--atp-white); }
 
 .state-placeholder {
   height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
   font-weight: 900; font-size: 14px; color: #CCC;
 }
-.bauhaus-spinner-large { width: 60px; height: 60px; border: 8px solid var(--atp-black); border-top-color: var(--atp-blue); animation: spin 1s infinite linear; }
-.geometric-shape { width: 60px; height: 60px; background: var(--atp-red); border: 4px solid var(--atp-black); transform: rotate(45deg); }
+.bauhaus-spinner-large { width: 60px; height: 60px; border: 8px solid var(--atp-black); border-top-color: var(--atp-cyan); animation: spin 1s infinite linear; }
+.geometric-shape { width: 60px; height: 60px; background: var(--atp-cyan); border: 4px solid var(--atp-black); transform: rotate(45deg); }
 </style>

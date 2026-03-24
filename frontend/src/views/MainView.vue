@@ -482,7 +482,7 @@ onUnmounted(() => {
   font-size: 1.2rem;
   letter-spacing: -1px;
   cursor: pointer;
-  color: var(--atp-black);
+  color: var(--atp-cyan); /* PULSE text equivalent */
   text-transform: uppercase;
 }
 
@@ -568,14 +568,14 @@ onUnmounted(() => {
 }
 
 .status-indicator.processing .dot {
-  background: var(--atp-red);
+  background: var(--atp-cyan);
   animation: bau-pulse 1s infinite step-end;
 }
 .status-indicator.completed .dot {
-  background: var(--atp-blue);
+  background: var(--atp-green); /* System Online green */
 }
 .status-indicator.error .dot {
-  background: var(--atp-black);
+  background: var(--atp-red);
   position: relative;
 }
 .status-indicator.error .dot::after {

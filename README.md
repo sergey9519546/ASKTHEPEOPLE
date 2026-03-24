@@ -580,14 +580,13 @@ docker compose down
 docker compose up -d --build
 ```
 
-#### Service Ports
+#### Service Ports (Production)
 
-| Service | Internal Port | External Port | Description |
-|----------|---------------|----------------|-------------|
-| Frontend | 3000 | 3000 | Vue.js development server |
-| Backend | 5001 | 5001 | Flask API server |
+| Service | Port | Description |
+|----------|------|-------------|
+| Unified App | 5001 | Flask + Built Frontend (Single Entry Point) |
 
-Access the application at: `http://localhost:3000`
+Access the application at: `http://localhost:5001`
 
 ### Troubleshooting Installation
 

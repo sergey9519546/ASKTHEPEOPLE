@@ -21,6 +21,7 @@ dependencies = [
     "camel-ai==0.2.78",
     # File Processing
     "PyMuPDF>=1.24.0",
+    "fpdf2>=2.7.9",
     # Encoding detection (supports non-UTF-8 text files)
     "charset-normalizer>=3.0.0",
     "chardet>=5.0.0",
