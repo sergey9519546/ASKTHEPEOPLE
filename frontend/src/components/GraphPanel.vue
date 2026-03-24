@@ -3,7 +3,7 @@
     <!-- Header -->
     <header class="panel-header-block">
       <div class="header-left">
-        <h2 class="panel-label">PHASE 01: ONTOLOGY VISUALIZATION</h2>
+        <h2 class="panel-label" aria-live="polite">{{ phaseLabels }}</h2>
       </div>
       <div class="header-right">
         <button
@@ -11,16 +11,23 @@
           @click="$emit('refresh')"
           :disabled="loading"
           title="Refresh Graph"
+          aria-label="Refresh graph data"
         >
-          <span class="btn-icon" :class="{ 'is-spinning': loading }">↻</span>
+          <span
+            class="btn-icon"
+            :class="{ 'is-spinning': loading }"
+            aria-hidden="true"
+            >↻</span
+          >
           <span class="btn-text">REFRESH</span>
         </button>
         <button
           class="bauhaus-btn small square"
           @click="$emit('toggle-maximize')"
           title="Maximize View"
+          aria-label="Toggle maximize view"
         >
-          <span class="btn-icon">⛶</span>
+          <span class="btn-icon" aria-hidden="true">⛶</span>
         </button>
       </div>
     </header>
@@ -55,8 +62,14 @@
 
         <!-- Entity Detail Panel (Sidebar within Graph) -->
         <Transition name="panel-slide">
-          <div v-if="selectedItem" class="entity-detail-panel bauhaus-card">
-            <header class="detail-header">
+          <div
+            v-if="selectedItem"
+            class="entity-detail-panel bauhaus-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="detail-header"
+          >
+            <header class="detail-header" id="detail-header">
               <span class="detail-category">{{
                 selectedItem.type === "node" ? "NODE_DATA" : "RELATION_LINK"
               }}</span>
@@ -67,7 +80,11 @@
               >
                 {{ selectedItem.entityType.toUpperCase() }}
               </span>
-              <button class="close-detail-btn" @click="closeDetailPanel">
+              <button
+                class="close-detail-btn"
+                @click="closeDetailPanel"
+                aria-label="Close detail panel"
+              >
                 ×
               </button>
             </header>
@@ -188,8 +205,12 @@
         <div class="control-row">
           <span class="control-label">EDGE_LABELS</span>
           <label class="bauhaus-switch">
-            <input type="checkbox" v-model="showEdgeLabels" />
-            <span class="switch-slider"></span>
+            <input
+              type="checkbox"
+              v-model="showEdgeLabels"
+              aria-label="Toggle edge labels"
+            />
+            <span class="switch-slider" aria-hidden="true"></span>
           </label>
         </div>
       </div>
@@ -206,6 +227,17 @@ const props = defineProps({
   loading: Boolean,
   currentPhase: Number,
   isSimulating: Boolean,
+});
+
+const phaseLabels = computed(() => {
+  const labels = {
+    1: "PHASE 01: ONTOLOGY VISUALIZATION",
+    2: "PHASE 02: SIMULATION PREPARATION",
+    3: "PHASE 03: SIMULATION EXECUTION",
+    4: "PHASE 04: REPORT GENERATION",
+    5: "PHASE 05: DEEP INTERACTION",
+  };
+  return labels[props.currentPhase] || "ONTOLOGY VISUALIZATION";
 });
 
 const emit = defineEmits(["refresh", "toggle-maximize"]);

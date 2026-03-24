@@ -5,15 +5,19 @@
     ref="historyContainer"
   >
     <!-- Bauhaus Backdrop -->
-    <div v-if="projects.length > 0 || loading" class="bauhaus-backdrop">
+    <div
+      v-if="projects.length > 0 || loading"
+      class="bauhaus-backdrop"
+      aria-hidden="true"
+    >
       <div class="geometric-pattern"></div>
     </div>
 
     <!-- Section Header -->
-    <header class="section-title-area">
-      <div class="bauhaus-accent-shape triangle"></div>
+    <header class="section-title-area" aria-label="Simulation Archive section">
+      <div class="bauhaus-accent-shape triangle" aria-hidden="true"></div>
       <h2 class="section-label">Simulation Archive</h2>
-      <div class="bauhaus-accent-shape square"></div>
+      <div class="bauhaus-accent-shape square" aria-hidden="true"></div>
     </header>
 
     <!-- Project Cards Grid -->
@@ -35,24 +39,36 @@
         @mouseenter="hoveringCard = index"
         @mouseleave="hoveringCard = null"
         @click="openProjectDetails(project)"
+        role="button"
+        tabindex="0"
+        :aria-label="`Simulation ${formatSimId(project.simulation_id)}: ${getShortRequirement(project.simulation_requirement)}`"
+        @keydown.enter="openProjectDetails(project)"
+        @keydown.space.prevent="openProjectDetails(project)"
       >
         <!-- Card Header: ID & Capabilities -->
         <header class="card-header-row">
           <span class="simulation-id">{{
             formatSimId(project.simulation_id)
           }}</span>
-          <div class="capability-flags">
+          <div class="capability-flags" aria-label="Capabilities">
             <span
               class="flag"
               :class="{ active: project.project_id }"
               title="Graph Building"
+              aria-label="Graph Building: {{ project.project_id ? 'Available' : 'Not available' }}"
               >GB</span
             >
-            <span class="flag active" title="Environment Setup">ES</span>
+            <span
+              class="flag active"
+              title="Environment Setup"
+              aria-label="Environment Setup: Available"
+              >ES</span
+            >
             <span
               class="flag"
               :class="{ active: project.report_id }"
               title="Analysis Report"
+              aria-label="Analysis Report: {{ project.report_id ? 'Available' : 'Not available' }}"
               >AR</span
             >
           </div>
@@ -60,7 +76,7 @@
 
         <!-- Preview Area: Files -->
         <div class="card-preview-area">
-          <div class="viewport-mark top-left"></div>
+          <div class="viewport-mark top-left" aria-hidden="true"></div>
           <div
             v-if="project.files && project.files.length > 0"
             class="file-previews"
@@ -81,8 +97,12 @@
               +{{ project.files.length - 3 }} Assets Remaining
             </div>
           </div>
-          <div v-else class="empty-files-placeholder">
-            <span class="empty-icon">×</span>
+          <div
+            v-else
+            class="empty-files-placeholder"
+            aria-label="No source data available"
+          >
+            <span class="empty-icon" aria-hidden="true">×</span>
             <span class="empty-text">NO SOURCE DATA</span>
           </div>
         </div>
@@ -109,13 +129,18 @@
           </div>
         </footer>
 
-        <div class="hover-accent-line"></div>
+        <div class="hover-accent-line" aria-hidden="true"></div>
       </div>
     </div>
 
     <!-- Loading State -->
-    <div v-if="loading" class="workbench-loading">
-      <div class="bauhaus-spinner"></div>
+    <div
+      v-if="loading"
+      class="workbench-loading"
+      role="status"
+      aria-live="polite"
+    >
+      <div class="bauhaus-spinner" aria-hidden="true"></div>
       <span class="loading-label">RETRIEVING ARCHIVES...</span>
     </div>
 
@@ -126,19 +151,22 @@
           v-if="selectedProject"
           class="workbench-modal-overlay"
           @click.self="closeModal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
         >
           <div class="bauhaus-modal-content">
             <!-- Modal Header -->
             <header class="modal-header-block">
               <div class="id-meta">
-                <span class="modal-sim-id">{{
+                <span class="modal-sim-id" id="modal-title">{{
                   formatSimId(selectedProject.simulation_id)
                 }}</span>
                 <div
                   class="modal-status-badge"
                   :class="getProgressState(selectedProject)"
                 >
-                  <span class="status-dot"></span>
+                  <span class="status-dot" aria-hidden="true"></span>
                   {{ formatIteration(selectedProject) }}
                 </div>
                 <span class="creation-stamp"
@@ -146,15 +174,28 @@
                   {{ formatTime(selectedProject.created_at) }}</span
                 >
               </div>
-              <button class="close-modal-btn" @click="closeModal">
+              <button
+                class="close-modal-btn"
+                @click="closeModal"
+                aria-label="Close modal"
+              >
                 CLOSE [X]
               </button>
             </header>
 
             <!-- Modal Body -->
-            <div class="modal-scroll-area">
-              <section class="modal-section">
-                <h4 class="section-heading">SIMULATION OBJECTIVE</h4>
+            <div
+              class="modal-scroll-area"
+              role="region"
+              aria-label="Modal content"
+            >
+              <section
+                class="modal-section"
+                aria-labelledby="simulation-objective-heading"
+              >
+                <h4 class="section-heading" id="simulation-objective-heading">
+                  SIMULATION OBJECTIVE
+                </h4>
                 <div class="requirement-box">
                   {{
                     selectedProject.simulation_requirement ||
@@ -163,65 +204,92 @@
                 </div>
               </section>
 
-              <section class="modal-section">
-                <h4 class="section-heading">LINKED ASSETS</h4>
+              <section
+                class="modal-section"
+                aria-labelledby="linked-assets-heading"
+              >
+                <h4 class="section-heading" id="linked-assets-heading">
+                  LINKED ASSETS
+                </h4>
                 <div
                   v-if="
                     selectedProject.files && selectedProject.files.length > 0
                   "
                   class="modal-file-list"
+                  role="list"
+                  aria-label="Linked files"
                 >
                   <div
                     v-for="(file, idx) in selectedProject.files"
                     :key="idx"
                     class="modal-file-row"
+                    role="listitem"
+                    :aria-label="`File: ${file.filename}, Type: ${getShortExt(file.filename)}`"
                   >
                     <span
                       class="file-extension-pill"
                       :class="getFileExtension(file.filename)"
+                      aria-hidden="true"
                       >{{ getShortExt(file.filename) }}</span
                     >
-                    <span class="modal-filename">{{ file.filename }}</span>
+                    <span class="modal-filename" aria-hidden="true">{{
+                      file.filename
+                    }}</span>
                   </div>
                 </div>
-                <div v-else class="modal-no-assets">NO ASSETS DETECTED</div>
+                <div
+                  v-else
+                  class="modal-no-assets"
+                  aria-label="No assets detected"
+                >
+                  NO ASSETS DETECTED
+                </div>
               </section>
             </div>
 
             <!-- Interactivity Area -->
-            <div class="modal-playback-divider">
-              <div class="hr-line"></div>
+            <div
+              class="modal-playback-divider"
+              aria-label="Synthetic playback section"
+            >
+              <div class="hr-line" aria-hidden="true"></div>
               <span class="playback-label">SYNTHETIC PLAYBACK</span>
-              <div class="hr-line"></div>
+              <div class="hr-line" aria-hidden="true"></div>
             </div>
 
-            <nav class="modal-navigation-grid">
+            <nav class="modal-navigation-grid" aria-label="Phase navigation">
               <button
                 class="nav-btn btn-graph"
                 @click="jumpToGraph"
                 :disabled="!selectedProject.project_id"
+                aria-label="Navigate to Phase 01: Graph Archive"
               >
                 <span class="step-num">PHASE 01</span>
-                <span class="action-icon">◆</span>
+                <span class="action-icon" aria-hidden="true">◆</span>
                 <span class="action-label">GRAPH ARCHIVE</span>
               </button>
-              <button class="nav-btn btn-setup" @click="jumpToSetup">
+              <button
+                class="nav-btn btn-setup"
+                @click="jumpToSetup"
+                aria-label="Navigate to Phase 02: Environment Configuration"
+              >
                 <span class="step-num">PHASE 02</span>
-                <span class="action-icon">▲</span>
+                <span class="action-icon" aria-hidden="true">▲</span>
                 <span class="action-label">ENV CONFIG</span>
               </button>
               <button
                 class="nav-btn btn-report"
                 @click="jumpToReport"
                 :disabled="!selectedProject.report_id"
+                aria-label="Navigate to Phase 04: Report Synthesis"
               >
                 <span class="step-num">PHASE 04</span>
-                <span class="action-icon">■</span>
+                <span class="action-icon" aria-hidden="true">■</span>
                 <span class="action-label">REPORT SYNTHESIS</span>
               </button>
             </nav>
 
-            <footer class="modal-notice">
+            <footer class="modal-notice" aria-label="Important notice">
               <p>
                 Phases 03 [Simulation] and 05 [Interaction] are runtime-only and
                 do not support archive playback.
