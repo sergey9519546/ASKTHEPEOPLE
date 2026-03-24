@@ -50,10 +50,5 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy to Railway
-        run: railway redeploy --service secure-playfulness --yes
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Trigger Railway Deploy Hook
+        run: curl -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}"
