@@ -5,7 +5,7 @@ COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
 # Pass Railway backend URL at build time so Vite bakes it into the bundle
-ARG VITE_API_BASE_URL=https://secure-playfulness-production-46a5.up.railway.app
+ARG VITE_API_BASE_URL=https://secure-playfulness-production-dda6.up.railway.app
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
