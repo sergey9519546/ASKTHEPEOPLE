@@ -1216,6 +1216,16 @@ Special thanks to:
 - **Discussions**: Ask questions, share ideas, and connect with other users
 - **Documentation**: This README and inline code documentation
 
+## License & Acknowledgments
+
+### License
+
+**ASKTHEPEOPLE** is released under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE). For more information, please see the full license text in the `LICENSE` file.
+
+### Acknowledgments
+
+Grateful to the open-source community for the tools and frameworks that made this project possible.
+
 ---
 
 <div align="center">
