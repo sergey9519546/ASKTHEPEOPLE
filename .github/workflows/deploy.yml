@@ -54,6 +54,6 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy to Railway
-        run: railway up --image ghcr.io/${{ env.IMAGE_NAME }}:latest --service secure-playfulness --detach
+        run: railway redeploy --service secure-playfulness --yes
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
