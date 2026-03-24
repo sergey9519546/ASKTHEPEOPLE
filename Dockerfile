@@ -4,8 +4,15 @@ COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen
-# Replace GPU torch with CPU-only to keep image small (OASIS uses API-based LLMs, not local GPU inference)
-RUN uv pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall --no-deps
+# Swap GPU torch for CPU-only and strip all NVIDIA/CUDA packages
+# (OASIS uses API-based LLMs via OpenRouter, not local GPU inference)
+RUN uv pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall --no-deps && \
+    uv pip uninstall \
+        nvidia-cublas-cu12 nvidia-cuda-cupti-cu12 nvidia-cuda-nvrtc-cu12 \
+        nvidia-cuda-runtime-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 \
+        nvidia-curand-cu12 nvidia-cusolver-cu12 nvidia-cusparse-cu12 \
+        nvidia-nccl-cu12 nvidia-nvjitlink-cu12 nvidia-nvtx-cu12 triton \
+        2>/dev/null || true
 
 # Stage 2: Runtime
 FROM python:3.11-slim
