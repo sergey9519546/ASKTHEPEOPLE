@@ -216,3 +216,21 @@ class CSVExporter:
         output = io.StringIO()
         df.to_csv(output, index=False)
         return output.getvalue()
+
+    def export_survey_results(self, results: List[Dict[str, Any]]) -> str:
+        """
+        Convert batch interview (survey) results into a CSV string.
+        
+        Args:
+            results: List of dicts, each containing agent_name, profession, and answer.
+            
+        Returns:
+            CSV formatted string.
+        """
+        if not results:
+            return "agent_name,profession,answer\n"
+            
+        df = pd.DataFrame(results)
+        output = io.StringIO()
+        df.to_csv(output, index=False)
+        return output.getvalue()

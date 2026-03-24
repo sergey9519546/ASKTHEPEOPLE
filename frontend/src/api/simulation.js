@@ -217,6 +217,17 @@ export const interviewAgents = (data) => {
 };
 
 /**
+ * Export survey results as CSV
+ * @param {string} simulationId
+ * @param {Array} results
+ */
+export const exportSurveyCSV = (simulationId, results) => {
+  return service.post(`/api/simulation/${simulationId}/export/survey`, { results }, {
+    responseType: 'blob'
+  });
+};
+
+/**
  * Get simulation history (with project details)
  * Used for home page history display
  * @param {number} limit - Result count limit

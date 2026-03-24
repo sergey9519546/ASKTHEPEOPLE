@@ -4,7 +4,9 @@ Step 2: Zep Entity Reading & Filtering, OASIS Simulation Preparation & Running (
 """
 
 import os
+import io
 import traceback
+from datetime import datetime
 from flask import request, jsonify, send_file
 
 from . import simulation_bp
@@ -14,6 +16,8 @@ from ..services.oasis_profile_generator import OasisProfileGenerator
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_observation_store import search_observations
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
+from ..services.export_service import CSVExporter
+from ..services.zep_tools import ZepToolsService
 from ..utils.logger import get_logger
 from ..models.project import ProjectManager
 
@@ -2788,4 +2792,52 @@ def close_simulation_env():
             "success": False,
             "error": str(e),
             "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/<simulation_id>/export/survey', methods=['POST'])
+def export_survey_csv(simulation_id: str):
+    """
+    Export survey (batch interview) results as CSV
+    
+    Request (JSON):
+        {
+            "results": [
+                {"agent_name": "...", "profession": "...", "answer": "..."},
+                ...
+            ]
+        }
+    """
+    try:
+        data = request.get_json() or {}
+        results = data.get('results', [])
+        
+        if not results:
+            return jsonify({
+                "success": False,
+                "error": "No results to export"
+            }), 400
+            
+        exporter = CSVExporter(ZepToolsService())
+        csv_content = exporter.export_survey_results(results)
+        
+        # Create bytes stream for file download
+        mem = io.BytesIO()
+        mem.write(csv_content.encode('utf-8'))
+        mem.seek(0)
+        
+        filename = f"ATP_SURVEY_{simulation_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        
+        return send_file(
+            mem,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to export survey CSV: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
         }), 500
