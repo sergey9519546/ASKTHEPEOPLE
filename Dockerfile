@@ -34,6 +34,10 @@ ENV FLASK_APP=backend/run.py
 
 EXPOSE 5001
 
+# Verify the app can be imported at build time — surfaces import errors in CI logs.
+RUN cd /app/backend && python -c "import sys; sys.path.insert(0, '.'); from app import create_app; app = create_app(); print('WSGI app import OK')"
+
 # Single worker + threads: keeps in-memory state (TaskManager, SimulationRunner) consistent.
 # Timeout 300s: supports long-running report generation via background thread.
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "4", "--timeout", "300", "backend.run:app"]
+# --chdir ensures wsgi.py is loaded from /app/backend so `from app import ...` resolves correctly.
+CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "4", "--timeout", "300", "--chdir", "/app/backend", "wsgi:app"]
