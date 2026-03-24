@@ -148,7 +148,8 @@ def init_logging_for_simulation(simulation_dir: str):
     # Disable detailed OASIS logs
     disable_oasis_logging()
     
-    # Clean up old log directory if it exists    old_log_dir = os.path.join(simulation_dir, "log")
+    # Clean up old log directory if it exists
+    old_log_dir = os.path.join(simulation_dir, "log")
     if os.path.exists(old_log_dir):
         import shutil
         shutil.rmtree(old_log_dir, ignore_errors=True)
@@ -157,6 +158,7 @@ def init_logging_for_simulation(simulation_dir: str):
 from action_logger import SimulationLogManager, PlatformActionLogger
 from app.services.simulation_runtime_contract import (
     apply_bootstrap_actions,
+    apply_reflection_round,
     apply_scheduled_events,
     bootstrap_boost_agent_ids,
     build_agent_name_lookup,
@@ -990,7 +992,6 @@ def _get_comment_info(
 
 def create_model(simulation_dir: str, use_boost: bool = False):
     """
-    """
     Create LLM model
     
     Supports dual LLM configuration to speed up parallel simulation:
@@ -1050,18 +1051,7 @@ async def run_twitter_simulation(
     main_logger: Optional[SimulationLogManager] = None,
     max_rounds: Optional[int] = None
 ) -> PlatformSimulation:
-    """Run Twitter simulation
-    
-    Args:
-        config: Simulation configuration
-        simulation_dir: Simulation directory
-        action_logger: Action log recorder
-        main_logger: Main log manager
-        max_rounds: Maximum simulation rounds (optional, used to truncate long simulations)
-        
-    Returns:
-        PlatformSimulation: Result object containing env and agent_graph
-    """
+    """Run Twitter simulation"""
     result = PlatformSimulation()
     
     def log_info(msg):
@@ -1261,6 +1251,22 @@ async def run_twitter_simulation(
         if (round_num + 1) % 20 == 0:
             progress = (round_num + 1) / total_rounds * 100
             log_info(f"Day {simulated_day}, {simulated_hour:02d}:00 - Round {round_num + 1}/{total_rounds} ({progress:.1f}%)")
+        
+        # Trigger reflection every N rounds (default 4 = 2 hours simulated time)
+        reflection_interval = time_config.get("reflection_interval_rounds", 4)
+        if reflection_interval > 0 and (round_num + 1) % reflection_interval == 0:
+            log_info(f"Starting scheduled reflection phase for Twitter Round {round_num + 1}...")
+            reflected_count = await apply_reflection_round(
+                env=result.env,
+                platform="twitter",
+                round_num=round_num + 1,
+                agent_names=agent_names,
+                manual_action_cls=ManualAction,
+                action_type_cls=ActionType,
+                action_logger=action_logger
+            )
+            log_info(f"Twitter Reflection phase complete: {reflected_count} agents processed.")
+
     
     # Note: Do not close environment, keep it for Interview
     
@@ -1281,18 +1287,7 @@ async def run_reddit_simulation(
     main_logger: Optional[SimulationLogManager] = None,
     max_rounds: Optional[int] = None
 ) -> PlatformSimulation:
-    """Run Reddit simulation
-    
-    Args:
-        config: Simulation configuration
-        simulation_dir: Simulation directory
-        action_logger: Action log recorder
-        main_logger: Main log manager
-        max_rounds: Maximum simulation rounds (optional, used to truncate long simulations)
-        
-    Returns:
-        PlatformSimulation: Result object containing env and agent_graph
-    """
+    """Run Reddit simulation"""
     result = PlatformSimulation()
     
     def log_info(msg):
@@ -1492,6 +1487,22 @@ async def run_reddit_simulation(
         if (round_num + 1) % 20 == 0:
             progress = (round_num + 1) / total_rounds * 100
             log_info(f"Day {simulated_day}, {simulated_hour:02d}:00 - Round {round_num + 1}/{total_rounds} ({progress:.1f}%)")
+        
+        # Trigger reflection every N rounds (default 4 = 2 hours simulated time)
+        reflection_interval = time_config.get("reflection_interval_rounds", 4)
+        if reflection_interval > 0 and (round_num + 1) % reflection_interval == 0:
+            log_info(f"Starting scheduled reflection phase for Reddit Round {round_num + 1}...")
+            reflected_count = await apply_reflection_round(
+                env=result.env,
+                platform="reddit",
+                round_num=round_num + 1,
+                agent_names=agent_names,
+                manual_action_cls=ManualAction,
+                action_type_cls=ActionType,
+                action_logger=action_logger
+            )
+            log_info(f"Reddit Reflection phase complete: {reflected_count} agents processed.")
+
     
     # Note: Do not close environment, keep it for Interview
     
@@ -1676,7 +1687,7 @@ def setup_signal_handlers(loop=None):
     2. Allow the program to perform necessary cleanup (closing DB, env, etc)
     3. Then exit
     """
- def signal_handler(signum, frame):
+    def signal_handler(signum, frame):
         global _cleanup_done
         sig_name = "SIGTERM" if signum == signal.SIGTERM else "SIGINT"
         print(f"\nReceived {sig_name} signal, exiting...")

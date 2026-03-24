@@ -210,6 +210,13 @@
           >
             SURVEY SYSTEM
           </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'opinion_map' }"
+            @click="selectOpinionMapTab"
+          >
+            OPINION MAP
+          </button>
 
           <!-- Agent Dropdown -->
           <div v-if="showAgentDropdown" class="agent-dropdown bauhaus-card">
@@ -378,6 +385,11 @@
             </div>
           </div>
         </div>
+
+        <!-- Opinion Map Interface -->
+        <div v-if="activeTab === 'opinion_map'" class="opinion-map-viewport">
+          <OpinionMap :simulationId="simulationId" />
+        </div>
       </main>
     </div>
   </div>
@@ -401,6 +413,7 @@ import {
   interviewAgents,
   stopSimulation,
 } from "../api/simulation";
+import OpinionMap from "./OpinionMap.vue";
 
 const props = defineProps({
   reportId: String,
@@ -612,6 +625,11 @@ const selectAgent = (agent, idx) => {
 
 const selectSurveyTab = () => {
   activeTab.value = "survey";
+  showAgentDropdown.value = false;
+};
+
+const selectOpinionMapTab = () => {
+  activeTab.value = "opinion_map";
   showAgentDropdown.value = false;
 };
 
@@ -1136,6 +1154,13 @@ watch(() => props.simulationId, loadData);
   to {
     transform: translateY(-10px);
   }
+}
+
+.opinion-map-viewport {
+  flex: 1;
+  padding: 30px;
+  background: #f5f5f5;
+  overflow: hidden;
 }
 
 /* Markdown Styles */

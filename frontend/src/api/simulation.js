@@ -235,3 +235,14 @@ export const exportSurveyCSV = (simulationId, results) => {
 export const getSimulationHistory = (limit = 20) => {
   return service.get("/api/simulation/history", { params: { limit } });
 };
+
+/**
+ * Get Agent opinion scoring history
+ * @param {string} simulationId
+ * @param {number} limit - Result count limit
+ */
+export const getSimulationOpinions = (simulationId, limit = 1000) => {
+  return service.get(`/api/simulation/${simulationId}/opinions`, {
+    params: { limit },
+  });
+};

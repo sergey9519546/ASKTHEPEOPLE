@@ -29,6 +29,17 @@ POST_EVENT_TYPES = {
 FOLLOW_EVENT_TYPES = {"follow_wave"}
 
 
+REFLECTION_PROMPT = """
+You have just completed several hours of simulation. Reflect on your recent interactions, the posts you have seen, and the overall context of the conversation. 
+Summarize your current state of mind, your stance on the main topic, and how your sentiment has evolved in 2-3 concise sentences.
+"""
+
+
+def get_reflection_prompt() -> str:
+    """Return the standardized reflection prompt."""
+    return REFLECTION_PROMPT.strip()
+
+
 def build_agent_name_lookup(config: Dict[str, Any]) -> Dict[int, str]:
     lookup: Dict[int, str] = {}
     for agent_config in config.get("agent_configs", []):
@@ -639,3 +650,59 @@ async def apply_runtime_control(
         action_logger=action_logger,
     )
     return {"applied_count": applied, "round_num": round_num, "platform": platform}
+
+
+async def apply_reflection_round(
+    env: Any,
+    platform: str,
+    round_num: int,
+    agent_names: Dict[int, str],
+    manual_action_cls: Any,
+    action_type_cls: Any,
+    action_logger: Any = None,
+) -> int:
+    """
+    Trigger a reflection round for all available agents.
+    
+    Args:
+        env: OASIS environment
+        platform: Platform name
+        round_num: Current round number
+        agent_names: Mapping of agent_id to name
+        manual_action_cls: OASIS ManualAction class
+        action_type_cls: OASIS ActionType class
+        action_logger: Optional action logger
+        
+    Returns:
+        Number of agents that reflected
+    """
+    from oasis import ActionType as OasisActionType
+    
+    actions: Dict[Any, Any] = {}
+    prompt = get_reflection_prompt()
+    
+    # Get all agents from the graph
+    for agent_id, agent in env.agent_graph.get_agents():
+        action = manual_action_cls(
+            action_type=OasisActionType.INTERVIEW,
+            action_args={"prompt": prompt, "is_reflection": True}
+        )
+        actions[agent] = action
+
+    if not actions:
+        return 0
+
+    await env.step(actions)
+
+    if action_logger:
+        for agent_id, agent in env.agent_graph.get_agents():
+             action_type_str = "INTERVIEW" # Standard name for logging
+             action_logger.log_action(
+                 round_num=round_num,
+                 agent_id=agent_id,
+                 agent_name=agent_names.get(agent_id, f"Agent_{agent_id}"),
+                 action_type=action_type_str,
+                 action_args={"prompt": prompt, "is_reflection": True},
+             )
+
+    return len(actions)

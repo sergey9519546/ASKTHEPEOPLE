@@ -16,6 +16,7 @@ from zep_cloud.client import Zep
 
 from ..config import Config
 from ..utils.logger import get_logger
+from ..utils.opinion_scorer import get_opinion_scorer
 
 logger = get_logger('askthepeople.zep_graph_memory_updater')
 
@@ -52,6 +53,7 @@ class AgentActivity:
             "SEARCH_POSTS": self._describe_search,
             "SEARCH_USER": self._describe_search_user,
             "MUTE": self._describe_mute,
+            "INTERVIEW": self._describe_interview,
         }
         
         describe_func = action_descriptions.get(self.action_type, self._describe_generic)
@@ -193,6 +195,22 @@ class AgentActivity:
             return f"muted user '{target_user_name}'"
         return "muted a user"
     
+    def _describe_interview(self) -> str:
+        """Interview or Reflection action"""
+        prompt = self.action_args.get("prompt", "")
+        is_reflection = self.action_args.get("is_reflection", False)
+        
+        if is_reflection:
+            # For reflection, we want Zep to treat it as internal consolidation
+            # The prompt is actually the 'reflection question', the response is the 'reflection content'
+            # However, in ManualAction for INTERVIEW, the response is usually handled by OASIS
+            # and may be in a different database field.
+            return f"reflected on recent events and updated their personal perspective: '{prompt}'"
+        
+        if prompt:
+            return f"responded to an interview question: '{prompt}'"
+        return "participated in an interview"
+    
     def _describe_generic(self) -> str:
         # Generate generic description for unknown action types
         return f"executed {self.action_type} operation"
@@ -228,21 +246,26 @@ class ZepGraphMemoryUpdater:
     MAX_RETRIES = 3
     RETRY_DELAY = 2  # seconds
     
-    def __init__(self, graph_id: str, api_key: Optional[str] = None):
+    def __init__(self, graph_id: str, simulation_id: Optional[str] = None, api_key: Optional[str] = None):
         """
         Initialize updater
         
         Args:
             graph_id: Zep Graph ID
+            simulation_id: Simulation ID (optional, for saving opinion data)
             api_key: Zep API Key (optional, defauts to config)
         """
         self.graph_id = graph_id
+        self.simulation_id = simulation_id
         self.api_key = api_key or Config.ZEP_API_KEY
         
         if not self.api_key:
             raise ValueError("ZEP_API_KEY not configured")
         
         self.client = Zep(api_key=self.api_key)
+        
+        # Opinion Scorer
+        self.scorer = get_opinion_scorer() # Default context
         
         # Activity queue
         self._activity_queue: Queue = Queue()
@@ -416,6 +439,12 @@ class ZepGraphMemoryUpdater:
                 display_name = self._get_platform_display_name(platform)
                 logger.info(f"Successfully batch sent {len(activities)} {display_name}activities to graph {self.graph_id}")
                 logger.debug(f"Batch content preview: {combined_text[:200]}...")
+                
+                # After successful batch send, score opinions in background
+                # (We do it here to ensure we only score actions that were successfully processed)
+                for activity in activities:
+                    self._save_opinion(activity)
+                    
                 return
                 
             except Exception as e:
@@ -425,6 +454,45 @@ class ZepGraphMemoryUpdater:
                 else:
                     logger.error(f"Batch send to Zep failed, retried{self.MAX_RETRIES}times: {e}")
                     self._failed_count += 1
+
+    def _save_opinion(self, activity: AgentActivity):
+        """Score activity and save to opinions.jsonl if simulation_id is present"""
+        if not self.simulation_id:
+            return
+            
+        content = activity.action_args.get("content") or activity.action_args.get("prompt")
+        if not content:
+            return
+            
+        try:
+            x, y, z, reason = self.scorer.score_text(content)
+            
+            # Save to opinions.jsonl
+            simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, self.simulation_id)
+            if not os.path.exists(simulation_dir):
+                os.makedirs(simulation_dir, exist_ok=True)
+                
+            opinion_file = os.path.join(simulation_dir, "opinions.jsonl")
+            opinion_data = {
+                "timestamp": datetime.now().isoformat(),
+                "agent_id": activity.agent_id,
+                "agent_name": activity.agent_name,
+                "platform": activity.platform,
+                "round": activity.round_num,
+                "x": x,
+                "y": y,
+                "z": z,
+                "reason": reason,
+                "text_snippet": content[:100]
+            }
+            
+            with open(opinion_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(opinion_data, ensure_ascii=False) + "\n")
+                
+            logger.debug(f"Saved opinion coord for {activity.agent_name}: ({x}, {y})")
+            
+        except Exception as e:
+            logger.error(f"Failed to save opinion: {e}")
     
     def _flush_remaining(self):
         """Send remaining activities in queue and buffers"""
@@ -497,7 +565,7 @@ class ZepGraphMemoryManager:
             if simulation_id in cls._updaters:
                 cls._updaters[simulation_id].stop()
             
-            updater = ZepGraphMemoryUpdater(graph_id)
+            updater = ZepGraphMemoryUpdater(graph_id, simulation_id=simulation_id)
             updater.start()
             cls._updaters[simulation_id] = updater
             
