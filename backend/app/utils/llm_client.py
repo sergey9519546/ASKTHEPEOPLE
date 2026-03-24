@@ -66,6 +66,8 @@ class LLMClient:
         
         response = self.client.chat.completions.create(**kwargs)
         content = response.choices[0].message.content
+        if content is None:
+            raise ValueError(f"LLM returned empty content (finish_reason={response.choices[0].finish_reason})")
         # Some models (like MiniMax M2.5) may include <think> reasoning in content, which needs removal
         content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
         return content
@@ -91,7 +93,6 @@ class LLMClient:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            response_format={"type": "json_object"}
         )
         # Clean up markdown code block tags
         cleaned_response = response.strip()
