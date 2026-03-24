@@ -6,6 +6,14 @@
 
 ---
 
+## Naming Clarification
+
+`Process.vue` and `MainView.vue` are two distinct files with separate logic.
+The router registers `MainView.vue` under the route name `"Process"` via an import alias — the route named `"Process"` maps to `MainView.vue`, **not** to `Process.vue`.
+This spec lists them separately in the files table because they are different files requiring different edits.
+
+---
+
 ## Problem Statement
 
 A comprehensive audit identified 68 issues across the ASKTHEPEOPLE frontend. Three categories cause active production crashes:
@@ -28,36 +36,50 @@ Global fixes where root causes are centralized; surgical patches where issues ar
 
 ### API Response Interceptor (`api/index.js`)
 
-Add an Axios response interceptor that normalizes all API responses before any component receives them:
+The existing interceptor already has a `service.interceptors.response.use(...)` success handler that unwraps `response.data` into `res`. **Do not add a second interceptor call.** Instead, insert the following null/type guard at the very top of the existing success handler, before the `const res = response.data` line:
 
-- If `response.data` is `null` or `undefined`, replace with `{ success: false, error: 'empty_response' }`
-- If `response.data.content` is `null`, set it to `''` (prevents NoneType crashes from models like stepfun that return null content)
+```js
+// At the top of the existing success handler:
+if (response.data == null || typeof response.data !== 'object') {
+  response.data = { success: false, error: 'empty_response' }
+}
+// Existing logic continues below unchanged:
+// const res = response.data
+// ...
+```
 
-This means every component always receives a predictable object shape. The `projRes.data.graph_id` family of crashes is eliminated at the source.
+This handles three cases:
+- `response.data` is `null` or `undefined` (backend NoneType bug)
+- `response.data` is a plain string (e.g., `"ok"` or an HTML error page from a proxy)
+- `response.data` is a number or other non-object primitive
+
+The `content` null patch (`if (res.content == null) res.content = ''`) is inserted after `const res = response.data`, before the return, to handle models like stepfun that return null content fields.
 
 ### Vue Global Error Handler (`main.js`)
 
 Add a single `app.config.errorHandler` that:
 
-- Logs the error (dev environment only)
-- Sets a top-level `hasCrashed` reactive ref
+- Logs the error (dev environment only, guarded by `import.meta.env.DEV`)
+- Sets a top-level `hasCrashed` reactive ref exported from a shared composable
 - `App.vue` watches `hasCrashed` and renders a minimal "Something went wrong — reload" banner instead of a blank/frozen screen
 
-This is the last line of defense for any uncaught promise rejection or render error that slips through the other layers.
+### Crash Banner (`App.vue`)
+
+Add a `v-if="hasCrashed"` overlay with a "Reload" button (`window.location.reload()`). Positioned fixed, full-width, above all other content.
 
 ---
 
 ## Layer 2 — Routing Surgery
 
-**Files:** `frontend/src/views/Process.vue`, `frontend/src/router/index.js`, `frontend/src/views/SimulationView.vue`
+**Files:** `frontend/src/views/Process.vue`, `frontend/src/router/index.js`
 
-### Fix Broken Route Name (`Process.vue:164`)
+### Fix Broken Route Name (`Process.vue` lines 162–167)
 
 ```js
 // BEFORE (broken — route "Main" does not exist)
 router.push({ name: "Main", query: { step: 2, projectId: currentProjectId.value } })
 
-// AFTER
+// AFTER (confirmed: "Process" exists in router at line 17, path /process/:projectId)
 router.push({ name: "Process", params: { projectId: currentProjectId.value }, query: { step: 2 } })
 ```
 
@@ -65,15 +87,11 @@ router.push({ name: "Process", params: { projectId: currentProjectId.value }, qu
 
 Add a `beforeEach` guard that validates required route params:
 
-- Routes requiring `projectId`: redirect to `/` if missing or `undefined`
-- Routes requiring `simulationId`: redirect to `/` if missing or `undefined`
-- Routes requiring `reportId`: redirect to `/` if missing or `undefined`
+- Routes requiring `projectId` (e.g., `/process/:projectId`): redirect to `/` if `params.projectId` is falsy or `"undefined"`
+- Routes requiring `simulationId`: redirect to `/` if param is falsy
+- Routes requiring `reportId`: redirect to `/` if param is falsy
 
-Prevents blank views when users land on deep-link URLs with missing/undefined params.
-
-### Fix `simulationId` Naming Clash
-
-`router.js` declares the param as `simulationId` but `SimulationView.vue` reads it as `currentSimulationId`. Align both to `simulationId`.
+**No changes to `SimulationView.vue` or the router's param names.** The previously identified "naming clash" was incorrect — the router declares `simulationId` and `SimulationView.vue` correctly reads `route.params.simulationId` into a local ref named `currentSimulationId`. No fix needed there.
 
 ---
 
@@ -81,23 +99,23 @@ Prevents blank views when users land on deep-link URLs with missing/undefined pa
 
 **Files:** `frontend/src/views/MainView.vue`, `frontend/src/views/ReportView.vue`, `frontend/src/views/InteractionView.vue`, `frontend/src/views/Process.vue`
 
-Six targeted edits using optional chaining (`?.`) and nullish coalescing (`??`):
+Seven targeted edits using optional chaining (`?.`) and nullish coalescing (`??`). Line numbers are approximate — anchor by function name as line numbers shift:
 
-| File | Line | Change |
-|------|------|--------|
-| `MainView.vue` | 294 | `projRes.data.graph_id` → `projRes.data?.graph_id` |
-| `MainView.vue` | 438 | `projRes.data.graph_id` → `projRes.data?.graph_id` |
-| `MainView.vue` | 278 | Silent `return` → set `error.value` so UI reflects the failure |
-| `MainView.vue` | 419 | `task.message` comparison → add `?? ''` on both sides |
-| `ReportView.vue` | 91 | `simulationId` assignment gets fallback error state |
-| `InteractionView.vue` | 91 | `simulationId` assignment gets fallback error state |
-| `Process.vue` | 190 | `task.progress ?? 0`, `task.message ?? ''` (consistency) |
+| File | Function | Change |
+|------|----------|--------|
+| `MainView.vue` | `fetchGraphData()` | `projRes.data.graph_id` → `projRes.data?.graph_id` |
+| `MainView.vue` | `pollTaskStatus()` final load block | `projRes.data.graph_id` → `projRes.data?.graph_id` |
+| `MainView.vue` | `pollOntologyTask()` | Silent `return` on `!res.success` → also set `error.value = 'Ontology poll failed'` |
+| `MainView.vue` | `pollOntologyTask()` | `task.message` comparison → `(task.message ?? '') !== (buildProgress.value?.message ?? '')` |
+| `ReportView.vue` | `loadReportData()` (~line 147) | After `simulationId.value = reportData.simulation_id`, add: `if (!simulationId.value) { error.value = 'Report data missing simulation reference'; return; }` |
+| `InteractionView.vue` | `loadReportData()` (~line 147) | Same as above |
+| `Process.vue` | `pollTaskStatus()` | `buildProgress.value = { progress: task.progress ?? 0, message: task.message ?? '' }` |
 
 ---
 
 ## What This Does NOT Cover
 
-The following issues from the 68-issue audit are out of scope for this patch and should be addressed in a separate pass:
+The following issues from the 68-issue audit are out of scope for this patch:
 
 - CSS inconsistencies (hardcoded values, undefined variables, mixed font weights)
 - `console.log`/`console.warn`/`console.error` in production code
@@ -113,23 +131,22 @@ The following issues from the 68-issue audit are out of scope for this patch and
 
 | File | Layer | Change Type |
 |------|-------|-------------|
-| `frontend/src/api/index.js` | 1 | Add response interceptor |
-| `frontend/src/main.js` | 1 | Add global error handler |
-| `frontend/src/App.vue` | 1 | Add crash banner state + template |
-| `frontend/src/router/index.js` | 2 | Add beforeEach guard |
-| `frontend/src/views/Process.vue` | 2 + 3 | Fix route name + null-safety |
-| `frontend/src/views/SimulationView.vue` | 2 | Fix param name |
-| `frontend/src/views/MainView.vue` | 3 | 4 null-safety patches |
-| `frontend/src/views/ReportView.vue` | 3 | Fallback error state |
-| `frontend/src/views/InteractionView.vue` | 3 | Fallback error state |
+| `frontend/src/api/index.js` | 1 | Modify existing interceptor: add null/type guard + content null patch |
+| `frontend/src/main.js` | 1 | Add `app.config.errorHandler` |
+| `frontend/src/App.vue` | 1 | Add crash banner (`v-if="hasCrashed"`) |
+| `frontend/src/router/index.js` | 2 | Add `beforeEach` param validation guard |
+| `frontend/src/views/Process.vue` | 2 + 3 | Fix route name + `buildProgress` null-safety |
+| `frontend/src/views/MainView.vue` | 3 | 4 null-safety patches across 3 functions |
+| `frontend/src/views/ReportView.vue` | 3 | Fallback error state in `loadReportData()` |
+| `frontend/src/views/InteractionView.vue` | 3 | Fallback error state in `loadReportData()` |
 
-**Total: 9 files, all small edits. No new files created. No logic refactored.**
+**Total: 8 files, all small edits. No new files created. No logic refactored.**
 
 ---
 
 ## Success Criteria
 
-- Navigating from Phase 1 → Phase 2 in `Process.vue` works without error
-- API returning `null` or malformed data does not crash any view
-- A failed poll shows an error state in the UI, never a frozen/blank screen
-- Any uncaught error anywhere shows a reload banner rather than a silent blank
+1. Navigating from Phase 1 → Phase 2 in `Process.vue` works without a console error
+2. API returning `null`, `undefined`, or a plain string does not crash any view — the response is normalized to `{ success: false, error: 'empty_response' }`
+3. A failed poll (`!res.success`) sets `error.value` and is visible in the UI — the view never silently freezes
+4. Any uncaught render error triggers the crash banner — **test vector**: manually throw `throw new Error('test')` inside a `onMounted` hook in `App.vue` during development; confirm the banner renders and the reload button calls `window.location.reload()`

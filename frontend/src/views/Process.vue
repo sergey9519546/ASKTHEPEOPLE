@@ -382,7 +382,7 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
   font-family: var(--font-mono);
   font-weight: 950;
   font-size: 1.5rem;
-  color: var(--atp-white);
+  color: inherit;
 }
 .step-title {
   font-weight: 950;
