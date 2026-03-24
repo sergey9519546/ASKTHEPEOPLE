@@ -47,12 +47,24 @@
 }
 
 /* Utility Classes for usage */
-.bg-accent-cyan { background-color: var(--atp-cyan) !important; }
-.text-accent-cyan { color: var(--atp-cyan) !important; }
-.bg-accent-purple { background-color: var(--atp-purple) !important; }
-.text-accent-purple { color: var(--atp-purple) !important; }
-.bg-accent-green { background-color: var(--atp-green) !important; }
-.text-accent-green { color: var(--atp-green) !important; }
+.bg-accent-cyan {
+  background-color: var(--atp-cyan) !important;
+}
+.text-accent-cyan {
+  color: var(--atp-cyan) !important;
+}
+.bg-accent-purple {
+  background-color: var(--atp-purple) !important;
+}
+.text-accent-purple {
+  color: var(--atp-purple) !important;
+}
+.bg-accent-green {
+  background-color: var(--atp-green) !important;
+}
+.text-accent-green {
+  color: var(--atp-green) !important;
+}
 
 /* Global Style Reset */
 * {
