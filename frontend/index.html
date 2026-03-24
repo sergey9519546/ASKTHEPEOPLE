@@ -7,6 +7,35 @@
       href="https://fonts.googleapis.com/css2?family=Staatliches&display=swap"
       rel="stylesheet"
     />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "bauhaus-red": "#E63946",
+                        "bauhaus-blue": "#1D3557",
+                        "bauhaus-yellow": "#FFB703",
+                        "on-background": "#0F0F0F",
+                        "background": "#F8F9FA",
+                        "surface": "#FFFFFF",
+                        "outline": "#000000",
+                        "on-surface-variant": "#2D2D2D",
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk", "sans-serif"],
+                        "body": ["Space Grotesk", "sans-serif"],
+                        "mono": ["JetBrains Mono", "monospace"]
+                    },
+                    borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+                },
+            },
+        }
+    </script>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,7 +43,7 @@
       name="description"
       content="ASKTHEPEOPLE - Crowd Simulation Engine. Upload documents, simulate public opinion, predict outcomes."
     />
-    <title>ASKTHEPEOPLE - Public Opinion Engine</title>
+    <title>ATP | Command Interface</title>
   </head>
   <body>
     <div id="app"></div>

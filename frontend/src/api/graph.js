@@ -6,16 +6,13 @@ import service, { requestWithRetry } from './index'
  * @returns {Promise}
  */
 export function generateOntology(formData) {
-  return requestWithRetry(() => 
-    service({
-      url: '/api/graph/ontology/generate',
-      method: 'post',
-      data: formData,
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    })
-  )
+  // Do NOT set Content-Type manually — axios detects FormData and sets
+  // multipart/form-data with the correct boundary automatically.
+  return service({
+    url: '/api/graph/ontology/generate',
+    method: 'post',
+    data: formData,
+  })
 }
 
 /**

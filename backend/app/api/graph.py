@@ -121,48 +121,61 @@ def reset_project(project_id: str):
 @graph_bp.route('/ontology/generate', methods=['POST'])
 def generate_ontology():
     """
-    Endpoint 1: Upload file, analyze and generate ontology definition
-    
+    Endpoint 1: Upload file, analyze and generate ontology definition (async)
+
+    Saves files and extracts text synchronously, then runs the LLM call in a
+    background thread to avoid Railway/proxy timeouts on long LLM responses.
+    Returns a task_id immediately; poll /api/graph/task/{task_id} for progress.
+    On completion, task.result contains the full project/ontology data.
+
     Request Method: multipart/form-data
-    
+
     Parameters:
         files: Uploaded files (PDF/MD/TXT), multiple allowed
         simulation_requirement: Simulation requirement description (required)
         project_name: Project name (optional)
         additional_context: Additional context (optional)
         
-    Returns:
+    Returns immediately:
         {
             "success": true,
             "data": {
+                "task_id": "task_xxxx",
                 "project_id": "proj_xxxx",
-                "ontology": {
-                    "entity_types": [...],
-                    "edge_types": [...],
-                    "analysis_summary": "..."
-                },
-                "files": [...],
-                "total_text_length": 12345
+                "message": "..."
             }
+        }
+    On task completion (task.result):
+        {
+            "project_id": "proj_xxxx",
+            "ontology": {"entity_types": [...], "edge_types": [...]},
+            "analysis_summary": "...",
+            "files": [...],
+            "total_text_length": 12345
         }
     """
     try:
-        logger.info("=== Started generating ontology definition ===")
-        
+        logger.info("=== Starting ontology generation task ===")
+
+        # Validate API key upfront so we fail fast before touching the filesystem
+        if not Config.LLM_API_KEY:
+            return jsonify({"success": False, "error": "LLM_API_KEY is not configured"}), 500
+
         # Get parameters
         simulation_requirement = request.form.get('simulation_requirement', '')
         project_name = request.form.get('project_name', 'Unnamed Project')
         additional_context = request.form.get('additional_context', '')
-        
+
         logger.debug(f"Project name: {project_name}")
-        logger.debug(f"Simulation requirements: {simulation_requirement[:100]}...")
-        
+        if simulation_requirement:
+            logger.debug(f"Simulation requirements: {simulation_requirement[:100]}...")
+
         if not simulation_requirement:
             return jsonify({
                 "success": False,
                 "error": "Please provide simulation requirement description (simulation_requirement)"
             }), 400
-        
+
         # Get uploaded files
         uploaded_files = request.files.getlist('files')
         if not uploaded_files or all(not f.filename for f in uploaded_files):
@@ -170,82 +183,131 @@ def generate_ontology():
                 "success": False,
                 "error": "Please upload at least one document file"
             }), 400
-        
+
         # Create project
         project = ProjectManager.create_project(name=project_name)
         project.simulation_requirement = simulation_requirement
         logger.info(f"Created project: {project.project_id}")
-        
-        # Save files and extract text
+
+        # Save files and extract text synchronously (fast — no LLM call yet)
         document_texts = []
         all_text = ""
-        
+
         for file in uploaded_files:
             if file and file.filename and allowed_file(file.filename):
-                # Save file to project directory
                 file_info = ProjectManager.save_file_to_project(
-                    project.project_id, 
-                    file, 
+                    project.project_id,
+                    file,
                     file.filename
                 )
                 project.files.append({
                     "filename": file_info["original_filename"],
                     "size": file_info["size"]
                 })
-                
-                # Extract text
                 text = FileParser.extract_text(file_info["path"])
                 text = TextProcessor.preprocess_text(text)
                 document_texts.append(text)
                 all_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"
-        
+
         if not document_texts:
             ProjectManager.delete_project(project.project_id)
             return jsonify({
                 "success": False,
                 "error": "Did not successfully process any document, please check file formats"
             }), 400
-        
-        # Save extracted text
+
+        # Persist extracted text before handing off to background thread
         project.total_text_length = len(all_text)
         ProjectManager.save_extracted_text(project.project_id, all_text)
-        logger.info(f"Text extraction completed, total {len(all_text)} characters")
-        
-        # Generate ontology
-        logger.info("Calling LLM to generate ontology definition...")
-        generator = OntologyGenerator()
-        ontology = generator.generate(
-            document_texts=document_texts,
-            simulation_requirement=simulation_requirement,
-            additional_context=additional_context if additional_context else None
-        )
-        
-        # Save ontology to project
-        entity_count = len(ontology.get("entity_types", []))
-        edge_count = len(ontology.get("edge_types", []))
-        logger.info(f"Ontology generation completed: {entity_count} entity types, {edge_count} relation types")
-        
-        project.ontology = {
-            "entity_types": ontology.get("entity_types", []),
-            "edge_types": ontology.get("edge_types", [])
-        }
-        project.analysis_summary = ontology.get("analysis_summary", "")
-        project.status = ProjectStatus.ONTOLOGY_GENERATED
         ProjectManager.save_project(project)
-        logger.info(f"=== Ontology Generation Completed === Project ID: {project.project_id}")
-        
+        logger.info(f"Text extraction completed, total {len(all_text)} characters")
+
+        # Create async task for the LLM call
+        task_manager = TaskManager()
+        task_id = task_manager.create_task(f"Generate Ontology: {project_name}")
+        logger.info(f"Created ontology task: task_id={task_id}, project_id={project.project_id}")
+
+        # Snapshot locals for the background thread
+        _project = project
+        _doc_texts = document_texts
+        _sim_req = simulation_requirement
+        _extra_ctx = additional_context
+
+        def ontology_task():
+            gen_logger = get_logger('askthepeople.ontology')
+            try:
+                task_manager.update_task(
+                    task_id,
+                    status=TaskStatus.PROCESSING,
+                    message="Calling LLM to generate ontology...",
+                    progress=10
+                )
+                gen_logger.info(f"[{task_id}] Calling LLM for ontology generation...")
+
+                generator = OntologyGenerator()
+                ontology = generator.generate(
+                    document_texts=_doc_texts,
+                    simulation_requirement=_sim_req,
+                    additional_context=_extra_ctx if _extra_ctx else None
+                )
+
+                entity_count = len(ontology.get("entity_types", []))
+                edge_count = len(ontology.get("edge_types", []))
+                gen_logger.info(
+                    f"[{task_id}] Ontology done: {entity_count} entity types, {edge_count} relation types"
+                )
+
+                _project.ontology = {
+                    "entity_types": ontology.get("entity_types", []),
+                    "edge_types": ontology.get("edge_types", [])
+                }
+                _project.analysis_summary = ontology.get("analysis_summary", "")
+                _project.status = ProjectStatus.ONTOLOGY_GENERATED
+                ProjectManager.save_project(_project)
+
+                task_manager.update_task(
+                    task_id,
+                    status=TaskStatus.COMPLETED,
+                    message="Ontology generation completed",
+                    progress=100,
+                    result={
+                        "project_id": _project.project_id,
+                        "project_name": _project.name,
+                        "ontology": _project.ontology,
+                        "analysis_summary": _project.analysis_summary,
+                        "files": _project.files,
+                        "total_text_length": _project.total_text_length
+                    }
+                )
+                gen_logger.info(f"[{task_id}] === Ontology Generation Completed === Project ID: {_project.project_id}")
+
+            except Exception as e:
+                gen_logger.error(f"[{task_id}] Ontology generation failed: {str(e)}")
+                gen_logger.debug(traceback.format_exc())
+
+                _project.status = ProjectStatus.FAILED
+                _project.error = str(e)
+                ProjectManager.save_project(_project)
+
+                task_manager.update_task(
+                    task_id,
+                    status=TaskStatus.FAILED,
+                    message=f"Ontology generation failed: {str(e)}",
+                    error=traceback.format_exc()
+                )
+
+        thread = threading.Thread(target=ontology_task, daemon=True)
+        thread.start()
+
         return jsonify({
             "success": True,
             "data": {
+                "task_id": task_id,
                 "project_id": project.project_id,
-                "project_name": project.name,
-                "ontology": project.ontology,
-                "analysis_summary": project.analysis_summary,
-                "files": project.files,
-                "total_text_length": project.total_text_length
+                "message": "Ontology generation started, poll /api/graph/task/{task_id} for progress"
             }
         })
-        
+
     except Exception as e:
         return jsonify({
             "success": False,

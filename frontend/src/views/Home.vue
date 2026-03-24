@@ -1,164 +1,331 @@
 <template>
-  <div class="bauhaus-home-root">
-    <!-- BAUHAUS DECORATIVE ELEMENTS -->
-    <div class="geo-decoration circle-purple"></div>
-    <div class="geo-decoration square-cyan"></div>
-    <div class="geo-decoration triangle-green"></div>
-
-    <!-- NAVIGATION OVERLAY -->
-    <nav class="bauhaus-nav">
-      <div class="brand-block">
-        <span class="brand-text">ASK THE PEOPLE</span>
-        <span class="brand-version">BETA_V1.1</span>
-      </div>
-      <div class="nav-actions">
-        <a href="https://github.com/sergey9519546/ASKTHEPEOPLE" target="_blank" class="bauhaus-nav-link">
-          SOURCE_CODE_<span class="arrow">↗</span>
-        </a>
-      </div>
-    </nav>
-
-    <main class="bauhaus-main">
-      <!-- HERO: THE BRUTALIST STATEMENT -->
-      <section class="hero-brutal">
-        <div class="hero-left">
-          <div class="status-ribbon">ENGINE_ONLINE // SYSTEM_STABLE</div>
-          <h1 class="hero-title">
-            SIMULATE<br />
-            <span class="text-cyan">COLLECTIVE</span><br />
-            <span class="text-brutal">REALITY.</span>
-          </h1>
+  <div class="bauhaus-interface selection:bg-bauhaus-red selection:text-white">
+    <!-- HEADER -->
+    <header class="bg-white sticky top-0 z-50 command-center-header flex flex-col md:flex-row justify-between items-center w-full px-10 py-4 gap-6 border-b-4 border-black shadow-sm">
+        <div class="flex items-center gap-6">
+            <div class="text-3xl font-black tracking-tighter uppercase leading-none border-4 border-black px-3 py-1">ATP</div>
+            <div class="hidden md:flex flex-col text-[9px] font-bold font-mono opacity-60 leading-tight uppercase tracking-widest">
+                <span>Terminal_Auth: active</span>
+                <span>Uptime: 99.98%</span>
+            </div>
         </div>
-        <div class="hero-right">
-          <p class="hero-manifesto">
-            The first autonomous crowd intelligence engine. 
-            Deploy millions of digital twins. Predict emergent human behavior. 
-            Transform documents into living, breathing simulations.
-          </p>
+        <nav class="flex gap-0 items-center border-2 border-black overflow-hidden">
+            <button @click="scrollToSection('hero')" class="bg-black text-white px-8 py-3 text-xs font-black uppercase tracking-widest hover:bg-bauhaus-red transition-colors">DEPLOY</button>
+            <button @click="scrollToSection('sessions')" class="px-8 py-3 text-xs font-black uppercase tracking-widest border-l-2 border-black hover:bg-black hover:text-white transition-all">ANALYTICS</button>
+            <button @click="scrollToSection('archive')" class="px-8 py-3 text-xs font-black uppercase tracking-widest border-l-2 border-black hover:bg-black hover:text-white transition-all">ARCHIVE</button>
+        </nav>
+        <div class="flex items-center gap-8">
+            <div class="hidden lg:flex flex-col items-end text-[10px] font-mono font-bold leading-none uppercase">
+                <span class="text-bauhaus-red">// LINK_ESTABLISHED</span>
+                <span class="opacity-40">node_id: 8172_alpha</span>
+            </div>
+            <div class="flex gap-1">
+                <button class="w-10 h-10 border-2 border-black flex items-center justify-center hover:bg-black hover:text-white p-0"><span class="material-symbols-outlined">person</span></button>
+                <button class="w-10 h-10 border-2 border-black flex items-center justify-center hover:bg-black hover:text-white p-0"><span class="material-symbols-outlined">settings_input_component</span></button>
+            </div>
         </div>
-      </section>
+    </header>
 
-      <!-- WORKBENCH INITIALIZATION -->
-      <section class="workbench-init">
-        <div class="init-grid">
-          <!-- LEFT: SEED UPLOAD -->
-          <div class="init-card upload-card">
-            <header class="card-header">
-              <span class="step-tag">STEP_01</span>
-              <h3>KNOWLEDGE SEEDING</h3>
-            </header>
-            
-            <div 
-              class="bauhaus-dropzone"
-              :class="{ 'is-active': isDragOver }"
-              @dragover.prevent="isDragOver = true"
-              @dragleave.prevent="isDragOver = false"
-              @drop.prevent="handleDrop"
-              @click="triggerFileInput"
-            >
-              <input ref="fileInput" type="file" multiple accept=".pdf,.md,.txt" @change="handleFileSelect" hidden />
-              
-              <div v-if="files.length === 0" class="dropzone-empty">
-                <div class="massive-plus">+</div>
-                <div class="drop-msg">
-                  <span class="primary">ATTACH DATA_SEEDS</span>
-                  <span class="secondary">PDF / MARKDOWN / TXT</span>
-                </div>
-              </div>
-
-              <div v-else class="file-manifest">
-                <div v-for="(file, i) in files" :key="i" class="file-item-bauhaus">
-                  <span class="f-ext">{{ file.name.split('.').pop().toUpperCase() }}</span>
-                  <span class="f-name">{{ file.name }}</span>
-                  <button class="f-remove" @click.stop="removeFile(i)">×</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="input-group-bauhaus">
-              <label>SIMULATION_OBJECTIVE</label>
-              <textarea 
-                v-model="formData.simulationRequirement"
-                placeholder="What reality do you wish to manifest? Define your scenario, audience, or core question..."
-                class="bauhaus-textarea"
-              ></textarea>
-            </div>
-
-            <!-- TEMPLATE GALLERY -->
-            <div class="template-gallery" v-if="templates.length">
-              <label class="gallery-label">QUICK_START_TEMPLATES</label>
-              <div class="template-grid">
-                <div 
-                  v-for="tmp in templates" 
-                  :key="tmp.id" 
-                  class="template-card-mini"
-                  @click="selectTemplate(tmp)"
-                >
-                  <div class="tmp-icon">{{ tmp.icon }}</div>
-                  <div class="tmp-info">
-                    <span class="tmp-name">{{ tmp.name }}</span>
-                    <span class="tmp-desc">{{ tmp.description }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button 
-              class="bauhaus-launch-btn" 
-              @click="startSimulation" 
-              :disabled="!canSubmit || loading"
-            >
-              <span v-if="!loading">INITIALIZE ENGINE_SEQUENCE</span>
-              <span v-else class="bauhaus-spinner-small"></span>
-              <span class="launch-arrow" v-if="!loading">→</span>
+    <!-- SIDEBAR -->
+    <aside class="hidden lg:flex fixed left-0 top-0 h-full w-24 hover:w-72 bg-white border-r-4 border-black flex-col z-40 pt-28 transition-all duration-300 group overflow-hidden">
+        <div class="flex-grow">
+            <a class="flex items-center w-full px-8 py-6 hover:bg-bauhaus-red hover:text-white border-b-2 border-black/5 transition-colors" href="#">
+                <span class="material-symbols-outlined text-2xl min-w-[40px]">sensors</span>
+                <span class="ml-4 text-xs font-black uppercase tracking-[0.3em] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Realtime_Stream</span>
+            </a>
+            <a class="flex items-center w-full px-8 py-6 hover:bg-bauhaus-yellow hover:text-black border-b-2 border-black/5 transition-colors" href="#">
+                <span class="material-symbols-outlined text-2xl min-w-[40px]">account_balance</span>
+                <span class="ml-4 text-xs font-black uppercase tracking-[0.3em] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Macro_Econ</span>
+            </a>
+            <a class="flex items-center w-full px-8 py-6 hover:bg-bauhaus-blue hover:text-white border-b-2 border-black/5 transition-colors" href="#">
+                <span class="material-symbols-outlined text-2xl min-w-[40px]">biotech</span>
+                <span class="ml-4 text-xs font-black uppercase tracking-[0.3em] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Sovereign_Tech</span>
+            </a>
+            <a class="flex items-center w-full px-8 py-6 hover:bg-black hover:text-white border-b-2 border-black/5 transition-colors" href="#">
+                <span class="material-symbols-outlined text-2xl min-w-[40px]">data_exploration</span>
+                <span class="ml-4 text-xs font-black uppercase tracking-[0.3em] whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Vector_Maps</span>
+            </a>
+        </div>
+        <div class="p-4 bg-black group-hover:p-6 transition-all">
+            <button @click="scrollToSection('hero')" class="w-full text-white font-black py-4 text-xs uppercase tracking-[0.4em] flex justify-center border-none hover:bg-transparent shadow-none hover:translate-x-0 hover:translate-y-0">
+                <span class="group-hover:hidden">++</span>
+                <span class="hidden group-hover:inline">NEW_ENTRY</span>
             </button>
-          </div>
-
-          <!-- RIGHT: SPECS & CAPABILITIES -->
-          <div class="init-card specs-card">
-            <header class="card-header">
-              <span class="step-tag">TECH_SPECS</span>
-              <h3>ARCHITECTURAL FLOW</h3>
-            </header>
-
-            <div class="capability-list">
-              <div v-for="(step, i) in steps" :key="i" class="cap-item">
-                <div class="cap-num">0{{ i + 1 }}</div>
-                <div class="cap-content">
-                  <span class="cap-title">{{ step.item }}</span>
-                  <span class="cap-desc">{{ step.desc }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="system-metrics">
-              <div class="metric-box">
-                <label>ENGINE_MODEL</label>
-                <div class="val">GraphRAG_LTM_V2</div>
-              </div>
-              <div class="metric-box">
-                <label>AGENT_CAPACITY</label>
-                <div class="val">∞ SCALABLE</div>
-              </div>
-            </div>
-          </div>
         </div>
-      </section>
+    </aside>
 
-      <!-- HISTORY / ARCHIVE -->
-      <section class="archive-section">
-        <header class="archive-header">
-          <div class="header-line"></div>
-          <h2>HISTORICAL_DATABASE</h2>
-        </header>
-        <HistoryDatabase borderless />
-      </section>
+    <!-- MAIN CONTENT -->
+    <main class="lg:ml-24 pt-4 pb-24 px-6 md:px-12 atelier-grid min-h-screen">
+        <!-- HERO / DEPLOY SECTION -->
+        <section id="hero" class="py-20 flex flex-col items-start relative overflow-hidden border-b-4 border-black">
+            <div class="absolute right-0 top-1/2 -translate-y-1/2 opacity-10 pointer-events-none">
+                <svg height="400" viewBox="0 0 100 100" width="400">
+                    <circle cx="50" cy="50" fill="none" r="48" stroke="black" stroke-dasharray="2 2" stroke-width="0.5"></circle>
+                    <rect fill="none" height="60" stroke="black" stroke-width="0.5" width="60" x="20" y="20"></rect>
+                    <path d="M0 50 L100 50 M50 0 L50 100" stroke="black" stroke-width="0.2"></path>
+                </svg>
+            </div>
+            <div class="bg-black text-white px-3 py-1 text-[10px] font-mono font-bold uppercase tracking-[0.5em] mb-8">
+                COMMAND_INTERFACE // 00-CORE
+            </div>
+            <h1 class="text-[clamp(4rem,10vw,10rem)] font-black leading-[0.75] tracking-tighter mb-12 uppercase">
+                DECISION<br>MATRIX<span class="text-bauhaus-red">.</span>
+            </h1>
+            
+            <div class="w-full max-w-6xl space-y-12">
+                <p class="text-2xl md:text-3xl font-light max-w-2xl leading-tight opacity-90 border-l-8 border-black pl-8 py-2">
+                    High-fidelity consensus mapping. Simplified for rapid systemic evolution.
+                </p>
+
+                <!-- INITIALIZATION INTERFACE -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+                    <!-- INPUT AREA -->
+                    <div class="space-y-6">
+                        <div class="bauhaus-input-container">
+                            <label class="block text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">SIMULATION_OBJECTIVE</label>
+                            <textarea 
+                                v-model="formData.simulationRequirement"
+                                placeholder="What reality do you wish to manifest? Define your scenario, audience, or core question..."
+                                class="w-full h-48 border-4 border-black p-6 font-body font-bold text-lg focus:bg-bauhaus-yellow/5 outline-none transition-colors resize-none"
+                            ></textarea>
+                        </div>
+                        
+                        <div class="flex flex-col md:flex-row gap-4">
+                            <button 
+                                @click="startSimulation" 
+                                :disabled="!canSubmit || loading"
+                                class="flex-grow bg-black text-white px-12 py-6 text-sm font-black uppercase tracking-[0.3em] hover:bg-bauhaus-red transition-all flex items-center justify-between gap-8 group disabled:opacity-20 disabled:cursor-not-allowed shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
+                            >
+                                <span v-if="!loading">INITIATE_VOTE</span>
+                                <span v-else class="bauhaus-spinner-small"></span>
+                                <span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward_ios</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- DROPZONE AREA -->
+                    <div 
+                        class="h-full border-4 border-black border-dashed flex flex-col items-center justify-center p-8 transition-all relative min-h-[300px]"
+                        :class="{ 'bg-bauhaus-yellow/20 border-solid': isDragOver }"
+                        @dragover.prevent="isDragOver = true"
+                        @dragleave.prevent="isDragOver = false"
+                        @drop.prevent="handleDrop"
+                        @click="triggerFileInput"
+                    >
+                        <input ref="fileInput" type="file" multiple accept=".pdf,.md,.txt" @change="handleFileSelect" hidden />
+                        
+                        <div v-if="files.length === 0" class="text-center group cursor-pointer">
+                            <span class="material-symbols-outlined text-8xl mb-4 group-hover:scale-110 transition-transform">upload_file</span>
+                            <div class="text-xs font-black uppercase tracking-[0.3em]">ATTACH_DATA_SEEDS</div>
+                            <div class="text-[10px] font-mono opacity-40 mt-2">PDF / MARKDOWN / TXT</div>
+                        </div>
+
+                        <div v-else class="w-full grid grid-cols-1 gap-2">
+                           <div v-for="(file, i) in files" :key="i" class="flex items-center justify-between bg-white border-2 border-black p-3 group">
+                                <div class="flex items-center gap-3 overflow-hidden">
+                                    <span class="text-bauhaus-red font-mono font-bold text-[10px]">{{ file.name.split('.').pop().toUpperCase() }}</span>
+                                    <span class="font-bold text-xs truncate">{{ file.name }}</span>
+                                </div>
+                                <button @click.stop="removeFile(i)" class="p-1 hover:text-bauhaus-red border-none bg-transparent shadow-none hover:translate-x-0 hover:translate-y-0 text-lg">×</button>
+                           </div>
+                           <button class="mt-4 text-[10px] font-black uppercase underline hover:text-bauhaus-red border-none bg-transparent shadow-none hover:translate-x-0 hover:translate-y-0" @click.stop="triggerFileInput">ADD_MORE_FILES</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SESSIONS / ANALYTICS SECTION -->
+        <section id="sessions" class="py-16">
+            <div class="flex flex-col md:flex-row justify-between items-baseline mb-12 border-b-2 border-black pb-4">
+                <h2 class="text-6xl font-black uppercase tracking-tighter text-bauhaus-blue">LIVE_SESSIONS</h2>
+                <div class="flex items-center gap-6 font-mono text-[11px] font-bold">
+                    <span class="flex items-center gap-2 text-bauhaus-red">
+                        <span class="w-2 h-2 rounded-full bg-bauhaus-red animate-pulse"></span> STREAMING_DATA
+                    </span>
+                    <span class="opacity-40">NODES_CONNECTED: 82.4K</span>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 font-mono">
+                <!-- Large Placeholder Vote Card (Maintains design) -->
+                <div class="md:col-span-8 bg-white border-4 border-black p-0 flex flex-col group relative overflow-hidden shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
+                    <div class="flex border-b-4 border-black">
+                        <div class="bg-bauhaus-red text-white p-6 aspect-square flex items-center justify-center">
+                            <span class="material-symbols-outlined text-4xl">policy</span>
+                        </div>
+                        <div class="flex-grow p-6 flex items-center justify-between">
+                            <span class="text-xs font-black tracking-widest">SUB_MODULE: SOVEREIGN_AI</span>
+                            <span class="text-[10px] font-bold opacity-40">REF_ID: 9912-X</span>
+                        </div>
+                    </div>
+                    <div class="p-8 md:p-12">
+                        <h3 class="text-4xl md:text-6xl font-black font-body leading-[0.85] tracking-tighter mb-12 uppercase">
+                            GRANT LEGAL PERSONHOOD TO SYNTHETIC AGENTS?
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                            <div class="space-y-6">
+                                <div class="flex justify-between items-end">
+                                    <span class="text-xs font-black uppercase">AFFIRMATIVE</span>
+                                    <span class="text-4xl font-black stat-value">64.2%</span>
+                                </div>
+                                <div class="h-12 bg-black/5 border-2 border-black relative overflow-hidden">
+                                    <div class="absolute inset-y-0 left-0 bg-bauhaus-red" style="width: 64.2%;"></div>
+                                    <div class="absolute inset-y-0 left-0 w-full flex items-center px-4 mix-blend-difference text-white text-[10px] font-black">PROGRESS_METER</div>
+                                </div>
+                            </div>
+                            <button class="h-full bg-black text-white p-8 text-sm font-black uppercase tracking-[0.4em] hover:bg-bauhaus-blue transition-colors flex items-center justify-center gap-4 border-none shadow-none hover:translate-x-0 hover:translate-y-0">
+                                VOTE_NOW <span class="material-symbols-outlined">bolt</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Small Vote Cards Placeholder -->
+                <div class="md:col-span-4 flex flex-col gap-4">
+                    <div class="flex-grow bg-bauhaus-yellow border-4 border-black p-8 flex flex-col justify-between hover:bg-white transition-colors cursor-pointer group shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                        <div>
+                            <div class="flex justify-between mb-8">
+                                <span class="text-[10px] font-black uppercase border-b-2 border-black">URBAN_SYSTEMS</span>
+                                <span class="material-symbols-outlined">domain</span>
+                            </div>
+                            <h3 class="text-2xl font-black font-body leading-none uppercase">REPLACE PUBLIC TRANSIT WITH AUTONOMOUS PODS?</h3>
+                        </div>
+                        <div class="flex justify-between items-end mt-8">
+                            <div class="text-xs font-bold">STAGE: EVALUATION</div>
+                            <span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward</span>
+                        </div>
+                    </div>
+                    <div class="flex-grow bg-white border-4 border-black p-8 flex flex-col justify-between hover:bg-bauhaus-blue hover:text-white transition-colors cursor-pointer group shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+                        <div>
+                            <div class="flex justify-between mb-8">
+                                <span class="text-[10px] font-black uppercase border-b-2 border-black">DATA_PRIVACY</span>
+                                <span class="material-symbols-outlined">encrypted</span>
+                            </div>
+                            <h3 class="text-2xl font-black font-body leading-none uppercase">GLOBAL MANDATORY BIO-ENCRYPTION FOR PAYMENTS?</h3>
+                        </div>
+                        <div class="flex justify-between items-end mt-8">
+                            <div class="text-xs font-bold">STATUS: CRITICAL</div>
+                            <span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ARCHIVE SECTION -->
+        <section id="archive" class="py-24 border-t-4 border-black">
+            <div class="flex flex-col md:flex-row justify-between items-baseline mb-12 border-b-2 border-black pb-4">
+                <h2 class="text-6xl font-black uppercase tracking-tighter">ARCHIVE_DB</h2>
+                <div class="text-[10px] font-mono font-bold opacity-40 uppercase">Accessing Historical Knowledge Nodes...</div>
+            </div>
+            
+            <div class="bg-white border-4 border-black p-8 shadow-[16px_16px_0px_0px_rgba(230,57,70,1)]">
+                <HistoryDatabase borderless />
+            </div>
+        </section>
+
+        <!-- METRICS & SYSTEM INFO -->
+        <section class="py-24 border-t-4 border-black">
+            <div class="flex flex-col md:flex-row gap-16">
+                <div class="w-full md:w-1/3">
+                    <div class="bg-black text-white p-10 flex flex-col justify-between h-full geometric-decoration min-h-[300px]">
+                        <div>
+                            <h4 class="text-xs font-mono font-bold tracking-[0.4em] mb-6 opacity-60">SYSTEM_ANALYTICS</h4>
+                            <p class="text-4xl font-black leading-tight uppercase mb-8">The geometry of modern consensus.</p>
+                        </div>
+                        <div class="space-y-4">
+                            <div class="text-[10px] font-mono opacity-50 uppercase">Current_Processing_Cycle: 8.2s</div>
+                            <div class="w-full h-1 bg-white/20">
+                                <div class="w-2/3 h-full bg-bauhaus-red"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="border-4 border-black p-8 bg-white flex flex-col justify-center shadow-[10px_10px_0px_0px_rgba(255,183,3,1)]">
+                        <div class="text-[10px] font-black uppercase tracking-widest mb-6 opacity-40">Global_Consensus_Drift</div>
+                        <div class="h-32 flex items-end gap-2 mb-4">
+                            <div class="bg-bauhaus-red w-full" style="height: 40%"></div>
+                            <div class="bg-black w-full" style="height: 70%"></div>
+                            <div class="bg-bauhaus-blue w-full" style="height: 55%"></div>
+                            <div class="bg-bauhaus-yellow w-full" style="height: 90%"></div>
+                            <div class="bg-black w-full" style="height: 30%"></div>
+                            <div class="bg-bauhaus-red w-full" style="height: 65%"></div>
+                        </div>
+                        <div class="flex justify-between text-[10px] font-mono font-bold">
+                            <span>P_01</span><span>P_02</span><span>P_03</span><span>P_04</span><span>P_05</span><span>P_06</span>
+                        </div>
+                    </div>
+                    <div class="border-4 border-black p-8 bg-white flex flex-col justify-between shadow-[10px_10px_0px_0px_rgba(29,53,87,1)]">
+                        <div>
+                            <div class="text-[10px] font-black uppercase tracking-widest mb-4 opacity-40">System_Health</div>
+                            <div class="text-6xl font-black stat-value">0.998</div>
+                        </div>
+                        <div class="flex gap-2">
+                            <span class="w-4 h-4 bg-bauhaus-red"></span>
+                            <span class="w-4 h-4 bg-bauhaus-blue"></span>
+                            <span class="w-4 h-4 bg-bauhaus-yellow"></span>
+                            <span class="w-4 h-4 bg-black"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TEMPLATE GALLERY (Integration) -->
+        <section class="py-24 border-t-4 border-black bg-black text-white p-12 md:p-24 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-20 pointer-events-none">
+                <div class="w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
+            </div>
+            <div class="relative z-10 flex flex-col items-center text-center">
+                <span class="font-mono text-[11px] font-bold tracking-[0.8em] mb-8 border border-white/30 px-4 py-2 uppercase">CORE_SEED_TEMPLATES</span>
+                <h2 class="text-5xl md:text-8xl font-black leading-none mb-12 tracking-tighter uppercase">READY TO <br><span class="text-bauhaus-red">INPUT?</span></h2>
+                
+                <div v-if="templates.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 w-full max-w-6xl font-mono">
+                    <button 
+                        v-for="tmp in templates" 
+                        :key="tmp.id"
+                        @click="selectTemplate(tmp)"
+                        class="bg-white text-black p-8 font-black uppercase text-xs hover:bg-bauhaus-yellow transition-all border-none shadow-none hover:translate-x-0 hover:translate-y-0 text-left flex flex-col justify-between min-h-[200px]"
+                    >
+                        <div class="flex justify-between w-full">
+                           <span class="text-2xl">{{ tmp.icon }}</span>
+                           <span class="material-symbols-outlined">add_circle</span>
+                        </div>
+                        <div>
+                            <div class="mb-1">{{ tmp.name }}</div>
+                            <div class="text-[9px] opacity-60 font-medium">{{ tmp.description }}</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </section>
     </main>
 
-    <footer class="bauhaus-footer">
-      <div class="footer-block">© 2026 ASK THE PEOPLE // NO_RIGHTS_RESERVED</div>
-      <div class="footer-block">ENCODED IN MODERNIST_BRUTAL</div>
-    </footer>
+    <!-- MOBILE NAV -->
+    <nav class="md:hidden fixed bottom-0 left-0 w-full h-20 z-50 flex bg-white border-t-4 border-black">
+        <button @click="scrollToSection('hero')" class="flex-1 flex flex-col items-center justify-center bg-black text-white border-none rounded-none">
+            <span class="material-symbols-outlined mb-1">dashboard_customize</span>
+            <span class="text-[9px] font-black uppercase">CORE</span>
+        </button>
+        <button @click="scrollToSection('sessions')" class="flex-1 flex flex-col items-center justify-center border-r border-black/10 bg-transparent text-black border-none rounded-none">
+            <span class="material-symbols-outlined mb-1">analytics</span>
+            <span class="text-[9px] font-black uppercase">DATA</span>
+        </button>
+        <button @click="scrollToSection('archive')" class="flex-1 flex flex-col items-center justify-center bg-transparent text-black border-none rounded-none">
+            <span class="material-symbols-outlined mb-1">history</span>
+            <span class="text-[9px] font-black uppercase">ARCHIVE</span>
+        </button>
+    </nav>
+
+    <!-- FAB -->
+    <div class="fixed bottom-10 right-10 z-50 hidden md:block">
+        <button @click="scrollToSection('hero')" class="w-24 h-24 bg-bauhaus-red text-white flex flex-col items-center justify-center border-4 border-black hover:bg-black transition-all shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:translate-x-1 active:translate-y-1 active:shadow-none group p-0">
+            <span class="material-symbols-outlined text-4xl mb-1">add</span>
+            <span class="text-[9px] font-black uppercase tracking-widest">SIGNAL</span>
+        </button>
+    </div>
   </div>
 </template>
 
@@ -219,194 +386,60 @@ const selectTemplate = (template) => {
   formData.value.simulationRequirement = template.prompt_base + "\n\n" + template.suggested_ontology_goal;
 };
 
+const scrollToSection = (id) => {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth' });
+};
+
 fetchTemplates();
 </script>
 
 <style scoped>
-.bauhaus-home-root {
-  min-height: 100vh;
-  background-color: white;
-  color: black;
-  font-family: var(--font-sans);
-  position: relative;
-  overflow-x: hidden;
-  padding-bottom: 60px;
+.bauhaus-interface {
+  background-color: #F8F9FA;
+  color: #0F0F0F;
+  font-family: 'Space Grotesk', sans-serif;
 }
 
-/* DECORATIVE SHAPES */
-.geo-decoration { position: absolute; z-index: 0; opacity: 0.8; pointer-events: none; }
-.circle-purple { width: 400px; height: 400px; border-radius: 50%; background: var(--atp-purple); top: -100px; right: -100px; }
-.square-cyan { width: 300px; height: 300px; background: var(--atp-cyan); bottom: 20%; left: -100px; transform: rotate(15deg); }
-.triangle-green { 
-  width: 0; height: 0; 
-  border-left: 150px solid transparent; 
-  border-right: 150px solid transparent; 
-  border-bottom: 250px solid var(--atp-green);
-  top: 40%; right: 5%; transform: rotate(-10deg);
+.atelier-grid {
+    background-image: 
+        linear-gradient(to right, #e5e7eb 1px, transparent 1px),
+        linear-gradient(to bottom, #e5e7eb 1px, transparent 1px);
+    background-size: 40px 40px;
 }
 
-.bauhaus-nav {
-  height: 80px; padding: 0 40px;
-  display: flex; justify-content: space-between; align-items: center;
-  border-bottom: 4px solid var(--atp-black);
-  background: var(--atp-white); position: sticky; top: 0; z-index: 100;
-}
-.brand-text { font-weight: 950; font-size: 1.5rem; letter-spacing: -1px; }
-.brand-version { font-family: var(--font-mono); font-size: 10px; background: var(--atp-black); color: var(--atp-white); padding: 2px 8px; margin-left: 15px; }
-
-.bauhaus-nav-link {
-  font-family: var(--font-mono); font-weight: 900; font-size: 12px;
-  text-decoration: none; color: var(--atp-black); border: 3px solid var(--atp-black); padding: 8px 20px;
-  transition: 0.2s;
-}
-.bauhaus-nav-link:hover { background: var(--atp-cyan); transform: translate(-4px, -4px); box-shadow: 4px 4px 0 var(--atp-black); }
-
-.bauhaus-main { max-width: 1400px; margin: 0 auto; padding: 60px 40px; position: relative; z-index: 1; }
-
-.hero-brutal { display: flex; gap: 60px; margin-bottom: 100px; align-items: flex-end; }
-.hero-left { flex: 1.4; }
-.hero-right { flex: 1; padding-bottom: 20px; }
-
-.status-ribbon { font-family: var(--font-mono); font-weight: 900; font-size: 11px; margin-bottom: 20px; }
-.hero-title { font-size: clamp(4rem, 10vw, 10rem); line-height: 0.85; font-weight: 950; letter-spacing: -4px; text-transform: uppercase; }
-.text-cyan { color: var(--atp-cyan); }
-.text-brutal { text-shadow: 4px 4px 0 var(--atp-purple); }
-
-.hero-manifesto { font-size: 1.4rem; line-height: 1.4; font-weight: 600; color: #333; }
-
-.init-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 40px; }
-
-.init-card { background: var(--atp-white); border: 4px solid var(--atp-black); padding: 40px; box-shadow: 15px 15px 0 var(--atp-black); }
-.card-header { border-bottom: 4px solid var(--atp-black); padding-bottom: 20px; margin-bottom: 30px; display: flex; align-items: center; gap: 20px; }
-.step-tag { background: var(--atp-black); color: var(--atp-white); font-family: var(--font-mono); font-weight: 900; font-size: 11px; padding: 4px 10px; }
-.card-header h3 { font-weight: 950; font-size: 1.4rem; letter-spacing: -0.5px; }
-
-.bauhaus-dropzone {
-  height: 200px; border: 3px dashed var(--atp-black); display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: 0.2s; background: #fafafa; margin-bottom: 30px;
-}
-.bauhaus-dropzone:hover, .bauhaus-dropzone.is-active { background: var(--atp-cyan); border-style: solid; }
-.massive-plus { font-size: 50px; font-weight: 950; line-height: 1; }
-.drop-msg { margin-left: 20px; display: flex; flex-direction: column; }
-.drop-msg .primary { font-weight: 950; font-size: 1.1rem; }
-.drop-msg .secondary { font-family: var(--font-mono); font-size: 10px; font-weight: 800; opacity: 0.6; }
-
-.file-manifest { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; width: 100%; padding: 20px; }
-.file-item-bauhaus { 
-  background: var(--atp-white); border: 2.5px solid var(--atp-black); padding: 6px 10px; display: flex; align-items: center; gap: 10px;
-  font-size: 11px; font-weight: 900;
-}
-.f-ext { color: var(--atp-cyan); }
-.f-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.f-remove { background: none; border: none; font-size: 18px; font-weight: 950; cursor: pointer; color: var(--atp-purple); }
-
-.input-group-bauhaus label { display: block; font-weight: 950; font-size: 11px; margin-bottom: 10px; letter-spacing: 1px; }
-.bauhaus-textarea {
-  width: 100%; height: 120px; border: 3px solid var(--atp-black); padding: 15px; font-family: inherit; font-size: 1rem;
-  font-weight: 600; outline: none; transition: 0.2s; resize: none;
-}
-.bauhaus-textarea:focus { background: var(--atp-white); box-shadow: 8px 8px 0 var(--atp-purple); transform: translate(-4px, -4px); }
-
-.bauhaus-launch-btn {
-  width: 100%; height: 70px; margin-top: 30px; background: var(--atp-black); color: var(--atp-white);
-  border: none; font-weight: 950; font-size: 1.2rem; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 20px; transition: 0.2s;
-}
-.bauhaus-launch-btn:not(:disabled):hover { background: var(--atp-cyan); transform: translate(-6px, -6px); box-shadow: 10px 10px 0 var(--atp-black); }
-.bauhaus-launch-btn:disabled { opacity: 0.2; cursor: not-allowed; }
-
-/* TEMPLATE GALLERY STYLES */
-.template-gallery {
-  margin-top: 32px;
-  border-top: 4px solid var(--atp-black);
-  padding-top: 24px;
+.command-center-header {
+    border-bottom: 4px solid black;
 }
 
-.gallery-label {
-  display: block;
-  font-weight: 950;
-  font-size: 11px;
-  margin-bottom: 20px;
-  letter-spacing: 1px;
+.stat-value {
+    font-variant-numeric: tabular-nums;
+    font-family: 'JetBrains Mono', monospace;
 }
 
-.template-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
+.geometric-decoration {
+    clip-path: polygon(0% 0%, 100% 0%, 100% 75%, 75% 100%, 0% 100%);
 }
 
-.template-card-mini {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 16px;
-  border: 3px solid var(--atp-black);
-  cursor: pointer;
-  transition: all 0.2s;
-  background: var(--atp-white);
+.bauhaus-spinner-small { 
+  width: 24px; 
+  height: 24px; 
+  border: 4px solid white; 
+  border-top-color: #E63946; 
+  border-radius: 50%; 
+  animation: spin 1s infinite linear; 
 }
-
-.template-card-mini:hover {
-  background: var(--atp-black);
-  color: var(--atp-white);
-  transform: translate(-4px, -4px);
-  box-shadow: 4px 4px 0 var(--atp-cyan);
-}
-
-.tmp-icon {
-  font-size: 24px;
-  flex-shrink: 0;
-}
-
-.tmp-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.tmp-name {
-  font-weight: 950;
-  font-size: 11px;
-  text-transform: uppercase;
-  margin-bottom: 4px;
-}
-
-.tmp-desc {
-  font-size: 10px;
-  line-height: 1.4;
-  opacity: 0.8;
-  font-weight: 600;
-}
-
-.cap-item { display: flex; gap: 20px; margin-bottom: 25px; }
-.cap-num { 
-  width: 32px; height: 32px; border: 2.5px solid var(--atp-black); display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-weight: 950; font-size: 13px; flex-shrink: 0;
-}
-.cap-title { display: block; font-weight: 950; font-size: 11px; margin-bottom: 4px; }
-.cap-desc { font-size: 12px; color: #555; font-weight: 600; line-height: 1.4; }
-
-.system-metrics { border-top: 3px solid var(--atp-black); padding-top: 30px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.metric-box label { font-size: 9px; font-weight: 950; color: #888; display: block; margin-bottom: 5px; }
-.metric-box .val { font-family: var(--font-mono); font-weight: 950; font-size: 1.1rem; }
-
-.archive-section { margin-top: 100px; }
-.archive-header { display: flex; align-items: center; gap: 20px; margin-bottom: 40px; }
-.header-line { flex: 1; height: 4px; background: var(--atp-black); }
-.archive-header h2 { font-weight: 950; font-size: 2rem; letter-spacing: -1px; }
-
-.bauhaus-footer {
-  padding: 40px; border-top: 4px solid var(--atp-black); display: flex; justify-content: space-between;
-  font-family: var(--font-mono); font-weight: 900; font-size: 11px;
-}
-
-@media (max-width: 1100px) {
-  .hero-brutal { flex-direction: column; align-items: flex-start; gap: 30px; }
-  .init-grid { grid-template-columns: 1fr; }
-  .hero-title { font-size: 5rem; }
-}
-
-.bauhaus-spinner-small { width: 24px; height: 24px; border: 4px solid var(--atp-white); border-top-color: var(--atp-cyan); border-radius: 50%; animation: spin 1s infinite linear; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* Ensure Material symbols line up */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Custom Overrides for imported components if needed */
+:deep(.simulation-history-workbench) {
+  border: none !important;
+  padding: 0 !important;
+  margin-top: 0 !important;
+}
 </style>

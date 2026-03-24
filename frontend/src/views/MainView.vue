@@ -122,6 +122,7 @@ const systemLogs = ref([]);
 // Polling timers
 let pollTimer = null;
 let graphPollTimer = null;
+let ontologyPollTimer = null;
 
 // --- Computed Layout Styles ---
 const leftPanelStyle = computed(() => {
@@ -227,37 +228,79 @@ const handleNewProject = async () => {
   try {
     loading.value = true;
     currentPhase.value = 0;
-    ontologyProgress.value = { message: "Uploading and analyzing docs..." };
+    ontologyProgress.value = { message: "Uploading files..." };
     addLog("Starting ontology generation: Uploading files...");
 
     const formData = new FormData();
     pending.files.forEach((f) => formData.append("files", f));
     formData.append("simulation_requirement", pending.simulationRequirement);
 
+    // This now returns immediately with {task_id, project_id}
     const res = await generateOntology(formData);
     if (res.success) {
       clearPendingUpload();
       currentProjectId.value = res.data.project_id;
-      projectData.value = res.data;
 
       router.replace({
         name: "Process",
         params: { projectId: res.data.project_id },
       });
-      ontologyProgress.value = null;
-      addLog(
-        `Ontology generated successfully for project ${res.data.project_id}`,
-      );
-      await startBuildGraph();
+
+      ontologyProgress.value = { message: "Analyzing documents with LLM..." };
+      addLog(`Files uploaded. Ontology task started: ${res.data.task_id}`);
+      startPollingOntologyTask(res.data.task_id);
     } else {
       error.value = res.error || "Ontology generation failed";
-      addLog(`Error generating ontology: ${error.value}`);
+      addLog(`Error starting ontology task: ${error.value}`);
     }
   } catch (err) {
     error.value = err.message;
     addLog(`Exception in handleNewProject: ${err.message}`);
   } finally {
     loading.value = false;
+  }
+};
+
+const startPollingOntologyTask = (taskId) => {
+  pollOntologyTask(taskId);
+  ontologyPollTimer = setInterval(() => pollOntologyTask(taskId), 3000);
+};
+
+const stopOntologyPolling = () => {
+  if (ontologyPollTimer) {
+    clearInterval(ontologyPollTimer);
+    ontologyPollTimer = null;
+  }
+};
+
+const pollOntologyTask = async (taskId) => {
+  try {
+    const res = await getTaskStatus(taskId);
+    if (!res.success) return;
+
+    const task = res.data;
+
+    if (task.message && task.message !== ontologyProgress.value?.message) {
+      addLog(task.message);
+    }
+    ontologyProgress.value = {
+      progress: task.progress || 0,
+      message: task.message,
+    };
+
+    if (task.status === "completed") {
+      stopOntologyPolling();
+      ontologyProgress.value = null;
+      projectData.value = task.result;
+      addLog(`Ontology generated for project ${task.result.project_id}`);
+      await startBuildGraph();
+    } else if (task.status === "failed") {
+      stopOntologyPolling();
+      error.value = task.error || task.message;
+      addLog(`Ontology generation failed: ${error.value}`);
+    }
+  } catch (e) {
+    console.error("Ontology poll error:", e);
   }
 };
 
@@ -452,6 +495,7 @@ onMounted(() => {
 onUnmounted(() => {
   stopPolling();
   stopGraphPolling();
+  stopOntologyPolling();
 });
 </script>
 
