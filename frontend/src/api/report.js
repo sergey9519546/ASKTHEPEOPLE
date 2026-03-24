@@ -1,20 +1,24 @@
-import service, { requestWithRetry } from './index'
+import service, { requestWithRetry } from "./index";
 
 /**
  * Start report generation
  * @param {Object} data - { simulation_id, force_regenerate? }
  */
 export const generateReport = (data) => {
-  return requestWithRetry(() => service.post('/api/report/generate', data), 3, 1000)
-}
+  return requestWithRetry(
+    () => service.post("/api/report/generate", data),
+    3,
+    1000,
+  );
+};
 
 /**
  * Get report generation status
  * @param {Object} params - { report_id?, task_id?, simulation_id? }
  */
 export const getReportStatus = (params = {}) => {
-  return service.get(`/api/report/generate/status`, { params })
-}
+  return service.get(`/api/report/generate/status`, { params });
+};
 
 /**
  * Get Agent logs (incremental)
@@ -22,8 +26,10 @@ export const getReportStatus = (params = {}) => {
  * @param {number} fromLine - Start line for retrieval
  */
 export const getAgentLog = (reportId, fromLine = 0) => {
-  return service.get(`/api/report/${reportId}/agent-log`, { params: { from_line: fromLine } })
-}
+  return service.get(`/api/report/${reportId}/agent-log`, {
+    params: { from_line: fromLine },
+  });
+};
 
 /**
  * Get console logs (incremental)
@@ -31,29 +37,53 @@ export const getAgentLog = (reportId, fromLine = 0) => {
  * @param {number} fromLine - Start line for retrieval
  */
 export const getConsoleLog = (reportId, fromLine = 0) => {
-  return service.get(`/api/report/${reportId}/console-log`, { params: { from_line: fromLine } })
-}
+  return service.get(`/api/report/${reportId}/console-log`, {
+    params: { from_line: fromLine },
+  });
+};
 
 /**
  * Get report details
  * @param {string} reportId
  */
 export const getReport = (reportId) => {
-  return service.get(`/api/report/${reportId}`)
-}
+  return service.get(`/api/report/${reportId}`);
+};
 
 /**
  * Get report evidence
  * @param {string} reportId
  */
 export const getReportEvidence = (reportId) => {
-  return service.get(`/api/report/${reportId}/evidence`)
-}
+  return service.get(`/api/report/${reportId}/evidence`);
+};
 
 /**
  * Chat with Report Agent
  * @param {Object} data - { simulation_id, message, chat_history? }
  */
 export const chatWithReport = (data) => {
-  return requestWithRetry(() => service.post('/api/report/chat', data), 3, 1000)
-}
+  return requestWithRetry(
+    () => service.post("/api/report/chat", data),
+    3,
+    1000,
+  );
+};
+
+/**
+ * Export report as PDF
+ * @param {string} reportId
+ */
+export const exportReportPDF = (reportId) => {
+  const url = `${service.defaults.baseURL}/api/report/${reportId}/export/pdf`;
+  window.open(url, "_blank");
+};
+
+/**
+ * Export report as CSV
+ * @param {string} reportId
+ */
+export const exportReportCSV = (reportId) => {
+  const url = `${service.defaults.baseURL}/api/report/${reportId}/export/csv`;
+  window.open(url, "_blank");
+};

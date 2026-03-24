@@ -84,6 +84,25 @@
               ></textarea>
             </div>
 
+            <!-- TEMPLATE GALLERY -->
+            <div class="template-gallery" v-if="templates.length">
+              <label class="gallery-label">QUICK_START_TEMPLATES</label>
+              <div class="template-grid">
+                <div 
+                  v-for="tmp in templates" 
+                  :key="tmp.id" 
+                  class="template-card-mini"
+                  @click="selectTemplate(tmp)"
+                >
+                  <div class="tmp-icon">{{ tmp.icon }}</div>
+                  <div class="tmp-info">
+                    <span class="tmp-name">{{ tmp.name }}</span>
+                    <span class="tmp-desc">{{ tmp.description }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <button 
               class="bauhaus-launch-btn" 
               @click="startSimulation" 
@@ -146,6 +165,7 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
+import { getTemplates } from "../api/graph";
 import HistoryDatabase from "../components/HistoryDatabase.vue";
 
 const router = useRouter();
@@ -154,6 +174,18 @@ const files = ref([]);
 const loading = ref(false);
 const isDragOver = ref(false);
 const fileInput = ref(null);
+const templates = ref([]);
+
+const fetchTemplates = async () => {
+  try {
+    const res = await getTemplates();
+    if (res.success) {
+      templates.value = res.data;
+    }
+  } catch (err) {
+    console.warn("Failed to fetch templates:", err);
+  }
+};
 
 const steps = [
   { item: "GRAPH_SYNTHESIS", desc: "Recursive extraction of knowledge nodes." },
@@ -182,6 +214,12 @@ const startSimulation = () => {
     router.push({ name: "Process", params: { projectId: "new" } });
   });
 };
+
+const selectTemplate = (template) => {
+  formData.value.simulationRequirement = template.prompt_base + "\n\n" + template.suggested_ontology_goal;
+};
+
+fetchTemplates();
 </script>
 
 <style scoped>
@@ -276,6 +314,69 @@ const startSimulation = () => {
 }
 .bauhaus-launch-btn:not(:disabled):hover { background: var(--atp-blue); transform: translate(-6px, -6px); box-shadow: 10px 10px 0 var(--atp-black); }
 .bauhaus-launch-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
+/* TEMPLATE GALLERY STYLES */
+.template-gallery {
+  margin-top: 32px;
+  border-top: 4px solid var(--atp-black);
+  padding-top: 24px;
+}
+
+.gallery-label {
+  display: block;
+  font-weight: 950;
+  font-size: 11px;
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.template-card-mini {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 16px;
+  border: 3px solid var(--atp-black);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--atp-white);
+}
+
+.template-card-mini:hover {
+  background: var(--atp-black);
+  color: var(--atp-white);
+  transform: translate(-4px, -4px);
+  box-shadow: 4px 4px 0 var(--atp-yellow);
+}
+
+.tmp-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.tmp-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.tmp-name {
+  font-weight: 950;
+  font-size: 11px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.tmp-desc {
+  font-size: 10px;
+  line-height: 1.4;
+  opacity: 0.8;
+  font-weight: 600;
+}
 
 .cap-item { display: flex; gap: 20px; margin-bottom: 25px; }
 .cap-num { 

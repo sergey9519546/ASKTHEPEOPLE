@@ -58,6 +58,17 @@ export function getGraphData(graphId) {
 }
 
 /**
+ * Get simulation templates
+ * @returns {Promise}
+ */
+export function getTemplates() {
+  return service({
+    url: '/api/graph/templates',
+    method: 'get'
+  })
+}
+
+/**
  * Get project information
  * @param {String} projectId - Project ID
  * @returns {Promise}

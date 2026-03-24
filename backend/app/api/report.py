@@ -13,6 +13,8 @@ from ..config import Config
 from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
 from ..services.report_evidence import load_report_evidence
 from ..services.simulation_manager import SimulationManager
+from ..services.export_service import PDFGenerator, CSVExporter
+from ..services.zep_tools import ZepToolsService
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
 from ..utils.logger import get_logger
@@ -510,6 +512,71 @@ def download_report(report_id: str):
             "error": str(e),
             "traceback": traceback.format_exc()
         }), 500
+
+
+@report_bp.route('/<report_id>/export/pdf', methods=['GET'])
+def export_report_pdf(report_id: str):
+    """
+    Export report as PDF (Bauhaus Style)
+    """
+    try:
+        report = ReportManager.get_report(report_id)
+        if not report:
+            return jsonify({"success": False, "error": f"Report does not exist: {report_id}"}), 404
+            
+        generator = PDFGenerator()
+        pdf_bytes = generator.generate(report.to_dict())
+        
+        # Create a temporary file to send
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as f:
+            f.write(pdf_bytes)
+            temp_path = f.name
+            
+        return send_file(
+            temp_path,
+            as_attachment=True,
+            download_name=f"ATP_REPORT_{report_id}.pdf",
+            mimetype='application/pdf'
+        )
+    except Exception as e:
+        logger.error(f"Failed to export PDF: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@report_bp.route('/<report_id>/export/csv', methods=['GET'])
+def export_report_csv(report_id: str):
+    """
+    Export simulation graph data as CSV
+    """
+    try:
+        report = ReportManager.get_report(report_id)
+        if not report:
+            return jsonify({"success": False, "error": f"Report does not exist: {report_id}"}), 404
+            
+        graph_id = report.graph_id
+        if not graph_id:
+            return jsonify({"success": False, "error": "No graph associated with this report"}), 400
+            
+        zep = ZepToolsService()
+        exporter = CSVExporter(zep)
+        csv_data = exporter.export_graph(graph_id)
+        
+        # Create temporary file
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
+            f.write(csv_data)
+            temp_path = f.name
+            
+        return send_file(
+            temp_path,
+            as_attachment=True,
+            download_name=f"ATP_DATA_{report_id}.csv",
+            mimetype='text/csv'
+        )
+    except Exception as e:
+        logger.error(f"Failed to export CSV: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @report_bp.route('/<report_id>', methods=['DELETE'])

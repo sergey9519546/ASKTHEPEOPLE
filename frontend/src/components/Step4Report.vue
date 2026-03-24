@@ -26,6 +26,20 @@
           <div class="panel-actions">
             <button
               class="action-btn"
+              @click="handleExportPDF"
+              :disabled="!isComplete"
+            >
+              EXPORT_PDF
+            </button>
+            <button
+              class="action-btn secondary"
+              @click="handleExportCSV"
+              :disabled="!isComplete"
+            >
+              EXPORT_CSV
+            </button>
+            <button
+              class="action-btn"
               @click="goToInteraction"
               :disabled="!isComplete"
             >
@@ -356,7 +370,7 @@
 <script setup>
 import { h, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { getAgentLog, getConsoleLog, getReportEvidence } from "../api/report";
+import { getAgentLog, getConsoleLog, getReportEvidence, exportReportPDF, exportReportCSV } from "../api/report";
 
 const router = useRouter();
 
@@ -394,6 +408,20 @@ const rightPanel = ref(null);
 const goToInteraction = () => {
   if (props.reportId) {
     router.push({ name: "Interaction", params: { reportId: props.reportId } });
+  }
+};
+
+const handleExportPDF = () => {
+  if (props.reportId) {
+    emit("add-log", "Generating Bauhaus PDF...");
+    exportReportPDF(props.reportId);
+  }
+};
+
+const handleExportCSV = () => {
+  if (props.reportId) {
+    emit("add-log", "Extracting Graph Data to CSV...");
+    exportReportCSV(props.reportId);
   }
 };
 
