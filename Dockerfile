@@ -1,4 +1,15 @@
-# Stage 1: Backend Dependencies
+# Stage 1: Frontend Build
+FROM node:20-slim AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+# Pass Railway backend URL at build time so Vite bakes it into the bundle
+ARG VITE_API_BASE_URL=https://secure-playfulness-production-46a5.up.railway.app
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+RUN npm run build
+
+# Stage 2: Backend Dependencies
 FROM python:3.11-slim AS backend-builder
 COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 WORKDIR /app/backend
@@ -14,7 +25,7 @@ RUN uv pip install torch --index-url https://download.pytorch.org/whl/cpu --forc
         nvidia-nccl-cu12 nvidia-nvjitlink-cu12 nvidia-nvtx-cu12 triton \
         2>/dev/null || true
 
-# Stage 2: Runtime
+# Stage 3: Runtime
 FROM python:3.11-slim
 WORKDIR /app
 
@@ -24,6 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=backend-builder /app/backend/.venv /app/backend/.venv
 COPY backend/ /app/backend/
+
+# Copy built frontend dist
+COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 
 RUN mkdir -p /app/backend/uploads
 
@@ -41,3 +55,4 @@ RUN cd /app/backend && python -c "import sys; sys.path.insert(0, '.'); from app 
 # Timeout 300s: supports long-running report generation via background thread.
 # --chdir ensures wsgi.py is loaded from /app/backend so `from app import ...` resolves correctly.
 CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "4", "--timeout", "300", "--chdir", "/app/backend", "wsgi:app"]
+

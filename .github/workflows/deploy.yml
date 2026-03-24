@@ -44,6 +44,8 @@ jobs:
           tags: |
             ghcr.io/${{ env.IMAGE_NAME }}:latest
             ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          build-args: |
+            VITE_API_BASE_URL=https://secure-playfulness-production-46a5.up.railway.app
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
