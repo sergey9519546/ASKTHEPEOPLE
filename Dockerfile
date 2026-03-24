@@ -5,7 +5,7 @@ WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen
 # Replace GPU torch with CPU-only to keep image small (OASIS uses API-based LLMs, not local GPU inference)
-RUN .venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall --no-deps -q
+RUN uv pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall --no-deps
 
 # Stage 2: Runtime
 FROM python:3.11-slim
