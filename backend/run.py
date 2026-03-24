@@ -21,6 +21,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app import create_app
 from app.config import Config
 
+# Module-level app for Gunicorn: gunicorn backend.run:app
+app = create_app()
+
 
 def main():
     """Main function"""
@@ -32,15 +35,12 @@ def main():
             print(f"  - {err}")
         print("\nPlease check the configuration in the .env file")
         sys.exit(1)
-    
-    # Create application
-    app = create_app()
-    
+
     # Get runtime configuration
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 5001))
     debug = Config.DEBUG
-    
+
     # Start service
     app.run(host=host, port=port, debug=debug, threaded=True)
 
