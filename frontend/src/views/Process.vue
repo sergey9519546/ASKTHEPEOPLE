@@ -218,14 +218,14 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer))
   display: flex; align-items: center; gap: 12px;
   background: #f0f0f0; border: 3px solid var(--atp-black); padding: 6px 20px;
 }
-.phase-label { font-family: var(--font-mono); font-weight: 950; font-size: 11px; color: var(--atp-red); }
+.phase-label { font-family: var(--font-mono); font-weight: 950; font-size: 11px; color: var(--atp-cyan); }
 .phase-name { font-weight: 950; font-size: 12px; }
 
 .status-dot { width: 12px; height: 12px; border: 2.5px solid var(--atp-black); }
 .system-status { display: flex; align-items: center; gap: 10px; font-weight: 950; font-size: 10px; font-family: var(--font-mono); }
-.system-status.processing .status-dot { background: var(--atp-red); animation: flash 0.8s infinite; }
-.system-status.ready .status-dot { background: var(--atp-blue); }
-.system-status.error .status-dot { background: var(--atp-black); }
+.system-status.processing .status-dot { background: var(--atp-cyan); animation: flash 0.8s infinite; }
+.system-status.ready .status-dot { background: var(--atp-green); }
+.system-status.error .status-dot { background: var(--atp-purple); }
 
 @keyframes flash { 50% { opacity: 0; } }
 
@@ -241,11 +241,11 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer))
 
 .pipeline-scroll { flex: 1; overflow-y: auto; }
 .pipeline-step { border: 3px solid var(--atp-black); margin-bottom: 25px; transition: 0.3s; padding: 20px; }
-.pipeline-step.is-active { background: var(--atp-yellow); box-shadow: 8px 8px 0 var(--atp-black); transform: translate(-4px, -4px); }
+.pipeline-step.is-active { background: var(--atp-purple); color: var(--atp-white); box-shadow: 8px 8px 0 var(--atp-black); transform: translate(-4px, -4px); }
 .pipeline-step.is-done { opacity: 0.6; filter: grayscale(1); }
 
 .step-meta { display: flex; gap: 15px; align-items: flex-start; }
-.step-id { font-family: var(--font-mono); font-weight: 950; font-size: 1.5rem; color: var(--atp-red); }
+.step-id { font-family: var(--font-mono); font-weight: 950; font-size: 1.5rem; color: var(--atp-white); }
 .step-title { font-weight: 950; font-size: 0.95rem; margin-bottom: 5px; }
 .step-status-tag { display: inline-block; font-family: var(--font-mono); font-weight: 900; font-size: 9px; padding: 2px 6px; border: 1.5px solid var(--atp-black); }
 
@@ -253,17 +253,17 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer))
 
 .progress-container-bauhaus { margin-top: 15px; }
 .progress-track { height: 12px; background: var(--atp-white); border: 3px solid var(--atp-black); margin-bottom: 8px; }
-.progress-thumb { height: 100%; background: var(--atp-red); }
+.progress-thumb { height: 100%; background: var(--atp-cyan); }
 .progress-stats { display: flex; justify-content: space-between; font-weight: 950; font-size: 10px; font-family: var(--font-mono); }
 
-.ontology-status-box { background: rgba(0,0,0,0.05); padding: 15px; border-left: 6px solid var(--atp-blue); font-weight: 900; font-size: 11px; }
+.ontology-status-box { background: rgba(0,0,0,0.05); padding: 15px; border-left: 6px solid var(--atp-green); font-weight: 900; font-size: 11px; }
 
 .bauhaus-cta-btn {
   width: 100%; height: 60px; background: var(--atp-black); color: var(--atp-white); border: none;
   font-weight: 950; font-size: 1.1rem; cursor: pointer; transition: 0.2s;
   display: flex; align-items: center; justify-content: center; gap: 15px;
 }
-.bauhaus-cta-btn:hover { background: var(--atp-red); transform: translate(-5px, -5px); box-shadow: 8px 8px 0 var(--atp-black); }
+.bauhaus-cta-btn:hover { background: var(--atp-cyan); color: var(--atp-black); transform: translate(-5px, -5px); box-shadow: 8px 8px 0 var(--atp-black); }
 
 .bauhaus-footer-bar {
   height: 40px; padding: 0 30px; border-top: 4px solid var(--atp-black);

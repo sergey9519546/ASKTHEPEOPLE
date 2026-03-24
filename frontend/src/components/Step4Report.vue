@@ -370,7 +370,13 @@
 <script setup>
 import { h, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
-import { getAgentLog, getConsoleLog, getReportEvidence, exportReportPDF, exportReportCSV } from "../api/report";
+import {
+  exportReportCSV,
+  exportReportPDF,
+  getAgentLog,
+  getConsoleLog,
+  getReportEvidence,
+} from "../api/report";
 
 const router = useRouter();
 
@@ -550,10 +556,10 @@ const QuickSearchDisplay = {
 
 // Logic
 const toolConfig = {
-  insight_forge: { name: "Deep Insight", color: "blue", icon: "lightbulb" },
-  panorama_search: { name: "Panorama", color: "blue", icon: "globe" },
-  interview_agents: { name: "Interview", color: "blue", icon: "users" },
-  quick_search: { name: "Search", color: "blue", icon: "zap" },
+  insight_forge: { name: "Deep Insight", color: "purple", icon: "lightbulb" },
+  panorama_search: { name: "Panorama", color: "cyan", icon: "globe" },
+  interview_agents: { name: "Interview", color: "green", icon: "users" },
+  quick_search: { name: "Search", color: "cyan", icon: "zap" },
 };
 
 const getToolDisplayName = (n) => toolConfig[n]?.name || n;
@@ -707,14 +713,14 @@ onUnmounted(() => {
 }
 
 .status-indicator.is-complete {
-  background: var(--atp-blue);
-  color: var(--atp-white);
+  background: var(--atp-cyan);
+  color: var(--atp-black);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
-  background: var(--atp-red);
+  background: var(--atp-green);
 }
 
 .workbench-layout {
@@ -763,7 +769,7 @@ onUnmounted(() => {
 }
 
 .report-section.is-generating {
-  border-color: var(--atp-blue);
+  border-color: var(--atp-cyan);
   transform: translateX(10px);
 }
 
@@ -771,7 +777,7 @@ onUnmounted(() => {
   padding: 16px 20px;
   display: flex;
   align-items: center;
-  background: var(--atp-black);
+  background: var(--atp-purple);
   color: var(--atp-white);
   cursor: pointer;
 }
@@ -810,7 +816,8 @@ onUnmounted(() => {
 }
 
 .tab-btn.active {
-  background: var(--atp-yellow);
+  background: var(--atp-purple);
+  color: var(--atp-white);
 }
 
 .evidence-content {
@@ -855,7 +862,7 @@ onUnmounted(() => {
   border: 2px solid var(--atp-black);
   font-weight: 800;
   font-size: 10px;
-  background: var(--atp-blue);
+  background: var(--atp-purple);
   color: var(--atp-white);
 }
 
@@ -898,7 +905,7 @@ onUnmounted(() => {
 }
 
 .log-timestamp {
-  color: var(--atp-yellow);
+  color: var(--atp-cyan);
   margin-right: 10px;
 }
 
@@ -906,7 +913,7 @@ onUnmounted(() => {
   width: 40px;
   height: 40px;
   border: 4px solid var(--atp-black);
-  border-top-color: var(--atp-blue);
+  border-top-color: var(--atp-cyan);
   animation: spin 1s infinite linear;
 }
 
@@ -932,6 +939,6 @@ onUnmounted(() => {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
 }
 </style>

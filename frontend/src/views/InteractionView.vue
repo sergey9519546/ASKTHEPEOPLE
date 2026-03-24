@@ -186,15 +186,15 @@ onMounted(() => {
   font-family: var(--font-mono); font-weight: 950; font-size: 10px; cursor: pointer;
 }
 .mode-btn.is-active { background: var(--atp-black); color: var(--atp-white); }
-.mode-btn:hover:not(.is-active) { background: var(--atp-yellow); }
+.mode-btn:hover:not(.is-active) { background: var(--atp-cyan); }
 
 .header-right { display: flex; align-items: center; gap: 25px; }
 .step-indicator { display: flex; align-items: center; gap: 10px; font-weight: 950; font-size: 11px; }
-.step-val { color: var(--atp-red); font-family: var(--font-mono); }
+.step-val { color: var(--atp-purple); font-family: var(--font-mono); }
 .status-box { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-weight: 950; font-size: 10px; }
 .status-dot { width: 10px; height: 10px; border: 2px solid var(--atp-black); }
-.status-box.processing .status-dot { background: var(--atp-red); animation: flash 0.8s infinite; }
-.status-box.ready .status-dot { background: var(--atp-blue); }
+.status-box.processing .status-dot { background: var(--atp-cyan); animation: flash 0.8s infinite; }
+.status-box.ready .status-dot { background: var(--atp-green); }
 @keyframes flash { 50% { opacity: 0; } }
 
 .workbench-viewport { flex: 1; display: flex; padding: 20px; gap: 20px; overflow: hidden; position: relative; }

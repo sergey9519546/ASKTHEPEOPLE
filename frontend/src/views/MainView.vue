@@ -15,7 +15,9 @@
             :class="{ active: viewMode === mode }"
             @click="viewMode = mode"
           >
-            {{ { graph: "Graph", split: "Split", workbench: "Workbench" }[mode] }}
+            {{
+              { graph: "Graph", split: "Split", workbench: "Workbench" }[mode]
+            }}
           </button>
         </div>
       </div>
@@ -75,19 +77,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import {
+  buildGraph,
+  generateOntology,
+  getGraphData,
+  getProject,
+  getTaskStatus,
+} from "../api/graph";
 import GraphPanel from "../components/GraphPanel.vue";
 import Step1GraphBuild from "../components/Step1GraphBuild.vue";
 import Step2EnvSetup from "../components/Step2EnvSetup.vue";
-import {
-  generateOntology,
-  getProject,
-  buildGraph,
-  getTaskStatus,
-  getGraphData,
-} from "../api/graph";
-import { getPendingUpload, clearPendingUpload } from "../store/pendingUpload";
+import { clearPendingUpload, getPendingUpload } from "../store/pendingUpload";
 
 const route = useRoute();
 const router = useRouter();
@@ -97,7 +99,13 @@ const viewMode = ref("split"); // graph | split | workbench
 
 // Step State
 const currentStep = ref(1); // 1: Graph Build, 2: Env Setup, 3: Start Simulation, 4: Report Generation, 5: Deep Interaction
-const stepNames = ["Graph Build", "Env Setup", "Start Simulation", "Report Generation", "Deep Interaction"];
+const stepNames = [
+  "Graph Build",
+  "Env Setup",
+  "Start Simulation",
+  "Report Generation",
+  "Deep Interaction",
+];
 
 // Data State
 const currentProjectId = ref(route.params.projectId);
@@ -505,7 +513,7 @@ onUnmounted(() => {
   transition: all 0.1s;
   font-family: var(--font-mono);
   text-transform: uppercase;
-  border-right: 1px solid rgba(0,0,0,0.1);
+  border-right: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .switch-btn:last-child {
@@ -518,7 +526,7 @@ onUnmounted(() => {
 }
 
 .switch-btn:hover:not(.active) {
-  background: var(--atp-yellow);
+  background: var(--atp-cyan);
 }
 
 .header-right {
@@ -537,7 +545,7 @@ onUnmounted(() => {
 }
 
 .step-num {
-  color: var(--atp-red);
+  color: var(--atp-purple);
 }
 
 .step-name {
@@ -575,20 +583,23 @@ onUnmounted(() => {
   background: var(--atp-green); /* System Online green */
 }
 .status-indicator.error .dot {
-  background: var(--atp-red);
+  background: var(--atp-purple);
   position: relative;
 }
 .status-indicator.error .dot::after {
-  content: '×';
+  content: "×";
   color: var(--atp-white);
   position: absolute;
-  top: 50%; left: 50%;
+  top: 50%;
+  left: 50%;
   transform: translate(-50%, -50%);
   font-size: 8px;
 }
 
 @keyframes bau-pulse {
-  50% { opacity: 0; }
+  50% {
+    opacity: 0;
+  }
 }
 
 /* Content */
@@ -608,6 +619,4 @@ onUnmounted(() => {
   background: var(--atp-white);
   border: var(--border-width) solid var(--atp-black);
 }
-
-
 </style>

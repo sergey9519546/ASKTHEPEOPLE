@@ -11,9 +11,6 @@
   /* Modernist Brutal - "Creative Studio" Palette */
   --atp-black: #000000;
   --atp-white: #ffffff;
-  --atp-blue: #0026fe; /* Ultramarine - Keeping for base */
-  --atp-red: #ff331f; /* Vermilion */
-  --atp-yellow: #e5ff00; /* Acid Yellow */
   --atp-cyan: #22d3ee;
   --atp-purple: #a855f7;
   --atp-green: #4ade80;
@@ -92,7 +89,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
 }
 
 /* Global Button - Modernist Brutal */
@@ -115,7 +112,7 @@ button:hover {
   background: var(--atp-black);
   color: var(--atp-white);
   transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0px var(--atp-blue);
+  box-shadow: 4px 4px 0px var(--atp-cyan);
 }
 
 button:active {

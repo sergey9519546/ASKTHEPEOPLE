@@ -983,7 +983,7 @@ onUnmounted(() => {
 }
 
 .step-card.active {
-  box-shadow: 12px 12px 0px var(--atp-blue);
+  box-shadow: 12px 12px 0px var(--atp-cyan);
   transform: translate(-4px, -4px);
 }
 
@@ -1035,12 +1035,12 @@ onUnmounted(() => {
   color: var(--atp-black);
 }
 .badge.processing {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
   color: var(--atp-white);
 }
 .badge.accent {
-  background: var(--atp-yellow);
-  color: var(--atp-black);
+  background: var(--atp-purple);
+  color: var(--atp-white);
 }
 .badge.pending {
   background: #eee;
@@ -1084,7 +1084,7 @@ onUnmounted(() => {
 }
 
 .profile-card:hover {
-  background: var(--atp-yellow);
+  background: var(--atp-cyan);
   transform: translate(-4px, -4px);
   box-shadow: 4px 4px 0px var(--atp-black);
 }
@@ -1111,7 +1111,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 0.65rem;
   font-weight: 900;
-  background: var(--atp-blue);
+  background: var(--atp-purple);
   color: var(--atp-white);
   padding: 2px 8px;
   text-transform: uppercase;
@@ -1169,8 +1169,8 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 900;
-  background: var(--atp-yellow);
-  color: var(--atp-black);
+  background: var(--atp-purple);
+  color: var(--atp-white);
   padding: 4px 12px;
   border: 2px solid var(--atp-black);
 }
@@ -1191,7 +1191,7 @@ onUnmounted(() => {
   font-size: 0.9rem;
   margin-bottom: 16px;
   display: block;
-  color: var(--atp-red);
+  color: var(--atp-cyan);
 }
 
 .param-row {
@@ -1212,7 +1212,7 @@ onUnmounted(() => {
 .param-value {
   font-family: var(--font-mono);
   font-weight: 900;
-  color: var(--atp-blue);
+  color: var(--atp-cyan);
 }
 
 .config-grid {
@@ -1240,7 +1240,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 1.2rem;
   font-weight: 900;
-  color: var(--atp-blue);
+  color: var(--atp-cyan);
 }
 
 /* Narrative */
@@ -1258,7 +1258,7 @@ onUnmounted(() => {
   font-weight: 900;
   font-size: 0.8rem;
   margin-bottom: 20px;
-  color: var(--atp-blue);
+  color: var(--atp-purple);
 }
 
 .narrative-text {
@@ -1367,7 +1367,7 @@ onUnmounted(() => {
 }
 
 input:checked + .switch-track {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
 }
 
 input:checked + .switch-track::after {
@@ -1379,7 +1379,7 @@ input:checked + .switch-track::after {
   font-size: 4rem;
   font-weight: 900;
   font-family: var(--font-mono);
-  color: var(--atp-blue);
+  color: var(--atp-cyan);
 }
 
 .minimal-slider {
@@ -1397,7 +1397,7 @@ input:checked + .switch-track::after {
   appearance: none;
   width: 40px;
   height: 40px;
-  background: var(--atp-yellow);
+  background: var(--atp-purple);
   border: 2px solid var(--atp-black);
   cursor: pointer;
 }
@@ -1430,9 +1430,9 @@ input:checked + .switch-track::after {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
   transform: translate(-8px, -8px);
-  box-shadow: 10px 10px 0px var(--atp-yellow);
+  box-shadow: 10px 10px 0px var(--atp-purple);
 }
 
 .action-btn.secondary {
@@ -1464,7 +1464,7 @@ input:checked + .switch-track::after {
   overflow-y: auto;
   padding: 60px;
   position: relative;
-  box-shadow: 30px 30px 0px var(--atp-blue);
+  box-shadow: 30px 30px 0px var(--atp-cyan);
 }
 
 .modal-header {
@@ -1537,7 +1537,7 @@ input:checked + .switch-track::after {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 900;
-  color: var(--atp-blue);
+  color: var(--atp-cyan);
   letter-spacing: 4px;
 }
 
@@ -1550,7 +1550,7 @@ input:checked + .switch-track::after {
 }
 
 .log-time {
-  color: var(--atp-yellow);
+  color: var(--atp-purple);
   margin-right: 16px;
 }
 

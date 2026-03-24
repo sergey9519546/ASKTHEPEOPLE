@@ -826,13 +826,13 @@ watch(() => props.simulationId, loadData);
   font-weight: 800;
 }
 .dash-value.running {
-  color: var(--atp-blue);
+  color: var(--atp-cyan);
 }
 .dash-value.completed {
-  color: #2ecc71;
+  color: var(--atp-green);
 }
 .dash-value.failed {
-  color: var(--atp-red);
+  color: var(--atp-purple);
 }
 
 .abort-btn {
@@ -845,7 +845,7 @@ watch(() => props.simulationId, loadData);
   cursor: pointer;
 }
 .abort-btn:hover {
-  background: var(--atp-red);
+  background: var(--atp-purple);
 }
 
 .simulation-badge {
@@ -924,7 +924,7 @@ watch(() => props.simulationId, loadData);
   border: 2px solid var(--atp-black);
 }
 .live-dot.pulse {
-  background: var(--atp-red);
+  background: var(--atp-green);
   animation: pulse 1s infinite alternate;
 }
 @keyframes pulse {
@@ -996,7 +996,8 @@ watch(() => props.simulationId, loadData);
   gap: 10px;
 }
 .tab-btn.active {
-  background: var(--atp-yellow);
+  background: var(--atp-purple);
+  color: var(--atp-white);
 }
 
 .chat-viewport {
@@ -1018,7 +1019,7 @@ watch(() => props.simulationId, loadData);
 }
 .message-item.user {
   align-self: flex-end;
-  border-color: var(--atp-blue);
+  border-color: var(--atp-cyan);
 }
 .message-item.assistant {
   align-self: flex-start;
@@ -1039,7 +1040,7 @@ watch(() => props.simulationId, loadData);
   resize: none;
 }
 .send-btn {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
   color: var(--atp-white);
   border: none;
   padding: 0 30px;
@@ -1064,7 +1065,7 @@ watch(() => props.simulationId, loadData);
   gap: 15px;
 }
 .export-csv-btn {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
   color: var(--atp-white);
   border: none;
   font-size: 10px;
@@ -1087,12 +1088,13 @@ watch(() => props.simulationId, loadData);
   cursor: pointer;
 }
 .agent-label.checked {
-  background: var(--atp-yellow);
+  background: var(--atp-purple);
+  color: var(--atp-white);
 }
 
 .submit-survey-btn {
   width: 100%;
-  background: var(--atp-red);
+  background: var(--atp-cyan);
   color: var(--atp-white);
   border: none;
   padding: 15px;
@@ -1106,7 +1108,7 @@ watch(() => props.simulationId, loadData);
   width: 40px;
   height: 40px;
   border: 4px solid var(--atp-black);
-  border-top-color: var(--atp-blue);
+  border-top-color: var(--atp-cyan);
   animation: spin 1s infinite linear;
 }
 @keyframes spin {

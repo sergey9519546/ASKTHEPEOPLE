@@ -1064,14 +1064,14 @@ onUnmounted(() => {
 }
 
 .platform-status.twitter {
-  border-bottom: 8px solid var(--atp-blue);
+  border-bottom: 8px solid var(--atp-cyan);
 }
 .platform-status.reddit {
-  border-bottom: 8px solid var(--atp-red);
+  border-bottom: 8px solid var(--atp-purple);
 }
 
 .platform-status.active {
-  background: var(--atp-yellow);
+  background: var(--atp-cyan);
 }
 
 .platform-status.completed {
@@ -1104,7 +1104,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 900;
-  color: var(--atp-yellow);
+  color: var(--atp-purple);
   text-transform: uppercase;
   margin-bottom: 12px;
 }
@@ -1170,9 +1170,9 @@ onUnmounted(() => {
 }
 
 .final-action-btn:hover:not(:disabled) {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
   transform: translate(-4px, -4px);
-  box-shadow: 6px 6px 0 var(--atp-yellow);
+  box-shadow: 6px 6px 0 var(--atp-purple);
 }
 
 .final-action-btn:disabled {
@@ -1222,8 +1222,8 @@ onUnmounted(() => {
 }
 
 .contract-failed {
-  border-color: var(--atp-red);
-  color: var(--atp-red);
+  border-color: var(--atp-purple);
+  color: var(--atp-purple);
 }
 
 /* Timeline */
@@ -1290,10 +1290,10 @@ onUnmounted(() => {
 }
 
 .twitter .marker-dot {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
 }
 .reddit .marker-dot {
-  background: var(--atp-red);
+  background: var(--atp-purple);
 }
 
 .timeline-card {
@@ -1305,10 +1305,10 @@ onUnmounted(() => {
 }
 
 .twitter .timeline-card {
-  border-left: 12px solid var(--atp-blue);
+  border-left: 12px solid var(--atp-cyan);
 }
 .reddit .timeline-card {
-  border-left: 12px solid var(--atp-red);
+  border-left: 12px solid var(--atp-purple);
 }
 
 .timeline-card-header {
@@ -1352,18 +1352,18 @@ onUnmounted(() => {
 }
 
 .badge-post {
-  background: var(--atp-yellow);
+  background: var(--atp-cyan);
 }
 .badge-blue {
-  background: var(--atp-blue);
+  background: var(--atp-cyan);
   color: var(--atp-white);
 }
 .badge-red {
-  background: var(--atp-red);
+  background: var(--atp-purple);
   color: var(--atp-white);
 }
 .badge-yellow {
-  background: var(--atp-yellow);
+  background: var(--atp-purple);
 }
 .badge-black {
   background: var(--atp-black);
@@ -1432,7 +1432,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 900;
-  color: var(--atp-blue);
+  color: var(--atp-purple);
   letter-spacing: 4px;
 }
 
@@ -1456,8 +1456,8 @@ onUnmounted(() => {
 .spinner-sm {
   width: 20px;
   height: 20px;
-  border: 4px solid rgba(0, 38, 254, 0.2);
-  border-top-color: var(--atp-blue);
+  border: 4px solid rgba(34, 211, 238, 0.2);
+  border-top-color: var(--atp-cyan);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
