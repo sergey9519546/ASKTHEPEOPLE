@@ -53,11 +53,11 @@ jobs:
 
     steps:
       - name: Trigger Railway Deploy Hook
-        if: ${{ secrets.RAILWAY_DEPLOY_HOOK_URL != '' }}
         run: |
-          curl -fsSL -X POST "${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}"
-          echo "Railway redeploy triggered"
-
-      - name: Manual deploy reminder
-        if: ${{ secrets.RAILWAY_DEPLOY_HOOK_URL == '' }}
-        run: echo "Image pushed to ghcr.io/${{ env.IMAGE_NAME }}:latest — go to Railway dashboard and click Redeploy"
+          if [ -n "$HOOK_URL" ]; then
+            curl -fsSL -X POST "$HOOK_URL" && echo "Railway redeploy triggered"
+          else
+            echo "No RAILWAY_DEPLOY_HOOK_URL configured — redeploy manually in Railway dashboard"
+          fi
+        env:
+          HOOK_URL: ${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}
