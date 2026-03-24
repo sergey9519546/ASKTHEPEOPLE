@@ -39,7 +39,7 @@ COPY backend/ /app/backend/
 # Copy built frontend dist
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 
-RUN mkdir -p /app/backend/uploads
+RUN mkdir -p /app/backend/uploads /app/backend/uploads/simulations /app/backend/logs
 
 ENV PATH="/app/backend/.venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1
