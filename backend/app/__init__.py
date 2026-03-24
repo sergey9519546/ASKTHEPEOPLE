@@ -51,7 +51,9 @@ def create_app(config_class=Config):
         )
 
     # Enable CORS
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    _cors_origins = app.config.get('CORS_ORIGINS', '*')
+    _origins = [o.strip() for o in _cors_origins.split(',')] if _cors_origins != '*' else '*'
+    CORS(app, resources={r"/api/*": {"origins": _origins}})
     
     # Register simulation process cleanup function (ensure all simulation processes are terminated when server closes)
     from .services.simulation_runner import SimulationRunner

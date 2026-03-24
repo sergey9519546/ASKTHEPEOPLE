@@ -23,6 +23,7 @@ class Config:
     # Flask Configuration
     SECRET_KEY = os.environ.get('SECRET_KEY', 'askthepeople-secret-key')
     DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+    CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
     
     # JSON Configuration - Disable ASCII escaping to display characters directly (instead of \uXXXX format)
     JSON_AS_ASCII = False

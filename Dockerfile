@@ -42,4 +42,4 @@ EXPOSE 5001
 
 # Run with Gunicorn
 # Bind to 0.0.0.0:5001 so it's accessible outside the container
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "4", "--timeout", "120", "backend.run:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "4", "--timeout", "300", "backend.run:app"]
