@@ -11,19 +11,15 @@ RUN uv pip install torch --index-url https://download.pytorch.org/whl/cpu --forc
 FROM python:3.11-slim
 WORKDIR /app
 
-# Install necessary system utilities
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy backend environment and source
 COPY --from=backend-builder /app/backend/.venv /app/backend/.venv
 COPY backend/ /app/backend/
 
-# Ensure the upload directory exists
 RUN mkdir -p /app/backend/uploads
 
-# Set environment
 ENV PATH="/app/backend/.venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -32,5 +28,5 @@ ENV FLASK_APP=backend/run.py
 EXPOSE 5001
 
 # Single worker + threads: keeps in-memory state (TaskManager, SimulationRunner) consistent.
-# Timeout 300s: supports long-running report generation (up to 15 min via background thread).
+# Timeout 300s: supports long-running report generation via background thread.
 CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "4", "--timeout", "300", "backend.run:app"]
