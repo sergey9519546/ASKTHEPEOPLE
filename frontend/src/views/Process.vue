@@ -426,7 +426,7 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
 .ontology-status-box {
   background: rgba(0, 0, 0, 0.05);
   padding: 15px;
-  border-left: 6px solid var(--atp-green);
+  border-left: 6px solid var(--bauhaus-yellow);
   font-weight: 900;
   font-size: 11px;
 }
