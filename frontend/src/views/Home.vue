@@ -82,7 +82,7 @@
                     <!-- INPUT AREA -->
                     <div class="space-y-6">
                         <div class="bauhaus-input-container">
-                            <label class="block text-[10px] font-black uppercase tracking-widest mb-2 opacity-60">SIMULATION_OBJECTIVE</label>
+                            <span class="text-xs font-black uppercase text-gray-500">Simulation Objective</span>
                             <textarea 
                                 v-model="formData.simulationRequirement"
                                 placeholder="What reality do you wish to manifest? Define your scenario, audience, or core question..."
@@ -91,15 +91,12 @@
                         </div>
                         
                         <div class="flex flex-col md:flex-row gap-4">
-                            <button 
-                                @click="startSimulation" 
-                                :disabled="!canSubmit || loading"
-                                class="flex-grow bg-black text-white px-12 py-6 text-sm font-black uppercase tracking-[0.3em] hover:bg-bauhaus-red transition-all flex items-center justify-between gap-8 group disabled:opacity-20 disabled:cursor-not-allowed shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] active:shadow-none active:translate-x-1 active:translate-y-1"
-                            >
-                                <span v-if="!loading">INITIATE_VOTE</span>
-                                <span v-else class="bauhaus-spinner-small"></span>
-                                <span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward_ios</span>
-                            </button>
+                            <button @click="startSimulation" :disabled="!canSubmit || loading"
+                                        class="w-full bg-black text-white p-6 font-black text-lg flex items-center justify-center gap-4 hover:bg-bauhaus-red transition-all group active:translate-y-1">
+                                    <span v-if="!loading">INITIALIZE ENGINE SEQUENCE</span>
+                                    <span v-else class="bauhaus-spinner-small"></span>
+                                    <span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward</span>
+                                </button>
                         </div>
                     </div>
 
@@ -116,7 +113,7 @@
                         
                         <div v-if="files.length === 0" class="text-center group cursor-pointer">
                             <span class="material-symbols-outlined text-8xl mb-4 group-hover:scale-110 transition-transform">upload_file</span>
-                            <div class="text-xs font-black uppercase tracking-[0.3em]">ATTACH_DATA_SEEDS</div>
+                            <div class="text-xs font-black uppercase tracking-[0.3em]">Attach Data Seeds</div>
                             <div class="text-[10px] font-mono opacity-40 mt-2">PDF / MARKDOWN / TXT</div>
                         </div>
 
@@ -128,7 +125,7 @@
                                 </div>
                                 <button @click.stop="removeFile(i)" class="p-1 hover:text-bauhaus-red border-none bg-transparent shadow-none hover:translate-x-0 hover:translate-y-0 text-lg">×</button>
                            </div>
-                           <button class="mt-4 text-[10px] font-black uppercase underline hover:text-bauhaus-red border-none bg-transparent shadow-none hover:translate-x-0 hover:translate-y-0" @click.stop="triggerFileInput">ADD_MORE_FILES</button>
+                           <button class="mt-4 text-[10px] font-black uppercase underline hover:text-bauhaus-red border-none bg-transparent shadow-none hover:translate-x-0 hover:translate-y-0" @click.stop="triggerFileInput">Add More Files</button>
                         </div>
                     </div>
                 </div>
@@ -138,12 +135,12 @@
         <!-- SESSIONS / ANALYTICS SECTION -->
         <section id="sessions" class="py-16">
             <div class="flex flex-col md:flex-row justify-between items-baseline mb-12 border-b-2 border-black pb-4">
-                <h2 class="text-6xl font-black uppercase tracking-tighter text-bauhaus-blue">LIVE_SESSIONS</h2>
+                <h2 class="text-6xl font-black uppercase tracking-tighter text-bauhaus-blue">Live Sessions</h2>
                 <div class="flex items-center gap-6 font-mono text-[11px] font-bold">
                     <span class="flex items-center gap-2 text-bauhaus-red">
-                        <span class="w-2 h-2 rounded-full bg-bauhaus-red animate-pulse"></span> STREAMING_DATA
+                        <span class="w-2 h-2 rounded-full bg-bauhaus-red animate-pulse"></span> Streaming Data
                     </span>
-                    <span class="opacity-40">NODES_CONNECTED: 82.4K</span>
+                    <span class="opacity-40">Nodes Connected: 82.4K</span>
                 </div>
             </div>
             
@@ -155,8 +152,8 @@
                             <span class="material-symbols-outlined text-4xl">policy</span>
                         </div>
                         <div class="flex-grow p-6 flex items-center justify-between">
-                            <span class="text-xs font-black tracking-widest">SUB_MODULE: SOVEREIGN_AI</span>
-                            <span class="text-[10px] font-bold opacity-40">REF_ID: 9912-X</span>
+                            <span class="text-xs font-black tracking-widest">Sub Module: Sovereign AI</span>
+                            <span class="text-[10px] font-bold opacity-40">Ref ID: 9912-X</span>
                         </div>
                     </div>
                     <div class="p-8 md:p-12">
@@ -166,16 +163,16 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                             <div class="space-y-6">
                                 <div class="flex justify-between items-end">
-                                    <span class="text-xs font-black uppercase">AFFIRMATIVE</span>
+                                    <span class="text-xs font-black uppercase">Affirmative</span>
                                     <span class="text-4xl font-black stat-value">64.2%</span>
                                 </div>
                                 <div class="h-12 bg-black/5 border-2 border-black relative overflow-hidden">
                                     <div class="absolute inset-y-0 left-0 bg-bauhaus-red" style="width: 64.2%;"></div>
-                                    <div class="absolute inset-y-0 left-0 w-full flex items-center px-4 mix-blend-difference text-white text-[10px] font-black">PROGRESS_METER</div>
+                                    <div class="absolute inset-y-0 left-0 w-full flex items-center px-4 mix-blend-difference text-white text-[10px] font-black">Progress Meter</div>
                                 </div>
                             </div>
                             <button class="h-full bg-black text-white p-8 text-sm font-black uppercase tracking-[0.4em] hover:bg-bauhaus-blue transition-colors flex items-center justify-center gap-4 border-none shadow-none hover:translate-x-0 hover:translate-y-0">
-                                VOTE_NOW <span class="material-symbols-outlined">bolt</span>
+                                Vote Now <span class="material-symbols-outlined">bolt</span>
                             </button>
                         </div>
                     </div>
@@ -186,26 +183,26 @@
                     <div class="flex-grow bg-bauhaus-yellow border-4 border-black p-8 flex flex-col justify-between hover:bg-white transition-colors cursor-pointer group shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                         <div>
                             <div class="flex justify-between mb-8">
-                                <span class="text-[10px] font-black uppercase border-b-2 border-black">URBAN_SYSTEMS</span>
+                                <span class="text-[10px] font-black uppercase border-b-2 border-black">Urban Systems</span>
                                 <span class="material-symbols-outlined">domain</span>
                             </div>
                             <h3 class="text-2xl font-black font-body leading-none uppercase">REPLACE PUBLIC TRANSIT WITH AUTONOMOUS PODS?</h3>
                         </div>
                         <div class="flex justify-between items-end mt-8">
-                            <div class="text-xs font-bold">STAGE: EVALUATION</div>
+                            <div class="text-xs font-bold">Stage: Evaluation</div>
                             <span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward</span>
                         </div>
                     </div>
                     <div class="flex-grow bg-white border-4 border-black p-8 flex flex-col justify-between hover:bg-bauhaus-blue hover:text-white transition-colors cursor-pointer group shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
                         <div>
                             <div class="flex justify-between mb-8">
-                                <span class="text-[10px] font-black uppercase border-b-2 border-black">DATA_PRIVACY</span>
+                                <span class="text-[10px] font-black uppercase border-b-2 border-black">Data Privacy</span>
                                 <span class="material-symbols-outlined">encrypted</span>
                             </div>
                             <h3 class="text-2xl font-black font-body leading-none uppercase">GLOBAL MANDATORY BIO-ENCRYPTION FOR PAYMENTS?</h3>
                         </div>
                         <div class="flex justify-between items-end mt-8">
-                            <div class="text-xs font-bold">STATUS: CRITICAL</div>
+                            <div class="text-xs font-bold">Status: Critical</div>
                             <span class="material-symbols-outlined group-hover:translate-x-2 transition-transform">arrow_forward</span>
                         </div>
                     </div>
@@ -216,7 +213,7 @@
         <!-- ARCHIVE SECTION -->
         <section id="archive" class="py-24 border-t-4 border-black">
             <div class="flex flex-col md:flex-row justify-between items-baseline mb-12 border-b-2 border-black pb-4">
-                <h2 class="text-6xl font-black uppercase tracking-tighter">ARCHIVE_DB</h2>
+                <h2 class="text-6xl font-black uppercase tracking-tighter">Archive DB</h2>
                 <div class="text-[10px] font-mono font-bold opacity-40 uppercase">Accessing Historical Knowledge Nodes...</div>
             </div>
             
@@ -231,11 +228,11 @@
                 <div class="w-full md:w-1/3">
                     <div class="bg-black text-white p-10 flex flex-col justify-between h-full geometric-decoration min-h-[300px]">
                         <div>
-                            <h4 class="text-xs font-mono font-bold tracking-[0.4em] mb-6 opacity-60">SYSTEM_ANALYTICS</h4>
+                            <h4 class="text-xs font-mono font-bold tracking-[0.4em] mb-6 opacity-60">System Analytics</h4>
                             <p class="text-4xl font-black leading-tight uppercase mb-8">The geometry of modern consensus.</p>
                         </div>
                         <div class="space-y-4">
-                            <div class="text-[10px] font-mono opacity-50 uppercase">Current_Processing_Cycle: 8.2s</div>
+                            <div class="text-[10px] font-mono opacity-50 uppercase">Current Processing Cycle: 8.2s</div>
                             <div class="w-full h-1 bg-white/20">
                                 <div class="w-2/3 h-full bg-bauhaus-red"></div>
                             </div>
@@ -244,7 +241,7 @@
                 </div>
                 <div class="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div class="border-4 border-black p-8 bg-white flex flex-col justify-center shadow-[10px_10px_0px_0px_rgba(255,183,3,1)]">
-                        <div class="text-[10px] font-black uppercase tracking-widest mb-6 opacity-40">Global_Consensus_Drift</div>
+                        <div class="text-[10px] font-black uppercase tracking-widest mb-6 opacity-40">Global Consensus Drift</div>
                         <div class="h-32 flex items-end gap-2 mb-4">
                             <div class="bg-bauhaus-red w-full" style="height: 40%"></div>
                             <div class="bg-black w-full" style="height: 70%"></div>
@@ -259,7 +256,7 @@
                     </div>
                     <div class="border-4 border-black p-8 bg-white flex flex-col justify-between shadow-[10px_10px_0px_0px_rgba(29,53,87,1)]">
                         <div>
-                            <div class="text-[10px] font-black uppercase tracking-widest mb-4 opacity-40">System_Health</div>
+                            <div class="text-[10px] font-black uppercase tracking-widest mb-4 opacity-40">System Health</div>
                             <div class="text-6xl font-black stat-value">0.998</div>
                         </div>
                         <div class="flex gap-2">
@@ -279,7 +276,7 @@
                 <div class="w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
             </div>
             <div class="relative z-10 flex flex-col items-center text-center">
-                <span class="font-mono text-[11px] font-bold tracking-[0.8em] mb-8 border border-white/30 px-4 py-2 uppercase">CORE_SEED_TEMPLATES</span>
+                <span class="font-mono text-[11px] font-bold tracking-[0.8em] mb-8 border border-white/30 px-4 py-2 uppercase">Core Seed Templates</span>
                 <h2 class="text-5xl md:text-8xl font-black leading-none mb-12 tracking-tighter uppercase">READY TO <br><span class="text-bauhaus-red">INPUT?</span></h2>
                 
                 <div v-if="templates.length" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1 w-full max-w-6xl font-mono">

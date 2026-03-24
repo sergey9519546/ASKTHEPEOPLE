@@ -8,29 +8,36 @@
 
 <style>
 :root {
-  /* Modernist Brutal - "Creative Studio" Palette */
+  /* Bauhaus Design System - Primary Palette */
+  --bauhaus-red: #e63946;
+  --bauhaus-blue: #1d3557;
+  --bauhaus-yellow: #ffb703;
   --atp-black: #000000;
   --atp-white: #ffffff;
-  --atp-cyan: #22d3ee;
-  --atp-purple: #a855f7;
-  --atp-green: #4ade80;
   --atp-light-gray: #f9f9f9;
+  --background: #f8f9fa;
+  --surface: #ffffff;
+  --on-background: #0f0f0f;
+  --on-surface-variant: #2d2d2d;
 
-  /* Semantic Variables */
-  --bg-color: var(--atp-white);
-  --surface-color: var(--atp-white);
+  /* Semantic Variables - Bauhaus Mapping */
+  --bg-color: var(--background);
+  --surface-color: var(--surface);
   --border-color: var(--atp-black);
   --border-width: 2px;
+  --border-width-heavy: 4px;
 
   --text-primary: var(--atp-black);
   --text-secondary: #555555;
-  --accent-color: var(--atp-cyan); /* Default accent is now Cyan */
+  --accent-color: var(--bauhaus-red);
+  --accent-secondary: var(--bauhaus-blue);
+  --accent-tertiary: var(--bauhaus-yellow);
 
   /* Typography */
   --font-mono: "JetBrains Mono", monospace;
-  --font-sans: "Space Grotesk", "Inter", sans-serif;
+  --font-sans: "Space Grotesk", sans-serif;
 
-  /* Geometry */
+  /* Geometry - Brutalist (Zero Radius) */
   --radius-none: 0px;
   --radius-sm: 0px;
   --radius-md: 0px;
@@ -38,32 +45,52 @@
 
   /* Spacing */
   --gap: 24px;
+  --grid-unit: 40px;
 }
 
-/* Custom Selection Color */
+/* Custom Selection Color - Bauhaus */
 ::selection {
-  background: var(--atp-cyan);
-  color: var(--atp-black);
+  background: var(--bauhaus-red);
+  color: var(--atp-white);
 }
 
-/* Utility Classes for usage */
+/* Utility Classes - Bauhaus Palette */
+.bg-accent-red {
+  background-color: var(--bauhaus-red) !important;
+}
+.text-accent-red {
+  color: var(--bauhaus-red) !important;
+}
+.bg-accent-blue {
+  background-color: var(--bauhaus-blue) !important;
+}
+.text-accent-blue {
+  color: var(--bauhaus-blue) !important;
+}
+.bg-accent-yellow {
+  background-color: var(--bauhaus-yellow) !important;
+}
+.text-accent-yellow {
+  color: var(--bauhaus-yellow) !important;
+}
+/* Legacy support - map old classes to new colors */
 .bg-accent-cyan {
-  background-color: var(--atp-cyan) !important;
+  background-color: var(--bauhaus-red) !important;
 }
 .text-accent-cyan {
-  color: var(--atp-cyan) !important;
+  color: var(--bauhaus-red) !important;
 }
 .bg-accent-purple {
-  background-color: var(--atp-purple) !important;
+  background-color: var(--bauhaus-blue) !important;
 }
 .text-accent-purple {
-  color: var(--atp-purple) !important;
+  color: var(--bauhaus-blue) !important;
 }
 .bg-accent-green {
-  background-color: var(--atp-green) !important;
+  background-color: var(--bauhaus-yellow) !important;
 }
 .text-accent-green {
-  color: var(--atp-green) !important;
+  color: var(--bauhaus-yellow) !important;
 }
 
 /* Global Style Reset */
@@ -101,10 +128,10 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
 }
 
-/* Global Button - Modernist Brutal */
+/* Global Button - Bauhaus Brutalist */
 button {
   font-family: var(--font-mono);
   font-weight: 700;
@@ -112,19 +139,19 @@ button {
   letter-spacing: 1px;
   cursor: pointer;
   padding: 12px 24px;
-  border: var(--border-width) solid var(--atp-black);
+  border: var(--border-width-heavy) solid var(--atp-black);
   background: var(--atp-white);
   color: var(--atp-black);
   border-radius: var(--radius-none);
-  transition: all 0.1s;
+  transition: all 0.15s ease;
   position: relative;
 }
 
 button:hover {
   background: var(--atp-black);
   color: var(--atp-white);
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0px var(--atp-cyan);
+  transform: translate(-4px, -4px);
+  box-shadow: 8px 8px 0px var(--bauhaus-red);
 }
 
 button:active {

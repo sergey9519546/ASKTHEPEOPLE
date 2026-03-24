@@ -1,5 +1,5 @@
 <template>
-  <div 
+  <div
     class="simulation-history-workbench"
     :class="{ 'empty-state': projects.length === 0 && !loading }"
     ref="historyContainer"
@@ -12,17 +12,25 @@
     <!-- Section Header -->
     <header class="section-title-area">
       <div class="bauhaus-accent-shape triangle"></div>
-      <h2 class="section-label">SIMULATION_ARCHIVE</h2>
+      <h2 class="section-label">Simulation Archive</h2>
       <div class="bauhaus-accent-shape square"></div>
     </header>
 
     <!-- Project Cards Grid -->
-    <div v-if="projects.length > 0" class="workbench-cards-grid" :class="{ 'is-expanded': isExpanded }" :style="gridContainerStyle">
-      <div 
-        v-for="(project, index) in projects" 
+    <div
+      v-if="projects.length > 0"
+      class="workbench-cards-grid"
+      :class="{ 'is-expanded': isExpanded }"
+      :style="gridContainerStyle"
+    >
+      <div
+        v-for="(project, index) in projects"
         :key="project.simulation_id"
         class="simulation-card bauhaus-card"
-        :class="{ 'is-expanded': isExpanded, 'is-hovered': hoveringCard === index }"
+        :class="{
+          'is-expanded': isExpanded,
+          'is-hovered': hoveringCard === index,
+        }"
         :style="getCardStyle(index)"
         @mouseenter="hoveringCard = index"
         @mouseleave="hoveringCard = null"
@@ -30,28 +38,47 @@
       >
         <!-- Card Header: ID & Capabilities -->
         <header class="card-header-row">
-          <span class="simulation-id">{{ formatSimId(project.simulation_id) }}</span>
+          <span class="simulation-id">{{
+            formatSimId(project.simulation_id)
+          }}</span>
           <div class="capability-flags">
-            <span class="flag" :class="{ 'active': project.project_id }" title="Graph Building">GB</span>
+            <span
+              class="flag"
+              :class="{ active: project.project_id }"
+              title="Graph Building"
+              >GB</span
+            >
             <span class="flag active" title="Environment Setup">ES</span>
-            <span class="flag" :class="{ 'active': project.report_id }" title="Analysis Report">AR</span>
+            <span
+              class="flag"
+              :class="{ active: project.report_id }"
+              title="Analysis Report"
+              >AR</span
+            >
           </div>
         </header>
 
         <!-- Preview Area: Files -->
         <div class="card-preview-area">
           <div class="viewport-mark top-left"></div>
-          <div v-if="project.files && project.files.length > 0" class="file-previews">
-            <div 
-              v-for="(file, fIdx) in project.files.slice(0, 3)" 
+          <div
+            v-if="project.files && project.files.length > 0"
+            class="file-previews"
+          >
+            <div
+              v-for="(file, fIdx) in project.files.slice(0, 3)"
               :key="fIdx"
               class="file-strip"
             >
-              <span class="type-tag" :class="getFileExtension(file.filename)">{{ getShortExt(file.filename) }}</span>
-              <span class="filename-text">{{ truncate(file.filename, 18) }}</span>
+              <span class="type-tag" :class="getFileExtension(file.filename)">{{
+                getShortExt(file.filename)
+              }}</span>
+              <span class="filename-text">{{
+                truncate(file.filename, 18)
+              }}</span>
             </div>
             <div v-if="project.files.length > 3" class="more-files-indicator">
-              +{{ project.files.length - 3 }} ASSETS_REMAINING
+              +{{ project.files.length - 3 }} Assets Remaining
             </div>
           </div>
           <div v-else class="empty-files-placeholder">
@@ -62,8 +89,12 @@
 
         <!-- Content Area -->
         <div class="card-content-block">
-          <h3 class="requirement-title">{{ getShortRequirement(project.simulation_requirement) }}</h3>
-          <p class="requirement-preview">{{ truncate(project.simulation_requirement, 60) }}</p>
+          <h3 class="requirement-title">
+            {{ getShortRequirement(project.simulation_requirement) }}
+          </h3>
+          <p class="requirement-preview">
+            {{ truncate(project.simulation_requirement, 60) }}
+          </p>
         </div>
 
         <!-- Footer -->
@@ -73,11 +104,11 @@
             <span class="time-text">{{ formatTime(project.created_at) }}</span>
           </div>
           <div class="execution-progress" :class="getProgressState(project)">
-            <span class="status-indicator"></span> 
+            <span class="status-indicator"></span>
             <span class="progress-text">{{ formatIteration(project) }}</span>
           </div>
         </footer>
-        
+
         <div class="hover-accent-line"></div>
       </div>
     </div>
@@ -91,33 +122,65 @@
     <!-- Modal: Project Details & Playback -->
     <Teleport to="body">
       <Transition name="bauhaus-modal">
-        <div v-if="selectedProject" class="workbench-modal-overlay" @click.self="closeModal">
+        <div
+          v-if="selectedProject"
+          class="workbench-modal-overlay"
+          @click.self="closeModal"
+        >
           <div class="bauhaus-modal-content">
             <!-- Modal Header -->
             <header class="modal-header-block">
               <div class="id-meta">
-                <span class="modal-sim-id">{{ formatSimId(selectedProject.simulation_id) }}</span>
-                <div class="modal-status-badge" :class="getProgressState(selectedProject)">
+                <span class="modal-sim-id">{{
+                  formatSimId(selectedProject.simulation_id)
+                }}</span>
+                <div
+                  class="modal-status-badge"
+                  :class="getProgressState(selectedProject)"
+                >
                   <span class="status-dot"></span>
                   {{ formatIteration(selectedProject) }}
                 </div>
-                <span class="creation-stamp">{{ formatDate(selectedProject.created_at) }} @ {{ formatTime(selectedProject.created_at) }}</span>
+                <span class="creation-stamp"
+                  >{{ formatDate(selectedProject.created_at) }} @
+                  {{ formatTime(selectedProject.created_at) }}</span
+                >
               </div>
-              <button class="close-modal-btn" @click="closeModal">CLOSE [X]</button>
+              <button class="close-modal-btn" @click="closeModal">
+                CLOSE [X]
+              </button>
             </header>
 
             <!-- Modal Body -->
             <div class="modal-scroll-area">
               <section class="modal-section">
                 <h4 class="section-heading">SIMULATION OBJECTIVE</h4>
-                <div class="requirement-box">{{ selectedProject.simulation_requirement || 'NO OBJECTIVE DEFINED' }}</div>
+                <div class="requirement-box">
+                  {{
+                    selectedProject.simulation_requirement ||
+                    "NO OBJECTIVE DEFINED"
+                  }}
+                </div>
               </section>
 
               <section class="modal-section">
                 <h4 class="section-heading">LINKED ASSETS</h4>
-                <div v-if="selectedProject.files && selectedProject.files.length > 0" class="modal-file-list">
-                  <div v-for="(file, idx) in selectedProject.files" :key="idx" class="modal-file-row">
-                    <span class="file-extension-pill" :class="getFileExtension(file.filename)">{{ getShortExt(file.filename) }}</span>
+                <div
+                  v-if="
+                    selectedProject.files && selectedProject.files.length > 0
+                  "
+                  class="modal-file-list"
+                >
+                  <div
+                    v-for="(file, idx) in selectedProject.files"
+                    :key="idx"
+                    class="modal-file-row"
+                  >
+                    <span
+                      class="file-extension-pill"
+                      :class="getFileExtension(file.filename)"
+                      >{{ getShortExt(file.filename) }}</span
+                    >
                     <span class="modal-filename">{{ file.filename }}</span>
                   </div>
                 </div>
@@ -133,8 +196,8 @@
             </div>
 
             <nav class="modal-navigation-grid">
-              <button 
-                class="nav-btn btn-graph" 
+              <button
+                class="nav-btn btn-graph"
                 @click="jumpToGraph"
                 :disabled="!selectedProject.project_id"
               >
@@ -142,16 +205,13 @@
                 <span class="action-icon">◆</span>
                 <span class="action-label">GRAPH ARCHIVE</span>
               </button>
-              <button 
-                class="nav-btn btn-setup" 
-                @click="jumpToSetup"
-              >
+              <button class="nav-btn btn-setup" @click="jumpToSetup">
                 <span class="step-num">PHASE 02</span>
                 <span class="action-icon">▲</span>
                 <span class="action-label">ENV CONFIG</span>
               </button>
-              <button 
-                class="nav-btn btn-report" 
+              <button
+                class="nav-btn btn-report"
                 @click="jumpToReport"
                 :disabled="!selectedProject.report_id"
               >
@@ -162,7 +222,10 @@
             </nav>
 
             <footer class="modal-notice">
-              <p>Phases 03 [Simulation] and 05 [Interaction] are runtime-only and do not support archive playback.</p>
+              <p>
+                Phases 03 [Simulation] and 05 [Interaction] are runtime-only and
+                do not support archive playback.
+              </p>
             </footer>
           </div>
         </div>
@@ -172,170 +235,221 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, onActivated, watch, nextTick } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
-import { getSimulationHistory } from '../api/simulation'
+import {
+  computed,
+  nextTick,
+  onActivated,
+  onMounted,
+  onUnmounted,
+  ref,
+} from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { getSimulationHistory } from "../api/simulation";
 
-const router = useRouter()
-const route = useRoute()
+const router = useRouter();
+const route = useRoute();
 
 // State
-const projects = ref([])
-const loading = ref(true)
-const isExpanded = ref(false)
-const hoveringCard = ref(null)
-const historyContainer = ref(null)
-const selectedProject = ref(null)
-let observer = null
-let isAnimating = false
-let expandDebounceTimer = null
-let pendingState = null
+const projects = ref([]);
+const loading = ref(true);
+const isExpanded = ref(false);
+const hoveringCard = ref(null);
+const historyContainer = ref(null);
+const selectedProject = ref(null);
+let observer = null;
+let isAnimating = false;
+let expandDebounceTimer = null;
+let pendingState = null;
 
 // Configuration
-const CARDS_PER_ROW = 4
-const CARD_WIDTH = 300
-const CARD_HEIGHT = 300
-const CARD_GAP = 30
+const CARDS_PER_ROW = 4;
+const CARD_WIDTH = 300;
+const CARD_HEIGHT = 300;
+const CARD_GAP = 30;
 
 const gridContainerStyle = computed(() => {
-  if (!isExpanded.value) return { minHeight: '450px' }
-  const total = projects.value.length
-  if (total === 0) return { minHeight: '300px' }
-  const rows = Math.ceil(total / CARDS_PER_ROW)
-  return { minHeight: `${rows * CARD_HEIGHT + (rows - 1) * CARD_GAP + 50}px` }
-})
+  if (!isExpanded.value) return { minHeight: "450px" };
+  const total = projects.value.length;
+  if (total === 0) return { minHeight: "300px" };
+  const rows = Math.ceil(total / CARDS_PER_ROW);
+  return { minHeight: `${rows * CARD_HEIGHT + (rows - 1) * CARD_GAP + 50}px` };
+});
 
 const getCardStyle = (index) => {
-  const total = projects.value.length
-  const transition = 'transform 800ms cubic-bezier(0.19, 1, 0.22, 1), opacity 800ms, box-shadow 0.3s'
+  const total = projects.value.length;
+  const transition =
+    "transform 800ms cubic-bezier(0.19, 1, 0.22, 1), opacity 800ms, box-shadow 0.3s";
 
   if (isExpanded.value) {
-    const col = index % CARDS_PER_ROW
-    const row = Math.floor(index / CARDS_PER_ROW)
-    const currentRowStart = row * CARDS_PER_ROW
-    const currentRowCards = Math.min(CARDS_PER_ROW, total - currentRowStart)
-    const rowWidth = currentRowCards * CARD_WIDTH + (currentRowCards - 1) * CARD_GAP
-    const startX = -(rowWidth / 2) + (CARD_WIDTH / 2)
-    const x = startX + (index % CARDS_PER_ROW) * (CARD_WIDTH + CARD_GAP)
-    const y = 30 + row * (CARD_HEIGHT + CARD_GAP)
+    const col = index % CARDS_PER_ROW;
+    const row = Math.floor(index / CARDS_PER_ROW);
+    const currentRowStart = row * CARDS_PER_ROW;
+    const currentRowCards = Math.min(CARDS_PER_ROW, total - currentRowStart);
+    const rowWidth =
+      currentRowCards * CARD_WIDTH + (currentRowCards - 1) * CARD_GAP;
+    const startX = -(rowWidth / 2) + CARD_WIDTH / 2;
+    const x = startX + (index % CARDS_PER_ROW) * (CARD_WIDTH + CARD_GAP);
+    const y = 30 + row * (CARD_HEIGHT + CARD_GAP);
 
     return {
       transform: `translate(${x}px, ${y}px) scale(1)`,
       zIndex: 100 + index,
       opacity: 1,
-      transition
-    }
+      transition,
+    };
   } else {
-    const centerIdx = (total - 1) / 2
-    const offset = index - centerIdx
-    const x = offset * 40
-    const y = 30 + Math.abs(offset) * 10
-    const r = offset * 4
-    const s = 1 - Math.abs(offset) * 0.05
+    const centerIdx = (total - 1) / 2;
+    const offset = index - centerIdx;
+    const x = offset * 40;
+    const y = 30 + Math.abs(offset) * 10;
+    const r = offset * 4;
+    const s = 1 - Math.abs(offset) * 0.05;
 
     return {
       transform: `translate(${x}px, ${y}px) rotate(${r}deg) scale(${s})`,
       zIndex: 10 + index,
       opacity: 1,
-      transition
-    }
+      transition,
+    };
   }
-}
+};
 
 // Formatters
-const formatSimId = (id) => id ? `SIM_${id.replace('sim_', '').slice(0, 6).toUpperCase()}` : 'SIM_UNKNOWN'
-const truncate = (text, len) => text && text.length > len ? text.slice(0, len) + '...' : (text || '')
-const getShortRequirement = (req) => req ? truncate(req, 22) : 'UNTITLED_SIM'
-const formatDate = (ds) => ds ? new Date(ds).toISOString().slice(0, 10) : ''
-const formatTime = (ds) => ds ? new Date(ds).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''
+const formatSimId = (id) =>
+  id
+    ? `SIM_${id.replace("sim_", "").slice(0, 6).toUpperCase()}`
+    : "SIM_UNKNOWN";
+const truncate = (text, len) =>
+  text && text.length > len ? text.slice(0, len) + "..." : text || "";
+const getShortRequirement = (req) => (req ? truncate(req, 22) : "UNTITLED_SIM");
+const formatDate = (ds) => (ds ? new Date(ds).toISOString().slice(0, 10) : "");
+const formatTime = (ds) =>
+  ds
+    ? new Date(ds).toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
 const formatIteration = (sim) => {
-  const c = sim.current_round || 0
-  const t = sim.total_rounds || 0
-  return t === 0 ? 'PENDING' : `${c}/${t} CYCLES`
-}
+  const c = sim.current_round || 0;
+  const t = sim.total_rounds || 0;
+  return t === 0 ? "PENDING" : `${c}/${t} CYCLES`;
+};
 
 const getProgressState = (sim) => {
-  const c = sim.current_round || 0
-  const t = sim.total_rounds || 0
-  if (t === 0 || c === 0) return 'state-pending'
-  if (c >= t) return 'state-complete'
-  return 'state-active'
-}
+  const c = sim.current_round || 0;
+  const t = sim.total_rounds || 0;
+  if (t === 0 || c === 0) return "state-pending";
+  if (c >= t) return "state-complete";
+  return "state-active";
+};
 
-const getShortExt = (fn) => fn ? fn.split('.').pop()?.toUpperCase().slice(0, 4) : 'FILE'
+const getShortExt = (fn) =>
+  fn ? fn.split(".").pop()?.toUpperCase().slice(0, 4) : "FILE";
 const getFileExtension = (fn) => {
-  const ext = fn?.split('.').pop()?.toLowerCase()
-  const map = { pdf: 'pdf', doc: 'doc', docx: 'doc', xls: 'xls', xlsx: 'xls', csv: 'xls', ppt: 'ppt', pptx: 'ppt', txt: 'txt', md: 'txt', json: 'code' }
-  return map[ext] || 'bin'
-}
+  const ext = fn?.split(".").pop()?.toLowerCase();
+  const map = {
+    pdf: "pdf",
+    doc: "doc",
+    docx: "doc",
+    xls: "xls",
+    xlsx: "xls",
+    csv: "xls",
+    ppt: "ppt",
+    pptx: "ppt",
+    txt: "txt",
+    md: "txt",
+    json: "code",
+  };
+  return map[ext] || "bin";
+};
 
 // Navigation & Actions
-const openProjectDetails = (sim) => selectedProject.value = sim
-const closeModal = () => selectedProject.value = null
+const openProjectDetails = (sim) => (selectedProject.value = sim);
+const closeModal = () => (selectedProject.value = null);
 
 const jumpToGraph = () => {
   if (selectedProject.value?.project_id) {
-    router.push({ name: 'Process', params: { projectId: selectedProject.value.project_id } })
-    closeModal()
+    router.push({
+      name: "Process",
+      params: { projectId: selectedProject.value.project_id },
+    });
+    closeModal();
   }
-}
+};
 
 const jumpToSetup = () => {
   if (selectedProject.value?.simulation_id) {
-    router.push({ name: 'Simulation', params: { simulationId: selectedProject.value.simulation_id } })
-    closeModal()
+    router.push({
+      name: "Simulation",
+      params: { simulationId: selectedProject.value.simulation_id },
+    });
+    closeModal();
   }
-}
+};
 
 const jumpToReport = () => {
   if (selectedProject.value?.report_id) {
-    router.push({ name: 'Report', params: { reportId: selectedProject.value.report_id } })
-    closeModal()
+    router.push({
+      name: "Report",
+      params: { reportId: selectedProject.value.report_id },
+    });
+    closeModal();
   }
-}
+};
 
 const fetchHistory = async () => {
   try {
-    loading.value = true
-    const res = await getSimulationHistory(24)
-    if (res.success) projects.value = res.data || []
-  } finally { loading.value = false }
-}
+    loading.value = true;
+    const res = await getSimulationHistory(24);
+    if (res.success) projects.value = res.data || [];
+  } finally {
+    loading.value = false;
+  }
+};
 
 const setupObserver = () => {
-  if (observer) observer.disconnect()
-  observer = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      pendingState = e.isIntersecting
-      if (isAnimating) return
-      if (pendingState === isExpanded.value) return
-      
-      const delay = pendingState ? 80 : 250
-      if (expandDebounceTimer) clearTimeout(expandDebounceTimer)
-      expandDebounceTimer = setTimeout(() => {
-        if (isAnimating || pendingState === null || pendingState === isExpanded.value) return
-        isAnimating = true
-        isExpanded.value = pendingState
-        pendingState = null
-        setTimeout(() => isAnimating = false, 800)
-      }, delay)
-    })
-  }, { threshold: [0.3, 0.7], rootMargin: '0px 0px -100px 0px' })
+  if (observer) observer.disconnect();
+  observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((e) => {
+        pendingState = e.isIntersecting;
+        if (isAnimating) return;
+        if (pendingState === isExpanded.value) return;
 
-  if (historyContainer.value) observer.observe(historyContainer.value)
-}
+        const delay = pendingState ? 80 : 250;
+        if (expandDebounceTimer) clearTimeout(expandDebounceTimer);
+        expandDebounceTimer = setTimeout(() => {
+          if (
+            isAnimating ||
+            pendingState === null ||
+            pendingState === isExpanded.value
+          )
+            return;
+          isAnimating = true;
+          isExpanded.value = pendingState;
+          pendingState = null;
+          setTimeout(() => (isAnimating = false), 800);
+        }, delay);
+      });
+    },
+    { threshold: [0.3, 0.7], rootMargin: "0px 0px -100px 0px" },
+  );
+
+  if (historyContainer.value) observer.observe(historyContainer.value);
+};
 
 onMounted(async () => {
-  await nextTick()
-  await fetchHistory()
-  setTimeout(setupObserver, 200)
-})
+  await nextTick();
+  await fetchHistory();
+  setTimeout(setupObserver, 200);
+});
 
-onActivated(fetchHistory)
+onActivated(fetchHistory);
 onUnmounted(() => {
-  if (observer) observer.disconnect()
-  if (expandDebounceTimer) clearTimeout(expandDebounceTimer)
-})
+  if (observer) observer.disconnect();
+  if (expandDebounceTimer) clearTimeout(expandDebounceTimer);
+});
 </script>
 
 <style scoped>
@@ -351,14 +465,18 @@ onUnmounted(() => {
 
 .bauhaus-backdrop {
   position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   pointer-events: none;
   overflow: hidden;
 }
 
 .geometric-pattern {
-  width: 100%; height: 100%;
-  background-image: 
+  width: 100%;
+  height: 100%;
+  background-image:
     linear-gradient(to right, var(--atp-black) 2px, transparent 2px),
     linear-gradient(to bottom, var(--atp-black) 2px, transparent 2px);
   background-size: 80px 80px;
@@ -376,10 +494,32 @@ onUnmounted(() => {
   padding: 0 60px;
 }
 
-.bauhaus-accent-shape { width: 40px; height: 40px; border: 4px solid var(--atp-black); }
-.bauhaus-accent-shape.triangle { border-bottom-color: var(--atp-cyan); border-right-color: transparent; border-left-color: transparent; border-top-color: transparent; height: 0; width: 0; border-width: 0 20px 35px 20px; border-style: solid; box-sizing: border-box; }
-.bauhaus-accent-shape.square { background: var(--atp-purple); }
-.section-label { font-weight: 950; font-size: 1.5rem; letter-spacing: -1px; color: var(--atp-black); text-transform: uppercase; }
+.bauhaus-accent-shape {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--atp-black);
+}
+.bauhaus-accent-shape.triangle {
+  border-bottom-color: var(--bauhaus-red);
+  border-right-color: transparent;
+  border-left-color: transparent;
+  border-top-color: transparent;
+  height: 0;
+  width: 0;
+  border-width: 0 20px 35px 20px;
+  border-style: solid;
+  box-sizing: border-box;
+}
+.bauhaus-accent-shape.square {
+  background: var(--bauhaus-blue);
+}
+.section-label {
+  font-weight: 950;
+  font-size: 1.5rem;
+  letter-spacing: -1px;
+  color: var(--atp-black);
+  text-transform: uppercase;
+}
 
 .workbench-cards-grid {
   position: relative;
@@ -407,7 +547,7 @@ onUnmounted(() => {
   box-shadow: 15px 15px 0 var(--atp-black);
   transform: translate(-6px, -6px) !important;
   z-index: 2000 !important;
-  border-color: var(--atp-cyan);
+  border-color: var(--bauhaus-red);
 }
 
 .card-header-row {
@@ -419,17 +559,32 @@ onUnmounted(() => {
   border-bottom: 3px solid var(--atp-black);
 }
 
-.simulation-id { font-family: var(--font-mono); font-weight: 900; font-size: 13px; }
+.simulation-id {
+  font-family: var(--font-mono);
+  font-weight: 900;
+  font-size: 13px;
+}
 
-.capability-flags { display: flex; gap: 5px; }
+.capability-flags {
+  display: flex;
+  gap: 5px;
+}
 .flag {
-  width: 24px; height: 24px;
+  width: 24px;
+  height: 24px;
   border: 2px solid var(--atp-black);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 900;
   opacity: 0.2;
 }
-.flag.active { opacity: 1; background: var(--atp-purple); color: var(--atp-white); }
+.flag.active {
+  opacity: 1;
+  background: var(--bauhaus-blue);
+  color: var(--atp-white);
+}
 
 .card-preview-area {
   position: relative;
@@ -439,102 +594,330 @@ onUnmounted(() => {
   padding: 10px;
 }
 
-.viewport-mark { position: absolute; width: 10px; height: 10px; border-top: 2px solid var(--atp-white); border-left: 2px solid var(--atp-white); }
-.top-left { top: 5px; left: 5px; }
+.viewport-mark {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid var(--atp-white);
+  border-left: 2px solid var(--atp-white);
+}
+.top-left {
+  top: 5px;
+  left: 5px;
+}
 
 .file-strip {
-  display: flex; align-items: center; gap: 8px;
-  background: var(--atp-white); border: 2px solid var(--atp-black);
-  margin-bottom: 4px; padding: 2px 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--atp-white);
+  border: 2px solid var(--atp-black);
+  margin-bottom: 4px;
+  padding: 2px 6px;
 }
 
-.type-tag { font-family: var(--font-mono); font-size: 8px; font-weight: 900; background: var(--atp-purple); color: var(--atp-white); padding: 1px 4px; }
-.filename-text { font-size: 10px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--atp-black); }
+.type-tag {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 900;
+  background: var(--bauhaus-blue);
+  color: var(--atp-white);
+  padding: 1px 4px;
+}
+.filename-text {
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--atp-black);
+}
 
-.more-files-indicator { font-size: 9px; font-weight: 900; color: var(--atp-white); text-align: center; }
+.more-files-indicator {
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--atp-white);
+  text-align: center;
+}
 
-.empty-files-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--atp-white); }
-.empty-icon { font-size: 20px; font-weight: 900; color: var(--atp-purple); }
-.empty-text { font-size: 9px; font-weight: 800; }
+.empty-files-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--atp-white);
+}
+.empty-icon {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--bauhaus-blue);
+}
+.empty-text {
+  font-size: 9px;
+  font-weight: 800;
+}
 
-.requirement-title { font-weight: 900; font-size: 16px; margin-bottom: 5px; color: var(--atp-cyan); text-transform: uppercase; }
-.requirement-preview { font-size: 11px; line-height: 1.4; color: #333; height: 32px; overflow: hidden; }
+.requirement-title {
+  font-weight: 900;
+  font-size: 16px;
+  margin-bottom: 5px;
+  color: var(--bauhaus-red);
+  text-transform: uppercase;
+}
+.requirement-preview {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #333;
+  height: 32px;
+  overflow: hidden;
+}
 
 .card-footer-row {
-  margin-top: 15px; padding-top: 12px; border-top: 2px solid var(--atp-black);
-  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 2px solid var(--atp-black);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.timestamp-group { display: flex; flex-direction: column; font-family: var(--font-mono); font-size: 9px; font-weight: 800; }
-.execution-progress { display: flex; align-items: center; gap: 6px; font-weight: 900; font-size: 10px; }
-.status-indicator { width: 8px; height: 8px; border: 1px solid var(--atp-black); }
+.timestamp-group {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 800;
+}
+.execution-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 900;
+  font-size: 10px;
+}
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--atp-black);
+}
 
-.state-complete { color: var(--atp-green); }
-.state-complete .status-indicator { background: var(--atp-green); }
-.state-active { color: var(--atp-cyan); }
-.state-active .status-indicator { background: var(--atp-cyan); }
-.state-pending { color: #666; }
+.state-complete {
+  color: var(--bauhaus-yellow);
+}
+.state-complete .status-indicator {
+  background: var(--bauhaus-yellow);
+}
+.state-active {
+  color: var(--bauhaus-red);
+}
+.state-active .status-indicator {
+  background: var(--bauhaus-red);
+}
+.state-pending {
+  color: #666;
+}
 
-.workbench-loading { display: flex; flex-direction: column; align-items: center; gap: 15px; padding: 50px; }
-.bauhaus-spinner { width: 40px; height: 40px; border: 6px solid var(--atp-black); border-top-color: var(--atp-cyan); animation: spin 0.8s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-.loading-label { font-weight: 900; font-size: 12px; letter-spacing: 2px; }
+.workbench-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  padding: 50px;
+}
+.bauhaus-spinner {
+  width: 40px;
+  height: 40px;
+  border: 6px solid var(--atp-black);
+  border-top-color: var(--bauhaus-red);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.loading-label {
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 2px;
+}
 
 /* Modal Styles */
 .workbench-modal-overlay {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: var(--atp-white);
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   z-index: 9999;
 }
 
 .bauhaus-modal-content {
-  background: var(--atp-white); border: 8px solid var(--atp-black);
-  width: 650px; max-width: 95vw;
+  background: var(--atp-white);
+  border: 8px solid var(--atp-black);
+  width: 650px;
+  max-width: 95vw;
   box-shadow: 20px 20px 0 var(--atp-black);
 }
 
 .modal-header-block {
-  padding: 30px; border-bottom: 6px solid var(--atp-black);
-  display: flex; justify-content: space-between; align-items: flex-start;
+  padding: 30px;
+  border-bottom: 6px solid var(--atp-black);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
 }
 
-.id-meta { display: flex; flex-direction: column; gap: 8px; }
-.modal-sim-id { font-weight: 900; font-size: 28px; }
-.modal-status-badge { display: inline-flex; align-items: center; gap: 10px; font-weight: 900; font-size: 12px; padding: 5px 12px; border: 3px solid var(--atp-black); }
+.id-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.modal-sim-id {
+  font-weight: 900;
+  font-size: 28px;
+}
+.modal-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+  font-size: 12px;
+  padding: 5px 12px;
+  border: 3px solid var(--atp-black);
+}
 
-.close-modal-btn { background: var(--atp-purple); color: var(--atp-white); border: 4px solid var(--atp-black); padding: 10px 20px; font-weight: 900; cursor: pointer; }
-.close-modal-btn:hover { background: var(--atp-black); }
+.close-modal-btn {
+  background: var(--bauhaus-blue);
+  color: var(--atp-white);
+  border: 4px solid var(--atp-black);
+  padding: 10px 20px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.close-modal-btn:hover {
+  background: var(--atp-black);
+}
 
-.modal-scroll-area { padding: 30px; max-height: 400px; overflow-y: auto; }
-.modal-section { margin-bottom: 30px; }
-.section-heading { font-weight: 900; font-size: 12px; letter-spacing: 2px; color: var(--atp-purple); margin-bottom: 12px; }
-.requirement-box { border: 4px solid var(--atp-black); padding: 20px; font-size: 16px; line-height: 1.6; background: #F5F5F5; }
+.modal-scroll-area {
+  padding: 30px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.modal-section {
+  margin-bottom: 30px;
+}
+.section-heading {
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--bauhaus-blue);
+  margin-bottom: 12px;
+}
+.requirement-box {
+  border: 4px solid var(--atp-black);
+  padding: 20px;
+  font-size: 16px;
+  line-height: 1.6;
+  background: #f5f5f5;
+}
 
-.modal-file-row { display: flex; align-items: center; gap: 15px; padding: 12px; border: 2px solid var(--atp-black); margin-bottom: 8px; }
-.file-extension-pill { font-weight: 900; font-size: 10px; padding: 4px 8px; border: 2px solid var(--atp-black); background: var(--atp-purple); color: var(--atp-white); }
+.modal-file-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 12px;
+  border: 2px solid var(--atp-black);
+  margin-bottom: 8px;
+}
+.file-extension-pill {
+  font-weight: 900;
+  font-size: 10px;
+  padding: 4px 8px;
+  border: 2px solid var(--atp-black);
+  background: var(--bauhaus-blue);
+  color: var(--atp-white);
+}
 
-.modal-playback-divider { display: flex; align-items: center; gap: 20px; padding: 0 30px; }
-.hr-line { flex: 1; height: 3px; background: var(--atp-black); }
-.playback-label { font-weight: 900; font-size: 10px; letter-spacing: 3px; }
+.modal-playback-divider {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 0 30px;
+}
+.hr-line {
+  flex: 1;
+  height: 3px;
+  background: var(--atp-black);
+}
+.playback-label {
+  font-weight: 900;
+  font-size: 10px;
+  letter-spacing: 3px;
+}
 
-.modal-navigation-grid { display: flex; gap: 15px; padding: 30px; }
+.modal-navigation-grid {
+  display: flex;
+  gap: 15px;
+  padding: 30px;
+}
 .nav-btn {
-  flex: 1; border: 4px solid var(--atp-black); background: var(--atp-white); padding: 20px;
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  cursor: pointer; transition: 0.2s;
+  flex: 1;
+  border: 4px solid var(--atp-black);
+  background: var(--atp-white);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: 0.2s;
 }
-.nav-btn:hover:not(:disabled) { transform: translateY(-5px); box-shadow: 8px 8px 0 var(--atp-black); border-color: var(--atp-cyan); }
-.nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.nav-btn:hover:not(:disabled) {
+  transform: translateY(-5px);
+  box-shadow: 8px 8px 0 var(--atp-black);
+  border-color: var(--bauhaus-red);
+}
+.nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
 
-.step-num { font-size: 10px; font-weight: 900; color: #666; }
-.action-icon { font-size: 24px; }
-.action-label { font-weight: 900; font-size: 11px; }
+.step-num {
+  font-size: 10px;
+  font-weight: 900;
+  color: #666;
+}
+.action-icon {
+  font-size: 24px;
+}
+.action-label {
+  font-weight: 900;
+  font-size: 11px;
+}
 
-.modal-notice { padding: 0 30px 30px; text-align: center; }
-.modal-notice p { font-size: 11px; font-weight: 700; color: var(--atp-purple); }
+.modal-notice {
+  padding: 0 30px 30px;
+  text-align: center;
+}
+.modal-notice p {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bauhaus-blue);
+}
 
 /* Transition */
-.bauhaus-modal-enter-active, .bauhaus-modal-leave-active { transition: opacity 0.4s; }
-.bauhaus-modal-enter-from, .bauhaus-modal-leave-to { opacity: 0; }
+.bauhaus-modal-enter-active,
+.bauhaus-modal-leave-active {
+  transition: opacity 0.4s;
+}
+.bauhaus-modal-enter-from,
+.bauhaus-modal-leave-to {
+  opacity: 0;
+}
 </style>

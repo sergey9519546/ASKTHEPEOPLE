@@ -175,7 +175,9 @@
     >
       <div
         class="contract-card"
-        :class="preflight?.status === 'failed' ? 'contract-failed' : 'contract-ok'"
+        :class="
+          preflight?.status === 'failed' ? 'contract-failed' : 'contract-ok'
+        "
       >
         <span class="contract-label">Preflight</span>
         <span class="contract-value">{{ preflight?.status || "loading" }}</span>
@@ -225,7 +227,8 @@
       <div class="timeline-header" v-if="allActions.length > 0">
         <div class="timeline-stats">
           <span class="total-count"
-            >TOTAL EVENTS: <span class="mono">{{ allActions.length }}</span></span
+            >TOTAL EVENTS:
+            <span class="mono">{{ allActions.length }}</span></span
           >
           <span class="platform-breakdown">
             <span class="breakdown-item twitter">
@@ -384,7 +387,10 @@
                     </div>
                     <div class="quote-text">
                       {{
-                        truncateContent(action.action_args.original_content, 150)
+                        truncateContent(
+                          action.action_args.original_content,
+                          150,
+                        )
                       }}
                     </div>
                   </div>
@@ -447,7 +453,9 @@
                     v-if="action.action_args?.post_content"
                     class="liked-content"
                   >
-                    "{{ truncateContent(action.action_args.post_content, 120) }}"
+                    "{{
+                      truncateContent(action.action_args.post_content, 120)
+                    }}"
                   </div>
                 </template>
 
@@ -456,7 +464,10 @@
                   <div v-if="action.action_args?.content" class="content-text">
                     {{ action.action_args.content }}
                   </div>
-                  <div v-if="action.action_args?.post_id" class="comment-context">
+                  <div
+                    v-if="action.action_args?.post_id"
+                    class="comment-context"
+                  >
                     <svg
                       class="icon-small"
                       viewBox="0 0 24 24"
@@ -570,7 +581,9 @@
                     v-if="action.action_args?.post_content"
                     class="voted-content"
                   >
-                    "{{ truncateContent(action.action_args.post_content, 120) }}"
+                    "{{
+                      truncateContent(action.action_args.post_content, 120)
+                    }}"
                   </div>
                 </template>
 
@@ -608,7 +621,8 @@
                       'UPVOTE_POST',
                       'DOWNVOTE_POST',
                       'DO_NOTHING',
-                    ].includes(action.action_type) && action.action_args?.content
+                    ].includes(action.action_type) &&
+                    action.action_args?.content
                   "
                   class="content-text"
                 >
@@ -650,17 +664,16 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { generateReport } from "../api/report";
 import {
-  startSimulation,
-  stopSimulation,
   getRunStatus,
   getRunStatusDetail,
   getSimulationDiagnostics,
   getSimulationPreflight,
+  startSimulation,
 } from "../api/simulation";
-import { generateReport } from "../api/report";
 
 const props = defineProps({
   simulationId: String,
@@ -967,7 +980,8 @@ const getActionTypeClass = (type) => {
 
 const truncateContent = (content, maxLength = 100) => {
   if (!content) return "";
-  if (content.length > maxLength) return content.substring(0, maxLength) + "...";
+  if (content.length > maxLength)
+    return content.substring(0, maxLength) + "...";
   return content;
 };
 
@@ -1064,14 +1078,14 @@ onUnmounted(() => {
 }
 
 .platform-status.twitter {
-  border-bottom: 8px solid var(--atp-cyan);
+  border-bottom: 8px solid var(--bauhaus-red);
 }
 .platform-status.reddit {
-  border-bottom: 8px solid var(--atp-purple);
+  border-bottom: 8px solid var(--bauhaus-blue);
 }
 
 .platform-status.active {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-yellow);
 }
 
 .platform-status.completed {
@@ -1104,7 +1118,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 900;
-  color: var(--atp-purple);
+  color: var(--bauhaus-blue);
   text-transform: uppercase;
   margin-bottom: 12px;
 }
@@ -1170,9 +1184,9 @@ onUnmounted(() => {
 }
 
 .final-action-btn:hover:not(:disabled) {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   transform: translate(-4px, -4px);
-  box-shadow: 6px 6px 0 var(--atp-purple);
+  box-shadow: 6px 6px 0 var(--bauhaus-blue);
 }
 
 .final-action-btn:disabled {
@@ -1222,8 +1236,8 @@ onUnmounted(() => {
 }
 
 .contract-failed {
-  border-color: var(--atp-purple);
-  color: var(--atp-purple);
+  border-color: var(--bauhaus-blue);
+  color: var(--bauhaus-blue);
 }
 
 /* Timeline */
@@ -1290,10 +1304,10 @@ onUnmounted(() => {
 }
 
 .twitter .marker-dot {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
 }
 .reddit .marker-dot {
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
 }
 
 .timeline-card {
@@ -1305,10 +1319,10 @@ onUnmounted(() => {
 }
 
 .twitter .timeline-card {
-  border-left: 12px solid var(--atp-cyan);
+  border-left: 12px solid var(--bauhaus-red);
 }
 .reddit .timeline-card {
-  border-left: 12px solid var(--atp-purple);
+  border-left: 12px solid var(--bauhaus-blue);
 }
 
 .timeline-card-header {
@@ -1352,18 +1366,20 @@ onUnmounted(() => {
 }
 
 .badge-post {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
+  color: var(--atp-white);
 }
 .badge-blue {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-blue);
   color: var(--atp-white);
 }
 .badge-red {
-  background: var(--atp-purple);
+  background: var(--bauhaus-red);
   color: var(--atp-white);
 }
 .badge-yellow {
-  background: var(--atp-purple);
+  background: var(--bauhaus-yellow);
+  color: var(--atp-black);
 }
 .badge-black {
   background: var(--atp-black);
@@ -1432,7 +1448,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 900;
-  color: var(--atp-purple);
+  color: var(--bauhaus-yellow);
   letter-spacing: 4px;
 }
 
@@ -1457,7 +1473,7 @@ onUnmounted(() => {
   width: 20px;
   height: 20px;
   border: 4px solid rgba(34, 211, 238, 0.2);
-  border-top-color: var(--atp-cyan);
+  border-top-color: var(--bauhaus-yellow);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

@@ -253,7 +253,7 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, nextTick } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { createSimulation } from "../api/simulation";
 
@@ -363,7 +363,7 @@ watch(
 }
 
 .step-card.active {
-  box-shadow: 12px 12px 0px var(--atp-cyan);
+  box-shadow: 12px 12px 0px var(--bauhaus-red);
   transform: translate(-4px, -4px);
 }
 
@@ -415,12 +415,12 @@ watch(
   color: var(--atp-black);
 }
 .badge.processing {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   color: var(--atp-white);
 }
 .badge.accent {
-  background: var(--atp-purple);
-  color: var(--atp-white);
+  background: var(--bauhaus-yellow);
+  color: var(--atp-black);
 }
 .badge.pending {
   background: #eee;
@@ -450,7 +450,7 @@ watch(
   gap: 16px;
   font-family: var(--font-mono);
   font-size: 0.9rem;
-  color: var(--atp-cyan);
+  color: var(--bauhaus-red);
   margin-bottom: 24px;
   font-weight: 900;
   text-transform: uppercase;
@@ -490,7 +490,7 @@ watch(
 }
 
 .entity-tag:hover {
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
   color: var(--atp-white);
   transform: translate(-4px, -4px);
   box-shadow: 4px 4px 0px var(--atp-black);
@@ -516,7 +516,7 @@ watch(
   font-size: 2.5rem;
   font-weight: 900;
   font-family: var(--font-mono);
-  color: var(--atp-cyan);
+  color: var(--bauhaus-red);
   line-height: 1;
 }
 
@@ -589,7 +589,7 @@ watch(
   font-size: 0.8rem;
   margin-bottom: 16px;
   text-transform: uppercase;
-  color: var(--atp-purple);
+  color: var(--bauhaus-blue);
 }
 
 .attr-item {
@@ -622,9 +622,9 @@ watch(
 }
 
 .action-btn:hover:not(:disabled) {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   transform: translate(-8px, -8px);
-  box-shadow: 10px 10px 0px var(--atp-purple);
+  box-shadow: 10px 10px 0px var(--bauhaus-blue);
 }
 
 .action-btn:disabled {
@@ -644,7 +644,7 @@ watch(
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 900;
-  color: var(--atp-cyan);
+  color: var(--bauhaus-red);
   letter-spacing: 4px;
 }
 
@@ -659,8 +659,8 @@ watch(
 .spinner-sm {
   width: 20px;
   height: 20px;
-  border: 4px solid rgba(34, 211, 238, 0.2);
-  border-top-color: var(--atp-cyan);
+  border: 4px solid rgba(230, 57, 70, 0.2);
+  border-top-color: var(--bauhaus-red);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

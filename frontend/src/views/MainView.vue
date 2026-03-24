@@ -509,10 +509,10 @@ onUnmounted(() => {
   font-family: var(--font-sans);
 }
 
-/* Header */
+/* Header - Bauhaus Brutalist */
 .app-header {
   height: 60px;
-  border-bottom: var(--border-width) solid var(--atp-black);
+  border-bottom: var(--border-width-heavy) solid var(--atp-black);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -534,8 +534,11 @@ onUnmounted(() => {
   font-size: 1.2rem;
   letter-spacing: -1px;
   cursor: pointer;
-  color: var(--atp-cyan); /* PULSE text equivalent */
-  text-transform: uppercase;
+  color: var(--bauhaus-red);
+  transition: color 0.15s ease;
+}
+.brand:hover {
+  color: var(--bauhaus-blue);
 }
 
 .view-switcher {
@@ -554,7 +557,7 @@ onUnmounted(() => {
   font-weight: 800;
   color: var(--atp-black);
   cursor: pointer;
-  transition: all 0.1s;
+  transition: all 0.15s ease;
   font-family: var(--font-mono);
   text-transform: uppercase;
   border-right: 1px solid rgba(0, 0, 0, 0.1);
@@ -570,7 +573,8 @@ onUnmounted(() => {
 }
 
 .switch-btn:hover:not(.active) {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
+  color: var(--atp-white);
 }
 
 .header-right {
@@ -589,11 +593,12 @@ onUnmounted(() => {
 }
 
 .step-num {
-  color: var(--atp-purple);
+  color: var(--bauhaus-red);
 }
 
 .step-name {
   color: var(--atp-black);
+  text-transform: uppercase;
 }
 
 .step-divider {
@@ -620,14 +625,14 @@ onUnmounted(() => {
 }
 
 .status-indicator.processing .dot {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   animation: bau-pulse 1s infinite step-end;
 }
 .status-indicator.completed .dot {
-  background: var(--atp-green); /* System Online green */
+  background: var(--bauhaus-yellow);
 }
 .status-indicator.error .dot {
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
   position: relative;
 }
 .status-indicator.error .dot::after {
@@ -646,7 +651,7 @@ onUnmounted(() => {
   }
 }
 
-/* Content */
+/* Content - Bauhaus Grid Layout */
 .content-area {
   flex: 1;
   display: flex;
@@ -654,6 +659,10 @@ onUnmounted(() => {
   overflow: hidden;
   padding: 20px;
   gap: 20px;
+  background-image:
+    linear-gradient(to right, #e5e7eb 1px, transparent 1px),
+    linear-gradient(to bottom, #e5e7eb 1px, transparent 1px);
+  background-size: var(--grid-unit) var(--grid-unit);
 }
 
 .panel-wrapper {
@@ -661,6 +670,6 @@ onUnmounted(() => {
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
+  border: var(--border-width-heavy) solid var(--atp-black);
 }
 </style>

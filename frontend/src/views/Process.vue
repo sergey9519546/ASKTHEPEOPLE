@@ -9,8 +9,8 @@
       
       <div class="header-center">
         <div class="phase-indicator">
-          <span class="phase-label">PHASE_01</span>
-          <span class="phase-name">KNOWLEDGE_CONSTRUCTION</span>
+          <span class="phase-label">Phase 1</span>
+          <span class="phase-name">Knowledge Construction</span>
         </div>
       </div>
 
@@ -38,7 +38,7 @@
       <!-- RIGHT: EXECUTION PIPELINE -->
       <section class="workbench-panel pipeline-panel" v-if="!isFullScreen">
         <header class="panel-label-bar">
-          <span class="label">EXECUTION_PIPELINE</span>
+          <span class="label">Execution Pipeline</span>
         </header>
         
         <div class="pipeline-scroll">
@@ -72,7 +72,7 @@
                  </div>
                  <!-- Info for Phase 2/3 -->
                  <div v-else class="ontology-status-box">
-                    CORE_ONTOLOGY SYNTHESIZED. READY FOR INJECTION PROXY.
+                    CORE ONTOLOGY SYNTHESIZED. READY FOR INJECTION PROXY.
                  </div>
               </div>
             </Transition>
@@ -81,7 +81,7 @@
           <!-- LAUNCH CTA -->
           <div class="launch-sequence-box" v-if="currentPhase >= 2">
             <button class="bauhaus-cta-btn" @click="goToNextStep">
-              INITIALIZE_ENVIRONMENT <span class="arrow">→</span>
+              INITIALIZE ENVIRONMENT <span class="arrow">→</span>
             </button>
           </div>
         </div>
@@ -90,8 +90,8 @@
 
     <!-- FOOTER STATUS -->
     <footer class="bauhaus-footer-bar">
-      <div class="f-left">LOC: WORKSPACE_PHASE_01</div>
-      <div class="f-right">SYSTEM_TIME: {{ new Date().toLocaleTimeString() }}</div>
+      <div class="f-left">LOC: Workspace Phase 01</div>
+      <div class="f-right">System Time: {{ new Date().toLocaleTimeString() }}</div>
     </footer>
   </div>
 </template>
@@ -107,9 +107,9 @@ const router = useRouter()
 
 const currentStep = ref(1)
 const phases = [
-  { id: 1, title: 'GRAPHRAG_CONSTRUCTION' },
-  { id: 2, title: 'REALITY_SEED_EXTRACTION' },
-  { id: 3, title: 'ENTITY_RELATIONAL_MAP' }
+  { id: 1, title: 'Knowledge Construction' },
+  { id: 2, title: 'Reality Seed Extraction' },
+  { id: 3, title: 'Entity Relational Map' }
 ]
 
 const currentPhase = ref(1)

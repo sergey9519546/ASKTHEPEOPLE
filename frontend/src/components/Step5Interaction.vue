@@ -844,13 +844,13 @@ watch(() => props.simulationId, loadData);
   font-weight: 800;
 }
 .dash-value.running {
-  color: var(--atp-cyan);
+  color: var(--bauhaus-red);
 }
 .dash-value.completed {
-  color: var(--atp-green);
+  color: var(--bauhaus-yellow);
 }
 .dash-value.failed {
-  color: var(--atp-purple);
+  color: var(--bauhaus-blue);
 }
 
 .abort-btn {
@@ -863,7 +863,7 @@ watch(() => props.simulationId, loadData);
   cursor: pointer;
 }
 .abort-btn:hover {
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
 }
 
 .simulation-badge {
@@ -942,7 +942,7 @@ watch(() => props.simulationId, loadData);
   border: 2px solid var(--atp-black);
 }
 .live-dot.pulse {
-  background: var(--atp-green);
+  background: var(--bauhaus-yellow);
   animation: pulse 1s infinite alternate;
 }
 @keyframes pulse {
@@ -1014,7 +1014,7 @@ watch(() => props.simulationId, loadData);
   gap: 10px;
 }
 .tab-btn.active {
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
   color: var(--atp-white);
 }
 
@@ -1037,7 +1037,7 @@ watch(() => props.simulationId, loadData);
 }
 .message-item.user {
   align-self: flex-end;
-  border-color: var(--atp-cyan);
+  border-color: var(--bauhaus-red);
 }
 .message-item.assistant {
   align-self: flex-start;
@@ -1058,7 +1058,7 @@ watch(() => props.simulationId, loadData);
   resize: none;
 }
 .send-btn {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   color: var(--atp-white);
   border: none;
   padding: 0 30px;
@@ -1083,7 +1083,7 @@ watch(() => props.simulationId, loadData);
   gap: 15px;
 }
 .export-csv-btn {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   color: var(--atp-white);
   border: none;
   font-size: 10px;

@@ -713,14 +713,14 @@ onUnmounted(() => {
 }
 
 .status-indicator.is-complete {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-yellow);
   color: var(--atp-black);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
-  background: var(--atp-green);
+  background: var(--bauhaus-yellow);
 }
 
 .workbench-layout {
@@ -769,7 +769,7 @@ onUnmounted(() => {
 }
 
 .report-section.is-generating {
-  border-color: var(--atp-cyan);
+  border-color: var(--bauhaus-red);
   transform: translateX(10px);
 }
 
@@ -777,7 +777,7 @@ onUnmounted(() => {
   padding: 16px 20px;
   display: flex;
   align-items: center;
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
   color: var(--atp-white);
   cursor: pointer;
 }
@@ -816,7 +816,7 @@ onUnmounted(() => {
 }
 
 .tab-btn.active {
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
   color: var(--atp-white);
 }
 
@@ -862,7 +862,7 @@ onUnmounted(() => {
   border: 2px solid var(--atp-black);
   font-weight: 800;
   font-size: 10px;
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
   color: var(--atp-white);
 }
 
@@ -905,7 +905,7 @@ onUnmounted(() => {
 }
 
 .log-timestamp {
-  color: var(--atp-cyan);
+  color: var(--bauhaus-red);
   margin-right: 10px;
 }
 
@@ -913,7 +913,7 @@ onUnmounted(() => {
   width: 40px;
   height: 40px;
   border: 4px solid var(--atp-black);
-  border-top-color: var(--atp-cyan);
+  border-top-color: var(--bauhaus-red);
   animation: spin 1s infinite linear;
 }
 
@@ -939,6 +939,6 @@ onUnmounted(() => {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
 }
 </style>
