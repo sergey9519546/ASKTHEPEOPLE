@@ -54,5 +54,5 @@ RUN cd /app/backend && python -c "import sys; sys.path.insert(0, '.'); from app 
 # Single worker + threads: keeps in-memory state (TaskManager, SimulationRunner) consistent.
 # Timeout 300s: supports long-running report generation via background thread.
 # --chdir ensures wsgi.py is loaded from /app/backend so `from app import ...` resolves correctly.
-CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--threads", "4", "--timeout", "300", "--chdir", "/app/backend", "wsgi:app"]
+CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5001} --workers 1 --threads 4 --timeout 300 --chdir /app/backend wsgi:app"]
 
