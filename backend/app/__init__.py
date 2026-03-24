@@ -72,7 +72,18 @@ def create_app(config_class=Config):
     @app.route('/health')
     def health():
         return {'status': 'ok', 'service': 'ASKTHEPEOPLE Backend'}
-    
+
+    # Serve static frontend files
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
+        import flask
+        static_dir = os.path.join(app.root_path, '../../frontend/dist')
+        if path != "" and os.path.exists(os.path.join(static_dir, path)):
+            return flask.send_from_directory(static_dir, path)
+        else:
+            return flask.send_from_directory(static_dir, 'index.html')
+
     if should_log_startup:
         logger.info("ASKTHEPEOPLE Backend started successfully")
     
