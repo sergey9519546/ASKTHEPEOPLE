@@ -637,21 +637,13 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-:root {
-  --atp-black: #000000;
-  --atp-white: #ffffff;
-  --atp-blue: #0026fe;
-  --atp-red: #ff331f;
-  --atp-yellow: #e5ff00;
-}
-
 .step4-report-workbench {
   height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--atp-white);
   color: var(--atp-black);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans);
   overflow: hidden;
 }
 
@@ -825,7 +817,7 @@ onUnmounted(() => {
 }
 
 .item-time {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
 }
@@ -840,9 +832,9 @@ onUnmounted(() => {
 }
 
 .item-details {
-  border: 3px solid var(--atp-black);
+  border: 4px solid var(--atp-black);
   padding: 12px;
-  background: #f0f0f0;
+  background: var(--atp-light-gray);
 }
 
 .bauhaus-sub {
@@ -868,7 +860,7 @@ onUnmounted(() => {
   background: var(--atp-black);
   color: var(--atp-white);
   padding: 15px;
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-mono);
 }
 
 .log-line {

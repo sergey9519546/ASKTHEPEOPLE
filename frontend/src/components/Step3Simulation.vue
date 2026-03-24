@@ -1185,15 +1185,15 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   padding: 16px 32px;
-  background: #f9f9f9;
-  border-bottom: 2px solid var(--atp-black);
+  background: var(--atp-light-gray);
+  border-bottom: 4px solid var(--atp-black);
 }
 
 .contract-card {
   flex: 1;
   padding: 12px 16px;
   background: var(--atp-white);
-  border: 2px solid var(--atp-black);
+  border: 4px solid var(--atp-black);
   display: flex;
   flex-direction: column;
 }
@@ -1235,7 +1235,7 @@ onUnmounted(() => {
 
 .timeline-header {
   padding: 12px 32px;
-  border-bottom: 2px solid var(--atp-black);
+  border-bottom: 4px solid var(--atp-black);
   position: sticky;
   top: 0;
   background: var(--atp-white);
@@ -1299,7 +1299,7 @@ onUnmounted(() => {
 .timeline-card {
   flex: 1;
   background: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
+  border: 4px solid var(--atp-black);
   padding: 32px;
   box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.05);
 }
@@ -1311,7 +1311,7 @@ onUnmounted(() => {
   border-left: 12px solid var(--atp-red);
 }
 
-.card-header {
+.timeline-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1356,18 +1356,18 @@ onUnmounted(() => {
 }
 .badge-blue {
   background: var(--atp-blue);
-  color: #fff;
+  color: var(--atp-white);
 }
 .badge-red {
   background: var(--atp-red);
-  color: #fff;
+  color: var(--atp-white);
 }
 .badge-yellow {
   background: var(--atp-yellow);
 }
 .badge-black {
   background: var(--atp-black);
-  color: #fff;
+  color: var(--atp-white);
 }
 
 .content-text {
@@ -1422,10 +1422,10 @@ onUnmounted(() => {
 
 /* Logs */
 .system-logs {
-  background: #000;
+  background: var(--atp-black);
   padding: 40px;
   border-top: var(--border-width) solid var(--atp-black);
-  color: #fff;
+  color: var(--atp-white);
 }
 
 .log-title {

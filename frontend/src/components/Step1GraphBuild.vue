@@ -633,10 +633,10 @@ watch(
 
 /* Logs */
 .system-logs {
-  background: #000;
+  background: var(--atp-black);
   padding: 40px;
   border-top: var(--border-width) solid var(--atp-black);
-  color: #fff;
+  color: var(--atp-white);
 }
 
 .log-title {

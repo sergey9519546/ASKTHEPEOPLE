@@ -452,7 +452,7 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bau-bg);
+  background: var(--bg-color);
   overflow: hidden;
   font-family: var(--font-sans);
 }
@@ -460,12 +460,12 @@ onUnmounted(() => {
 /* Header */
 .app-header {
   height: 60px;
-  border-bottom: var(--border-width) solid var(--bau-black);
+  border-bottom: var(--border-width) solid var(--atp-black);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: #FFF;
+  background: var(--atp-white);
   z-index: 100;
   position: relative;
 }
@@ -482,15 +482,15 @@ onUnmounted(() => {
   font-size: 1.2rem;
   letter-spacing: -1px;
   cursor: pointer;
-  color: var(--bau-black);
+  color: var(--atp-black);
   text-transform: uppercase;
 }
 
 .view-switcher {
   display: flex;
-  background: var(--bau-bg);
+  background: var(--bg-color);
   padding: 4px;
-  border: var(--border-width) solid var(--bau-black);
+  border: var(--border-width) solid var(--atp-black);
   gap: 0;
 }
 
@@ -500,7 +500,7 @@ onUnmounted(() => {
   padding: 6px 16px;
   font-size: 11px;
   font-weight: 800;
-  color: var(--bau-black);
+  color: var(--atp-black);
   cursor: pointer;
   transition: all 0.1s;
   font-family: var(--font-mono);
@@ -513,12 +513,12 @@ onUnmounted(() => {
 }
 
 .switch-btn.active {
-  background: var(--bau-black);
-  color: #FFF;
+  background: var(--atp-black);
+  color: var(--atp-white);
 }
 
 .switch-btn:hover:not(.active) {
-  background: var(--bau-yellow);
+  background: var(--atp-yellow);
 }
 
 .header-right {
@@ -537,17 +537,17 @@ onUnmounted(() => {
 }
 
 .step-num {
-  color: var(--bau-red);
+  color: var(--atp-red);
 }
 
 .step-name {
-  color: var(--bau-black);
+  color: var(--atp-black);
 }
 
 .step-divider {
   width: 2px;
   height: 14px;
-  background-color: var(--bau-black);
+  background-color: var(--atp-black);
 }
 
 .status-indicator {
@@ -555,7 +555,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: var(--bau-black);
+  color: var(--atp-black);
   font-weight: 800;
   font-family: var(--font-mono);
 }
@@ -563,24 +563,24 @@ onUnmounted(() => {
 .dot {
   width: 10px;
   height: 10px;
-  background: var(--bau-black);
-  border: 1px solid var(--bau-black);
+  background: var(--atp-black);
+  border: 1px solid var(--atp-black);
 }
 
 .status-indicator.processing .dot {
-  background: var(--bau-red);
+  background: var(--atp-red);
   animation: bau-pulse 1s infinite step-end;
 }
 .status-indicator.completed .dot {
-  background: var(--bau-blue);
+  background: var(--atp-blue);
 }
 .status-indicator.error .dot {
-  background: var(--bau-black);
+  background: var(--atp-black);
   position: relative;
 }
 .status-indicator.error .dot::after {
   content: '×';
-  color: #FFF;
+  color: var(--atp-white);
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
@@ -605,8 +605,8 @@ onUnmounted(() => {
   height: 100%;
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: #FFF;
-  border: var(--border-width) solid var(--bau-black);
+  background: var(--atp-white);
+  border: var(--border-width) solid var(--atp-black);
 }
 
 

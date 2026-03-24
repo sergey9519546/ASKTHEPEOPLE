@@ -14,6 +14,7 @@
   --atp-blue: #0026fe; /* Ultramarine */
   --atp-red: #ff331f; /* Vermilion */
   --atp-yellow: #e5ff00; /* Acid Yellow */
+  --atp-light-gray: #f9f9f9;
 
   /* Semantic Variables */
   --bg-color: var(--atp-white);

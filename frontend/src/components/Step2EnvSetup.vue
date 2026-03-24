@@ -1074,11 +1074,13 @@ onUnmounted(() => {
 
 .profile-card {
   background: var(--atp-white);
-  border: 2px solid var(--atp-black);
+  border: 4px solid var(--atp-black);
   padding: 24px;
-  border-radius: 0;
   cursor: pointer;
-  transition: all 0.1s;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .profile-card:hover {
@@ -1089,16 +1091,16 @@ onUnmounted(() => {
 
 .profile-realname {
   display: block;
+  font-weight: 950;
   font-size: 1.1rem;
-  font-weight: 900;
-  margin-bottom: 4px;
+  letter-spacing: -0.5px;
 }
 
 .profile-username {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--atp-blue);
-  font-weight: 700;
+  font-size: 0.7rem;
+  font-weight: 900;
+  opacity: 0.5;
 }
 
 .profile-meta {
@@ -1107,20 +1109,20 @@ onUnmounted(() => {
 
 .profile-profession {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 900;
-  background: var(--atp-black);
+  background: var(--atp-blue);
   color: var(--atp-white);
-  padding: 4px 12px;
-  border-radius: 0;
+  padding: 2px 8px;
   text-transform: uppercase;
 }
 
 .profile-bio {
   font-size: 0.85rem;
   line-height: 1.6;
-  color: #444;
-  margin-bottom: 20px;
+  opacity: 0.8;
+  height: 48px;
+  overflow: hidden;
 }
 
 .profile-topics {
@@ -1132,18 +1134,19 @@ onUnmounted(() => {
 .topic-tag {
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
   border: 1px solid var(--atp-black);
-  padding: 2px 8px;
+  padding: 2px 6px;
   text-transform: uppercase;
 }
 
 /* Config Blocks */
 .config-block {
   margin-top: 32px;
-  border: 2px solid var(--atp-black);
+  border: 4px solid var(--atp-black);
   padding: 32px;
   background: var(--atp-white);
+  margin-bottom: 32px;
 }
 
 .config-block-header {
@@ -1156,8 +1159,8 @@ onUnmounted(() => {
 }
 
 .config-block-title {
-  font-size: 0.8rem;
-  font-weight: 900;
+  font-weight: 950;
+  font-size: 1.1rem;
   text-transform: uppercase;
   letter-spacing: 2px;
 }
@@ -1166,9 +1169,10 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 900;
-  background: var(--atp-blue);
-  color: var(--atp-white);
-  padding: 2px 10px;
+  background: var(--atp-yellow);
+  color: var(--atp-black);
+  padding: 4px 12px;
+  border: 2px solid var(--atp-black);
 }
 
 .platforms-grid {
@@ -1183,10 +1187,11 @@ onUnmounted(() => {
 }
 
 .platform-name {
-  font-weight: 900;
-  font-size: 1rem;
+  font-weight: 950;
+  font-size: 0.9rem;
   margin-bottom: 16px;
   display: block;
+  color: var(--atp-red);
 }
 
 .param-row {
@@ -1195,6 +1200,19 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 0.8rem;
   margin-bottom: 8px;
+}
+
+.param-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 900;
+  opacity: 0.6;
+}
+
+.param-value {
+  font-family: var(--font-mono);
+  font-weight: 900;
+  color: var(--atp-blue);
 }
 
 .config-grid {
@@ -1227,7 +1245,7 @@ onUnmounted(() => {
 
 /* Narrative */
 .narrative-box {
-  border: 2px solid var(--atp-black);
+  border: 4px solid var(--atp-black);
   padding: 32px;
   margin-bottom: 24px;
 }
@@ -1310,7 +1328,7 @@ onUnmounted(() => {
 
 /* Activation / Slider */
 .rounds-config-section {
-  border: 2px solid var(--atp-black);
+  border: 4px solid var(--atp-black);
   padding: 40px;
   margin: 40px 0;
 }
@@ -1366,6 +1384,7 @@ input:checked + .switch-track::after {
 
 .minimal-slider {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 20px;
   background: #eee;
@@ -1375,6 +1394,7 @@ input:checked + .switch-track::after {
 
 .minimal-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
+  appearance: none;
   width: 40px;
   height: 40px;
   background: var(--atp-yellow);
@@ -1507,10 +1527,10 @@ input:checked + .switch-track::after {
 
 /* System Logs */
 .system-logs {
-  background: #000;
+  background: var(--atp-black);
   padding: 40px;
   border-top: var(--border-width) solid var(--atp-black);
-  color: #fff;
+  color: var(--atp-white);
 }
 
 .log-title {

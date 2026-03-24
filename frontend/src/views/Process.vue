@@ -192,17 +192,17 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer))
 <style scoped>
 .bauhaus-process-root {
   height: 100vh;
-  background: white;
+  background: var(--atp-white);
   display: flex;
   flex-direction: column;
-  color: black;
+  color: var(--atp-black);
   overflow: hidden;
 }
 
 .bauhaus-header {
   height: 70px;
-  background: white;
-  border-bottom: 4px solid #000;
+  background: var(--atp-white);
+  border-bottom: 4px solid var(--atp-black);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -211,62 +211,62 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer))
 }
 
 .header-left { display: flex; align-items: center; gap: 15px; cursor: pointer; }
-.brand-monogram { background: #000; color: white; padding: 4px 8px; font-weight: 950; font-size: 1.2rem; }
+.brand-monogram { background: var(--atp-black); color: var(--atp-white); padding: 4px 8px; font-weight: 950; font-size: 1.2rem; }
 .brand-full { font-weight: 950; font-size: 1rem; letter-spacing: -0.5px; }
 
 .phase-indicator { 
   display: flex; align-items: center; gap: 12px;
-  background: #f0f0f0; border: 3px solid #000; padding: 6px 20px;
+  background: #f0f0f0; border: 3px solid var(--atp-black); padding: 6px 20px;
 }
-.phase-label { font-family: var(--font-mono); font-weight: 950; font-size: 11px; color: #FF331F; }
+.phase-label { font-family: var(--font-mono); font-weight: 950; font-size: 11px; color: var(--atp-red); }
 .phase-name { font-weight: 950; font-size: 12px; }
 
-.status-dot { width: 12px; height: 12px; border: 2.5px solid #000; }
+.status-dot { width: 12px; height: 12px; border: 2.5px solid var(--atp-black); }
 .system-status { display: flex; align-items: center; gap: 10px; font-weight: 950; font-size: 10px; font-family: var(--font-mono); }
-.system-status.processing .status-dot { background: #FF331F; animation: flash 0.8s infinite; }
-.system-status.ready .status-dot { background: #0026FE; }
-.system-status.error .status-dot { background: #000; }
+.system-status.processing .status-dot { background: var(--atp-red); animation: flash 0.8s infinite; }
+.system-status.ready .status-dot { background: var(--atp-blue); }
+.system-status.error .status-dot { background: var(--atp-black); }
 
 @keyframes flash { 50% { opacity: 0; } }
 
 .workbench-layout { flex: 1; display: flex; overflow: hidden; padding: 25px; gap: 25px; }
-.workbench-panel { background: white; border: 4px solid #000; display: flex; flex-direction: column; overflow: hidden; height: 100%; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+.workbench-panel { background: var(--atp-white); border: 4px solid var(--atp-black); display: flex; flex-direction: column; overflow: hidden; height: 100%; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
 .graph-panel-v2 { flex: 1.6; }
 .pipeline-panel { flex: 1; padding: 30px; }
 
 .graph-panel-v2.is-maximized { position: absolute; top: 95px; left: 25px; right: 25px; bottom: 85px; z-index: 50; }
 
-.panel-label-bar { border-bottom: 4px solid #000; padding-bottom: 15px; margin-bottom: 30px; }
-.panel-label-bar .label { font-weight: 950; font-size: 13px; letter-spacing: 1px; color: #000; }
+.panel-label-bar { border-bottom: 4px solid var(--atp-black); padding-bottom: 15px; margin-bottom: 30px; }
+.panel-label-bar .label { font-weight: 950; font-size: 13px; letter-spacing: 1px; color: var(--atp-black); }
 
 .pipeline-scroll { flex: 1; overflow-y: auto; }
-.pipeline-step { border: 3px solid #000; margin-bottom: 25px; transition: 0.3s; padding: 20px; }
-.pipeline-step.is-active { background: #E5FF00; box-shadow: 8px 8px 0 #000; transform: translate(-4px, -4px); }
-.pipeline-step.is-done { opacity: 0.6; grayscale: 1; }
+.pipeline-step { border: 3px solid var(--atp-black); margin-bottom: 25px; transition: 0.3s; padding: 20px; }
+.pipeline-step.is-active { background: var(--atp-yellow); box-shadow: 8px 8px 0 var(--atp-black); transform: translate(-4px, -4px); }
+.pipeline-step.is-done { opacity: 0.6; filter: grayscale(1); }
 
 .step-meta { display: flex; gap: 15px; align-items: flex-start; }
-.step-id { font-family: var(--font-mono); font-weight: 950; font-size: 1.5rem; color: #FF331F; }
+.step-id { font-family: var(--font-mono); font-weight: 950; font-size: 1.5rem; color: var(--atp-red); }
 .step-title { font-weight: 950; font-size: 0.95rem; margin-bottom: 5px; }
-.step-status-tag { display: inline-block; font-family: var(--font-mono); font-weight: 900; font-size: 9px; padding: 2px 6px; border: 1.5px solid #000; }
+.step-status-tag { display: inline-block; font-family: var(--font-mono); font-weight: 900; font-size: 9px; padding: 2px 6px; border: 1.5px solid var(--atp-black); }
 
 .step-runtime-view { margin-top: 20px; }
 
 .progress-container-bauhaus { margin-top: 15px; }
-.progress-track { height: 12px; background: white; border: 3px solid #000; margin-bottom: 8px; }
-.progress-thumb { height: 100%; background: #FF331F; }
+.progress-track { height: 12px; background: var(--atp-white); border: 3px solid var(--atp-black); margin-bottom: 8px; }
+.progress-thumb { height: 100%; background: var(--atp-red); }
 .progress-stats { display: flex; justify-content: space-between; font-weight: 950; font-size: 10px; font-family: var(--font-mono); }
 
-.ontology-status-box { background: rgba(0,0,0,0.05); padding: 15px; border-left: 6px solid #0026FE; font-weight: 900; font-size: 11px; }
+.ontology-status-box { background: rgba(0,0,0,0.05); padding: 15px; border-left: 6px solid var(--atp-blue); font-weight: 900; font-size: 11px; }
 
 .bauhaus-cta-btn {
-  width: 100%; height: 60px; background: #000; color: white; border: none;
+  width: 100%; height: 60px; background: var(--atp-black); color: var(--atp-white); border: none;
   font-weight: 950; font-size: 1.1rem; cursor: pointer; transition: 0.2s;
   display: flex; align-items: center; justify-content: center; gap: 15px;
 }
-.bauhaus-cta-btn:hover { background: #FF331F; transform: translate(-5px, -5px); box-shadow: 8px 8px 0 #000; }
+.bauhaus-cta-btn:hover { background: var(--atp-red); transform: translate(-5px, -5px); box-shadow: 8px 8px 0 var(--atp-black); }
 
 .bauhaus-footer-bar {
-  height: 40px; padding: 0 30px; border-top: 4px solid #000;
+  height: 40px; padding: 0 30px; border-top: 4px solid var(--atp-black);
   display: flex; justify-content: space-between; align-items: center;
   font-family: var(--font-mono); font-weight: 950; font-size: 10px;
 }

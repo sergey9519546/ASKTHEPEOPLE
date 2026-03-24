@@ -614,7 +614,7 @@ watch(() => props.reportId, loadData);
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 800;
 }
