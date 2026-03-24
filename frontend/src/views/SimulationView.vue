@@ -258,7 +258,7 @@ onMounted(async () => {
   color: var(--atp-white);
 }
 .mode-btn:hover:not(.is-active) {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
 }
 
 .header-right {
@@ -274,7 +274,7 @@ onMounted(async () => {
   font-size: 11px;
 }
 .step-val {
-  color: var(--atp-purple);
+  color: var(--bauhaus-blue);
   font-family: var(--font-mono);
 }
 .status-box {
@@ -291,11 +291,11 @@ onMounted(async () => {
   border: 2px solid var(--atp-black);
 }
 .status-box.processing .status-dot {
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   animation: flash 0.8s infinite;
 }
 .status-box.completed .status-dot {
-  background: var(--atp-green);
+  background: var(--bauhaus-yellow);
 }
 @keyframes flash {
   50% {

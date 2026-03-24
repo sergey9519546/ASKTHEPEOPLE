@@ -1106,13 +1106,13 @@ watch(() => props.simulationId, loadData);
   cursor: pointer;
 }
 .agent-label.checked {
-  background: var(--atp-purple);
+  background: var(--bauhaus-blue);
   color: var(--atp-white);
 }
 
 .submit-survey-btn {
   width: 100%;
-  background: var(--atp-cyan);
+  background: var(--bauhaus-red);
   color: var(--atp-white);
   border: none;
   padding: 15px;
@@ -1126,7 +1126,7 @@ watch(() => props.simulationId, loadData);
   width: 40px;
   height: 40px;
   border: 4px solid var(--atp-black);
-  border-top-color: var(--atp-cyan);
+  border-top-color: var(--bauhaus-red);
   animation: spin 1s infinite linear;
 }
 @keyframes spin {
