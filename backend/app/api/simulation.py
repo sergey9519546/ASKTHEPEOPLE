@@ -7,7 +7,6 @@ import os
 import io
 import json
 import traceback
-import json
 from datetime import datetime
 from flask import request, jsonify, send_file
 
@@ -2794,6 +2793,48 @@ def close_simulation_env():
             "success": False,
             "error": str(e),
             "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/<simulation_id>/opinions', methods=['GET'])
+def get_simulation_opinions(simulation_id: str):
+    """
+    Get agent opinion coordinates from opinions.jsonl
+
+    Query parameters:
+        limit: Maximum number of records to return (default 1000, most recent)
+    """
+    try:
+        limit = int(request.args.get('limit', 1000))
+        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        opinion_file = os.path.join(sim_dir, 'opinions.jsonl')
+
+        opinions = []
+        if os.path.exists(opinion_file):
+            with open(opinion_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            opinions.append(json.loads(line))
+                        except json.JSONDecodeError:
+                            continue
+
+        if len(opinions) > limit:
+            opinions = opinions[-limit:]
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "opinions": opinions
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to get opinions for {simulation_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
         }), 500
 
 

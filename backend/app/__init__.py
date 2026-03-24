@@ -2,7 +2,10 @@
 ASKTHEPEOPLE Backend - Flask Application Factory
 """
 
+import json
 import os
+import threading
+import time
 import warnings
 
 # Suppress multiprocessing resource_tracker warnings (from third-party libraries like transformers)
@@ -39,6 +42,14 @@ def create_app(config_class=Config):
         logger.info("ASKTHEPEOPLE Backend starting...")
         logger.info("=" * 50)
     
+    # Warn when running with the default hardcoded SECRET_KEY
+    _DEFAULT_SECRET = 'askthepeople-secret-key'
+    if app.config.get('SECRET_KEY') == _DEFAULT_SECRET:
+        logger.warning(
+            "SECRET_KEY is using the insecure default value. "
+            "Set SECRET_KEY in your .env file before deploying to production."
+        )
+
     # Enable CORS
     CORS(app, resources={r"/api/*": {"origins": "*"}})
     
@@ -61,7 +72,33 @@ def create_app(config_class=Config):
         logger = get_logger('askthepeople.request')
         logger.debug(f"Response: {response.status_code}")
         return response
+
+    @app.after_request
+    def strip_traceback_in_production(response):
+        """Remove internal tracebacks from JSON error responses in non-debug mode."""
+        if not app.config.get('DEBUG') and response.is_json:
+            try:
+                data = response.get_json(silent=True)
+                if isinstance(data, dict) and 'traceback' in data:
+                    data.pop('traceback')
+                    response.set_data(json.dumps(data, ensure_ascii=False))
+            except Exception:
+                pass
+        return response
     
+    # Periodic cleanup of stale completed/failed tasks (prevents unbounded memory growth)
+    def _task_cleanup_worker():
+        from .models.task import TaskManager
+        while True:
+            time.sleep(3600)  # Every hour
+            try:
+                TaskManager().cleanup_old_tasks(max_age_hours=24)
+            except Exception:
+                pass
+
+    cleanup_thread = threading.Thread(target=_task_cleanup_worker, daemon=True, name="task-cleanup")
+    cleanup_thread.start()
+
     # Register blueprints
     from .api import graph_bp, simulation_bp, report_bp
     app.register_blueprint(graph_bp, url_prefix='/api/graph')

@@ -680,9 +680,12 @@ async def apply_reflection_round(
     
     actions: Dict[Any, Any] = {}
     prompt = get_reflection_prompt()
-    
-    # Get all agents from the graph
-    for agent_id, agent in env.agent_graph.get_agents():
+
+    # Materialise the agent list before stepping to avoid iterating a
+    # potentially mutated graph after env.step() returns.
+    agent_list = list(env.agent_graph.get_agents())
+
+    for agent_id, agent in agent_list:
         action = manual_action_cls(
             action_type=OasisActionType.INTERVIEW,
             action_args={"prompt": prompt, "is_reflection": True}
@@ -695,7 +698,7 @@ async def apply_reflection_round(
     await env.step(actions)
 
     if action_logger:
-        for agent_id, agent in env.agent_graph.get_agents():
+        for agent_id, agent in agent_list:
              action_type_str = "INTERVIEW" # Standard name for logging
              action_logger.log_action(
                  round_num=round_num,

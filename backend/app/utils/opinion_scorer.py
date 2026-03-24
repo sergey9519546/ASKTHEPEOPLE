@@ -44,17 +44,17 @@ class OpinionScorer:
         system_msg = SYSTEM_PROMPT.replace("{topic_context}", self.topic_context)
         
         try:
-            # Note: Camel model interface (simplified for this utility)
-            # In our system, the response is usually the content field of the message
-            response = self.model.generate(
-                system_message=system_msg,
-                user_message=prompt
-            )
-            
+            messages = [
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": prompt},
+            ]
+            response = self.model.run(messages)
+            raw_content = response.choices[0].message.content
+
             # Clean response to find JSON
-            match = re.search(r'\{.*\}', response.content, re.DOTALL)
+            match = re.search(r'\{.*\}', raw_content, re.DOTALL)
             if match:
-                data = json.loads(match.group())
+                data = json.loads(match.group(0))
                 x = float(data.get("x", 0.0))
                 y = float(data.get("y", 0.0))
                 z = float(data.get("z", 0.0))

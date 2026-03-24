@@ -1,8 +1,8 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const targetFile = path.resolve('frontend/src/views/Home.vue');
-let content = fs.readFileSync(targetFile, 'utf-8');
+const targetFile = path.resolve("frontend/src/views/Home.vue");
+let content = fs.readFileSync(targetFile, "utf-8");
 
 // The new premium glassmorphism template and styles
 const newContent = `<template>
@@ -955,4 +955,4 @@ const startSimulation = () => {
 `;
 
 fs.writeFileSync(targetFile, newContent);
-console.log('Successfully re-written Home.vue');
+console.log("Successfully re-written Home.vue");
