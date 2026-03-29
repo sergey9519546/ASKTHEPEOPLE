@@ -142,9 +142,13 @@ class SimulationRunState:
     
     # Error message
     error: Optional[str] = None
-    
+
     # Process ID (for stopping)
     process_pid: Optional[int] = None
+
+    # Follower action counts (populated when enable_followers=True)
+    follower_twitter_count: int = 0
+    follower_reddit_count: int = 0
     
     def add_action(self, action: AgentAction):
         """Add action to recent actions list"""
@@ -185,6 +189,8 @@ class SimulationRunState:
             "completed_at": self.completed_at,
             "error": self.error,
             "process_pid": self.process_pid,
+            "follower_twitter_count": self.follower_twitter_count,
+            "follower_reddit_count": self.follower_reddit_count,
         }
     
     def to_detail_dict(self) -> Dict[str, Any]:
@@ -228,6 +234,10 @@ class SimulationRunner:
     
     # Graph memory update configuration
     _graph_memory_enabled: Dict[str, bool] = {}  # simulation_id -> enabled
+
+    # Follower engine state (populated by start_simulation when enable_followers=True)
+    _follower_engines: Dict[str, Any] = {}   # simulation_id -> FollowerEngine
+    _follower_agents: Dict[str, List] = {}   # simulation_id -> List[FollowerAgent]
 
     @classmethod
     def _mark_interrupted(cls, simulation_id: str, state: SimulationRunState, reason: str) -> None:
@@ -334,7 +344,10 @@ class SimulationRunner:
         platform: str = "parallel",  # twitter / reddit / parallel
         max_rounds: int = None,  # Maximum rounds (optional)
         enable_graph_memory_update: bool = False,  # Dynamically update Agent activities to Zep graph
-        graph_id: str = None  # Zep Graph ID (required if update enabled)
+        graph_id: str = None,  # Zep Graph ID (required if update enabled)
+        enable_followers: bool = False,
+        follower_count: int = 100,
+        follower_distribution: Optional[Dict[str, float]] = None,
     ) -> SimulationRunState:
         """
         Start simulation
@@ -408,7 +421,23 @@ class SimulationRunner:
                 cls._graph_memory_enabled[simulation_id] = False
         else:
             cls._graph_memory_enabled[simulation_id] = False
-        
+
+        # Initialize follower engine if requested
+        if enable_followers:
+            from .follower_engine import FollowerEngine
+            from .simulation_artifacts import read_json, canonical_agents_path
+            canonical_path = canonical_agents_path(sim_dir)
+            canonical_agents = read_json(canonical_path, default=[])
+            id_base = max(len(canonical_agents), 1000)
+            engine = FollowerEngine(id_base=id_base)
+            followers = engine.generate_followers(follower_count, follower_distribution)
+            cls._follower_engines[simulation_id] = engine
+            cls._follower_agents[simulation_id] = followers
+            logger.info(f"Follower engine initialized: simulation_id={simulation_id}, count={len(followers)}, id_base={id_base}")
+        else:
+            cls._follower_engines.pop(simulation_id, None)
+            cls._follower_agents.pop(simulation_id, None)
+
         # Determine which script to run (located in backend/scripts/)
         if platform == "twitter":
             script_name = "run_twitter_simulation.py"
@@ -516,26 +545,50 @@ class SimulationRunner:
         
         twitter_position = 0
         reddit_position = 0
-        
+
+        # Build follower round callback (no-op when followers not enabled)
+        def _follower_round_callback(round_num: int, platform: str, sim_dir: str) -> None:
+            engine = cls._follower_engines.get(simulation_id)
+            followers = cls._follower_agents.get(simulation_id)
+            if not engine or not followers:
+                return
+            round_leader_actions = cls._read_round_actions_raw(simulation_id, round_num, platform)
+            follower_dicts = engine.compute_round_actions(followers, round_leader_actions, round_num, platform)
+            if not follower_dicts:
+                return
+            follower_log = os.path.join(sim_dir, platform, "follower_actions.jsonl")
+            os.makedirs(os.path.dirname(follower_log), exist_ok=True)
+            with open(follower_log, "a", encoding="utf-8") as _f:
+                for _d in follower_dicts:
+                    _f.write(json.dumps(_d, ensure_ascii=False) + "\n")
+            run_state = cls._run_states.get(simulation_id)
+            if run_state:
+                if platform == "twitter":
+                    run_state.follower_twitter_count += len(follower_dicts)
+                else:
+                    run_state.follower_reddit_count += len(follower_dicts)
+
         try:
             while process.poll() is None:  # Process still running
                 # Read Twitter action log
                 if os.path.exists(twitter_actions_log):
                     twitter_position = cls._read_action_log(
-                        twitter_actions_log, twitter_position, state, "twitter"
+                        twitter_actions_log, twitter_position, state, "twitter",
+                        on_round_end=_follower_round_callback,
                     )
-                
+
                 # Read Reddit action log
                 if os.path.exists(reddit_actions_log):
                     reddit_position = cls._read_action_log(
-                        reddit_actions_log, reddit_position, state, "reddit"
+                        reddit_actions_log, reddit_position, state, "reddit",
+                        on_round_end=_follower_round_callback,
                     )
-                
+
                 # Update state
                 cls._save_run_state(state)
                 time.sleep(2)
-            
-            # Read logs once more after process ends
+
+            # Read logs once more after process ends (drain pass — no follower callback)
             if os.path.exists(twitter_actions_log):
                 cls._read_action_log(twitter_actions_log, twitter_position, state, "twitter")
             if os.path.exists(reddit_actions_log):
@@ -610,17 +663,22 @@ class SimulationRunner:
             except Exception as e:
                 logger.error(f"Failed to stop graph memory updater: {e}")
             cls._graph_memory_enabled.pop(simulation_id, None)
-        
+
+        # Clean up follower state
+        cls._follower_engines.pop(simulation_id, None)
+        cls._follower_agents.pop(simulation_id, None)
+
         logger.info(f"Simulation stopped: {simulation_id}")
         return state
     
     @classmethod
     def _read_action_log(
-        cls, 
-        log_path: str, 
-        position: int, 
+        cls,
+        log_path: str,
+        position: int,
         state: SimulationRunState,
-        platform: str
+        platform: str,
+        on_round_end: Optional[Any] = None,  # callable(round_num, platform, sim_dir) or None
     ) -> int:
         """
         Read action log file
@@ -674,7 +732,7 @@ class SimulationRunner:
                         elif event_type == "round_end":
                             round_num = action_data.get("round", 0)
                             simulated_hours = action_data.get("simulated_hours", 0)
-                            
+
                             # Update per-platform rounds/time
                             if platform == "twitter":
                                 if round_num > state.twitter_current_round:
@@ -684,14 +742,22 @@ class SimulationRunner:
                                 if round_num > state.reddit_current_round:
                                     state.reddit_current_round = round_num
                                 state.reddit_simulated_hours = simulated_hours
-                            
+
                             # Overall round is max of platforms
                             if round_num > state.current_round:
                                 state.current_round = round_num
                             # Overall time is max of platforms
                             state.simulated_hours = max(state.twitter_simulated_hours, state.reddit_simulated_hours)
-                        
-                        continue # Skip event entries for action processing
+
+                            # Fire follower callback (only during live monitoring, not drain pass)
+                            if on_round_end:
+                                sim_dir = os.path.join(cls.RUN_STATE_DIR, state.simulation_id)
+                                try:
+                                    on_round_end(round_num, platform, sim_dir)
+                                except Exception as _fe:
+                                    logger.error(f"Follower round callback error: {_fe}")
+
+                        continue  # Skip event entries for action processing
                     
                     # Skip records without agent_id (non-Agent actions)
                     if "agent_id" not in action_data:
@@ -722,6 +788,29 @@ class SimulationRunner:
             position = f.tell()
         return position
     
+    @classmethod
+    def _read_round_actions_raw(
+        cls, simulation_id: str, round_num: int, platform: str
+    ) -> List[Dict[str, Any]]:
+        """Read raw action dicts for a specific round from actions.jsonl (already written by OASIS)."""
+        sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
+        log_path = os.path.join(sim_dir, platform, "actions.jsonl")
+        if not os.path.exists(log_path):
+            return []
+        results: List[Dict[str, Any]] = []
+        with open(log_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                    if "event_type" not in d and d.get("round") == round_num:
+                        results.append(d)
+                except json.JSONDecodeError:
+                    pass
+        return results
+
     @classmethod
     def _check_all_platforms_completed(cls, state: SimulationRunState) -> bool:
         """
@@ -821,59 +910,75 @@ class SimulationRunner:
         simulation_id: str,
         platform: Optional[str] = None,
         agent_id: Optional[int] = None,
-        round_num: Optional[int] = None
+        round_num: Optional[int] = None,
+        include_followers: bool = True,
     ) -> List[AgentAction]:
         """
         Get the complete action history for all platforms (without pagination limit).
-        
+
         Args:
             simulation_id: Simulation ID.
             platform: Filter by platform (twitter/reddit).
             agent_id: Filter by Agent.
             round_num: Filter by round number.
-            
+            include_followers: Whether to include follower actions from follower_actions.jsonl.
+
         Returns:
             Complete list of actions (sorted by timestamp, newest first).
         """
         sim_dir = os.path.join(cls.RUN_STATE_DIR, simulation_id)
         actions = []
-        
+
         # Read Twitter action file (automatically set platform to twitter based on file path)
         twitter_actions_log = os.path.join(sim_dir, "twitter", "actions.jsonl")
         if not platform or platform == "twitter":
             actions.extend(cls._read_actions_from_file(
                 twitter_actions_log,
-                default_platform="twitter",  # Automatically fill platform field
+                default_platform="twitter",
                 platform_filter=platform,
-                agent_id=agent_id, 
+                agent_id=agent_id,
                 round_num=round_num
             ))
-        
+
         # Read Reddit action file (automatically set platform to reddit based on file path)
         reddit_actions_log = os.path.join(sim_dir, "reddit", "actions.jsonl")
         if not platform or platform == "reddit":
             actions.extend(cls._read_actions_from_file(
                 reddit_actions_log,
-                default_platform="reddit",  # Automatically fill platform field
+                default_platform="reddit",
                 platform_filter=platform,
                 agent_id=agent_id,
                 round_num=round_num
             ))
-        
+
         # If platform-specific files don't exist, try reading the old single file format
         if not actions:
             actions_log = os.path.join(sim_dir, "actions.jsonl")
             actions = cls._read_actions_from_file(
                 actions_log,
-                default_platform=None,  # Old format files should have a platform field
+                default_platform=None,
                 platform_filter=platform,
                 agent_id=agent_id,
                 round_num=round_num
             )
-        
+
+        # Append follower actions if requested
+        if include_followers:
+            for plat in ("twitter", "reddit"):
+                if platform and platform != plat:
+                    continue
+                follower_log = os.path.join(sim_dir, plat, "follower_actions.jsonl")
+                actions.extend(cls._read_actions_from_file(
+                    follower_log,
+                    default_platform=plat,
+                    platform_filter=platform,
+                    agent_id=agent_id,
+                    round_num=round_num
+                ))
+
         # Sort by timestamp (newest first)
         actions.sort(key=lambda x: x.timestamp, reverse=True)
-        
+
         return actions
     
     @classmethod
@@ -1085,13 +1190,14 @@ class SimulationRunner:
         for dir_name in dirs_to_clean:
             dir_path = os.path.join(sim_dir, dir_name)
             if os.path.exists(dir_path):
-                actions_file = os.path.join(dir_path, "actions.jsonl")
-                if os.path.exists(actions_file):
-                    try:
-                        os.remove(actions_file)
-                        cleaned_files.append(f"{dir_name}/actions.jsonl")
-                    except Exception as e:
-                        errors.append(f"Failed to delete {dir_name}/actions.jsonl: {str(e)}")
+                for log_name in ("actions.jsonl", "follower_actions.jsonl"):
+                    log_file = os.path.join(dir_path, log_name)
+                    if os.path.exists(log_file):
+                        try:
+                            os.remove(log_file)
+                            cleaned_files.append(f"{dir_name}/{log_name}")
+                        except Exception as e:
+                            errors.append(f"Failed to delete {dir_name}/{log_name}: {str(e)}")
         
         # Clean up run state in memory
         if simulation_id in cls._run_states:

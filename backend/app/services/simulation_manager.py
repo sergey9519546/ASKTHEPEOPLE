@@ -17,7 +17,11 @@ from ..utils.logger import get_logger
 from .zep_entity_reader import ZepEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
 from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
-from .simulation_artifacts import read_json, save_prepare_artifacts, write_exports_from_canonical
+from .simulation_artifacts import (
+    read_json, save_prepare_artifacts, write_exports_from_canonical,
+    write_json, canonical_agents_path, relationship_bootstrap_path,
+    build_canonical_agents_from_profiles,
+)
 from .simulation_preflight import run_preflight
 
 logger = get_logger('askthepeople.simulation')
@@ -237,7 +241,10 @@ class SimulationManager:
         defined_entity_types: Optional[List[str]] = None,
         use_llm_for_profiles: bool = True,
         progress_callback: Optional[callable] = None,
-        parallel_profile_count: int = 3
+        parallel_profile_count: int = 3,
+        use_archetypes: bool = False,
+        archetype_count: Optional[int] = None,
+        expansion_factor: Optional[int] = None,
     ) -> SimulationState:
         """
         Prepare simulation environment (fully automated)
@@ -338,40 +345,65 @@ class SimulationManager:
                 realtime_output_path = os.path.join(sim_dir, "twitter_profiles.csv")
                 realtime_platform = "twitter"
             
-            profiles = generator.generate_profiles_from_entities(
-                entities=filtered.entities,
-                use_llm=use_llm_for_profiles,
-                progress_callback=profile_progress,
-                graph_id=state.graph_id,  # Pass graph_id for Zep retrieval
-                parallel_count=parallel_profile_count,  # Parallel generation count
-                realtime_output_path=realtime_output_path,  # Real-time save path
-                output_platform=realtime_platform  # Output format
-            )
-            
-            state.profiles_count = len(profiles)
+            if use_archetypes:
+                # ========== Archetype compression path ==========
+                # generate_archetype_profiles internally calls generate_profiles_from_entities,
+                # so we do NOT call it separately here to avoid double LLM generation.
+                from ..config import Config as _Config
+                n_arch = archetype_count or _Config.ARCHETYPE_DEFAULT_COUNT
+                expand = expansion_factor or _Config.ARCHETYPE_DEFAULT_EXPANSION_FACTOR
 
-            artifacts = save_prepare_artifacts(
-                simulation_dir=sim_dir,
-                entities=filtered.entities,
-                profiles=profiles,
-            )
-            
-            if progress_callback:
-                progress_callback(
-                    "generating_profiles", 95, 
-                    "Saving Profile files...",
-                    current=total_entities,
-                    total=total_entities
+                profiles, archetypes = generator.generate_archetype_profiles(
+                    entities=filtered.entities,
+                    n_archetypes=n_arch,
+                    expansion_factor=expand,
+                    use_llm=use_llm_for_profiles,
+                    progress_callback=profile_progress,
+                    graph_id=state.graph_id,
                 )
-            
-            write_exports_from_canonical(
-                simulation_dir=sim_dir,
-                canonical_agents=artifacts["canonical_agents"],
-            )
-            
+                write_json(os.path.join(sim_dir, "archetypes.json"), [a.to_dict() for a in archetypes])
+
+                state.profiles_count = len(profiles)
+                canonical_agents = build_canonical_agents_from_profiles(profiles)
+                write_json(canonical_agents_path(sim_dir), canonical_agents)
+                write_json(relationship_bootstrap_path(sim_dir), [])
+                write_exports_from_canonical(sim_dir, canonical_agents)
+            else:
+                # ========== Normal entity-zip path ==========
+                profiles = generator.generate_profiles_from_entities(
+                    entities=filtered.entities,
+                    use_llm=use_llm_for_profiles,
+                    progress_callback=profile_progress,
+                    graph_id=state.graph_id,
+                    parallel_count=parallel_profile_count,
+                    realtime_output_path=realtime_output_path,
+                    output_platform=realtime_platform,
+                )
+                state.profiles_count = len(profiles)
+
+                artifacts = save_prepare_artifacts(
+                    simulation_dir=sim_dir,
+                    entities=filtered.entities,
+                    profiles=profiles,
+                )
+                canonical_agents = artifacts["canonical_agents"]
+
+                if progress_callback:
+                    progress_callback(
+                        "generating_profiles", 95,
+                        "Saving Profile files...",
+                        current=total_entities,
+                        total=total_entities
+                    )
+
+                write_exports_from_canonical(
+                    simulation_dir=sim_dir,
+                    canonical_agents=canonical_agents,
+                )
+
             if progress_callback:
                 progress_callback(
-                    "generating_profiles", 100, 
+                    "generating_profiles", 100,
                     f"Completed, total {len(profiles)} Profiles",
                     current=len(profiles),
                     total=len(profiles)
@@ -403,7 +435,7 @@ class SimulationManager:
                 simulation_requirement=simulation_requirement,
                 document_text=document_text,
                 entities=filtered.entities,
-                canonical_agents=artifacts["canonical_agents"],
+                canonical_agents=canonical_agents,
                 enable_twitter=state.enable_twitter,
                 enable_reddit=state.enable_reddit
             )

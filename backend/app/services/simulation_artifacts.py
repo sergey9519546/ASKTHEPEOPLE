@@ -187,6 +187,44 @@ def _build_source_facts(entity: EntityNode) -> list[Dict[str, Any]]:
     return results
 
 
+def build_canonical_agents_from_profiles(
+    profiles: Sequence[OasisAgentProfile],
+) -> list[Dict[str, Any]]:
+    """Build canonical agents from profiles alone (no EntityNode required).
+
+    Used for archetype-expanded variant agents that have no backing EntityNode.
+    Output shape is identical to build_canonical_agents() but with empty source_facts
+    and neutral role defaults.
+    """
+    neutral_role_info = normalize_entity_type("entity")
+    canonical: list[Dict[str, Any]] = []
+    for agent_id, profile in enumerate(profiles):
+        role_info = normalize_entity_type(profile.source_entity_type or "entity") if profile.source_entity_type else neutral_role_info
+        canonical.append(
+            {
+                "agent_id": agent_id,
+                "source_entity_uuid": profile.source_entity_uuid,
+                "source_entity_type_raw": profile.source_entity_type or "entity",
+                "source_entity_type_normalized": role_info["normalized_role"],
+                "display_name": profile.name,
+                "username": profile.user_name,
+                "public_bio": (profile.bio or profile.name).replace("\n", " ").strip(),
+                "internal_persona": (profile.persona or profile.bio or profile.name).replace("\n", " ").strip(),
+                "profession": profile.profession or role_info["normalized_role"],
+                "age": profile.age or 30,
+                "gender": _normalize_gender(profile.gender),
+                "mbti": profile.mbti or "ISTJ",
+                "country": profile.country or "Unknown",
+                "interested_topics": profile.interested_topics or [],
+                "stance_seed": "neutral",
+                "activity_seed": _build_activity_seed(role_info),
+                "platform_overrides": _build_platform_overrides(role_info),
+                "source_facts": [],
+            }
+        )
+    return canonical
+
+
 def build_canonical_agents(
     entities: Sequence[EntityNode],
     profiles: Sequence[OasisAgentProfile],

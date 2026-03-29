@@ -911,18 +911,25 @@ class ReportAgent:
         self.graph_id = graph_id
         self.simulation_id = simulation_id
         self.simulation_requirement = simulation_requirement
-        
+
         self.llm = llm_client or LLMClient()
         self.zep_tools = zep_tools or ZepToolsService()
-        
+
         # Tool definitions
         self.tools = self._define_tools()
-        
+
         # Report Logger (initialized in generate_report)
         self.report_logger: Optional[ReportLogger] = None
         # Console Logger (initialized in generate_report)
         self.console_logger: Optional[ReportConsoleLogger] = None
-        
+
+        # Load pre-computed simulation metrics (may be None if not yet computed)
+        try:
+            from .validation_engine import ValidationEngine
+            self._simulation_metrics: Optional[Dict[str, Any]] = ValidationEngine.load_metrics(simulation_id)
+        except Exception:
+            self._simulation_metrics = None
+
         logger.info(f"ReportAgent initialized: graph_id={graph_id}, simulation_id={simulation_id}")
     
     def _define_tools(self) -> Dict[str, Dict[str, Any]]:
@@ -1226,6 +1233,20 @@ class ReportAgent:
             total_entities=context.get('total_entities', 0),
             related_facts_json=json.dumps(context.get('related_facts', [])[:10], ensure_ascii=False, indent=2),
         )
+
+        if self._simulation_metrics:
+            m = self._simulation_metrics
+            user_prompt = user_prompt + (
+                "\n\n## Quantitative Simulation Metrics (use as factual anchors)\n"
+                f"- Polarization Index (modularity Q): {m.get('polarization_index', 0):.3f} "
+                "(0=homogeneous, 1=fully polarized)\n"
+                f"- Engagement Gini Coefficient: {m.get('engagement_gini', 0):.3f} "
+                "(0=equal, 1=dominated by few agents)\n"
+                f"- Echo Chamber Score: {m.get('echo_chamber_score', 0):.3f} "
+                "(0=open discourse, 1=fully siloed)\n"
+                f"- Communities Detected: {m.get('community_count', 'N/A')}\n"
+                f"- Total Actions: {m.get('total_actions', 0)}\n"
+            )
 
         try:
             response = self.llm.chat_json(

@@ -484,6 +484,9 @@ def prepare_simulation():
         entity_types_list = data.get('entity_types')
         use_llm_for_profiles = data.get('use_llm_for_profiles', True)
         parallel_profile_count = data.get('parallel_profile_count', 5)
+        use_archetypes = data.get('use_archetypes', False)
+        archetype_count = data.get('archetype_count')  # None → Config default
+        expansion_factor = data.get('expansion_factor')  # None → Config default
         
         # ========== Synchronously get entity count (before background task start) ==========
         # This allows the frontend to get the expected total Agent count immediately after calling prepare
@@ -599,7 +602,10 @@ def prepare_simulation():
                     defined_entity_types=entity_types_list,
                     use_llm_for_profiles=use_llm_for_profiles,
                     progress_callback=progress_callback,
-                    parallel_profile_count=parallel_profile_count
+                    parallel_profile_count=parallel_profile_count,
+                    use_archetypes=use_archetypes,
+                    archetype_count=archetype_count,
+                    expansion_factor=expansion_factor,
                 )
                 
                 # Task completed
@@ -1586,6 +1592,9 @@ def start_simulation():
         max_rounds = data.get('max_rounds')  # Optional: max simulation rounds
         enable_graph_memory_update = data.get('enable_graph_memory_update', False)  # Optional: whether to enable graph memory update
         force = data.get('force', False)  # Optional: force restart
+        enable_followers = data.get('enable_followers', False)
+        follower_count = int(data.get('follower_count', Config.FOLLOWER_DEFAULT_COUNT))
+        follower_distribution = data.get('follower_distribution', None)
 
         # Validate max_rounds parameter
         if max_rounds is not None:
@@ -1689,7 +1698,10 @@ def start_simulation():
             platform=platform,
             max_rounds=max_rounds,
             enable_graph_memory_update=enable_graph_memory_update,
-            graph_id=graph_id
+            graph_id=graph_id,
+            enable_followers=enable_followers,
+            follower_count=follower_count,
+            follower_distribution=follower_distribution,
         )
         
         # Update simulation status
@@ -1717,6 +1729,46 @@ def start_simulation():
         
     except Exception as e:
         logger.error(f"Start simulation failed: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/<simulation_id>/metrics', methods=['GET'])
+def get_simulation_metrics(simulation_id: str):
+    """
+    Get post-simulation validation metrics (polarization, Gini, echo-chamber score, etc.)
+
+    Returns 200 with success=False and error="simulation_not_complete" if simulation is still running.
+    Accepts ?force=true to recompute even if cached metrics.json exists.
+    """
+    try:
+        manager = SimulationManager()
+        state = manager.get_simulation(simulation_id)
+        if not state:
+            return jsonify({"success": False, "error": f"Simulation does not exist: {simulation_id}"}), 404
+
+        run_state = SimulationRunner.get_run_state(simulation_id)
+        if run_state and run_state.runner_status in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
+            return jsonify({
+                "success": False,
+                "error": "simulation_not_complete",
+                "status": run_state.runner_status.value,
+            })
+
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        from ..services.validation_engine import ValidationEngine
+        engine = ValidationEngine()
+        metrics = engine.compute_metrics(simulation_id, force=force)
+        return jsonify({"success": True, "data": metrics.to_dict()})
+
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)})
+    except Exception as e:
+        logger.error(f"Failed to compute simulation metrics: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -1971,15 +2023,16 @@ def get_simulation_actions(simulation_id: str):
         platform = request.args.get('platform')
         agent_id = request.args.get('agent_id', type=int)
         round_num = request.args.get('round_num', type=int)
-        
-        actions = SimulationRunner.get_actions(
+        include_followers = request.args.get('include_followers', 'true').lower() == 'true'
+
+        actions = SimulationRunner.get_all_actions(
             simulation_id=simulation_id,
-            limit=limit,
-            offset=offset,
             platform=platform,
             agent_id=agent_id,
-            round_num=round_num
+            round_num=round_num,
+            include_followers=include_followers,
         )
+        actions = actions[offset:offset + limit]
         
         return jsonify({
             "success": True,

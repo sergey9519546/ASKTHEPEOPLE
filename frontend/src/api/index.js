@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Create Axios instance
 const service = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001',
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5001',
   timeout: 300000, // 5 minute timeout (ontology generation can take a while)
   headers: {
     'Content-Type': 'application/json'

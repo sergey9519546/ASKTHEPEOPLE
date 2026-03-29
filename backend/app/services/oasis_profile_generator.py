@@ -1054,6 +1054,79 @@ IMPORTANT:
         
         return profiles
     
+    def generate_archetype_profiles(
+        self,
+        entities: List["EntityNode"],
+        n_archetypes: int,
+        expansion_factor: int,
+        use_llm: bool = True,
+        progress_callback: Optional[Any] = None,
+        graph_id: Optional[str] = None,
+    ) -> "Tuple[List[OasisAgentProfile], List[Any]]":
+        """
+        Generate archetype-expanded profiles from entities.
+
+        Flow:
+        1. Generate one LLM profile per entity  (N profiles)
+        2. Cluster into n_archetypes via LLM     (K archetypes)
+        3. Expand each archetype to expansion_factor variants
+        4. Re-assign sequential IDs 0..K*M-1
+        5. Return (all_profiles, archetypes)
+
+        Args:
+            entities: Source entity nodes
+            n_archetypes: Number of archetypes to form
+            expansion_factor: Total agents per archetype (1 centroid + expansion_factor-1 variants)
+            use_llm: Whether to use LLM for source profile generation
+            progress_callback: (current, total, message) callback
+            graph_id: Zep graph ID for enriched context
+
+        Returns:
+            Tuple of (all_profiles, archetypes)
+        """
+        from ..utils.llm_client import LLMClient
+        from .archetype_engine import ArchetypeEngine
+
+        # Step 1: generate one profile per entity
+        source_profiles = self.generate_profiles_from_entities(
+            entities=entities,
+            use_llm=use_llm,
+            progress_callback=progress_callback,
+            graph_id=graph_id,
+        )
+
+        # Step 2: cluster into archetypes
+        engine = ArchetypeEngine()
+        llm = LLMClient()
+        archetypes = engine.cluster_agents(source_profiles, n_archetypes, llm)
+
+        # Step 3: build centroid profiles (re-IDed 0..K-1) + variants
+        all_profiles: List[OasisAgentProfile] = []
+
+        # Re-ID centroids first
+        centroid_id_map: dict = {}  # archetype_id -> new sequential id
+        for i, arch in enumerate(archetypes):
+            centroid = source_profiles[arch.centroid_index]
+            centroid.user_id = i
+            centroid_id_map[arch.archetype_id] = i
+            all_profiles.append(centroid)
+
+        # Expand variants (expansion_factor-1 per archetype)
+        variant_count = expansion_factor - 1
+        if variant_count > 0:
+            base_id = len(archetypes)
+            for arch in archetypes:
+                centroid = all_profiles[centroid_id_map[arch.archetype_id]]
+                variants = engine.expand_archetype(arch, centroid, variant_count, base_id)
+                all_profiles.extend(variants)
+                base_id += variant_count
+
+        # Step 4: re-assign sequential IDs 0..N-1
+        for i, p in enumerate(all_profiles):
+            p.user_id = i
+
+        return all_profiles, archetypes
+
     def _print_generated_profile(self, entity_name: str, entity_type: str, profile: OasisAgentProfile):
         """Print generated persona to console (full content, NOT truncated)"""
         separator = "-" * 70

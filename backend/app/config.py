@@ -60,6 +60,14 @@ class Config:
         'TREND', 'REFRESH', 'DO_NOTHING', 'FOLLOW', 'MUTE'
     ]
     
+    # Archetype Compression Configuration
+    ARCHETYPE_DEFAULT_COUNT = int(os.environ.get('ARCHETYPE_DEFAULT_COUNT', '10'))
+    ARCHETYPE_DEFAULT_EXPANSION_FACTOR = int(os.environ.get('ARCHETYPE_DEFAULT_EXPANSION_FACTOR', '10'))
+
+    # Follower Engine Configuration
+    FOLLOWER_DEFAULT_COUNT = int(os.environ.get('FOLLOWER_DEFAULT_COUNT', '100'))
+    FOLLOWER_ID_BASE = int(os.environ.get('FOLLOWER_ID_BASE', '1000'))
+
     # Report Agent Configuration
     REPORT_AGENT_MAX_TOOL_CALLS = int(os.environ.get('REPORT_AGENT_MAX_TOOL_CALLS', '5'))
     REPORT_AGENT_MAX_REFLECTION_ROUNDS = int(os.environ.get('REPORT_AGENT_MAX_REFLECTION_ROUNDS', '2'))

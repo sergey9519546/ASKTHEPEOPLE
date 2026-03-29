@@ -5,7 +5,9 @@ COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
 # Pass Railway backend URL at build time so Vite bakes it into the bundle
-ARG VITE_API_BASE_URL=https://secure-playfulness-production-dda6.up.railway.app
+# Empty default = relative URLs, so the unified container works on any Railway URL.
+# Override at build time (e.g. for a standalone Vercel frontend) if needed.
+ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
