@@ -16,7 +16,10 @@ FROM python:3.11-slim AS backend-builder
 COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
 WORKDIR /app/backend
 COPY backend/pyproject.toml backend/uv.lock ./
-RUN uv sync --frozen
+# uv sync (without --frozen) lets Docker resolve new deps not yet in uv.lock
+# (e.g. flask-sock) while keeping all pinned packages at their locked versions.
+# Run `uv lock` locally and commit the updated uv.lock to restore --frozen.
+RUN uv sync
 # Swap GPU torch for CPU-only and strip all NVIDIA/CUDA packages
 # (OASIS uses API-based LLMs via OpenRouter, not local GPU inference)
 RUN uv pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall --no-deps && \

@@ -16,6 +16,7 @@ from flask import Flask, request
 from flask_cors import CORS
 
 from .config import Config
+from .extensions import sock
 from .utils.logger import setup_logger, get_logger
 
 
@@ -101,11 +102,17 @@ def create_app(config_class=Config):
     cleanup_thread = threading.Thread(target=_task_cleanup_worker, daemon=True, name="task-cleanup")
     cleanup_thread.start()
 
+    # Initialise WebSocket extension (must happen before ws routes are registered)
+    sock.init_app(app)
+
     # Register blueprints
     from .api import graph_bp, simulation_bp, report_bp
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
+
+    # Register WebSocket routes (imported here so sock is already init'd)
+    from .api import ws  # noqa: F401
     
     # Health check
     @app.route('/health')

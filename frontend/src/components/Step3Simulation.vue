@@ -668,12 +668,12 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { generateReport } from "../api/report";
 import {
-  getRunStatus,
-  getRunStatusDetail,
+  getSimulationActions,
   getSimulationDiagnostics,
   getSimulationPreflight,
   startSimulation,
 } from "../api/simulation";
+import { connectSimulationWs } from "../api/ws";
 
 const props = defineProps({
   simulationId: String,
@@ -775,7 +775,7 @@ const resetAllState = () => {
   startError.value = null;
   isStarting.value = false;
   isStopping.value = false;
-  stopPolling();
+  stopWs();
 };
 
 const doStartSimulation = async () => {
@@ -815,8 +815,7 @@ const doStartSimulation = async () => {
       phase.value = 1;
       runStatus.value = res.data;
 
-      startStatusPolling();
-      startDetailPolling();
+      startWs();
     } else {
       startError.value = res.error || "failed to start";
       addLog(`✗ Initiation failed: ${res.error || "unknown error"}`);
@@ -831,76 +830,101 @@ const doStartSimulation = async () => {
   }
 };
 
-let statusTimer = null;
-let detailTimer = null;
-
-const startStatusPolling = () => {
-  statusTimer = setInterval(fetchRunStatus, 2000);
-};
-
-const startDetailPolling = () => {
-  detailTimer = setInterval(fetchRunStatusDetail, 3000);
-};
-
-const stopPolling = () => {
-  if (statusTimer) {
-    clearInterval(statusTimer);
-    statusTimer = null;
-  }
-  if (detailTimer) {
-    clearInterval(detailTimer);
-    detailTimer = null;
-  }
-};
+let _simWs = null;
 
 const prevTwitterRound = ref(0);
 const prevRedditRound = ref(0);
 
-const fetchRunStatus = async () => {
-  if (!props.simulationId) return;
-
-  try {
-    const res = await getRunStatus(props.simulationId);
-
-    if (res.success && res.data) {
-      const data = res.data;
-      runStatus.value = data;
-
-      if (data.runner_status === "interrupted") {
-        addLog(`Simulation Interrupted: ${data.error || "runtime failure"}`);
-        phase.value = 2;
-        stopPolling();
-        emit("update-status", "error");
-        return;
-      }
-
-      if (data.twitter_current_round > prevTwitterRound.value) {
-        addLog(
-          `[PLAZA] R${data.twitter_current_round}/${data.total_rounds} | T:${data.twitter_simulated_hours || 0}h | A:${data.twitter_actions_count}`,
-        );
-        prevTwitterRound.value = data.twitter_current_round;
-      }
-
-      if (data.reddit_current_round > prevRedditRound.value) {
-        addLog(
-          `[COMMUNITY] R${data.reddit_current_round}/${data.total_rounds} | T:${data.reddit_simulated_hours || 0}h | A:${data.reddit_actions_count}`,
-        );
-        prevRedditRound.value = data.reddit_current_round;
-      }
-
-      const isCompleted =
-        data.runner_status === "completed" || data.runner_status === "stopped";
-      const platformsCompleted = checkPlatformsCompleted(data);
-
-      if (isCompleted || platformsCompleted) {
-        addLog("✓ Simulation cycle complete");
-        phase.value = 2;
-        stopPolling();
-        emit("update-status", "completed");
-      }
+const _mergeActions = (incoming) => {
+  incoming.forEach((action) => {
+    const actionId =
+      action.id ||
+      `${action.timestamp}-${action.platform}-${action.agent_id}-${action.action_type}`;
+    if (!actionIds.value.has(actionId)) {
+      actionIds.value.add(actionId);
+      allActions.value.push({ ...action, _uniqueId: actionId });
     }
-  } catch (err) {
-    console.warn("Run status poll failed:", err);
+  });
+};
+
+const _handleWsFrame = async (frame) => {
+  if (frame.type === "state") {
+    const data = frame;
+    runStatus.value = data;
+
+    if (data.runner_status === "interrupted") {
+      addLog(`Simulation Interrupted: ${data.error || "runtime failure"}`);
+      phase.value = 2;
+      stopWs();
+      emit("update-status", "error");
+      return;
+    }
+
+    if (data.twitter_current_round > prevTwitterRound.value) {
+      addLog(
+        `[PLAZA] R${data.twitter_current_round}/${data.total_rounds} | T:${data.twitter_simulated_hours || 0}h | A:${data.twitter_actions_count}`,
+      );
+      prevTwitterRound.value = data.twitter_current_round;
+    }
+
+    if (data.reddit_current_round > prevRedditRound.value) {
+      addLog(
+        `[COMMUNITY] R${data.reddit_current_round}/${data.total_rounds} | T:${data.reddit_simulated_hours || 0}h | A:${data.reddit_actions_count}`,
+      );
+      prevRedditRound.value = data.reddit_current_round;
+    }
+
+    if (Array.isArray(data.recent_actions)) {
+      _mergeActions(data.recent_actions);
+    }
+
+    const isCompleted =
+      data.runner_status === "completed" || data.runner_status === "stopped";
+    const platformsCompleted = checkPlatformsCompleted(data);
+
+    if (isCompleted || platformsCompleted) {
+      addLog("✓ Simulation cycle complete");
+      phase.value = 2;
+      stopWs();
+      emit("update-status", "completed");
+      // Load full action history once
+      try {
+        const res = await getSimulationActions(props.simulationId);
+        if (res.success && res.data) {
+          _mergeActions(res.data.actions || res.data || []);
+        }
+      } catch (_) { /* non-critical */ }
+    }
+  } else if (frame.type === "done") {
+    addLog("✓ Simulation cycle complete");
+    phase.value = 2;
+    stopWs();
+    emit("update-status", "completed");
+    try {
+      const res = await getSimulationActions(props.simulationId);
+      if (res.success && res.data) {
+        _mergeActions(res.data.actions || res.data || []);
+      }
+    } catch (_) { /* non-critical */ }
+  } else if (frame.type === "error") {
+    addLog(`WS error: ${frame.message || "unknown"}`);
+  }
+};
+
+const startWs = () => {
+  if (!props.simulationId) return;
+  stopWs();
+  _simWs = connectSimulationWs(props.simulationId, {
+    onMessage: _handleWsFrame,
+    onClose: () => { _simWs = null; },
+    onError: (e) => console.warn("Simulation WS error:", e),
+  });
+};
+
+const stopWs = () => {
+  if (_simWs) {
+    _simWs.close();
+    _simWs = null;
   }
 };
 
@@ -916,32 +940,6 @@ const checkPlatformsCompleted = (data) => {
   if (twitterEnabled && !twitterCompleted) return false;
   if (redditEnabled && !redditCompleted) return false;
   return true;
-};
-
-const fetchRunStatusDetail = async () => {
-  if (!props.simulationId) return;
-
-  try {
-    const res = await getRunStatusDetail(props.simulationId);
-
-    if (res.success && res.data) {
-      const serverActions = res.data.all_actions || [];
-      serverActions.forEach((action) => {
-        const actionId =
-          action.id ||
-          `${action.timestamp}-${action.platform}-${action.agent_id}-${action.action_type}`;
-        if (!actionIds.value.has(actionId)) {
-          actionIds.value.add(actionId);
-          allActions.value.push({
-            ...action,
-            _uniqueId: actionId,
-          });
-        }
-      });
-    }
-  } catch (err) {
-    console.warn("Detail status poll failed:", err);
-  }
 };
 
 const getActionTypeLabel = (type) => {
@@ -1038,7 +1036,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  stopPolling();
+  stopWs();
 });
 </script>
 
