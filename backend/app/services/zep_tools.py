@@ -10,6 +10,8 @@ Core Retrieval Tools (Optimized):
 
 import time
 import json
+import copy
+import threading
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
@@ -421,6 +423,12 @@ class ZepToolsService:
     MAX_RETRIES = 3
     RETRY_DELAY = 2.0
     
+    # Class-level cache for graph nodes and edges across instances
+    _nodes_cache: Dict[str, Dict[str, Any]] = {}
+    _edges_cache: Dict[str, Dict[str, Any]] = {}
+    _cache_lock = threading.Lock()
+    CACHE_TTL = 60  # seconds
+
     def __init__(self, api_key: Optional[str] = None, llm_client: Optional[LLMClient] = None):
         self.api_key = api_key or Config.ZEP_API_KEY
         if not self.api_key:
@@ -657,6 +665,15 @@ class ZepToolsService:
         Returns:
             List of nodes
         """
+        now = time.time()
+        # Check cache
+        with ZepToolsService._cache_lock:
+            if graph_id in ZepToolsService._nodes_cache:
+                cache_entry = ZepToolsService._nodes_cache[graph_id]
+                if now - cache_entry['timestamp'] < ZepToolsService.CACHE_TTL:
+                    logger.info(f"Returning cached nodes for graph {graph_id}")
+                    return copy.deepcopy(cache_entry['data'])
+
         logger.info(f"Retrieving all nodes for graph {graph_id}...")
 
         nodes = fetch_all_nodes(self.client, graph_id)
@@ -673,7 +690,24 @@ class ZepToolsService:
             ))
 
         logger.info(f"Retrieved {len(result)} nodes")
-        return result
+
+        # Update cache and evict expired
+        with ZepToolsService._cache_lock:
+            ZepToolsService._nodes_cache[graph_id] = {
+                'timestamp': now,
+                'data': result
+            }
+            # simple eviction strategy
+            if len(ZepToolsService._nodes_cache) > 200:
+                ZepToolsService._nodes_cache = {
+                    k: v for k, v in ZepToolsService._nodes_cache.items()
+                    if now - v['timestamp'] < ZepToolsService.CACHE_TTL
+                }
+                # if still too large, just clear it
+                if len(ZepToolsService._nodes_cache) > 200:
+                    ZepToolsService._nodes_cache.clear()
+
+        return copy.deepcopy(result)
 
     def get_all_edges(self, graph_id: str, include_temporal: bool = True) -> List[EdgeInfo]:
         """
@@ -686,6 +720,16 @@ class ZepToolsService:
         Returns:
             List of edges (includes created_at, valid_at, invalid_at, expired_at)
         """
+        now = time.time()
+        cache_key = f"{graph_id}_{include_temporal}"
+        # Check cache
+        with ZepToolsService._cache_lock:
+            if cache_key in ZepToolsService._edges_cache:
+                cache_entry = ZepToolsService._edges_cache[cache_key]
+                if now - cache_entry['timestamp'] < ZepToolsService.CACHE_TTL:
+                    logger.info(f"Returning cached edges for graph {graph_id}")
+                    return copy.deepcopy(cache_entry['data'])
+
         logger.info(f"Retrieving all edges for graph {graph_id}...")
 
         edges = fetch_all_edges(self.client, graph_id)
@@ -711,7 +755,24 @@ class ZepToolsService:
             result.append(edge_info)
 
         logger.info(f"Retrieved {len(result)} edges")
-        return result
+
+        # Update cache and evict expired
+        with ZepToolsService._cache_lock:
+            ZepToolsService._edges_cache[cache_key] = {
+                'timestamp': now,
+                'data': result
+            }
+            # simple eviction strategy
+            if len(ZepToolsService._edges_cache) > 200:
+                ZepToolsService._edges_cache = {
+                    k: v for k, v in ZepToolsService._edges_cache.items()
+                    if now - v['timestamp'] < ZepToolsService.CACHE_TTL
+                }
+                # if still too large, just clear it
+                if len(ZepToolsService._edges_cache) > 200:
+                    ZepToolsService._edges_cache.clear()
+
+        return copy.deepcopy(result)
     
     def get_node_detail(self, node_uuid: str) -> Optional[NodeInfo]:
         """
