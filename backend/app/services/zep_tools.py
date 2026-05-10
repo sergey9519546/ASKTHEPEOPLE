@@ -10,6 +10,8 @@ Core Retrieval Tools (Optimized):
 
 import time
 import json
+import threading
+import copy
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
@@ -421,6 +423,12 @@ class ZepToolsService:
     MAX_RETRIES = 3
     RETRY_DELAY = 2.0
     
+    # Class-level cache to share data across instances and requests
+    _nodes_cache: Dict[str, Dict[str, Any]] = {}
+    _edges_cache: Dict[str, Dict[str, Any]] = {}
+    _cache_lock = threading.Lock()
+    _CACHE_TTL = 300  # Cache duration in seconds
+
     def __init__(self, api_key: Optional[str] = None, llm_client: Optional[LLMClient] = None):
         self.api_key = api_key or Config.ZEP_API_KEY
         if not self.api_key:
@@ -650,6 +658,8 @@ class ZepToolsService:
     def get_all_nodes(self, graph_id: str) -> List[NodeInfo]:
         """
         Retrieve all nodes in the graph (paginated)
+        Uses a class-level TTL cache to share data across instances and requests,
+        avoiding redundant API calls for subsequent queries within the cache duration.
 
         Args:
             graph_id: Graph ID
@@ -657,6 +667,16 @@ class ZepToolsService:
         Returns:
             List of nodes
         """
+        current_time = time.time()
+
+        # Check cache first
+        with self.__class__._cache_lock:
+            cache_entry = self.__class__._nodes_cache.get(graph_id)
+            if cache_entry and (current_time - cache_entry['timestamp']) < self.__class__._CACHE_TTL:
+                logger.info(f"Retrieving nodes for graph {graph_id} from cache...")
+                # Return a deepcopy to prevent callers from mutating the shared cache
+                return copy.deepcopy(cache_entry['data'])
+
         logger.info(f"Retrieving all nodes for graph {graph_id}...")
 
         nodes = fetch_all_nodes(self.client, graph_id)
@@ -673,11 +693,21 @@ class ZepToolsService:
             ))
 
         logger.info(f"Retrieved {len(result)} nodes")
+
+        # Update cache
+        with self.__class__._cache_lock:
+            self.__class__._nodes_cache[graph_id] = {
+                'timestamp': current_time,
+                'data': copy.deepcopy(result)
+            }
+
         return result
 
     def get_all_edges(self, graph_id: str, include_temporal: bool = True) -> List[EdgeInfo]:
         """
         Retrieve all edges in the graph (paginated, includes temporal info)
+        Uses a class-level TTL cache to share data across instances and requests,
+        avoiding redundant API calls for subsequent queries within the cache duration.
 
         Args:
             graph_id: Graph ID
@@ -686,6 +716,17 @@ class ZepToolsService:
         Returns:
             List of edges (includes created_at, valid_at, invalid_at, expired_at)
         """
+        current_time = time.time()
+
+        # Check cache first
+        cache_key = f"{graph_id}_{include_temporal}"
+        with self.__class__._cache_lock:
+            cache_entry = self.__class__._edges_cache.get(cache_key)
+            if cache_entry and (current_time - cache_entry['timestamp']) < self.__class__._CACHE_TTL:
+                logger.info(f"Retrieving edges for graph {graph_id} from cache...")
+                # Return a deepcopy to prevent callers from mutating the shared cache
+                return copy.deepcopy(cache_entry['data'])
+
         logger.info(f"Retrieving all edges for graph {graph_id}...")
 
         edges = fetch_all_edges(self.client, graph_id)
@@ -711,6 +752,14 @@ class ZepToolsService:
             result.append(edge_info)
 
         logger.info(f"Retrieved {len(result)} edges")
+
+        # Update cache
+        with self.__class__._cache_lock:
+            self.__class__._edges_cache[cache_key] = {
+                'timestamp': current_time,
+                'data': copy.deepcopy(result)
+            }
+
         return result
     
     def get_node_detail(self, node_uuid: str) -> Optional[NodeInfo]:

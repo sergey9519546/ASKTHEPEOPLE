@@ -1,0 +1,3 @@
+## 2024-05-18 - Cached ZepToolsService methods get_all_nodes and get_all_edges
+**Learning:** ZepToolsService is instantiated per-request, meaning standard instance-level caching decorators (like @lru_cache) do not work for sharing data across requests. Zep graph data is accessed heavily and changing it constantly requires external API calls which are slow.
+**Action:** Used class-level dictionaries protected by a threading.Lock with a TTL and copy.deepcopy to safely share and cache data across multiple instances without mutating the shared state. This drastically reduces the number of API calls when fetching all nodes/edges.
