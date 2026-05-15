@@ -118,8 +118,22 @@ def _config():
 
 
 def test_select_active_agents_respects_platform_preference(monkeypatch):
-    monkeypatch.setattr("app.services.simulation_runtime_contract.random.uniform", lambda a, b: b)
-    monkeypatch.setattr("app.services.simulation_runtime_contract.random.random", lambda: 0.0)
+    # We want to test that platform preference influences probability,
+    # and that agent 1 is NOT selected while 0 and 2 ARE selected.
+    # Agent 0 probability: 0.8 * 1.15 = 0.92
+    # Agent 1 probability: 0.7 * 0.3 = 0.21
+    # Agent 2 probability: 0.6 * 1.0 = 0.6
+    # So we can set random.random() to return 0.5, which will select agents 0 and 2 but not 1.
+    # Wait, the code sets random.uniform(a,b) to b, so target_count is 3 (max).
+    # The problem is that random.random() returning 0.0 means ALL agents are selected!
+    # Because 0.0 < 0.92, 0.0 < 0.21, and 0.0 < 0.6.
+    # If random.random() returns 0.5:
+    # 0.5 < 0.92 (True, agent 0 selected)
+    # 0.5 < 0.21 (False, agent 1 NOT selected)
+    # 0.5 < 0.6 (True, agent 2 selected)
+    # Let's change random.random() to return 0.5.
+    monkeypatch.setattr("app.services.simulation_runtime_contract.random.uniform", lambda a, b: 3)
+    monkeypatch.setattr("app.services.simulation_runtime_contract.random.random", lambda: 0.5)
 
     selected = select_active_agent_ids(
         config=_config(),
