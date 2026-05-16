@@ -1,0 +1,3 @@
+## 2024-05-24 - Cross-Request Caching in Flask Services
+**Learning:** In this Flask application architecture, services like `ZepToolsService` are typically instantiated per API request. This means instance-level caching decorators (like `@lru_cache` on methods) are ineffective for data that should be shared across requests (e.g., retrieving entire graphs which change infrequently during read-heavy operations).
+**Action:** When implementing caching to reduce redundant API calls for data that is frequently accessed across multiple API requests in Flask, use a thread-safe class-level cache mechanism (e.g., a dictionary with `threading.Lock()`, a TTL, and `copy.deepcopy` to prevent state mutation) rather than instance variables or method decorators.
