@@ -119,7 +119,7 @@ def _config():
 
 def test_select_active_agents_respects_platform_preference(monkeypatch):
     monkeypatch.setattr("app.services.simulation_runtime_contract.random.uniform", lambda a, b: b)
-    monkeypatch.setattr("app.services.simulation_runtime_contract.random.random", lambda: 0.0)
+    monkeypatch.setattr("app.services.simulation_runtime_contract.random.random", lambda: 0.5)
 
     selected = select_active_agent_ids(
         config=_config(),
