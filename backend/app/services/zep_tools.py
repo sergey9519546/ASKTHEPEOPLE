@@ -10,6 +10,8 @@ Core Retrieval Tools (Optimized):
 
 import time
 import json
+import threading
+import copy
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 
@@ -421,6 +423,12 @@ class ZepToolsService:
     MAX_RETRIES = 3
     RETRY_DELAY = 2.0
     
+    # Class-level cache for graph data (shared across instances)
+    _nodes_cache = {}
+    _edges_cache = {}
+    _cache_lock = threading.Lock()
+    CACHE_TTL = 300  # 5 minutes Time-To-Live
+
     def __init__(self, api_key: Optional[str] = None, llm_client: Optional[LLMClient] = None):
         self.api_key = api_key or Config.ZEP_API_KEY
         if not self.api_key:
@@ -647,6 +655,24 @@ class ZepToolsService:
             total_count=len(facts)
         )
     
+    def invalidate_cache(self, graph_id: str = None):
+        """
+        Invalidate cache for a specific graph or all graphs.
+        """
+        with self._cache_lock:
+            if graph_id:
+                keys_to_delete = [k for k in self._nodes_cache.keys() if k.startswith(graph_id)]
+                for k in keys_to_delete:
+                    del self._nodes_cache[k]
+                keys_to_delete = [k for k in self._edges_cache.keys() if k.startswith(graph_id)]
+                for k in keys_to_delete:
+                    del self._edges_cache[k]
+                logger.info(f"Invalidated cache for graph {graph_id}")
+            else:
+                self._nodes_cache.clear()
+                self._edges_cache.clear()
+                logger.info("Invalidated all graph cache")
+
     def get_all_nodes(self, graph_id: str) -> List[NodeInfo]:
         """
         Retrieve all nodes in the graph (paginated)
@@ -657,6 +683,16 @@ class ZepToolsService:
         Returns:
             List of nodes
         """
+        cache_key = graph_id
+
+        cache_entry = None
+        with self._cache_lock:
+            cache_entry = self._nodes_cache.get(cache_key)
+
+        if cache_entry and time.time() - cache_entry['timestamp'] < self.CACHE_TTL:
+            logger.info(f"Using cached nodes for graph {graph_id}")
+            return copy.deepcopy(cache_entry['data'])
+
         logger.info(f"Retrieving all nodes for graph {graph_id}...")
 
         nodes = fetch_all_nodes(self.client, graph_id)
@@ -672,6 +708,12 @@ class ZepToolsService:
                 attributes=node.attributes or {}
             ))
 
+        with self._cache_lock:
+            self._nodes_cache[cache_key] = {
+                'timestamp': time.time(),
+                'data': copy.deepcopy(result)
+            }
+
         logger.info(f"Retrieved {len(result)} nodes")
         return result
 
@@ -686,6 +728,16 @@ class ZepToolsService:
         Returns:
             List of edges (includes created_at, valid_at, invalid_at, expired_at)
         """
+        cache_key = f"{graph_id}_{include_temporal}"
+
+        cache_entry = None
+        with self._cache_lock:
+            cache_entry = self._edges_cache.get(cache_key)
+
+        if cache_entry and time.time() - cache_entry['timestamp'] < self.CACHE_TTL:
+            logger.info(f"Using cached edges for graph {graph_id}")
+            return copy.deepcopy(cache_entry['data'])
+
         logger.info(f"Retrieving all edges for graph {graph_id}...")
 
         edges = fetch_all_edges(self.client, graph_id)
@@ -709,6 +761,12 @@ class ZepToolsService:
                 edge_info.expired_at = getattr(edge, 'expired_at', None)
 
             result.append(edge_info)
+
+        with self._cache_lock:
+            self._edges_cache[cache_key] = {
+                'timestamp': time.time(),
+                'data': copy.deepcopy(result)
+            }
 
         logger.info(f"Retrieved {len(result)} edges")
         return result
