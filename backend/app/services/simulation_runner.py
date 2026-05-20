@@ -628,10 +628,14 @@ class SimulationRunner:
             sync_observation_store(sim_dir, run_state=state.to_detail_dict())
             raise ValueError(f"Simulation not running: {simulation_id}, status={state.runner_status}")
         
-        state.runner_status = RunnerStatus.STOPPING
-        cls._save_run_state(state)
+        # Only set status to STOPPING/STOPPED if not already in terminal status (COMPLETED/FAILED)
+        is_terminal = state.runner_status in [RunnerStatus.COMPLETED, RunnerStatus.FAILED]
         
-        # Terminate process
+        if not is_terminal:
+            state.runner_status = RunnerStatus.STOPPING
+            cls._save_run_state(state)
+        
+        # Terminate process if still running
         process = cls._processes.get(simulation_id)
         if process and process.poll() is None:
             try:
@@ -648,11 +652,13 @@ class SimulationRunner:
                 except Exception:
                     process.kill()
         
-        state.runner_status = RunnerStatus.STOPPED
-        state.twitter_running = False
-        state.reddit_running = False
-        state.completed_at = datetime.now().isoformat()
-        cls._save_run_state(state)
+        if not is_terminal:
+            state.runner_status = RunnerStatus.STOPPED
+            state.twitter_running = False
+            state.reddit_running = False
+            state.completed_at = datetime.now().isoformat()
+            cls._save_run_state(state)
+            
         sync_observation_store(os.path.join(cls.RUN_STATE_DIR, simulation_id), run_state=state.to_detail_dict())
         
         # Stop graph memory updater
@@ -668,7 +674,7 @@ class SimulationRunner:
         cls._follower_engines.pop(simulation_id, None)
         cls._follower_agents.pop(simulation_id, None)
 
-        logger.info(f"Simulation stopped: {simulation_id}")
+        logger.info(f"Simulation monitor thread finished for {simulation_id}. Terminal state: {state.runner_status}")
         return state
     
     @classmethod

@@ -290,7 +290,7 @@
             </div>
 
             <div class="timeline-card">
-              <div class="card-header">
+              <div class="timeline-card-header">
                 <div class="agent-info">
                   <div class="avatar-placeholder">
                     {{ (action.agent_name || "A")[0] }}
