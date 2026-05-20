@@ -72,7 +72,7 @@ Output JSON with the following structure:
 
 ## Design Guidelines (CRITICAL)
 
-### 1. Entity Type Design — Must Follow Strictly
+### 1. Entity Type Design - Must Follow Strictly
 
 **Count requirement: Exactly 10 entity types**
 
@@ -101,13 +101,13 @@ B. **Specific types (8, designed based on document content)**:
 
 ### 2. Relationship Type Design
 
-- Count: 6–10 types
+- Count: 6-10 types
 - Relationships should reflect real connections in social media interactions
 - Ensure `source_targets` covers the entity types you defined
 
 ### 3. Attribute Design
 
-- 1–3 key attributes per entity type
+- 1-3 key attributes per entity type
 - **Note**: Do NOT use reserved field names: `name`, `uuid`, `group_id`, `created_at`, `summary`
 - Recommended: `full_name`, `title`, `role`, `position`, `location`, `description`, etc.
 
@@ -220,8 +220,8 @@ Based on the above, design entity types and relationship types suitable for soci
 1. Output exactly 10 entity types
 2. The last 2 must be the fallback types: Person (individual fallback) and Organization (organization fallback)
 3. The first 8 are specific types designed based on the document content
-4. All entity types must be real-world actors that can speak/post — no abstract concepts
-5. Attribute names must NOT use reserved words: name, uuid, group_id — use full_name, org_name, etc.
+4. All entity types must be real-world actors that can speak/post - no abstract concepts
+5. Attribute names must NOT use reserved words: name, uuid, group_id - use full_name, org_name, etc.
 """
 
         return message
