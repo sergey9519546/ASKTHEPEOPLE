@@ -215,6 +215,9 @@ def select_active_agent_ids(
             continue
 
         platform_preference = cfg.get("platform_preference", "both")
+        if not _platform_matches(platform_preference, platform):
+            continue
+
         activity_probability = float(cfg.get("activity_level", 0.5))
         activity_probability *= _platform_weight(platform_preference, platform)
 

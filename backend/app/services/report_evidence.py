@@ -24,7 +24,7 @@ def _section_query_seed(section_title: str, section_content: str) -> List[str]:
     tokens = []
     for token in (section_title + " " + section_content).replace("\n", " ").split():
         cleaned = token.strip(".,:;!?()[]{}\"'").lower()
-        if len(cleaned) >= 5:
+        if len(cleaned) >= 5 and cleaned not in tokens:
             tokens.append(cleaned)
         if len(tokens) >= 6:
             break
