@@ -22,10 +22,12 @@ def _connect(path: str) -> sqlite3.Connection:
 def _section_query_seed(section_title: str, section_content: str) -> List[str]:
     seeds = [section_title]
     tokens = []
+    seen = {section_title.lower()}
     for token in (section_title + " " + section_content).replace("\n", " ").split():
         cleaned = token.strip(".,:;!?()[]{}\"'").lower()
-        if len(cleaned) >= 5 and cleaned not in tokens:
+        if len(cleaned) >= 5 and cleaned not in seen:
             tokens.append(cleaned)
+            seen.add(cleaned)
         if len(tokens) >= 6:
             break
     seeds.extend(tokens[:3])
