@@ -27,8 +27,10 @@
       :class="{ 'is-expanded': isExpanded }"
       :style="gridContainerStyle"
     >
+      <!-- ⚡ Bolt: Added v-memo to prevent re-rendering all cards when a single card is hovered -->
       <div
         v-for="(project, index) in projects"
+        v-memo="[isExpanded, hoveringCard === index, project]"
         :key="project.simulation_id"
         class="simulation-card bauhaus-card"
         :class="{
