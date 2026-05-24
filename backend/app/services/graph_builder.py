@@ -3,7 +3,6 @@ Graph Building Service
 Endpoint 2: Build Standalone Graph using Zep API
 """
 
-import os
 import uuid
 import time
 import threading
@@ -377,7 +376,7 @@ class GraphBuilderService:
                         pending_episodes.remove(ep_uuid)
                         completed_count += 1
                         
-                except Exception as e:
+                except Exception:
                     # Ignore single query error and continue
                     pass
             

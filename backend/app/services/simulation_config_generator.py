@@ -21,7 +21,7 @@ from openai import OpenAI
 from ..config import Config
 from ..utils.logger import get_logger
 from .role_normalizer import normalize_entity_type
-from .zep_entity_reader import EntityNode, ZepEntityReader
+from .zep_entity_reader import EntityNode
 
 logger = get_logger('askthepeople.simulation_config')
 
@@ -580,7 +580,6 @@ class SimulationConfigGenerator:
                 "style": "threaded_discussion",
             },
         }
-        import re
         
         max_attempts = 3
         last_error = None

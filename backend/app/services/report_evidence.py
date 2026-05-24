@@ -51,6 +51,7 @@ def build_report_evidence(
                 section_content = handle.read()
 
         seeds = _section_query_seed(section.title, section_content)
+        seeds = list(dict.fromkeys(seeds))
         claim_counter = 1
         for seed in seeds[:3]:
             cursor.execute(

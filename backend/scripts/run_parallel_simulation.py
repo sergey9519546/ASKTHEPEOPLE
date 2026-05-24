@@ -68,11 +68,8 @@ import argparse
 import asyncio
 import json
 import logging
-import multiprocessing
-import random
 import signal
 import sqlite3
-import warnings
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
@@ -268,7 +265,8 @@ class ParallelIPCHandler:
         if not os.path.exists(self.commands_dir):
             return None
         
-        # Get command files (sorted by time)        command_files = []
+        # Get command files (sorted by time)
+        command_files = []
         for filename in os.listdir(self.commands_dir):
             if filename.endswith('.json'):
                 filepath = os.path.join(self.commands_dir, filename)
@@ -299,7 +297,8 @@ class ParallelIPCHandler:
         with open(response_file, 'w', encoding='utf-8') as f:
             json.dump(response, f, ensure_ascii=False, indent=2)
         
-        # Delete command file        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
+        # Delete command file
+        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
         try:
             os.remove(command_file)
         except OSError:
@@ -1581,7 +1580,7 @@ async def main():
     minutes_per_round = time_config.get('minutes_per_round', 30)
     config_total_rounds = (total_hours * 60) // minutes_per_round
     
-    log_manager.info(f"Simulation parameters:")
+    log_manager.info("Simulation parameters:")
     log_manager.info(f"  - Total simulation duration: {total_hours}hours")
     log_manager.info(f"  - Minutes per round: {minutes_per_round}minutes")
     log_manager.info(f"  - Configured Total rounds: {config_total_rounds}")
@@ -1592,9 +1591,9 @@ async def main():
     log_manager.info(f"  - Agent count: {len(config.get('agent_configs', []))}")
     
     log_manager.info("Log structure:")
-    log_manager.info(f"  - Main log: simulation.log")
-    log_manager.info(f"  - Twitter actions: twitter/actions.jsonl")
-    log_manager.info(f"  - Reddit actions: reddit/actions.jsonl")
+    log_manager.info("  - Main log: simulation.log")
+    log_manager.info("  - Twitter actions: twitter/actions.jsonl")
+    log_manager.info("  - Reddit actions: reddit/actions.jsonl")
     log_manager.info("=" * 60)
     
     start_time = datetime.now()
@@ -1669,8 +1668,8 @@ async def main():
         log_manager.info("[Reddit] Environment closed")
     
     log_manager.info("=" * 60)
-    log_manager.info(f"All complete!")
-    log_manager.info(f"Log files:")
+    log_manager.info("All complete!")
+    log_manager.info("Log files:")
     log_manager.info(f"  - {os.path.join(simulation_dir, 'simulation.log')}")
     log_manager.info(f"  - {os.path.join(simulation_dir, 'twitter', 'actions.jsonl')}")
     log_manager.info(f"  - {os.path.join(simulation_dir, 'reddit', 'actions.jsonl')}")

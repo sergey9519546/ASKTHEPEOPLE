@@ -20,7 +20,7 @@ from zep_cloud.client import Zep
 
 from ..config import Config
 from ..utils.logger import get_logger
-from .zep_entity_reader import EntityNode, ZepEntityReader
+from .zep_entity_reader import EntityNode
 
 logger = get_logger('askthepeople.oasis_profile')
 
@@ -284,7 +284,7 @@ class OasisProfileGenerator:
         
         # graph_id is required for search
         if not self.graph_id:
-            logger.debug(f"Skipping Zep retrieval: graph_id not set")
+            logger.debug("Skipping Zep retrieval: graph_id not set")
             return results
         
         comprehensive_query = f"All information, activities, events, relationships and background for {entity_name}"
@@ -552,7 +552,6 @@ class OasisProfileGenerator:
     
     def _fix_truncated_json(self, content: str) -> str:
         """Attempt to repair JSON truncated by token limits."""
-        import re
         
         content = content.strip()
         
@@ -600,7 +599,7 @@ class OasisProfileGenerator:
                 result = json.loads(json_str)
                 result["_fixed"] = True
                 return result
-            except json.JSONDecodeError as e:
+            except json.JSONDecodeError:
                 # 5. If still failed, attempt more aggressive repair
                 try:
                     # Remove all control characters
@@ -622,7 +621,7 @@ class OasisProfileGenerator:
         
         # If we extracted something meaningful, mark as fixed
         if bio_match or persona_match:
-            logger.info(f"Extracted partial info from malformed JSON")
+            logger.info("Extracted partial info from malformed JSON")
             return {
                 "bio": bio,
                 "persona": persona,
@@ -630,7 +629,7 @@ class OasisProfileGenerator:
             }
         
         # 7. Complete failure - return minimal structure
-        logger.warning(f"JSON repair failed, returning minimal structure")
+        logger.warning("JSON repair failed, returning minimal structure")
         return {
             "bio": entity_summary[:200] if entity_summary else f"{entity_type}: {entity_name}",
             "persona": entity_summary or f"{entity_name} is a {entity_type}."
@@ -763,7 +762,7 @@ IMPORTANT:
         
         elif entity_type_lower in ["publicfigure", "expert", "faculty"]:
             return {
-                "bio": f"Expert and thought leader in their field.",
+                "bio": "Expert and thought leader in their field.",
                 "persona": f"{entity_name} is a recognized {entity_type.lower()} who shares insights and opinions on important matters. They are known for their expertise and influence in public discourse.",
                 "age": random.randint(35, 60),
                 "gender": random.choice(["male", "female"]),
@@ -966,7 +965,7 @@ IMPORTANT:
                     user_name=self._generate_username(entity.name),
                     name=entity.name,
                     bio=f"{entity_type}: {entity.name}",
-                    persona=entity.summary or f"A participant in social discussions.",
+                    persona=entity.summary or "A participant in social discussions.",
                     source_entity_uuid=entity.uuid,
                     source_entity_type=entity_type,
                 )
@@ -1139,14 +1138,14 @@ IMPORTANT:
             f"[Generated] {entity_name} ({entity_type})",
             f"{separator}",
             f"Username: {profile.user_name}",
-            f"",
-            f"[Bio]",
+            "",
+            "[Bio]",
             f"{profile.bio}",
-            f"",
-            f"[Detailed Persona]",
+            "",
+            "[Detailed Persona]",
             f"{profile.persona}",
-            f"",
-            f"[Attributes]",
+            "",
+            "[Attributes]",
             f"Age: {profile.age} | Gender: {profile.gender} | MBTI: {profile.mbti}",
             f"Profession: {profile.profession} | Country: {profile.country}",
             f"Interests: {topics_str}",

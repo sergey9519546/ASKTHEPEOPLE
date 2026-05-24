@@ -12,7 +12,7 @@ import json
 import logging
 import random
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .oasis_profile_generator import OasisAgentProfile

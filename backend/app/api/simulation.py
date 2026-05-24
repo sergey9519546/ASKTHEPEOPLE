@@ -415,9 +415,7 @@ def prepare_simulation():
         }
     """
     import threading
-    import os
     from ..models.task import TaskManager, TaskStatus
-    from ..config import Config
     
     try:
         data = request.get_json() or {}
@@ -846,7 +844,6 @@ def _get_report_id_for_simulation(simulation_id: str) -> str:
         report_id or None
     """
     import json
-    from datetime import datetime
     
     # reports directory path: backend/uploads/reports
     # __file__ is app/api/simulation.py, need to go up two levels to backend/
@@ -1293,7 +1290,7 @@ def get_simulation_config(simulation_id: str):
         if not config:
             return jsonify({
                 "success": False,
-                "error": f"Simulation configuration does not exist, please call /prepare interface first"
+                "error": "Simulation configuration does not exist, please call /prepare interface first"
             }), 404
         
         return jsonify({
@@ -1651,7 +1648,7 @@ def start_simulation():
                         else:
                             return jsonify({
                                 "success": False,
-                                "error": f"Simulation is running, please call /stop API first, or use force=true to force restart"
+                                "error": "Simulation is running, please call /stop API first, or use force=true to force restart"
                             }), 400
 
                 # If force mode, clean up run logs

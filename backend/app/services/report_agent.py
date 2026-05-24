@@ -11,10 +11,9 @@ Features:
 
 import os
 import json
-import time
 import re
 from typing import Dict, Any, List, Optional, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
@@ -23,11 +22,7 @@ from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from .report_evidence import build_report_evidence
 from .zep_tools import (
-    ZepToolsService, 
-    SearchResult, 
-    InsightForgeResult, 
-    PanoramaResult,
-    InterviewResult
+    ZepToolsService
 )
 
 logger = get_logger('askthepeople.report_agent')
@@ -2367,7 +2362,7 @@ class ReportManager:
         # Build report header
         md_content = f"# {outline.title}\n\n"
         md_content += f"> {outline.summary}\n\n"
-        md_content += f"---\n\n"
+        md_content += "---\n\n"
         
         # Read all section files in order
         sections = cls.get_generated_sections(report_id)

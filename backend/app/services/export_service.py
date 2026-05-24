@@ -3,14 +3,12 @@ Export Service
 Handles PDF and CSV generation for simulation reports and data.
 """
 
-import os
 import io
 import pandas as pd
 from datetime import datetime
 from fpdf import FPDF
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
-from ..config import Config
 from ..utils.logger import get_logger
 from .zep_tools import ZepToolsService
 

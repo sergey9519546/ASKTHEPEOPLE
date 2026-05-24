@@ -5,8 +5,7 @@ Extracts 2D coordinates (Polarity, Intensity) from agent text using LLM analysis
 
 import json
 import re
-from typing import Tuple, Dict, Any, Optional
-from ..config import Config
+from typing import Tuple
 from ..services.camel_model_factory import create_camel_model
 from ..utils.logger import get_logger
 

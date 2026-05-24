@@ -18,7 +18,6 @@ import asyncio
 import json
 import logging
 import os
-import random
 import signal
 import sys
 import sqlite3
@@ -503,7 +502,7 @@ class TwitterSimulationRunner:
             if total_rounds < original_rounds:
                 print(f"\nRounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
         
-        print(f"\nSimulation Parameters:")
+        print("\nSimulation Parameters:")
         print(f"  - Total simulation duration: {total_hours} hours")
         print(f"  - Minutes per round: {minutes_per_round} minutes")
         print(f"  - Total rounds: {total_rounds}")
@@ -624,7 +623,7 @@ class TwitterSimulationRunner:
                       f"- elapsed: {elapsed:.1f}s")
         
         total_elapsed = (datetime.now() - start_time).total_seconds()
-        print(f"\nSimulation loop completed!")
+        print("\nSimulation loop completed!")
         print(f"  - Total elapsed: {total_elapsed:.1f}s")
         print(f"  - Database: {db_path}")
         

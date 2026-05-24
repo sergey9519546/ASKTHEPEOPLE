@@ -170,10 +170,10 @@ class InsightForgeResult:
     def to_text(self) -> str:
         """Convert to detailed text format for LLM understanding"""
         text_parts = [
-            f"## Deep Analysis of Future Predictions",
+            "## Deep Analysis of Future Predictions",
             f"Analysis Question: {self.query}",
             f"Prediction Scenario: {self.simulation_requirement}",
-            f"\n### Prediction Data Statistics",
+            "\n### Prediction Data Statistics",
             f"- Relevant Predicted Facts: {self.total_facts}",
             f"- Entities Involved: {self.total_entities}",
             f"- Relationship Chains: {self.total_relationships}"
@@ -181,19 +181,19 @@ class InsightForgeResult:
         
         # Sub-queries
         if self.sub_queries:
-            text_parts.append(f"\n### Analyzed Sub-queries")
+            text_parts.append("\n### Analyzed Sub-queries")
             for i, sq in enumerate(self.sub_queries, 1):
                 text_parts.append(f"{i}. {sq}")
         
         # Semantic search results
         if self.semantic_facts:
-            text_parts.append(f"\n### [Key Facts] (Please cite these original texts in the report)")
+            text_parts.append("\n### [Key Facts] (Please cite these original texts in the report)")
             for i, fact in enumerate(self.semantic_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Entity insights
         if self.entity_insights:
-            text_parts.append(f"\n### [Core Entities]")
+            text_parts.append("\n### [Core Entities]")
             for entity in self.entity_insights:
                 text_parts.append(f"- **{entity.get('name', 'Unknown')}** ({entity.get('type', 'Entity')})")
                 if entity.get('summary'):
@@ -203,7 +203,7 @@ class InsightForgeResult:
         
         # Relationship chains
         if self.relationship_chains:
-            text_parts.append(f"\n### Relationship Chains")
+            text_parts.append("\n### Relationship Chains")
             for chain in self.relationship_chains:
                 text_parts.append(f"- {chain}")
         
@@ -249,9 +249,9 @@ class PanoramaResult:
     def to_text(self) -> str:
         """Convert to text format (full version, no truncation)"""
         text_parts = [
-            f"## Wide Search Results (Future Panorama)",
+            "## Wide Search Results (Future Panorama)",
             f"Query: {self.query}",
-            f"\n### Statistical information",
+            "\n### Statistical information",
             f"- Total Nodes: {self.total_nodes}",
             f"- Total Edges: {self.total_edges}",
             f"- Currently Active Facts: {self.active_count}",
@@ -260,19 +260,19 @@ class PanoramaResult:
         
         # Currently active facts (full output, no truncation)
         if self.active_facts:
-            text_parts.append(f"\n### [Currently Active Facts] (Simulation Result Originals)")
+            text_parts.append("\n### [Currently Active Facts] (Simulation Result Originals)")
             for i, fact in enumerate(self.active_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Historical/Expired facts (full output, no truncation)
         if self.historical_facts:
-            text_parts.append(f"\n### [Historical/Expired Facts] (Evolutionary Record)")
+            text_parts.append("\n### [Historical/Expired Facts] (Evolutionary Record)")
             for i, fact in enumerate(self.historical_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Key entities (full output, no truncation)
         if self.all_nodes:
-            text_parts.append(f"\n### [Involved Entities]")
+            text_parts.append("\n### [Involved Entities]")
             for node in self.all_nodes:
                 entity_type = next((l for l in node.labels if l not in ["Entity", "Node"]), "Entity")
                 text_parts.append(f"- **{node.name}** ({entity_type})")
