@@ -27,9 +27,11 @@
       :class="{ 'is-expanded': isExpanded }"
       :style="gridContainerStyle"
     >
+      <!-- ⚡ Bolt Optimization: Using v-memo to prevent unnecessary virtual DOM updates for unaffected cards when hovering -->
       <div
         v-for="(project, index) in projects"
         :key="project.simulation_id"
+        v-memo="[project.simulation_id, project.current_round, project.total_rounds, isExpanded, hoveringCard === index]"
         class="simulation-card bauhaus-card"
         :class="{
           'is-expanded': isExpanded,
