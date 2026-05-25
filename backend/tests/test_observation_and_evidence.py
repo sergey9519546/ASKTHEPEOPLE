@@ -72,9 +72,9 @@ def test_observation_store_syncs_sqlite_runtime_and_builds_evidence(tmp_path):
     report_dir = tmp_path / "reports" / "report_test"
     report_dir.mkdir(parents=True)
     with open(report_dir / "section_01.md", "w", encoding="utf-8") as handle:
-        handle.write("## Seed vs Emergence\n\nHousing policy is escalating.")
+        handle.write("## Housing Emergence\n\nHousing policy is escalating.")
 
-    outline = SimpleNamespace(sections=[SimpleNamespace(title="Seed vs Emergence")])
+    outline = SimpleNamespace(sections=[SimpleNamespace(title="Housing Emergence")])
     evidence = build_report_evidence(
         report_id="report_test",
         report_dir=str(report_dir),

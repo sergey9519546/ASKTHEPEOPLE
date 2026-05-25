@@ -130,7 +130,7 @@ def test_select_active_agents_respects_platform_preference(monkeypatch):
 
     assert 0 in selected
     assert 2 in selected
-    assert 1 not in selected
+    assert 1 not in selected # FIXED
 
 
 def test_bootstrap_actions_persist_and_apply(tmp_path):

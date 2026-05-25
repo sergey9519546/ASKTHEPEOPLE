@@ -216,6 +216,8 @@ def select_active_agent_ids(
 
         platform_preference = cfg.get("platform_preference", "both")
         activity_probability = float(cfg.get("activity_level", 0.5))
+        if not _platform_matches(platform_preference, platform) and agent_id not in boost_ids:
+            continue
         activity_probability *= _platform_weight(platform_preference, platform)
 
         reaction_style = str(cfg.get("reaction_style", "measured")).lower()
@@ -238,7 +240,7 @@ def select_active_agent_ids(
             activity_probability = max(activity_probability, 0.92)
 
         activity_probability = max(0.02, min(0.98, activity_probability))
-        if random.random() < activity_probability:
+        if random.random() <= activity_probability:
             candidates.append(agent_id)
 
     if not candidates:
