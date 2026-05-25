@@ -27,9 +27,21 @@
       :class="{ 'is-expanded': isExpanded }"
       :style="gridContainerStyle"
     >
+      <!-- v-memo optimization: Prevents unnecessary virtual DOM updates for long lists.
+           Tracking individual primitive properties rather than the reactive object itself
+           since Vue uses strict equality (===) which breaks reactivity on internal changes. -->
       <div
         v-for="(project, index) in projects"
         :key="project.simulation_id"
+        v-memo="[
+          project.simulation_id,
+          project.current_round,
+          project.total_rounds,
+          project.report_id,
+          project.project_id,
+          isExpanded,
+          hoveringCard === index
+        ]"
         class="simulation-card bauhaus-card"
         :class="{
           'is-expanded': isExpanded,
