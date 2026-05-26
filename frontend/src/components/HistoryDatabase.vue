@@ -27,8 +27,26 @@
       :class="{ 'is-expanded': isExpanded }"
       :style="gridContainerStyle"
     >
+      <!--
+        ⚡ Bolt Optimization: Added v-memo to prevent O(N) re-renders.
+        Previously, hovering over a single card (changing `hoveringCard`) triggered
+        a full virtual DOM re-render of all items in the simulation archive list.
+        By explicitly tracking primitive dependencies, only the state-changed cards re-render.
+      -->
       <div
         v-for="(project, index) in projects"
+        v-memo="[
+          project.simulation_id,
+          project.project_id,
+          project.report_id,
+          project.files?.length,
+          project.simulation_requirement,
+          project.created_at,
+          project.current_round,
+          project.total_rounds,
+          isExpanded,
+          hoveringCard === index
+        ]"
         :key="project.simulation_id"
         class="simulation-card bauhaus-card"
         :class="{
