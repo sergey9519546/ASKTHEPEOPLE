@@ -30,6 +30,15 @@
       <div
         v-for="(project, index) in projects"
         :key="project.simulation_id"
+        v-memo="[
+          project.simulation_id,
+          project.project_id,
+          project.report_id,
+          project.current_round,
+          project.total_rounds,
+          isExpanded,
+          hoveringCard === index
+        ]"
         class="simulation-card bauhaus-card"
         :class="{
           'is-expanded': isExpanded,
