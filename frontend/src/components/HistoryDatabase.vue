@@ -27,8 +27,24 @@
       :class="{ 'is-expanded': isExpanded }"
       :style="gridContainerStyle"
     >
+      <!-- ⚡ Bolt Optimization: Use v-memo to prevent unnecessary re-renders of the entire grid.
+           Tracking specific primitive properties rather than the reactive project object fixes re-rendering
+           issues and improves performance while optimizing hover states. -->
       <div
         v-for="(project, index) in projects"
+        v-memo="[
+          project.simulation_id,
+          project.project_id,
+          project.report_id,
+          project.simulation_requirement,
+          project.created_at,
+          project.current_round,
+          project.total_rounds,
+          project.files,
+          isExpanded,
+          hoveringCard === index,
+          index
+        ]"
         :key="project.simulation_id"
         class="simulation-card bauhaus-card"
         :class="{

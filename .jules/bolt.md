@@ -1,0 +1,4 @@
+
+## 2024-05-14 - Vue v-memo in HistoryDatabase
+**Learning:** When applying `v-memo` to `v-for` loops in Vue to prevent unnecessary grid re-renders during state changes like hover effects, you must pass a dependency array containing primitive property values (`project.simulation_id`, `project.current_round`, etc.) rather than the reactive object itself (`project`). Passing the object causes strict equality (`===`) checks to fail at capturing internal property mutations. Furthermore, HTML comments (`<!-- ... -->`) placed inside a Vue element tag among its attributes will cause the Vite/Vue compiler to crash with a SyntaxError ('Duplicate attribute').
+**Action:** Place explanation comments directly before the element (outside the tag), and always explicitly destructure primitive tracking fields into the `v-memo` array.
