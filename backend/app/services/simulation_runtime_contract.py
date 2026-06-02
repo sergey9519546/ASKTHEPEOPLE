@@ -237,6 +237,9 @@ def select_active_agent_ids(
         if agent_id in boost_ids:
             activity_probability = max(activity_probability, 0.92)
 
+        if not _platform_matches(platform_preference, platform) and agent_id not in boost_ids:
+            continue
+
         activity_probability = max(0.02, min(0.98, activity_probability))
         if random.random() < activity_probability:
             candidates.append(agent_id)
