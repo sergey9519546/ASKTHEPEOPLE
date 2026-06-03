@@ -238,11 +238,18 @@ def select_active_agent_ids(
             activity_probability = max(activity_probability, 0.92)
 
         activity_probability = max(0.02, min(0.98, activity_probability))
+        if not _platform_matches(platform_preference, platform):
+            continue
         if random.random() < activity_probability:
             candidates.append(agent_id)
 
     if not candidates:
-        return list(boost_ids)[:target_count]
+        fallback_boosts = []
+        for i in boost_ids:
+            cfg = next((c for c in agent_configs if c.get('agent_id') == i), {})
+            if _platform_matches(cfg.get('platform_preference', 'both'), platform):
+                fallback_boosts.append(i)
+        return fallback_boosts[:target_count]
     if len(candidates) <= target_count:
         return candidates
     return random.sample(candidates, min(target_count, len(candidates)))
