@@ -28,8 +28,17 @@ def _section_query_seed(section_title: str, section_content: str) -> List[str]:
             tokens.append(cleaned)
         if len(tokens) >= 6:
             break
-    seeds.extend(tokens[:3])
-    return [seed for seed in seeds if seed]
+    seen = set()
+    unique_seeds = []
+    for s in seeds:
+        if s not in seen:
+            seen.add(s)
+            unique_seeds.append(s)
+    for t in tokens[:3]:
+        if t not in seen:
+            seen.add(t)
+            unique_seeds.append(t)
+    return [seed for seed in unique_seeds if seed]
 
 
 def build_report_evidence(
