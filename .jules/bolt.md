@@ -1,0 +1,3 @@
+## 2024-06-06 - [Avoid Date Instantiation in Large Arrays]
+**Learning:** Instantiating `new Date(string)` inside tight loops or `sort()` functions creates significant memory churn and CPU overhead in Vue components like `OpinionMap.vue` processing simulation data arrays. Because ISO 8601 strings (e.g., `2025-05-15T10:00:00Z`) naturally sort lexicographically the same as chronologically, string comparison is safe and vastly faster.
+**Action:** When filtering or comparing timestamp strings in frontend data visualisations, use direct string comparison (`a.timestamp >= b.timestamp`) instead of converting them to `Date` objects unless specific date math (like formatting) is required.

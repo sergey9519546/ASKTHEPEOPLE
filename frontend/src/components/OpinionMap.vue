@@ -120,11 +120,13 @@ const tooltipStyle = computed(() => ({
 
 const latestOpinions = computed(() => {
   const map = new Map();
-  const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
-  );
-  sorted.forEach((op) => {
-    map.set(op.agent_id, op);
+  // ⚡ Bolt: O(n) implementation using string comparison on ISO 8601 dates
+  // Avoids O(n log n) sort and expensive Date instantiations
+  opinions.value.forEach((op) => {
+    const existing = map.get(op.agent_id);
+    if (!existing || op.timestamp >= existing.timestamp) {
+      map.set(op.agent_id, op);
+    }
   });
   return Array.from(map.values());
 });
