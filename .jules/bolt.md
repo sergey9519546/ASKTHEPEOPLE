@@ -1,0 +1,3 @@
+## 2026-06-07 - Date Comparison Optimization in Vue Computed Properties
+**Learning:** Instantiating `Date` objects within the sorting function of a computed property (like `latestOpinions`) inside a polling Vue component causes unnecessary memory allocations and CPU overhead, especially with large arrays. Since ISO 8601 strings are lexicographically sortable, direct string comparison is significantly faster.
+**Action:** Replace `new Date(a.timestamp) - new Date(b.timestamp)` with string comparison logic `a.timestamp < b.timestamp ? -1 : (a.timestamp > b.timestamp ? 1 : 0)` to improve render performance.
