@@ -238,6 +238,8 @@ def select_active_agent_ids(
             activity_probability = max(activity_probability, 0.92)
 
         activity_probability = max(0.02, min(0.98, activity_probability))
+        if not _platform_matches(platform_preference, platform):
+            continue
         if random.random() < activity_probability:
             candidates.append(agent_id)
 
