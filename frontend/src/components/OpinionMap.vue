@@ -120,8 +120,10 @@ const tooltipStyle = computed(() => ({
 
 const latestOpinions = computed(() => {
   const map = new Map();
-  const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+  // ⚡ Bolt: Avoid Date instantiation in sort comparator for performance
+  // Expected impact: Removes O(N log N) Date allocations, significantly reducing GC overhead during re-renders
+  const sorted = [...opinions.value].sort((a, b) =>
+    a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0,
   );
   sorted.forEach((op) => {
     map.set(op.agent_id, op);
