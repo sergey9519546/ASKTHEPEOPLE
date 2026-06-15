@@ -119,13 +119,17 @@ const tooltipStyle = computed(() => ({
 }));
 
 const latestOpinions = computed(() => {
+  // ⚡ Bolt Performance Optimization
+  // Replaced O(N log N) sort with O(N) iteration and eliminated Date object
+  // instantiation by using direct ISO 8601 string comparison. This prevents
+  // unnecessary allocations and dramatically speeds up rendering cycles.
   const map = new Map();
-  const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
-  );
-  sorted.forEach((op) => {
-    map.set(op.agent_id, op);
-  });
+  for (const op of opinions.value) {
+    const existing = map.get(op.agent_id);
+    if (!existing || op.timestamp >= existing.timestamp) {
+      map.set(op.agent_id, op);
+    }
+  }
   return Array.from(map.values());
 });
 
