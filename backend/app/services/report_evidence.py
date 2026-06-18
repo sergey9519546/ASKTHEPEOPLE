@@ -23,13 +23,21 @@ def _section_query_seed(section_title: str, section_content: str) -> List[str]:
     seeds = [section_title]
     tokens = []
     for token in (section_title + " " + section_content).replace("\n", " ").split():
-        cleaned = token.strip(".,:;!?()[]{}\"'").lower()
+        cleaned = token.strip(".,:;!?()[]{}\"\'").lower()
         if len(cleaned) >= 5:
             tokens.append(cleaned)
         if len(tokens) >= 6:
             break
     seeds.extend(tokens[:3])
-    return [seed for seed in seeds if seed]
+
+    seen = set()
+    unique_seeds = []
+    for seed in seeds:
+        if seed and seed not in seen:
+            unique_seeds.append(seed)
+            seen.add(seed)
+
+    return unique_seeds
 
 
 def build_report_evidence(
