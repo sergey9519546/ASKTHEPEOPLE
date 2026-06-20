@@ -29,7 +29,13 @@ def _section_query_seed(section_title: str, section_content: str) -> List[str]:
         if len(tokens) >= 6:
             break
     seeds.extend(tokens[:3])
-    return [seed for seed in seeds if seed]
+    seen = set()
+    result = []
+    for seed in seeds:
+        if seed and seed not in seen:
+            seen.add(seed)
+            result.append(seed)
+    return result
 
 
 def build_report_evidence(
