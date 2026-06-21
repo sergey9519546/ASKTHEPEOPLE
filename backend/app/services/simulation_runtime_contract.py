@@ -210,11 +210,15 @@ def select_active_agent_ids(
     candidates: List[int] = []
     for cfg in agent_configs:
         agent_id = cfg.get("agent_id", 0)
+
+        platform_preference = cfg.get("platform_preference", "both")
+        if not _platform_matches(platform_preference, platform) and agent_id not in boost_ids:
+            continue
+
         active_hours = cfg.get("active_hours", list(range(8, 23)))
         if current_hour not in active_hours:
             continue
 
-        platform_preference = cfg.get("platform_preference", "both")
         activity_probability = float(cfg.get("activity_level", 0.5))
         activity_probability *= _platform_weight(platform_preference, platform)
 
