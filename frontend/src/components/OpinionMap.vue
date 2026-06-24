@@ -121,7 +121,9 @@ const tooltipStyle = computed(() => ({
 const latestOpinions = computed(() => {
   const map = new Map();
   const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+    // Bolt: Direct ISO 8601 string comparison is faster than creating Date objects for each comparison in v-for loops
+    (a, b) =>
+      a.timestamp > b.timestamp ? 1 : a.timestamp < b.timestamp ? -1 : 0,
   );
   sorted.forEach((op) => {
     map.set(op.agent_id, op);
