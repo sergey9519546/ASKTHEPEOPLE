@@ -329,6 +329,7 @@
 <script setup>
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
+import { setPendingUpload } from "../store/pendingUpload";
 import { getTemplates } from "../api/graph";
 import HistoryDatabase from "../components/HistoryDatabase.vue";
 
@@ -373,10 +374,8 @@ const handleDrop = (e) => { isDragOver.value = false; addFiles(Array.from(e.data
 const startSimulation = () => {
   if (!canSubmit.value || loading.value) return;
   loading.value = true;
-  import("../store/pendingUpload.js").then(({ setPendingUpload }) => {
-    setPendingUpload(files.value, formData.value.simulationRequirement);
-    router.push({ name: "Process", params: { projectId: "new" } });
-  });
+  setPendingUpload(files.value, formData.value.simulationRequirement);
+  router.push({ name: "Process", params: { projectId: "new" } });
 };
 
 const selectTemplate = (template) => {
