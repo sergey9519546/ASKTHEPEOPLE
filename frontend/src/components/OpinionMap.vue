@@ -119,12 +119,14 @@ const tooltipStyle = computed(() => ({
 }));
 
 const latestOpinions = computed(() => {
+  // BOLT OPTIMIZATION: Replaced O(N log N) date instantiation sort with O(N) string comparison
+  // Expected impact: Speeds up computed property updates significantly under high frequency polls.
   const map = new Map();
-  const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
-  );
-  sorted.forEach((op) => {
-    map.set(op.agent_id, op);
+  opinions.value.forEach((op) => {
+    const existing = map.get(op.agent_id);
+    if (!existing || op.timestamp > existing.timestamp) {
+      map.set(op.agent_id, op);
+    }
   });
   return Array.from(map.values());
 });
