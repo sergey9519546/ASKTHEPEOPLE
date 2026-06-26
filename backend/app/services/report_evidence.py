@@ -22,14 +22,23 @@ def _connect(path: str) -> sqlite3.Connection:
 def _section_query_seed(section_title: str, section_content: str) -> List[str]:
     seeds = [section_title]
     tokens = []
+    seen = set()
     for token in (section_title + " " + section_content).replace("\n", " ").split():
         cleaned = token.strip(".,:;!?()[]{}\"'").lower()
-        if len(cleaned) >= 5:
+        if len(cleaned) >= 5 and cleaned not in seen:
             tokens.append(cleaned)
+            seen.add(cleaned)
         if len(tokens) >= 6:
             break
     seeds.extend(tokens[:3])
-    return [seed for seed in seeds if seed]
+
+    unique_seeds = []
+    seed_seen = set()
+    for seed in seeds:
+        if seed and seed not in seed_seen:
+            unique_seeds.append(seed)
+            seed_seen.add(seed)
+    return unique_seeds
 
 
 def build_report_evidence(
