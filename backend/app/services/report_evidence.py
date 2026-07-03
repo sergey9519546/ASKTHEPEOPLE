@@ -52,7 +52,13 @@ def build_report_evidence(
 
         seeds = _section_query_seed(section.title, section_content)
         claim_counter = 1
-        for seed in seeds[:3]:
+        seen_seeds = set()
+        for seed in seeds:
+            if seed in seen_seeds:
+                continue
+            seen_seeds.add(seed)
+            if len(seen_seeds) > 3:
+                break
             cursor.execute(
                 """
                 SELECT platform, round_num, agent_id, action_type, action_args_json, trace_ref
