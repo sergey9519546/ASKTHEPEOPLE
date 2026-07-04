@@ -119,12 +119,13 @@ const tooltipStyle = computed(() => ({
 }));
 
 const latestOpinions = computed(() => {
+  // ⚡ Bolt: Replaced O(N log N) sort and Date instantiations with O(N) pass and ISO string comparison
   const map = new Map();
-  const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
-  );
-  sorted.forEach((op) => {
-    map.set(op.agent_id, op);
+  opinions.value.forEach((op) => {
+    const existing = map.get(op.agent_id);
+    if (!existing || op.timestamp >= existing.timestamp) {
+      map.set(op.agent_id, op);
+    }
   });
   return Array.from(map.values());
 });
