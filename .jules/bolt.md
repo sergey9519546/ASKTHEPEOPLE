@@ -1,0 +1,3 @@
+## 2024-05-18 - ISO 8601 String Comparison vs Date Object instantiation in Sort Callbacks
+**Learning:** Instantiating `new Date()` objects inside a `.sort()` callback in Vue/JavaScript causes significant memory allocation (GC pressure) and CPU overhead, as it operates in O(N log N) time on arrays. This is especially true for data structures like `latestOpinions` which updates on every polling cycle, causing repeated performance penalties.
+**Action:** Always compare ISO 8601 timestamp strings directly (e.g., `a.timestamp < b.timestamp`) in `.sort()` callbacks and loops rather than creating new Date objects when string comparison is sufficient and formats are uniform.
