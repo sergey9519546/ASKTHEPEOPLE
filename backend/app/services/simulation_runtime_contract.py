@@ -215,8 +215,15 @@ def select_active_agent_ids(
             continue
 
         platform_preference = cfg.get("platform_preference", "both")
+        is_boosted = agent_id in boost_ids
+
+        if not is_boosted and not _platform_matches(platform_preference, platform):
+            continue
+
         activity_probability = float(cfg.get("activity_level", 0.5))
-        activity_probability *= _platform_weight(platform_preference, platform)
+
+        if not is_boosted:
+            activity_probability *= _platform_weight(platform_preference, platform)
 
         reaction_style = str(cfg.get("reaction_style", "measured")).lower()
         novelty = float(cfg.get("novelty_seeking", 0.45))
@@ -234,7 +241,7 @@ def select_active_agent_ids(
             activity_probability += 0.04
         if conflict > 0.6 and round_num > 0:
             activity_probability += 0.03
-        if agent_id in boost_ids:
+        if is_boosted:
             activity_probability = max(activity_probability, 0.92)
 
         activity_probability = max(0.02, min(0.98, activity_probability))
