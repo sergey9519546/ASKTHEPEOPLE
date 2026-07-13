@@ -121,7 +121,9 @@ const tooltipStyle = computed(() => ({
 const latestOpinions = computed(() => {
   const map = new Map();
   const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+    // ⚡ Bolt: Direct ISO string comparison avoids object instantiation in O(N log N) sort callback, reducing GC overhead and CPU pressure.
+    (a, b) =>
+      a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0,
   );
   sorted.forEach((op) => {
     map.set(op.agent_id, op);
