@@ -1,0 +1,3 @@
+## 2024-05-27 - Avoid Date instantiation in sort callbacks
+**Learning:** Instantiating `Date` objects inside a `.sort()` callback for timestamp comparison causes significant garbage collection overhead and CPU pressure, especially as list sizes grow, since it creates `O(N log N)` ephemeral objects. In this architecture, timestamps are ISO 8601 strings which sort correctly lexicographically.
+**Action:** Always use direct string comparison (`a < b ? -1 : (a > b ? 1 : 0)`) for ISO 8601 timestamps in sort callbacks instead of `new Date()` to minimize memory allocation and improve render performance.
