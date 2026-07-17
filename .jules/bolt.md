@@ -1,0 +1,3 @@
+## 2024-05-14 - String Date Comparisons
+**Learning:** Instantiating `Date` objects in sorting loops (like `new Date(a.timestamp) - new Date(b.timestamp)`) creates unnecessary garbage collection overhead and CPU pressure in Vue's computed properties, causing performance bottlenecks. For ISO 8601 strings, direct string comparison (`a.timestamp < b.timestamp ? -1 : (a.timestamp > b.timestamp ? 1 : 0)`) is O(N log N) but avoids GC overhead.
+**Action:** Replace `Date` instantiation in `frontend/src/components/OpinionMap.vue` sorting logic with direct string comparison to optimize rendering performance.
