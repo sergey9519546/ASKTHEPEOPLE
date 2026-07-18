@@ -1,0 +1,3 @@
+## 2024-07-18 - Avoid Date Instantiation in Sort Callbacks
+**Learning:** Instantiating `new Date()` inside Vue `computed` property sort callbacks (like in `OpinionMap.vue`) causes O(N log N) object creations, leading to unnecessary GC overhead and UI lag when dealing with arrays of simulation opinions. Since ISO 8601 timestamps are lexicographically sortable, direct string comparison is sufficient and significantly faster.
+**Action:** When comparing dates for sorting, always check if they are ISO 8601 format and use direct string comparison (`a.timestamp < b.timestamp ? -1 : 1`) instead of parsing them into Date objects.
