@@ -121,7 +121,11 @@ const tooltipStyle = computed(() => ({
 const latestOpinions = computed(() => {
   const map = new Map();
   const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+    (a, b) => {
+      // ⚡ Bolt: Direct string comparison of ISO 8601 timestamps avoids Date instantiation
+      // in this O(N log N) loop, reducing GC pressure and CPU overhead during renders.
+      return a.timestamp < b.timestamp ? -1 : (a.timestamp > b.timestamp ? 1 : 0);
+    },
   );
   sorted.forEach((op) => {
     map.set(op.agent_id, op);
