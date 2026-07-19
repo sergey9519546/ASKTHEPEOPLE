@@ -113,14 +113,26 @@ def _build_event_content(event_type: str, payload: Dict[str, Any]) -> str:
     if payload.get("content"):
         return str(payload["content"]).strip()
     if event_type == "topic_spike":
-        topics = [str(topic).strip() for topic in _listify(payload.get("topics")) if str(topic).strip()]
+        topics = [
+            str(topic).strip()
+            for topic in _listify(payload.get("topics"))
+            if str(topic).strip()
+        ]
         if topics:
             return f"Topic spike: {', '.join(topics[:3])}"
         return "Topic spike is accelerating across the network."
     if event_type == "official_statement":
-        return str(payload.get("statement") or payload.get("summary") or "Official statement released.").strip()
+        return str(
+            payload.get("statement")
+            or payload.get("summary")
+            or "Official statement released."
+        ).strip()
     if event_type == "media_breaking_news":
-        return str(payload.get("headline") or payload.get("summary") or "Breaking news is spreading quickly.").strip()
+        return str(
+            payload.get("headline")
+            or payload.get("summary")
+            or "Breaking news is spreading quickly."
+        ).strip()
     if event_type == "seed_post":
         return str(payload.get("summary") or "Follow-up seed post.").strip()
     if event_type == "inject_post":
@@ -135,7 +147,11 @@ def _select_target_agent_ids(
     fallback_limit: int = 1,
 ) -> List[int]:
     agent_configs = config.get("agent_configs", [])
-    requested_ids = [agent_id for agent_id in _listify(targeting.get("agent_ids")) if isinstance(agent_id, int)]
+    requested_ids = [
+        agent_id
+        for agent_id in _listify(targeting.get("agent_ids"))
+        if isinstance(agent_id, int)
+    ]
     poster_agent_id = targeting.get("poster_agent_id")
     if isinstance(poster_agent_id, int):
         requested_ids.insert(0, poster_agent_id)
@@ -146,8 +162,12 @@ def _select_target_agent_ids(
         if agent_id in seen:
             continue
         seen.add(agent_id)
-        agent_cfg = next((cfg for cfg in agent_configs if cfg.get("agent_id") == agent_id), None)
-        if agent_cfg and _platform_matches(agent_cfg.get("platform_preference", "both"), platform):
+        agent_cfg = next(
+            (cfg for cfg in agent_configs if cfg.get("agent_id") == agent_id), None
+        )
+        if agent_cfg and _platform_matches(
+            agent_cfg.get("platform_preference", "both"), platform
+        ):
             unique_ids.append(agent_id)
     if unique_ids:
         return unique_ids[: max(fallback_limit, 1)]
@@ -167,7 +187,9 @@ def _select_target_agent_ids(
                 or str(cfg.get("entity_type", "")).lower() in roles
             )
         ]
-        matched.sort(key=lambda cfg: float(cfg.get("influence_weight", 1.0)), reverse=True)
+        matched.sort(
+            key=lambda cfg: float(cfg.get("influence_weight", 1.0)), reverse=True
+        )
         return [cfg.get("agent_id") for cfg in matched[: max(fallback_limit, 1)]]
 
     fallback = [
@@ -215,8 +237,15 @@ def select_active_agent_ids(
             continue
 
         platform_preference = cfg.get("platform_preference", "both")
+        if (
+            not _platform_matches(platform_preference, platform)
+            and agent_id not in boost_ids
+        ):
+            continue
+
         activity_probability = float(cfg.get("activity_level", 0.5))
-        activity_probability *= _platform_weight(platform_preference, platform)
+        if agent_id not in boost_ids:
+            activity_probability *= _platform_weight(platform_preference, platform)
 
         reaction_style = str(cfg.get("reaction_style", "measured")).lower()
         novelty = float(cfg.get("novelty_seeking", 0.45))
@@ -259,7 +288,9 @@ def _bootstrap_follow_specs(
     if not network_bootstrap.get("platforms", {}).get(platform, True):
         return []
 
-    relationship_bootstrap = read_json(relationship_bootstrap_path(simulation_dir), default=[])
+    relationship_bootstrap = read_json(
+        relationship_bootstrap_path(simulation_dir), default=[]
+    )
     config_by_agent = _agent_config_map(config)
     follow_density = float(network_bootstrap.get("follow_density", 0.35))
     role_bias_rules = {
@@ -278,14 +309,22 @@ def _bootstrap_follow_specs(
             continue
         source_cfg = config_by_agent.get(source_agent_id, {})
         target_cfg = config_by_agent.get(target_agent_id, {})
-        if not _platform_matches(source_cfg.get("platform_preference", "both"), platform):
+        if not _platform_matches(
+            source_cfg.get("platform_preference", "both"), platform
+        ):
             continue
-        if not _platform_matches(target_cfg.get("platform_preference", "both"), platform):
+        if not _platform_matches(
+            target_cfg.get("platform_preference", "both"), platform
+        ):
             continue
 
-        role_key = str(source_cfg.get("normalized_role", source_cfg.get("entity_type", ""))).lower()
+        role_key = str(
+            source_cfg.get("normalized_role", source_cfg.get("entity_type", ""))
+        ).lower()
         role_bias = role_bias_rules.get(role_key, 0.6)
-        effective_score = (float(relation.get("follow_seed", 0.0)) * 0.7) + (float(relation.get("affinity_score", 0.0)) * 0.3)
+        effective_score = (float(relation.get("follow_seed", 0.0)) * 0.7) + (
+            float(relation.get("affinity_score", 0.0)) * 0.3
+        )
         effective_score *= 0.6 + (role_bias * 0.4)
         if effective_score < threshold:
             continue
@@ -308,8 +347,12 @@ def _bootstrap_follow_specs(
     return specs
 
 
-def _bootstrap_post_specs(config: Dict[str, Any], platform: str) -> List[Dict[str, Any]]:
-    bootstrap_posts = config.get("bootstrap_posts") or config.get("event_config", {}).get("initial_posts", [])
+def _bootstrap_post_specs(
+    config: Dict[str, Any], platform: str
+) -> List[Dict[str, Any]]:
+    bootstrap_posts = config.get("bootstrap_posts") or config.get(
+        "event_config", {}
+    ).get("initial_posts", [])
     specs: List[Dict[str, Any]] = []
     for post in bootstrap_posts:
         poster_agent_id = post.get("poster_agent_id")
@@ -334,7 +377,9 @@ def _bootstrap_post_specs(config: Dict[str, Any], platform: str) -> List[Dict[st
                 "action_args": {"content": content},
                 "content": content,
                 "metadata": {
-                    "poster_assignment_confidence": post.get("poster_assignment_confidence"),
+                    "poster_assignment_confidence": post.get(
+                        "poster_assignment_confidence"
+                    ),
                     "poster_assignment_reason": post.get("poster_assignment_reason"),
                     "poster_type": post.get("poster_type"),
                 },
@@ -343,9 +388,13 @@ def _bootstrap_post_specs(config: Dict[str, Any], platform: str) -> List[Dict[st
     return specs
 
 
-def bootstrap_boost_agent_ids(simulation_dir: str, config: Dict[str, Any], platform: str) -> List[int]:
+def bootstrap_boost_agent_ids(
+    simulation_dir: str, config: Dict[str, Any], platform: str
+) -> List[int]:
     ids = []
-    for spec in _bootstrap_follow_specs(simulation_dir, config, platform) + _bootstrap_post_specs(config, platform):
+    for spec in _bootstrap_follow_specs(
+        simulation_dir, config, platform
+    ) + _bootstrap_post_specs(config, platform):
         ids.append(spec["source_agent_id"])
         target_agent_id = spec.get("metadata", {}).get("target_agent_id")
         if isinstance(target_agent_id, int):
@@ -378,7 +427,9 @@ def _scheduled_event_specs(
 
         if event_type in POST_EVENT_TYPES:
             limit = 3 if event_type == "topic_spike" else 1
-            target_ids = _select_target_agent_ids(config, platform, targeting, fallback_limit=limit)
+            target_ids = _select_target_agent_ids(
+                config, platform, targeting, fallback_limit=limit
+            )
             content = _build_event_content(event_type, payload)
             if not content:
                 continue
@@ -400,10 +451,14 @@ def _scheduled_event_specs(
             continue
 
         if event_type in FOLLOW_EVENT_TYPES:
-            relationship_bootstrap = read_json(relationship_bootstrap_path(simulation_dir), default=[])
+            relationship_bootstrap = read_json(
+                relationship_bootstrap_path(simulation_dir), default=[]
+            )
             source_roles = {
                 str(role).strip().lower()
-                for role in _listify(targeting.get("source_roles") or targeting.get("roles"))
+                for role in _listify(
+                    targeting.get("source_roles") or targeting.get("roles")
+                )
                 if str(role).strip()
             }
             target_roles = {
@@ -417,8 +472,12 @@ def _scheduled_event_specs(
                     continue
                 source_cfg = config_by_agent.get(relation.get("source_agent_id"), {})
                 target_cfg = config_by_agent.get(relation.get("target_agent_id"), {})
-                source_role = str(source_cfg.get("normalized_role", source_cfg.get("entity_type", ""))).lower()
-                target_role = str(target_cfg.get("normalized_role", target_cfg.get("entity_type", ""))).lower()
+                source_role = str(
+                    source_cfg.get("normalized_role", source_cfg.get("entity_type", ""))
+                ).lower()
+                target_role = str(
+                    target_cfg.get("normalized_role", target_cfg.get("entity_type", ""))
+                ).lower()
                 if source_roles and source_role not in source_roles:
                     continue
                 if target_roles and target_role not in target_roles:
@@ -533,7 +592,9 @@ async def apply_bootstrap_actions(
     action_type_cls: Any,
     action_logger: Any = None,
 ) -> int:
-    specs = _bootstrap_follow_specs(simulation_dir, config, platform) + _bootstrap_post_specs(config, platform)
+    specs = _bootstrap_follow_specs(
+        simulation_dir, config, platform
+    ) + _bootstrap_post_specs(config, platform)
     return await _apply_specs(
         env=env,
         simulation_dir=simulation_dir,
@@ -630,7 +691,15 @@ async def apply_runtime_control(
             "targeting": args.get("targeting") or {},
             "reasoning": args.get("reason"),
         }
-        specs = _scheduled_event_specs(simulation_dir, {"agent_configs": config.get("agent_configs", []), "event_schedule": [event]}, platform, round_num)
+        specs = _scheduled_event_specs(
+            simulation_dir,
+            {
+                "agent_configs": config.get("agent_configs", []),
+                "event_schedule": [event],
+            },
+            platform,
+            round_num,
+        )
         for spec in specs:
             spec.setdefault("metadata", {})
             spec["metadata"]["control_source"] = "ipc"
@@ -663,7 +732,7 @@ async def apply_reflection_round(
 ) -> int:
     """
     Trigger a reflection round for all available agents.
-    
+
     Args:
         env: OASIS environment
         platform: Platform name
@@ -672,12 +741,12 @@ async def apply_reflection_round(
         manual_action_cls: OASIS ManualAction class
         action_type_cls: OASIS ActionType class
         action_logger: Optional action logger
-        
+
     Returns:
         Number of agents that reflected
     """
     from oasis import ActionType as OasisActionType
-    
+
     actions: Dict[Any, Any] = {}
     prompt = get_reflection_prompt()
 
@@ -688,7 +757,7 @@ async def apply_reflection_round(
     for agent_id, agent in agent_list:
         action = manual_action_cls(
             action_type=OasisActionType.INTERVIEW,
-            action_args={"prompt": prompt, "is_reflection": True}
+            action_args={"prompt": prompt, "is_reflection": True},
         )
         actions[agent] = action
 
@@ -699,13 +768,13 @@ async def apply_reflection_round(
 
     if action_logger:
         for agent_id, agent in agent_list:
-             action_type_str = "INTERVIEW" # Standard name for logging
-             action_logger.log_action(
-                 round_num=round_num,
-                 agent_id=agent_id,
-                 agent_name=agent_names.get(agent_id, f"Agent_{agent_id}"),
-                 action_type=action_type_str,
-                 action_args={"prompt": prompt, "is_reflection": True},
-             )
+            action_type_str = "INTERVIEW"  # Standard name for logging
+            action_logger.log_action(
+                round_num=round_num,
+                agent_id=agent_id,
+                agent_name=agent_names.get(agent_id, f"Agent_{agent_id}"),
+                action_type=action_type_str,
+                action_args={"prompt": prompt, "is_reflection": True},
+            )
 
     return len(actions)
