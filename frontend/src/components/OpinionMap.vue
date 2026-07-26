@@ -120,8 +120,9 @@ const tooltipStyle = computed(() => ({
 
 const latestOpinions = computed(() => {
   const map = new Map();
+  // Use string lexicographical comparison for ISO8601 strings to avoid O(N log N) Date object GC overhead
   const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+    (a, b) => a.timestamp < b.timestamp ? -1 : (a.timestamp > b.timestamp ? 1 : 0),
   );
   sorted.forEach((op) => {
     map.set(op.agent_id, op);

@@ -1,0 +1,3 @@
+## 2026-07-26 - Optimize sorting in Vue computed property
+**Learning:** Instantiating `Date` objects in a `sort` callback can cause a significant amount of garbage collection overhead when the array size is large (O(N log N) `Date` objects created and thrown away), causing UI stuttering. String-based ISO8601 lexicographical comparison is highly efficient and safe provided that all dates have consistent precision.
+**Action:** Always prefer string-based lexicographical comparisons for ISO8601 strings when sorting data to avoid unnecessary GC overhead, especially in Vue reactive computed properties that might evaluate frequently.
