@@ -244,11 +244,16 @@ def select_active_agent_ids(
         if random.random() < activity_probability:
             candidates.append(agent_id)
 
-    if not candidates:
+    selected = [agent_id for agent_id in candidates if agent_id in boost_ids]
+    remaining = [agent_id for agent_id in candidates if agent_id not in boost_ids]
+    
+    needed = max(0, target_count - len(selected))
+    if needed > 0 and remaining:
+        selected.extend(random.sample(remaining, min(needed, len(remaining))))
+    
+    if not selected:
         return list(boost_ids)[:target_count]
-    if len(candidates) <= target_count:
-        return candidates
-    return random.sample(candidates, min(target_count, len(candidates)))
+    return selected
 
 
 def _bootstrap_follow_specs(

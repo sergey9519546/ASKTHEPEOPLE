@@ -20,9 +20,9 @@ def _connect(path: str) -> sqlite3.Connection:
 
 
 def _section_query_seed(section_title: str, section_content: str) -> List[str]:
-    seeds = [section_title]
+    seeds = [section_title.strip()] if section_title and section_title.strip() else []
     tokens = []
-    seen = {section_title.lower()}
+    seen = {s.lower() for s in seeds}
     for token in (section_title + " " + section_content).replace("\n", " ").split():
         cleaned = token.strip(".,:;!?()[]{}\"'").lower()
         if len(cleaned) >= 5 and cleaned not in seen:
@@ -30,7 +30,9 @@ def _section_query_seed(section_title: str, section_content: str) -> List[str]:
             seen.add(cleaned)
         if len(tokens) >= 6:
             break
-    seeds.extend(tokens[:3])
+    for t in tokens[:3]:
+        if t not in seeds:
+            seeds.append(t)
     return [seed for seed in seeds if seed]
 
 
