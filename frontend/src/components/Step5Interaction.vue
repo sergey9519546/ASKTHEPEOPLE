@@ -286,22 +286,30 @@
           </div>
 
           <div class="chat-input-area">
-            <textarea
-              v-model="chatInput"
-              class="chat-input"
-              placeholder="Enter your query..."
-              @keydown.enter.exact.prevent="sendMessage"
-              :disabled="
-                isSending || (!selectedAgent && chatTarget === 'agent')
-              "
-            ></textarea>
-            <button
-              class="send-btn"
-              @click="sendMessage"
-              :disabled="!chatInput.trim() || isSending"
-            >
-              SEND
-            </button>
+            <div class="chat-input-row">
+              <textarea
+                v-model="chatInput"
+                class="chat-input"
+                placeholder="Enter your query..."
+                @keydown.enter.exact.prevent="sendMessage"
+                :disabled="
+                  isSending || (!selectedAgent && chatTarget === 'agent')
+                "
+              ></textarea>
+              <button
+                class="send-btn"
+                @click="sendMessage"
+                :disabled="!chatInput.trim() || isSending"
+              >
+                SEND
+              </button>
+            </div>
+            <div v-if="chatTarget === 'agent'" class="chat-controls">
+              <label class="bypass-opt-checkbox">
+                <input type="checkbox" v-model="bypassPromptOpt" />
+                <span>BYPASS PROMPT OPTIMIZATION (RAW MODE)</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -354,17 +362,23 @@
                 class="survey-input"
                 placeholder="Enter universal inquiry for selected agents..."
               ></textarea>
-              <button
-                class="submit-survey-btn"
-                @click="submitSurvey"
-                :disabled="
-                  selectedAgents.size === 0 ||
-                  !surveyQuestion.trim() ||
-                  isSurveying
-                "
-              >
-                DISPATCH SURVEY
-              </button>
+              <div class="survey-controls-row">
+                <label class="bypass-opt-checkbox dark">
+                  <input type="checkbox" v-model="bypassPromptOpt" />
+                  <span>BYPASS PROMPT OPTIMIZATION (RAW MODE)</span>
+                </label>
+                <button
+                  class="submit-survey-btn"
+                  @click="submitSurvey"
+                  :disabled="
+                    selectedAgents.size === 0 ||
+                    !surveyQuestion.trim() ||
+                    isSurveying
+                  "
+                >
+                  DISPATCH SURVEY
+                </button>
+              </div>
             </div>
           </div>
 
@@ -453,6 +467,7 @@ const selectedAgents = ref(new Set());
 const surveyQuestion = ref("");
 const surveyResults = ref([]);
 const isSurveying = ref(false);
+const bypassPromptOpt = ref(false);
 
 const chatMessages = ref(null);
 
@@ -672,6 +687,7 @@ const sendMessage = async () => {
       const res = await interviewAgents({
         simulation_id: props.simulationId,
         interviews: [{ agent_id: selectedAgentIndex.value, prompt: msg }],
+        bypass_prompt_optimization: bypassPromptOpt.value,
       });
       if (res.success) {
         const results = res.data.result.results;
@@ -721,6 +737,7 @@ const submitSurvey = async () => {
         agent_id: idx,
         prompt: surveyQuestion.value.trim(),
       })),
+      bypass_prompt_optimization: bypassPromptOpt.value,
     });
     if (res.success) {
       const results = res.data.result.results;
@@ -788,46 +805,52 @@ watch(() => props.simulationId, loadData);
 
 <style scoped>
 .step5-interaction-workbench {
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--atp-white);
+  background: var(--bg-color);
   color: var(--atp-black);
-  font-family: "Inter", sans-serif;
+  font-family: var(--font-sans);
   overflow: hidden;
 }
 
 .workbench-header {
-  height: 80px;
-  border-bottom: 4px solid var(--atp-black);
-  padding: 0 40px;
+  height: 60px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
 }
 
 .workbench-title {
-  font-weight: 900;
-  font-size: 24px;
-  letter-spacing: -1px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--atp-black);
 }
 .workbench-subtitle {
-  font-size: 14px;
-  font-weight: 600;
-  opacity: 0.8;
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 2px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 
 .sim-dashboard {
   display: flex;
-  gap: 20px;
-  padding: 10px 20px;
-  background: #f0f0f0;
+  gap: 16px;
+  padding: 6px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  align-items: center;
 }
 .dash-item {
   display: flex;
@@ -835,42 +858,46 @@ watch(() => props.simulationId, loadData);
 }
 .dash-label {
   font-size: 8px;
-  font-weight: 900;
-  opacity: 0.5;
-  font-family: var(--font-mono);
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
 }
 .dash-value {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 700;
 }
 .dash-value.running {
-  color: var(--bauhaus-red);
+  color: var(--accent-color);
 }
 .dash-value.completed {
-  color: var(--bauhaus-yellow);
+  color: var(--accent-tertiary);
 }
 .dash-value.failed {
-  color: var(--bauhaus-blue);
+  color: #64748b;
 }
 
 .abort-btn {
-  background: var(--atp-black);
-  color: var(--atp-white);
+  background: #fee2e2;
+  color: var(--accent-color);
   border: none;
-  font-size: 10px;
-  font-weight: 950;
-  padding: 5px 12px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 12px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 .abort-btn:hover {
-  background: var(--bauhaus-blue);
+  background: #fecaca;
 }
 
 .simulation-badge {
-  padding: 8px 16px;
-  border: 3px solid var(--atp-black);
-  font-weight: 800;
-  font-size: 12px;
+  padding: 4px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 10px;
+  background: #f8fafc;
 }
 
 .workbench-layout {
@@ -880,39 +907,47 @@ watch(() => props.simulationId, loadData);
 }
 
 .context-panel {
-  width: 450px;
-  border-right: 4px solid var(--atp-black);
+  width: 380px;
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  background: #ffffff;
 }
 
 .panel-header {
-  height: 60px;
-  border-bottom: 3px solid var(--atp-black);
-  padding: 0 20px;
+  height: 50px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: rgba(255, 255, 255, 0.8);
 }
 .panel-title {
-  font-weight: 800;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 11px;
+  color: #475569;
+  text-transform: uppercase;
 }
 .panel-actions {
   display: flex;
-  gap: 5px;
+  gap: 4px;
 }
 .panel-toggle-btn {
-  border: 2px solid var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
   background: transparent;
-  font-size: 10px;
-  font-weight: 900;
-  padding: 4px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 8px;
   cursor: pointer;
+  color: #64748b;
+  transition: all 0.15s ease;
 }
 .panel-toggle-btn.active {
-  background: var(--atp-black);
+  background: #0f172a;
   color: var(--atp-white);
+  border-color: #0f172a;
 }
 
 .panel-scroll-area {
@@ -922,46 +957,54 @@ watch(() => props.simulationId, loadData);
 
 .report-container,
 .activity-container {
-  padding: 20px;
+  padding: 16px;
 }
 
 .activity-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 .panel-subtitle {
-  font-weight: 950;
-  font-size: 12px;
+  font-weight: 700;
+  font-size: 11px;
+  color: #475569;
 }
 .live-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 2px solid var(--atp-black);
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 0 0 1.5px #cbd5e1;
 }
 .live-dot.pulse {
-  background: var(--bauhaus-yellow);
+  background: var(--accent-tertiary);
+  box-shadow: 0 0 0 1.5px rgba(16, 185, 129, 0.4);
   animation: pulse 1s infinite alternate;
 }
 @keyframes pulse {
   to {
-    transform: scale(1.3);
-    opacity: 0.5;
+    transform: scale(1.25);
+    opacity: 0.6;
   }
 }
 
 .activity-item {
-  margin-bottom: 12px;
-  padding: 12px;
+  margin-bottom: 10px;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
 }
 .activity-meta {
   display: flex;
   justify-content: space-between;
   font-size: 8px;
-  font-weight: 900;
-  margin-bottom: 6px;
+  font-weight: 700;
+  color: #94a3b8;
+  margin-bottom: 4px;
+  text-transform: uppercase;
 }
 .action-platform.twitter {
   color: #1da1f2;
@@ -970,163 +1013,219 @@ watch(() => props.simulationId, loadData);
   color: #ff4500;
 }
 .action-text {
-  margin-top: 5px;
+  margin-top: 4px;
   font-style: italic;
-  font-size: 11px;
-  opacity: 0.8;
+  font-size: 10px;
+  color: #475569;
 }
 
 .interaction-hub {
   flex: 1;
   display: flex;
   flex-direction: column;
+  background: #f8fafc;
 }
 
 .bauhaus-card {
-  border: 4px solid var(--atp-black);
-  padding: 20px;
-  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 16px;
   background: var(--atp-white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 .bauhaus-card-mini {
-  border: 2px solid var(--atp-black);
-  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px;
   background: var(--atp-white);
 }
 
 .interface-tabs {
-  height: 60px;
-  border-bottom: 4px solid var(--atp-black);
+  height: 50px;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   position: relative;
+  background: #ffffff;
 }
 .tab-btn {
   height: 100%;
-  padding: 0 30px;
+  padding: 0 20px;
   border: none;
   background: transparent;
-  font-weight: 800;
-  font-size: 12px;
-  border-right: 3px solid var(--atp-black);
+  font-weight: 700;
+  font-size: 11px;
+  color: #64748b;
+  border-right: 1px solid var(--border-color);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.tab-btn:hover {
+  background: #f8fafc;
+  color: var(--atp-black);
 }
 .tab-btn.active {
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
+  background: #f8fafc;
+  color: var(--atp-black);
 }
 
 .chat-viewport {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 30px;
-  background: #eee;
+  padding: 24px;
+  background: #f8fafc;
 }
 .messages-list {
   flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 .message-item {
-  max-width: 80%;
+  max-width: 75%;
 }
 .message-item.user {
   align-self: flex-end;
-  border-color: var(--bauhaus-red);
+  background: #ffffff;
+  border-color: #cbd5e1;
 }
 .message-item.assistant {
   align-self: flex-start;
+  background: #ffffff;
 }
 
 .chat-input-area {
-  margin-top: 20px;
-  background: var(--atp-black);
-  padding: 15px;
+  margin-top: 16px;
+  background: #ffffff;
+  border-top: 1px solid var(--border-color);
+  padding: 16px;
   display: flex;
-  gap: 15px;
+  flex-direction: column;
+  gap: 12px;
+}
+.chat-input-row {
+  display: flex;
+  gap: 12px;
 }
 .chat-input {
   flex: 1;
-  background: var(--atp-white);
-  border: 4px solid var(--atp-white);
-  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 10px;
   resize: none;
+  font-size: 12px;
+  outline: none;
+}
+.chat-input:focus {
+  border-color: #cbd5e1;
+  background: #ffffff;
 }
 .send-btn {
-  background: var(--bauhaus-red);
+  background: #0f172a;
   color: var(--atp-white);
   border: none;
-  padding: 0 30px;
-  font-weight: 800;
+  padding: 0 20px;
+  font-weight: 700;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+.send-btn:hover {
+  background: #1e293b;
 }
 
 .survey-viewport {
   flex: 1;
-  padding: 30px;
+  padding: 24px;
   overflow-y: auto;
 }
 .setup-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 .setup-controls {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
 }
 .export-csv-btn {
-  background: var(--bauhaus-red);
-  color: var(--atp-white);
-  border: none;
-  font-size: 10px;
-  font-weight: 900;
-  padding: 6px 12px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid var(--border-color);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 4px;
   cursor: pointer;
+  transition: all 0.2s ease;
+}
+.export-csv-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .agent-selection-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-  margin: 20px 0;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 16px 0;
 }
 .agent-label {
-  border: 2px solid var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
   padding: 8px;
-  font-weight: 700;
-  font-size: 12px;
+  font-weight: 600;
+  font-size: 11px;
   cursor: pointer;
+  background: #ffffff;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.agent-label:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
 }
 .agent-label.checked {
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #2563eb;
 }
 
 .submit-survey-btn {
   width: 100%;
-  background: var(--bauhaus-red);
+  background: #0f172a;
   color: var(--atp-white);
   border: none;
-  padding: 15px;
-  font-weight: 800;
-  font-size: 18px;
+  padding: 12px;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  margin-top: 20px;
+  margin-top: 16px;
+  transition: background 0.15s ease;
+}
+.submit-survey-btn:hover {
+  background: #1e293b;
 }
 
 .bauhaus-loader {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--atp-black);
-  border-top-color: var(--bauhaus-red);
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f1f5f9;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
   animation: spin 1s infinite linear;
 }
 @keyframes spin {
@@ -1137,11 +1236,11 @@ watch(() => props.simulationId, loadData);
 
 .loading-dots span {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  background: var(--atp-black);
+  width: 6px;
+  height: 6px;
+  background: #cbd5e1;
   border-radius: 50%;
-  margin-right: 5px;
+  margin-right: 4px;
   animation: bounce 0.6s infinite alternate;
 }
 .loading-dots span:nth-child(2) {
@@ -1152,40 +1251,81 @@ watch(() => props.simulationId, loadData);
 }
 @keyframes bounce {
   to {
-    transform: translateY(-10px);
+    transform: translateY(-6px);
   }
 }
 
 .opinion-map-viewport {
   flex: 1;
-  padding: 30px;
-  background: #f5f5f5;
+  padding: 24px;
+  background: #ffffff;
   overflow: hidden;
 }
 
 /* Markdown Styles */
 .md-content ul {
-  padding-left: 20px;
-  margin: 10px 0;
+  padding-left: 16px;
+  margin: 8px 0;
 }
 .md-content li {
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 .table-wrapper {
   overflow-x: auto;
-  margin: 15px 0;
-  border: 2px solid var(--atp-black);
+  margin: 12px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
 }
 .table-wrapper table {
   width: 100%;
   border-collapse: collapse;
 }
 .table-wrapper td {
-  padding: 8px;
-  border: 1px solid #ddd;
-  font-size: 12px;
+  padding: 6px 10px;
+  border: 1px solid #f1f5f9;
+  font-size: 11px;
 }
 .table-wrapper tr:nth-child(even) {
-  background: #f9f9f9;
+  background: #f8fafc;
+}
+
+.chat-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bypass-opt-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.bypass-opt-checkbox.dark {
+  color: var(--atp-black);
+}
+
+.bypass-opt-checkbox input {
+  cursor: pointer;
+  accent-color: var(--accent-color);
+}
+
+.survey-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.survey-controls-row .submit-survey-btn {
+  margin-top: 0;
+  width: auto;
+  min-width: 200px;
 }
 </style>

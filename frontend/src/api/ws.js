@@ -1,8 +1,9 @@
 /**
- * WebSocket helpers for ASKTHEPEOPLE.
+ * WebSocket helpers for ASKTHEPEOPLE with built-in resilience.
  *
- * Both helpers return the native WebSocket object so callers can call
- * ws.close() when they unmount.
+ * Both helpers return a ResilientWebSocket wrapper object that exposes a
+ * `.close()` method identical to the native WebSocket interface, but manages
+ * auto-reconnection, exponential backoff, and an inactivity watchdog timer.
  *
  * URL derivation:
  *   - If VITE_API_BASE_URL is set (e.g. https://myapp.railway.app), convert
@@ -19,48 +20,143 @@ function wsBaseUrl() {
   return `${proto}//${window.location.host}`
 }
 
-/**
- * Open a WebSocket to /ws/simulation/<simulationId>.
- *
- * The server pushes JSON frames typed as:
- *   { type: 'state', runner_status, current_round, …, recent_actions }
- *   { type: 'error', code, message }
- *   { type: 'done',  runner_status }
- *
- * @param {string} simulationId
- * @param {{ onMessage, onClose, onError }} handlers
- * @returns {WebSocket}
- */
-export function connectSimulationWs(simulationId, { onMessage, onClose, onError } = {}) {
-  const url = `${wsBaseUrl()}/ws/simulation/${simulationId}`
-  const ws = new WebSocket(url)
-  ws.onmessage = (e) => {
-    try { onMessage?.(JSON.parse(e.data)) } catch (_) { /* ignore parse errors */ }
+class ResilientWebSocket {
+  constructor(url, { onMessage, onClose, onError } = {}) {
+    this.url = url;
+    this.onMessage = onMessage;
+    this.onClose = onClose;
+    this.onError = onError;
+    this.ws = null;
+    this.closedByUser = false;
+    this.reconnectAttempts = 0;
+    this.maxReconnectDelay = 15000;
+    this.reconnectTimer = null;
+    this.watchdogTimer = null;
+    this.watchdogTimeoutMs = 12000; // Expected ping/frame from server every 1s-2s; 12s represents missing multiple frames.
+
+    this.connect();
   }
-  ws.onclose  = (e) => onClose?.(e)
-  ws.onerror  = (e) => onError?.(e)
-  return ws
+
+  connect() {
+    if (this.closedByUser) return;
+
+    console.log(`[WS] Connecting to: ${this.url}`);
+    try {
+      this.ws = new WebSocket(this.url);
+    } catch (err) {
+      this.handleDisconnect(err);
+      return;
+    }
+
+    this.ws.onopen = () => {
+      console.log(`[WS] Connection established: ${this.url}`);
+      this.reconnectAttempts = 0;
+      this.startWatchdog();
+    };
+
+    this.ws.onmessage = (e) => {
+      this.feedWatchdog();
+      try {
+        const parsed = JSON.parse(e.data);
+        this.onMessage?.(parsed);
+      } catch (_) {
+        // Skip parse errors or non-JSON heartbeats
+      }
+    };
+
+    this.ws.onclose = (e) => {
+      this.stopWatchdog();
+      if (this.closedByUser) {
+        console.log(`[WS] Connection closed cleanly by client request.`);
+        this.onClose?.(e);
+      } else {
+        console.warn(`[WS] Connection closed unexpectedly. Scheduling reconnect.`);
+        this.handleDisconnect(e);
+      }
+    };
+
+    this.ws.onerror = (e) => {
+      console.error(`[WS] Error:`, e);
+      this.onError?.(e);
+    };
+  }
+
+  handleDisconnect(e) {
+    if (this.closedByUser) return;
+    
+    // Clean up current reference
+    if (this.ws) {
+      try { this.ws.close(); } catch (_) {}
+      this.ws = null;
+    }
+
+    // Schedule next reconnect attempt with exponential backoff
+    const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), this.maxReconnectDelay);
+    this.reconnectAttempts++;
+    console.log(`[WS] Attempting reconnect in ${Math.round(delay)}ms (Attempt #${this.reconnectAttempts})`);
+    
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.connect();
+    }, delay);
+  }
+
+  feedWatchdog() {
+    this.stopWatchdog();
+    this.startWatchdog();
+  }
+
+  startWatchdog() {
+    if (this.closedByUser) return;
+    this.watchdogTimer = setTimeout(() => {
+      console.warn(`[WS] Inactivity threshold exceeded on ${this.url}. Reconnecting...`);
+      if (this.ws) {
+        try { this.ws.close(); } catch (_) {}
+      } else {
+        this.handleDisconnect(new Error("Watchdog timeout"));
+      }
+    }, this.watchdogTimeoutMs);
+  }
+
+  stopWatchdog() {
+    if (this.watchdogTimer) {
+      clearTimeout(this.watchdogTimer);
+      this.watchdogTimer = null;
+    }
+  }
+
+  close() {
+    this.closedByUser = true;
+    this.stopWatchdog();
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
+  }
 }
 
 /**
- * Open a WebSocket to /ws/report/<reportId>.
- *
- * The server pushes JSON frames typed as:
- *   { type: 'progress', status, progress, message, sections_done, sections_total }
- *   { type: 'error',    code, message }
- *   { type: 'done',     status }
- *
+ * Open a resilient WebSocket to /ws/simulation/<simulationId>.
+ * @param {string} simulationId
+ * @param {{ onMessage, onClose, onError }} handlers
+ * @returns {ResilientWebSocket}
+ */
+export function connectSimulationWs(simulationId, { onMessage, onClose, onError } = {}) {
+  const url = `${wsBaseUrl()}/ws/simulation/${simulationId}`;
+  return new ResilientWebSocket(url, { onMessage, onClose, onError });
+}
+
+/**
+ * Open a resilient WebSocket to /ws/report/<reportId>.
  * @param {string} reportId
  * @param {{ onMessage, onClose, onError }} handlers
- * @returns {WebSocket}
+ * @returns {ResilientWebSocket}
  */
 export function connectReportWs(reportId, { onMessage, onClose, onError } = {}) {
-  const url = `${wsBaseUrl()}/ws/report/${reportId}`
-  const ws = new WebSocket(url)
-  ws.onmessage = (e) => {
-    try { onMessage?.(JSON.parse(e.data)) } catch (_) { /* ignore parse errors */ }
-  }
-  ws.onclose  = (e) => onClose?.(e)
-  ws.onerror  = (e) => onError?.(e)
-  return ws
+  const url = `${wsBaseUrl()}/ws/report/${reportId}`;
+  return new ResilientWebSocket(url, { onMessage, onClose, onError });
 }

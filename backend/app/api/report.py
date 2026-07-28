@@ -487,16 +487,14 @@ def download_report(report_id: str):
         md_path = ReportManager._get_report_markdown_path(report_id)
         
         if not os.path.exists(md_path):
-            # If the MD file doesn't exist, generate a temporary file
-            import tempfile
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-                f.write(report.markdown_content)
-                temp_path = f.name
-            
+            # If the MD file doesn't exist, send it from memory using BytesIO
+            from io import BytesIO
+            md_bytes = report.markdown_content.encode('utf-8')
             return send_file(
-                temp_path,
+                BytesIO(md_bytes),
                 as_attachment=True,
-                download_name=f"{report_id}.md"
+                download_name=f"{report_id}.md",
+                mimetype='text/markdown'
             )
         
         return send_file(
@@ -527,14 +525,9 @@ def export_report_pdf(report_id: str):
         generator = PDFGenerator()
         pdf_bytes = generator.generate(report.to_dict())
         
-        # Create a temporary file to send
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as f:
-            f.write(pdf_bytes)
-            temp_path = f.name
-            
+        from io import BytesIO
         return send_file(
-            temp_path,
+            BytesIO(pdf_bytes),
             as_attachment=True,
             download_name=f"ATP_REPORT_{report_id}.pdf",
             mimetype='application/pdf'
@@ -561,15 +554,11 @@ def export_report_csv(report_id: str):
         zep = ZepToolsService()
         exporter = CSVExporter(zep)
         csv_data = exporter.export_graph(graph_id)
+        csv_bytes = csv_data.encode('utf-8')
         
-        # Create temporary file
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False, encoding='utf-8') as f:
-            f.write(csv_data)
-            temp_path = f.name
-            
+        from io import BytesIO
         return send_file(
-            temp_path,
+            BytesIO(csv_bytes),
             as_attachment=True,
             download_name=f"ATP_DATA_{report_id}.csv",
             mimetype='text/csv'

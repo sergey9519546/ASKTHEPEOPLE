@@ -7,7 +7,7 @@
       </div>
       <div class="header-right">
         <button
-          class="bauhaus-btn small"
+          class="btn-action small"
           @click="$emit('refresh')"
           :disabled="loading"
           title="Refresh Graph"
@@ -19,10 +19,10 @@
             aria-hidden="true"
             >↻</span
           >
-          <span class="btn-text">REFRESH</span>
+          <span class="btn-text">Refresh</span>
         </button>
         <button
-          class="bauhaus-btn small square"
+          class="btn-action small square"
           @click="$emit('toggle-maximize')"
           title="Maximize View"
           aria-label="Toggle maximize view"
@@ -64,7 +64,7 @@
         <Transition name="panel-slide">
           <div
             v-if="selectedItem"
-            class="entity-detail-panel bauhaus-card"
+            class="entity-detail-panel"
             role="dialog"
             aria-modal="true"
             aria-labelledby="detail-header"
@@ -78,7 +78,7 @@
                 class="type-badge"
                 :style="{ background: selectedItem.color }"
               >
-                {{ selectedItem.entityType.toUpperCase() }}
+                {{ selectedItem.entityType }}
               </span>
               <button
                 class="close-detail-btn"
@@ -89,18 +89,18 @@
               </button>
             </header>
 
-            <div class="detail-scroll-area">
+            <div class="detail-scroll-area scrollbar-thin">
               <!-- Node Specific -->
               <div v-if="selectedItem.type === 'node'" class="node-attributes">
                 <div class="attr-row">
-                  <label>IDENTIFIER</label>
-                  <div class="attr-value title">
+                  <label>Identifier</label>
+                  <div class="attr-value title text-rose-500">
                     {{ selectedItem.data.name }}
                   </div>
                 </div>
                 <div class="attr-row">
-                  <label>UUID_HEX</label>
-                  <div class="attr-value mono">
+                  <label>UUID Hex</label>
+                  <div class="attr-value mono text-slate-500">
                     {{ selectedItem.data.uuid }}
                   </div>
                 </div>
@@ -112,21 +112,21 @@
                     Object.keys(selectedItem.data.attributes).length > 0
                   "
                 >
-                  <h4 class="section-label">PROPERTIES</h4>
+                  <h4 class="section-label">Properties</h4>
                   <div class="properties-grid">
                     <div
                       v-for="(v, k) in selectedItem.data.attributes"
                       :key="k"
                       class="prop-item"
                     >
-                      <span class="p-key">{{ k.toUpperCase() }}</span>
+                      <span class="p-key">{{ k }}</span>
                       <span class="p-val">{{ v || "N/A" }}</span>
                     </div>
                   </div>
                 </div>
 
                 <div class="attr-section" v-if="selectedItem.data.summary">
-                  <h4 class="section-label">SYNTHESIS</h4>
+                  <h4 class="section-label">Synthesis</h4>
                   <div class="summary-box">{{ selectedItem.data.summary }}</div>
                 </div>
               </div>
@@ -137,30 +137,28 @@
                   v-if="selectedItem.data.isSelfLoopGroup"
                   class="self-loop-header"
                 >
-                  LOOP: {{ selectedItem.data.source_name }} —
+                  Loop: {{ selectedItem.data.source_name }} —
                   {{ selectedItem.data.selfLoopCount }} REF
                 </div>
-                <div v-else class="edge-path-header">
+                <div v-else class="edge-path-header text-slate-800">
                   {{ selectedItem.data.source_name }} →
-                  {{ (selectedItem.data.name || "LINKED").toUpperCase() }} →
+                  {{ selectedItem.data.name || "LINKED" }} →
                   {{ selectedItem.data.target_name }}
                 </div>
 
                 <div class="attr-row">
-                  <label>LAB_TYPE</label>
-                  <div class="attr-value highlight">
+                  <label>Relationship Type</label>
+                  <div class="attr-value highlight text-rose-500">
                     {{
-                      (
-                        selectedItem.data.fact_type ||
-                        selectedItem.data.name ||
-                        "GENERAL"
-                      ).toUpperCase()
+                      selectedItem.data.fact_type ||
+                      selectedItem.data.name ||
+                      "General"
                     }}
                   </div>
                 </div>
 
                 <div v-if="selectedItem.data.fact" class="attr-section">
-                  <h4 class="section-label">OBSERVED_FACT</h4>
+                  <h4 class="section-label">Observed Fact</h4>
                   <div class="fact-box">{{ selectedItem.data.fact }}</div>
                 </div>
               </div>
@@ -171,13 +169,13 @@
 
       <!-- State Placeholders -->
       <div v-else-if="loading" class="state-placeholder">
-        <div class="bauhaus-spinner-large"></div>
-        <p>INITIALIZING GRAPH ENGINE...</p>
+        <div class="spinner-large"></div>
+        <p class="text-xs text-slate-400 font-medium">Initializing Graph Engine...</p>
       </div>
 
       <div v-else class="state-placeholder">
         <div class="geometric-shape"></div>
-        <p>AWAITING ONTOLOGY DEPLOYMENT</p>
+        <p class="text-xs text-slate-400 font-medium">Awaiting Ontology Deployment</p>
       </div>
     </div>
 
@@ -186,25 +184,25 @@
       <!-- Legend -->
       <div
         v-if="graphData && entityTypes.length"
-        class="type-legend bauhaus-card"
+        class="type-legend"
       >
-        <h5 class="legend-header">ENTITY_MAP</h5>
-        <div class="legend-list">
+        <h5 class="legend-header">Entity Map</h5>
+        <div class="legend-list scrollbar-thin">
           <div v-for="type in entityTypes" :key="type.name" class="legend-item">
             <span
               class="color-swatch"
               :style="{ background: type.color }"
             ></span>
-            <span class="type-name">{{ type.name.toUpperCase() }}</span>
+            <span class="type-name">{{ type.name }}</span>
           </div>
         </div>
       </div>
 
       <!-- Toggle -->
-      <div v-if="graphData" class="view-controls bauhaus-card">
+      <div v-if="graphData" class="view-controls">
         <div class="control-row">
-          <span class="control-label">EDGE_LABELS</span>
-          <label class="bauhaus-switch">
+          <span class="control-label">Edge Labels</span>
+          <label class="switch-control">
             <input
               type="checkbox"
               v-model="showEdgeLabels"
@@ -231,13 +229,13 @@ const props = defineProps({
 
 const phaseLabels = computed(() => {
   const labels = {
-    1: "PHASE 01: ONTOLOGY VISUALIZATION",
-    2: "PHASE 02: SIMULATION PREPARATION",
-    3: "PHASE 03: SIMULATION EXECUTION",
-    4: "PHASE 04: REPORT GENERATION",
-    5: "PHASE 05: DEEP INTERACTION",
+    1: "Phase 01: Ontology Visualization",
+    2: "Phase 02: Simulation Preparation",
+    3: "Phase 03: Simulation Execution",
+    4: "Phase 04: Report Generation",
+    5: "Phase 05: Deep Interaction",
   };
-  return labels[props.currentPhase] || "ONTOLOGY VISUALIZATION";
+  return labels[props.currentPhase] || "Ontology Visualization";
 });
 
 const emit = defineEmits(["refresh", "toggle-maximize"]);
@@ -266,14 +264,15 @@ const dismissFinishedHint = () => (showSimulationFinishedHint.value = false);
 
 const entityTypes = computed(() => {
   if (!props.graphData?.nodes) return [];
-  // Bauhaus Brutalist Palette
+  // Elegant Slate/Rose Palette
   const palette = [
-    "#E63946", // Bauhaus Red
-    "#1D3557", // Bauhaus Blue
-    "#FFB703", // Bauhaus Yellow
-    "#000000", // Black
-    "#AAAAAA", // Light Gray
-    "#555555", // Dark Gray
+    "#ef4444", // Rose/Red 500
+    "#3b82f6", // Blue 500
+    "#10b981", // Emerald 500
+    "#6366f1", // Indigo 500
+    "#f59e0b", // Amber 500
+    "#8b5cf6", // Purple 500
+    "#ec4899", // Pink 500
   ];
   const map = {};
   props.graphData.nodes.forEach((n) => {
@@ -327,9 +326,9 @@ const render = () => {
         .id((d) => d.id)
         .distance(150),
     )
-    .force("charge", d3.forceManyBody().strength(-500))
+    .force("charge", d3.forceManyBody().strength(-400))
     .force("center", d3.forceCenter(width / 2, height / 2))
-    .force("collide", d3.forceCollide(60));
+    .force("collide", d3.forceCollide(50));
 
   currentSimulation = simulation;
   const g = svg.append("g");
@@ -346,21 +345,23 @@ const render = () => {
     .data(edges)
     .enter()
     .append("line")
-    .attr("stroke", "#000")
-    .attr("stroke-width", 2);
+    .attr("stroke", "#e2e8f0")
+    .attr("stroke-width", 1.5);
+
   const nodeDots = g
     .append("g")
     .selectAll("circle")
     .data(nodes)
     .enter()
     .append("circle")
-    .attr("r", 14)
+    .attr("r", 12)
     .attr(
       "fill",
-      (d) => entityTypes.value.find((t) => t.name === d.type)?.color || "#999",
+      (d) => entityTypes.value.find((t) => t.name === d.type)?.color || "#94a3b8",
     )
-    .attr("stroke", "#000")
-    .attr("stroke-width", 3)
+    .attr("stroke", "#ffffff")
+    .attr("stroke-width", 2)
+    .style("cursor", "pointer")
     .on("click", (event, d) => {
       event.stopPropagation();
       selectedItem.value = {
@@ -386,9 +387,10 @@ const render = () => {
     .append("text")
     .text((d) => d.name)
     .attr("font-size", "10px")
-    .attr("font-weight", "900")
-    .attr("dx", 18)
-    .attr("dy", 5);
+    .attr("font-weight", "600")
+    .attr("fill", "#334155")
+    .attr("dx", 16)
+    .attr("dy", 4);
 
   simulation.on("tick", () => {
     links
@@ -438,37 +440,39 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   position: relative;
   overflow: hidden;
 }
 
 .panel-header-block {
-  height: 60px;
-  padding: 0 20px;
-  border-bottom: var(--border-width) solid var(--atp-black);
+  height: 50px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--atp-white);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
   z-index: 10;
 }
 
 .panel-label {
-  font-weight: 900;
-  font-size: 13px;
-  letter-spacing: 2px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--atp-black);
 }
 
 .header-right {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .viewport-container {
   flex: 1;
   position: relative;
-  background: var(--atp-white);
+  background: var(--bg-color);
 }
 
 .graph-canvas-wrapper {
@@ -478,161 +482,170 @@ onUnmounted(() => {
 
 .status-overlay-hint {
   position: absolute;
-  top: 20px;
-  left: 20px;
-  background: var(--bauhaus-red);
-  padding: 8px 15px;
-  border: var(--border-width) solid var(--atp-black);
+  top: 16px;
+  left: 16px;
+  background: rgba(244, 63, 94, 0.9);
+  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  border-radius: 20px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 900;
-  font-size: 11px;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 9px;
   z-index: 5;
   color: var(--atp-white);
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.2);
 }
 
 .pulse-dot {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
   background: var(--atp-white);
   border-radius: 50%;
   animation: pulse 1s infinite;
 }
 @keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-  100% {
-    opacity: 1;
-  }
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
 }
 
 .entity-detail-panel {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 320px;
-  max-height: calc(100% - 40px);
-  background: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
-  box-shadow: 10px 10px 0 var(--atp-black);
+  top: 16px;
+  right: 16px;
+  width: 300px;
+  max-height: calc(100% - 32px);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
   display: flex;
   flex-direction: column;
   z-index: 20;
 }
 
 .detail-header {
-  padding: 15px 20px;
-  border-bottom: var(--border-width) solid var(--atp-black);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 .detail-category {
-  font-weight: 900;
-  font-size: 10px;
-  letter-spacing: 1px;
-  color: #666;
+  font-weight: 700;
+  font-size: 9px;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
 }
 .type-badge {
-  font-weight: 900;
-  font-size: 10px;
+  font-weight: 700;
+  font-size: 9px;
   color: var(--atp-white);
-  padding: 2px 8px;
-  border: 1.5px solid var(--atp-black);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 .close-detail-btn {
   background: none;
   border: none;
-  font-size: 20px;
-  font-weight: 900;
+  font-size: 16px;
+  color: #94a3b8;
   cursor: pointer;
+  transition: color 0.15s ease;
+}
+.close-detail-btn:hover {
+  color: #475569;
 }
 
 .detail-scroll-area {
-  padding: 20px;
+  padding: 16px;
   overflow-y: auto;
+  flex-grow: 1;
 }
 .attr-row {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 .attr-row label {
   display: block;
-  font-weight: 900;
+  font-weight: 700;
   font-size: 9px;
-  color: #888;
-  margin-bottom: 4px;
+  color: #94a3b8;
+  margin-bottom: 2px;
+  text-transform: uppercase;
 }
 .attr-value {
-  font-weight: 800;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: 12px;
 }
 .attr-value.title {
-  font-size: 18px;
-  color: var(--bauhaus-red);
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 700;
 }
 .attr-value.mono {
   font-family: var(--font-mono);
-  font-size: 10px;
-  color: #555;
+  font-size: 9px;
+  color: #64748b;
+  word-break: break-all;
 }
 
 .attr-section {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 2px solid #eee;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
 }
 .section-label {
-  font-weight: 900;
-  font-size: 10px;
-  margin-bottom: 10px;
-  color: var(--atp-black);
+  font-weight: 700;
+  font-size: 9px;
+  margin-bottom: 8px;
+  color: #475569;
+  text-transform: uppercase;
 }
 .summary-box {
-  font-size: 13px;
-  line-height: 1.5;
-  background: #f9f9f9;
-  padding: 12px;
-  border: 2px solid var(--atp-black);
-  border-radius: 0;
+  font-size: 11px;
+  line-height: 1.6;
+  background: #f8fafc;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  color: #334155;
 }
 
 .graph-ui-overlays {
   position: absolute;
-  bottom: 20px;
+  bottom: 16px;
   left: 0;
   right: 0;
-  padding: 0 20px;
+  padding: 0 16px;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   pointer-events: none;
 }
 
-.bauhaus-card {
-  background: var(--atp-white);
-  border: 2.5px solid var(--atp-black);
-  pointer-events: auto;
-}
-
 .type-legend {
-  padding: 12px 15px;
-  max-width: 250px;
+  padding: 10px 12px;
+  max-width: 240px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  pointer-events: auto;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 .legend-header {
-  font-weight: 900;
+  font-weight: 700;
   font-size: 9px;
-  margin-bottom: 8px;
+  color: #475569;
+  margin-bottom: 6px;
 }
 .legend-list {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 100px;
+  overflow-y: auto;
 }
 .legend-item {
   display: flex;
@@ -640,60 +653,76 @@ onUnmounted(() => {
   gap: 6px;
 }
 .color-swatch {
-  width: 12px;
-  height: 12px;
-  border: 1px solid var(--atp-black);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
 .type-name {
-  font-weight: 800;
+  font-weight: 600;
   font-size: 9px;
+  color: #64748b;
 }
 
 .view-controls {
-  padding: 10px 15px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  pointer-events: auto;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 .control-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .control-label {
-  font-weight: 900;
+  font-weight: 700;
   font-size: 9px;
+  color: #475569;
 }
 
-.bauhaus-btn {
+.btn-action {
   background: var(--atp-white);
-  border: 2.5px solid var(--atp-black);
-  padding: 6px 15px;
-  font-weight: 900;
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  font-weight: 600;
   font-size: 11px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: 0.2s;
-  font-family: var(--font-mono);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--atp-black);
 }
-.bauhaus-btn:hover {
-  background: var(--bauhaus-red);
-  color: var(--atp-white);
-  transform: translate(-2px, -2px);
-  box-shadow: 4px 4px 0 var(--atp-black);
+.btn-action:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+.btn-action.square {
+  padding: 6px;
+  width: 28px;
+  height: 28px;
+  justify-content: center;
 }
 .is-spinning {
   animation: spin 0.8s infinite linear;
 }
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
-.bauhaus-switch {
+/* Switch styling */
+.switch-control {
   position: relative;
-  width: 34px;
-  height: 18px;
+  width: 28px;
+  height: 16px;
+  display: inline-block;
 }
-.bauhaus-switch input {
+.switch-control input {
   opacity: 0;
   width: 0;
   height: 0;
@@ -705,26 +734,26 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--atp-white);
-  border: 2px solid var(--atp-black);
-  transition: 0.2s;
+  background-color: #cbd5e1;
+  border-radius: 34px;
+  transition: .2s;
 }
 .switch-slider:before {
   position: absolute;
   content: "";
   height: 10px;
   width: 10px;
-  left: 2px;
-  bottom: 1.5px;
-  background-color: var(--atp-black);
-  transition: 0.2s;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: .2s;
 }
 input:checked + .switch-slider {
-  background-color: var(--bauhaus-red);
+  background-color: var(--accent-color);
 }
 input:checked + .switch-slider:before {
-  transform: translateX(15px);
-  background-color: var(--atp-white);
+  transform: translateX(12px);
 }
 
 .state-placeholder {
@@ -733,23 +762,32 @@ input:checked + .switch-slider:before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  font-weight: 900;
-  font-size: 14px;
-  color: #ccc;
+  gap: 16px;
 }
-.bauhaus-spinner-large {
-  width: 60px;
-  height: 60px;
-  border: 8px solid var(--atp-black);
-  border-top-color: var(--bauhaus-red);
+.spinner-large {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #f1f5f9;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
   animation: spin 1s infinite linear;
 }
 .geometric-shape {
-  width: 60px;
-  height: 60px;
-  background: var(--bauhaus-red);
-  border: 4px solid var(--atp-black);
+  width: 24px;
+  height: 24px;
+  border: 2px solid #cbd5e1;
+  border-radius: 4px;
   transform: rotate(45deg);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
 }
 </style>

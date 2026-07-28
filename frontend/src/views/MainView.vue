@@ -509,15 +509,16 @@ onUnmounted(() => {
   font-family: var(--font-sans);
 }
 
-/* Header - Bauhaus Brutalist */
+/* Header - Modern Minimalist */
 .app-header {
   height: 60px;
-  border-bottom: var(--border-width-heavy) solid var(--atp-black);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: var(--atp-white);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
   z-index: 100;
   position: relative;
 }
@@ -529,52 +530,52 @@ onUnmounted(() => {
 }
 
 .brand {
-  font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 1.2rem;
-  letter-spacing: -1px;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.5px;
   cursor: pointer;
-  color: var(--bauhaus-red);
-  transition: color 0.15s ease;
+  color: var(--accent-color);
+  transition: opacity 0.15s ease;
 }
 .brand:hover {
-  color: var(--bauhaus-blue);
+  opacity: 0.8;
 }
 
 .view-switcher {
   display: flex;
-  background: var(--bg-color);
+  background: var(--atp-light-gray);
   padding: 4px;
-  border: var(--border-width) solid var(--atp-black);
-  gap: 0;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  gap: 2px;
 }
 
 .switch-btn {
-  border: none;
-  background: transparent;
-  padding: 6px 16px;
+  border: none !important;
+  background: transparent !important;
+  padding: 6px 14px;
   font-size: 11px;
-  font-weight: 800;
-  color: var(--atp-black);
+  font-weight: 600;
+  color: var(--on-surface-variant);
   cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  border-right: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.switch-btn:last-child {
-  border-right: none;
+  transition: all 0.2s ease;
+  font-family: var(--font-sans);
+  text-transform: none;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 
 .switch-btn.active {
-  background: var(--atp-black);
-  color: var(--atp-white);
+  background: var(--atp-white) !important;
+  color: var(--atp-black) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
 }
 
 .switch-btn:hover:not(.active) {
-  background: var(--bauhaus-red);
-  color: var(--atp-white);
+  background: rgba(0, 0, 0, 0.03) !important;
+  color: var(--atp-black) !important;
 }
 
 .header-right {
@@ -587,82 +588,69 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-sans);
 }
 
 .step-num {
-  color: var(--bauhaus-red);
+  color: var(--accent-color);
 }
 
 .step-name {
   color: var(--atp-black);
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .step-divider {
-  width: 2px;
-  height: 14px;
-  background-color: var(--atp-black);
+  width: 1px;
+  height: 12px;
+  background-color: var(--border-color);
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 11px;
-  color: var(--atp-black);
-  font-weight: 800;
-  font-family: var(--font-mono);
+  color: var(--on-surface-variant);
+  font-weight: 600;
+  font-family: var(--font-sans);
 }
 
 .dot {
-  width: 10px;
-  height: 10px;
-  background: var(--atp-black);
-  border: 1px solid var(--atp-black);
+  width: 8px;
+  height: 8px;
+  background: #94a3b8;
+  border-radius: 50%;
 }
 
 .status-indicator.processing .dot {
-  background: var(--bauhaus-red);
-  animation: bau-pulse 1s infinite step-end;
+  background: var(--accent-color);
+  animation: smooth-pulse 1.2s infinite ease-in-out;
 }
 .status-indicator.completed .dot {
-  background: var(--bauhaus-yellow);
+  background: var(--accent-tertiary);
 }
 .status-indicator.error .dot {
-  background: var(--bauhaus-blue);
-  position: relative;
-}
-.status-indicator.error .dot::after {
-  content: "×";
-  color: var(--atp-white);
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 8px;
+  background: #ef4444;
 }
 
-@keyframes bau-pulse {
-  50% {
-    opacity: 0;
-  }
+@keyframes smooth-pulse {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.6; }
 }
 
-/* Content - Bauhaus Grid Layout */
+/* Content Area */
 .content-area {
   flex: 1;
   display: flex;
   position: relative;
   overflow: hidden;
-  padding: 20px;
-  gap: 20px;
-  background-image:
-    linear-gradient(to right, #e5e7eb 1px, transparent 1px),
-    linear-gradient(to bottom, #e5e7eb 1px, transparent 1px);
-  background-size: var(--grid-unit) var(--grid-unit);
+  padding: 16px;
+  gap: 16px;
+  background-color: var(--background) !important;
 }
 
 .panel-wrapper {
@@ -670,6 +658,8 @@ onUnmounted(() => {
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--atp-white);
-  border: var(--border-width-heavy) solid var(--atp-black);
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.02), 0 2px 8px -1px rgba(15, 23, 42, 0.01) !important;
 }
 </style>

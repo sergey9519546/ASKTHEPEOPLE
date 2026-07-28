@@ -246,3 +246,15 @@ export const getSimulationOpinions = (simulationId, limit = 1000) => {
     params: { limit },
   });
 };
+
+/**
+ * Get simulation post-run analytics metrics
+ * @param {string} simulationId
+ * @param {boolean} force - Force recalculation on backend
+ */
+export const getSimulationMetrics = (simulationId, force = false) => {
+  return service.get(`/api/simulation/${simulationId}/metrics`, {
+    params: { force },
+  });
+};
+

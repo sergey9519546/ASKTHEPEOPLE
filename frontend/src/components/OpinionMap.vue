@@ -1,5 +1,5 @@
 <template>
-  <div class="opinion-map-container bauhaus-card">
+  <div class="opinion-map-container">
     <div class="map-header">
       <div class="title-group">
         <h3 class="map-title">3D_OPINION_SPACE</h3>
@@ -206,29 +206,38 @@ onUnmounted(() => {
   height: 600px;
   display: flex;
   flex-direction: column;
-  background: var(--atp-white);
-  border: 4px solid var(--atp-black);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
   overflow: hidden;
 }
 
 .map-header {
-  padding: 15px 25px;
-  background: #f0f0f0;
-  border-bottom: 4px solid var(--atp-black);
+  padding: 18px 24px;
+  background: var(--atp-light-gray);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .map-title {
-  font-weight: 900;
-  font-size: 16px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
   margin: 0;
+  letter-spacing: 0.5px;
 }
+
 .map-subtitle {
-  font-size: 10px;
-  font-weight: 700;
-  opacity: 0.6;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  margin-top: 2px;
 }
 
 .map-controls {
@@ -238,35 +247,47 @@ onUnmounted(() => {
 }
 
 .control-btn {
-  background: var(--atp-black);
-  color: var(--atp-white);
-  border: none;
-  padding: 5px 12px;
-  font-size: 10px;
-  font-weight: 800;
+  background: var(--surface-color);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 500;
   cursor: pointer;
-  transition: transform 0.1s;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
 }
+
+.control-btn:hover {
+  background: var(--atp-light-gray);
+  border-color: #cbd5e1;
+}
+
 .control-btn:active {
-  transform: scale(0.95);
+  transform: translateY(0);
 }
 
 .legend-item {
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
   display: inline-flex;
   align-items: center;
-  margin-left: 10px;
+  margin-left: 12px;
 }
+
 .dot {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--atp-black);
-  margin-right: 5px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
 }
+
 .dot.reddit {
   background: #ff4500;
 }
+
 .dot.twitter {
   background: #1da1f2;
 }
@@ -275,11 +296,12 @@ onUnmounted(() => {
 .map-viewport {
   flex: 1;
   perspective: 1000px;
-  background: #fafafa;
+  background: var(--background);
   position: relative;
   overflow: hidden;
   cursor: grab;
 }
+
 .map-viewport:active {
   cursor: grabbing;
 }
@@ -305,71 +327,81 @@ onUnmounted(() => {
   position: absolute;
   width: 100%;
   height: 100%;
-  border: 1px dashed rgba(0, 0, 0, 0.1);
+  border: 1px dashed rgba(148, 163, 184, 0.15);
   pointer-events: none;
 }
 
 .face.back {
   transform: translateZ(-150px);
-  background: rgba(0, 0, 0, 0.02);
+  background: rgba(148, 163, 184, 0.02);
 }
+
 .face.bottom {
   transform: rotateX(90deg) translateZ(150px);
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(148, 163, 184, 0.04);
 }
+
 .face.left {
   transform: rotateY(-90deg) translateZ(150px);
-  border-right: 2px solid var(--atp-black);
+  border-right: 1px solid var(--border-color);
 }
 
 /* Axes */
 .axis {
   position: absolute;
-  background: var(--atp-black);
+  background: #cbd5e1;
   pointer-events: none;
-  opacity: 0.6;
 }
+
 .axis .label {
   position: absolute;
-  font-size: 9px;
-  font-weight: 900;
-  background: var(--atp-white);
-  border: 1px solid var(--atp-black);
-  padding: 1px 4px;
+  font-size: 8px;
+  font-weight: 600;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--text-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .x-line {
   width: 100%;
-  height: 2px;
+  height: 1px;
   top: 100%;
   left: 0;
   transform: translateZ(150px);
 }
+
 .x-line .label {
-  right: -40px;
+  right: -45px;
+  top: -8px;
 }
 
 .y-line {
-  width: 2px;
+  width: 1px;
   height: 100%;
   left: 0;
   top: 0;
   transform: translateZ(150px);
 }
+
 .y-line .label {
-  top: -20px;
-  left: -10px;
+  top: -24px;
+  left: -20px;
 }
 
 .z-line {
   width: 300px;
-  height: 2px;
+  height: 1px;
   left: 0;
   top: 100%;
   transform: rotateY(-90deg) translateZ(0);
 }
+
 .z-line .label {
-  right: -40px;
+  right: -45px;
+  top: -8px;
 }
 
 /* Agent Points */
@@ -385,35 +417,38 @@ onUnmounted(() => {
 }
 
 .point-body {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   position: absolute;
-  top: 14px;
-  left: 14px;
-  border: 2px solid var(--atp-black);
-  box-shadow: 4px 4px 0 var(--atp-black);
-  transition: transform 0.3s;
+  top: 15px;
+  left: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--surface-color);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .reddit .point-body {
   background: #ff4500;
 }
+
 .twitter .point-body {
   background: #1da1f2;
 }
 
 .agent-point.is-active .point-body {
-  transform: scale(1.5);
-  box-shadow: 6px 6px 0 var(--atp-black);
+  transform: scale(1.6);
+  border-color: var(--surface-color);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
 .depth-shadow {
   position: absolute;
   bottom: -300px; /* Projection to floor */
   left: 50%;
-  width: 8px;
-  height: 8px;
-  background: rgba(0, 0, 0, 0.1);
+  width: 6px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.05);
   border-radius: 50%;
   transform: rotateX(90deg) translateZ(0);
 }
@@ -425,10 +460,11 @@ onUnmounted(() => {
   left: 50%;
   width: 240px;
   margin-left: -120px;
-  background: var(--atp-white);
-  border: 3px solid var(--atp-black);
-  padding: 12px;
-  box-shadow: 8px 8px 0 var(--atp-black);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
   pointer-events: none;
   z-index: 200;
   backface-visibility: hidden;
@@ -437,52 +473,76 @@ onUnmounted(() => {
 .tooltip-header {
   display: flex;
   justify-content: space-between;
-  border-bottom: 2px solid var(--atp-black);
-  padding-bottom: 5px;
-  margin-bottom: 8px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
 }
+
 .name {
-  font-weight: 900;
+  font-weight: 600;
   font-size: 13px;
+  color: var(--text-primary);
 }
+
 .plat {
   font-size: 9px;
-  font-weight: 800;
-  padding: 1px 4px;
-  border: 1px solid var(--atp-black);
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 12px;
 }
+
+.plat.reddit {
+  background: rgba(255, 69, 0, 0.1);
+  color: #ff4500;
+}
+
+.plat.twitter {
+  background: rgba(29, 161, 242, 0.1);
+  color: #1da1f2;
+}
+
 .coords {
-  font-size: 10px;
-  font-weight: 800;
-  color: var(--atp-accent-cyan);
-  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  margin-bottom: 8px;
 }
+
 .reason {
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 500;
+  color: var(--text-primary);
   margin: 0 0 8px 0;
+  line-height: 1.4;
 }
+
 .snippet {
   font-size: 10px;
   font-style: italic;
-  opacity: 0.7;
-  border-left: 3px solid #eee;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border-color);
   padding-left: 8px;
   margin: 0;
+  line-height: 1.4;
 }
 
 .interaction-hint {
   position: absolute;
-  bottom: 20px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 900;
-  background: var(--atp-black);
-  color: var(--atp-white);
+  font-size: 9px;
+  font-weight: 500;
+  background: var(--text-primary);
+  color: var(--surface-color);
+  border-radius: 20px;
   padding: 4px 12px;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   pointer-events: none;
+  opacity: 0.8;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 /* Animations */
@@ -492,9 +552,10 @@ onUnmounted(() => {
     opacity 0.2s,
     transform 0.2s;
 }
+
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
-  transform: translateY(10px) scale(0.9);
+  transform: translateY(10px) scale(0.95);
 }
 </style>

@@ -75,8 +75,9 @@ export const chatWithReport = (data) => {
  * @param {string} reportId
  */
 export const exportReportPDF = (reportId) => {
-  const url = `${service.defaults.baseURL}/api/report/${reportId}/export/pdf`;
-  window.open(url, "_blank");
+  return service.get(`/api/report/${reportId}/export/pdf`, {
+    responseType: "blob",
+  });
 };
 
 /**
@@ -84,6 +85,7 @@ export const exportReportPDF = (reportId) => {
  * @param {string} reportId
  */
 export const exportReportCSV = (reportId) => {
-  const url = `${service.defaults.baseURL}/api/report/${reportId}/export/csv`;
-  window.open(url, "_blank");
+  return service.get(`/api/report/${reportId}/export/csv`, {
+    responseType: "blob",
+  });
 };

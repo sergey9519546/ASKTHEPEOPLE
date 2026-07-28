@@ -1,6 +1,6 @@
 <template>
   <div class="workbench-panel">
-    <div class="scroll-container">
+    <div class="scroll-container scrollbar-thin">
       <!-- Step 01: Ontology -->
       <div
         class="step-card"
@@ -12,11 +12,11 @@
             <span class="step-title">Ontology Generation</span>
           </div>
           <div class="step-status">
-            <span v-if="currentPhase > 0" class="badge success">COMPLETED</span>
+            <span v-if="currentPhase > 0" class="badge success">Completed</span>
             <span v-else-if="currentPhase === 0" class="badge processing"
-              >GENERATING</span
+              >Generating</span
             >
-            <span v-else class="badge pending">WAITING</span>
+            <span v-else class="badge pending">Waiting</span>
           </div>
         </div>
 
@@ -44,8 +44,8 @@
               <div class="detail-title-group">
                 <span class="detail-type-badge">{{
                   selectedOntologyItem.itemType === "entity"
-                    ? "ENTITY"
-                    : "RELATION"
+                    ? "Entity"
+                    : "Relation"
                 }}</span>
                 <span class="detail-name">{{ selectedOntologyItem.name }}</span>
               </div>
@@ -53,8 +53,8 @@
                 ×
               </button>
             </div>
-            <div class="detail-body">
-              <div class="detail-desc">
+            <div class="detail-body scrollbar-thin">
+              <div class="detail-desc text-slate-600">
                 {{ selectedOntologyItem.description }}
               </div>
 
@@ -63,16 +63,18 @@
                 class="detail-section"
                 v-if="selectedOntologyItem.attributes?.length"
               >
-                <span class="section-label">ATTRIBUTES</span>
+                <span class="section-label">Attributes</span>
                 <div class="attr-list">
                   <div
                     v-for="attr in selectedOntologyItem.attributes"
                     :key="attr.name"
                     class="attr-item"
                   >
-                    <span class="attr-name">{{ attr.name }}</span>
-                    <span class="attr-type">({{ attr.type }})</span>
-                    <span class="attr-desc">{{ attr.description }}</span>
+                    <div class="attr-header">
+                      <span class="attr-name">{{ attr.name }}</span>
+                      <span class="attr-type">({{ attr.type }})</span>
+                    </div>
+                    <span class="attr-desc text-slate-500">{{ attr.description }}</span>
                   </div>
                 </div>
               </div>
@@ -82,7 +84,7 @@
                 class="detail-section"
                 v-if="selectedOntologyItem.examples?.length"
               >
-                <span class="section-label">EXAMPLES</span>
+                <span class="section-label">Examples</span>
                 <div class="example-list">
                   <span
                     v-for="ex in selectedOntologyItem.examples"
@@ -98,12 +100,12 @@
                 class="detail-section"
                 v-if="selectedOntologyItem.source_targets?.length"
               >
-                <span class="section-label">CONNECTIONS</span>
+                <span class="section-label">Connections</span>
                 <div class="conn-list">
                   <div
                     v-for="(conn, idx) in selectedOntologyItem.source_targets"
                     :key="idx"
-                    class="conn-item"
+                    class="conn-item text-slate-600"
                   >
                     <span class="conn-node">{{ conn.source }}</span>
                     <span class="conn-arrow">→</span>
@@ -120,7 +122,7 @@
             class="tags-container"
             :class="{ dimmed: selectedOntologyItem }"
           >
-            <span class="tag-label">GENERATED ENTITY TYPES</span>
+            <span class="tag-label">Generated Entity Types</span>
             <div class="tags-list">
               <span
                 v-for="entity in projectData.ontology.entity_types"
@@ -139,7 +141,7 @@
             class="tags-container"
             :class="{ dimmed: selectedOntologyItem }"
           >
-            <span class="tag-label">GENERATED RELATION TYPES</span>
+            <span class="tag-label">Generated Relation Types</span>
             <div class="tags-list">
               <span
                 v-for="rel in projectData.ontology.edge_types"
@@ -165,11 +167,11 @@
             <span class="step-title">GraphRAG Build</span>
           </div>
           <div class="step-status">
-            <span v-if="currentPhase > 1" class="badge success">COMPLETED</span>
+            <span v-if="currentPhase > 1" class="badge success">Completed</span>
             <span v-else-if="currentPhase === 1" class="badge processing"
               >{{ buildProgress?.progress || 0 }}%</span
             >
-            <span v-else class="badge pending">WAITING</span>
+            <span v-else class="badge pending">Waiting</span>
           </div>
         </div>
 
@@ -184,16 +186,16 @@
           <!-- Stats Cards -->
           <div class="stats-grid">
             <div class="stat-card">
-              <span class="stat-value">{{ graphStats.nodes }}</span>
-              <span class="stat-label">ENTITIES</span>
+              <span class="stat-value text-rose-500">{{ graphStats.nodes }}</span>
+              <span class="stat-label">Entities</span>
             </div>
             <div class="stat-card">
-              <span class="stat-value">{{ graphStats.edges }}</span>
-              <span class="stat-label">RELATIONS</span>
+              <span class="stat-value text-blue-500">{{ graphStats.edges }}</span>
+              <span class="stat-label">Relations</span>
             </div>
             <div class="stat-card">
-              <span class="stat-value">{{ graphStats.types }}</span>
-              <span class="stat-label">SCHEMA TYPES</span>
+              <span class="stat-value text-emerald-500">{{ graphStats.types }}</span>
+              <span class="stat-label">Schema Types</span>
             </div>
           </div>
         </div>
@@ -211,14 +213,14 @@
           </div>
           <div class="step-status">
             <span v-if="currentPhase >= 2" class="badge accent"
-              >IN PROGRESS</span
+              >In Progress</span
             >
           </div>
         </div>
 
         <div class="card-content">
           <p class="api-note">POST /api/simulation/create</p>
-          <p class="description">
+          <p class="description text-slate-500">
             Graph construction complete. Please proceed to the next step for
             environment setup.
           </p>
@@ -228,7 +230,7 @@
             @click="handleEnterEnvSetup"
           >
             <span v-if="creatingSimulation" class="spinner-sm"></span>
-            {{ creatingSimulation ? "Creating..." : "ENTER ENV SETUP ➝" }}
+            {{ creatingSimulation ? "Creating..." : "Configure Environment ➝" }}
           </button>
         </div>
       </div>
@@ -237,14 +239,14 @@
     <!-- Bottom Info / Logs -->
     <div class="system-logs">
       <div class="log-header">
-        <span class="log-title">SYSTEM DASHBOARD</span>
+        <span class="log-title">System Dashboard</span>
         <span class="log-id">{{
           projectData?.project_id || "NO_PROJECT"
         }}</span>
       </div>
-      <div class="log-content" ref="logContent">
-        <div class="log-line" v-for="(log, idx) in systemLogs" :key="idx">
-          <span class="log-time">{{ log.time }}</span>
+      <div class="log-content scrollbar-thin" ref="logContent">
+        <div class="log-line text-slate-300" v-for="(log, idx) in systemLogs" :key="idx">
+          <span class="log-time text-slate-500">{{ log.time }}</span>
           <span class="log-msg">{{ log.msg }}</span>
         </div>
       </div>
@@ -347,187 +349,173 @@ watch(
 .scroll-container {
   flex: 1;
   overflow-y: auto;
-  padding: 32px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 24px;
 }
 
 .step-card {
   background: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
-  border-radius: 0;
-  padding: 40px;
-  transition: all 0.2s;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  transition: all 0.25s ease;
   position: relative;
 }
 
 .step-card.active {
-  box-shadow: 12px 12px 0px var(--bauhaus-red);
-  transform: translate(-4px, -4px);
+  box-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.04);
+  border-color: #cbd5e1;
 }
 
 .step-card.completed {
-  opacity: 0.7;
+  opacity: 0.65;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 32px;
-  border-bottom: var(--border-width) solid var(--atp-black);
-  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
 }
 
 .step-info {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 
 .step-num {
   font-family: var(--font-mono);
-  font-size: 32px;
-  font-weight: 900;
-  color: var(--atp-black);
+  font-size: 22px;
+  font-weight: 700;
+  color: #94a3b8;
 }
 
 .step-title {
-  font-weight: 900;
-  font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--atp-black);
 }
 
 .badge {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 6px 16px;
-  border-radius: 0;
-  font-weight: 900;
+  font-size: 9px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 700;
   text-transform: uppercase;
-  border: 2px solid var(--atp-black);
 }
 
 .badge.success {
-  background: var(--atp-white);
-  color: var(--atp-black);
+  background: #f1f5f9;
+  color: #475569;
 }
 .badge.processing {
-  background: var(--bauhaus-red);
-  color: var(--atp-white);
+  background: #fee2e2;
+  color: var(--accent-color);
 }
 .badge.accent {
-  background: var(--bauhaus-yellow);
-  color: var(--atp-black);
+  background: #ecfdf5;
+  color: var(--accent-tertiary);
 }
 .badge.pending {
-  background: #eee;
-  color: #888;
-  border-color: #ccc;
+  background: #f8fafc;
+  color: #94a3b8;
 }
 
 .api-note {
   font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--atp-black);
-  opacity: 0.5;
-  margin-bottom: 16px;
-  font-weight: 800;
+  font-size: 9px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+  font-weight: 600;
 }
 
 .description {
-  font-size: 0.95rem;
-  line-height: 1.7;
-  margin-bottom: 32px;
-  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+  color: #475569;
 }
 
 .progress-section {
   display: flex;
   align-items: center;
-  gap: 16px;
-  font-family: var(--font-mono);
-  font-size: 0.9rem;
-  color: var(--bauhaus-red);
-  margin-bottom: 24px;
-  font-weight: 900;
-  text-transform: uppercase;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--accent-color);
+  margin-bottom: 16px;
+  font-weight: 600;
 }
 
 /* Tags */
 .tags-container {
-  margin-top: 32px;
+  margin-top: 20px;
 }
 
 .tag-label {
   display: block;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  font-weight: 900;
-  color: var(--atp-black);
-  margin-bottom: 16px;
-  letter-spacing: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  margin-bottom: 10px;
 }
 
 .tags-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
 }
 
 .entity-tag {
-  background: var(--atp-white);
-  border: 2px solid var(--atp-black);
-  padding: 8px 18px;
-  font-size: 0.85rem;
-  border-radius: 0;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  padding: 6px 12px;
+  font-size: 11px;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.1s;
-  font-weight: 800;
-  text-transform: uppercase;
+  transition: all 0.2s ease;
+  font-weight: 600;
+  color: #475569;
 }
 
 .entity-tag:hover {
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
-  transform: translate(-4px, -4px);
-  box-shadow: 4px 4px 0px var(--atp-black);
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: var(--atp-black);
 }
 
 /* Stats */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 20px;
+  gap: 12px;
 }
 
 .stat-card {
-  padding: 32px 20px;
-  background: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
-  border-radius: 0;
+  padding: 16px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
   text-align: center;
 }
 
 .stat-value {
   display: block;
-  font-size: 2.5rem;
-  font-weight: 900;
+  font-size: 20px;
+  font-weight: 700;
   font-family: var(--font-mono);
-  color: var(--bauhaus-red);
   line-height: 1;
 }
 
 .stat-label {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  font-weight: 900;
-  color: var(--atp-black);
-  margin-top: 12px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+  font-size: 9px;
+  font-weight: 600;
+  color: #64748b;
+  margin-top: 6px;
 }
 
 /* Overlay */
@@ -537,130 +525,211 @@ watch(
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--atp-white);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(8px);
   z-index: 50;
-  border-radius: 0;
   display: flex;
   flex-direction: column;
-  padding: 40px;
-  border: var(--border-width) solid var(--atp-black);
+  padding: 24px;
 }
 
 .detail-header {
-  border-bottom: var(--border-width) solid var(--atp-black);
-  padding-bottom: 24px;
-  margin-bottom: 32px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 16px;
+  margin-bottom: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
 .detail-type-badge {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 900;
-  background: var(--atp-black);
-  color: var(--atp-white);
-  padding: 6px 16px;
-  border-radius: 0;
-  margin-right: 20px;
+  font-size: 9px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-right: 12px;
+  text-transform: uppercase;
 }
 
 .detail-name {
-  font-weight: 900;
-  font-size: 1.5rem;
-  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 15px;
 }
 
 .detail-body {
   overflow-y: auto;
+  flex-grow: 1;
 }
 
 .detail-desc {
-  font-size: 1.1rem;
+  font-size: 12px;
   line-height: 1.6;
-  margin-bottom: 32px;
+  margin-bottom: 20px;
 }
 
 .section-label {
   display: block;
-  font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 0.8rem;
-  margin-bottom: 16px;
+  font-weight: 700;
+  font-size: 10px;
+  margin-bottom: 10px;
   text-transform: uppercase;
-  color: var(--bauhaus-blue);
+  color: #94a3b8;
 }
 
+.attr-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .attr-item {
-  background: #f9f9f9;
-  border: 2px solid var(--atp-black);
-  padding: 16px;
-  margin-bottom: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+}
+.attr-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.attr-name {
+  font-weight: 700;
+  font-size: 11px;
+}
+.attr-type {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #94a3b8;
+}
+.attr-desc {
+  font-size: 10px;
+  line-height: 1.4;
 }
 
-.attr-name {
-  font-weight: 900;
-  font-family: var(--font-mono);
-  margin-right: 8px;
+.example-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.example-tag {
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.conn-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.conn-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+}
+.conn-node {
+  font-weight: 600;
+}
+.conn-arrow {
+  color: #cbd5e1;
+}
+
+.close-btn {
+  background: #f1f5f9;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .action-btn {
   width: 100%;
-  padding: 32px;
-  background: var(--atp-black);
+  padding: 14px;
+  background: #0f172a;
   color: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
-  font-weight: 900;
-  border-radius: 0;
+  border: none;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 3px;
-  font-family: var(--font-mono);
-  font-size: 1rem;
-  transition: all 0.1s;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .action-btn:hover:not(:disabled) {
-  background: var(--bauhaus-red);
-  transform: translate(-8px, -8px);
-  box-shadow: 10px 10px 0px var(--bauhaus-blue);
+  background: #1e293b;
 }
 
 .action-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 /* Logs */
 .system-logs {
-  background: var(--atp-black);
-  padding: 40px;
-  border-top: var(--border-width) solid var(--atp-black);
+  background: #0f172a;
+  padding: 20px;
   color: var(--atp-white);
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
 }
 
+.log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e293b;
+}
 .log-title {
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--accent-color);
+}
+.log-id {
   font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 900;
-  color: var(--bauhaus-red);
-  letter-spacing: 4px;
+  font-size: 9px;
+  color: #475569;
 }
 
 .log-content {
-  margin-top: 20px;
-  height: 120px;
+  margin-top: 10px;
+  height: 100px;
   overflow-y: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 10px;
+}
+.log-line {
+  margin-bottom: 4px;
+}
+.log-time {
+  margin-right: 8px;
 }
 
 .spinner-sm {
-  width: 20px;
-  height: 20px;
-  border: 4px solid rgba(230, 57, 70, 0.2);
-  border-top-color: var(--bauhaus-red);
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffffff;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -669,5 +738,19 @@ watch(
   100% {
     transform: rotate(360deg);
   }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+.system-logs .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #1e293b;
 }
 </style>

@@ -197,8 +197,8 @@ onMounted(() => {
 <style scoped>
 .bauhaus-view-root {
   height: 100vh;
-  background: var(--atp-white);
-  color: var(--atp-black);
+  background: var(--bg-color);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -206,56 +206,65 @@ onMounted(() => {
 
 .bauhaus-header {
   height: 70px;
-  background: var(--atp-white);
-  border-bottom: 4px solid var(--atp-black);
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 40px;
   z-index: 100;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
   cursor: pointer;
 }
 .brand-monogram {
-  background: var(--atp-black);
-  color: var(--atp-white);
+  background: var(--accent-color);
+  color: white;
   padding: 4px 8px;
-  font-weight: 950;
-  font-size: 1.2rem;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 4px;
 }
 .brand-full {
-  font-weight: 950;
+  font-weight: 600;
   font-size: 1rem;
   letter-spacing: -0.5px;
 }
 
 .view-mode-selector {
   display: flex;
-  border: 3px solid var(--atp-black);
-  background: #f0f0f0;
+  border: 1px solid var(--border-color);
+  background: var(--atp-light-gray);
   padding: 4px;
+  border-radius: var(--radius-sm);
   gap: 4px;
 }
 .mode-btn {
-  border: none;
-  background: transparent;
-  padding: 6px 15px;
+  border: none !important;
+  background: transparent !important;
+  padding: 6px 16px !important;
   font-family: var(--font-mono);
-  font-weight: 950;
+  font-weight: 600;
   font-size: 10px;
   cursor: pointer;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  transform: none !important;
 }
 .mode-btn.is-active {
-  background: var(--atp-black);
-  color: var(--atp-white);
+  background: var(--surface-color) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
 }
 .mode-btn:hover:not(.is-active) {
-  background: var(--bauhaus-red);
+  background: rgba(15, 23, 42, 0.03) !important;
+  color: var(--text-primary) !important;
 }
 
 .header-right {
@@ -267,11 +276,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 950;
+  font-weight: 600;
   font-size: 11px;
 }
 .step-val {
-  color: var(--bauhaus-blue);
+  color: var(--accent-secondary);
   font-family: var(--font-mono);
 }
 .status-box {
@@ -279,40 +288,41 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
-  font-weight: 950;
+  font-weight: 600;
   font-size: 10px;
 }
 .status-dot {
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--atp-black);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 .status-box.processing .status-dot {
-  background: var(--bauhaus-red);
-  animation: flash 0.8s infinite;
+  background: var(--accent-color);
+  animation: flash 1s infinite alternate;
 }
 .status-box.completed .status-dot {
-  background: var(--bauhaus-yellow);
+  background: var(--accent-tertiary);
 }
 @keyframes flash {
-  50% {
-    opacity: 0;
-  }
+  from { opacity: 0.3; }
+  to { opacity: 1; }
 }
 
 .workbench-viewport {
   flex: 1;
   display: flex;
-  padding: 20px;
-  gap: 20px;
+  padding: 24px;
+  gap: 24px;
   overflow: hidden;
   position: relative;
 }
 .panel-container {
   height: 100%;
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  background: var(--atp-white);
-  border: 4px solid var(--atp-black);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
   overflow: hidden;
 }
 
@@ -323,16 +333,18 @@ onMounted(() => {
 }
 .workbench-header {
   height: 50px;
-  border-bottom: 4px solid var(--atp-black);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   padding: 0 20px;
-  background: #f9f9f9;
+  background: var(--atp-light-gray);
 }
 .wb-label {
-  font-weight: 950;
+  font-weight: 600;
   font-size: 11px;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
 }
 .wb-content {
   flex: 1;
@@ -343,13 +355,15 @@ onMounted(() => {
 .bauhaus-footer-mini {
   height: 40px;
   padding: 0 40px;
-  border-top: 4px solid var(--atp-black);
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
-  font-weight: 950;
-  font-size: 10px;
+  font-weight: 500;
+  font-size: 9px;
+  color: var(--text-secondary);
+  background: var(--surface-color);
 }
 
 @media (max-width: 1100px) {

@@ -221,39 +221,41 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
 <style scoped>
 .bauhaus-process-root {
   height: 100vh;
-  background: var(--atp-white);
+  background: var(--bg-color);
   display: flex;
   flex-direction: column;
-  color: var(--atp-black);
+  color: var(--text-primary);
   overflow: hidden;
 }
 
 .bauhaus-header {
   height: 70px;
-  background: var(--atp-white);
-  border-bottom: 4px solid var(--atp-black);
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 40px;
   z-index: 100;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 12px;
   cursor: pointer;
 }
 .brand-monogram {
-  background: var(--atp-black);
-  color: var(--atp-white);
+  background: var(--accent-color);
+  color: white;
   padding: 4px 8px;
-  font-weight: 950;
-  font-size: 1.2rem;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 4px;
 }
 .brand-full {
-  font-weight: 950;
+  font-weight: 600;
   font-size: 1rem;
   letter-spacing: -0.5px;
 }
@@ -262,61 +264,63 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #f0f0f0;
-  border: 3px solid var(--atp-black);
-  padding: 6px 20px;
+  background: var(--atp-light-gray);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 18px;
 }
 .phase-label {
   font-family: var(--font-mono);
-  font-weight: 950;
-  font-size: 11px;
-  color: var(--bauhaus-red);
+  font-weight: 600;
+  font-size: 10px;
+  color: var(--accent-color);
 }
 .phase-name {
-  font-weight: 950;
-  font-size: 12px;
+  font-weight: 600;
+  font-size: 11px;
 }
 
 .status-dot {
-  width: 12px;
-  height: 12px;
-  border: 2.5px solid var(--atp-black);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 .system-status {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 950;
+  font-weight: 600;
   font-size: 10px;
   font-family: var(--font-mono);
 }
 .system-status.processing .status-dot {
-  background: var(--bauhaus-red);
-  animation: flash 0.8s infinite;
+  background: var(--accent-color);
+  animation: flash 1s infinite alternate;
 }
 .system-status.ready .status-dot {
-  background: var(--bauhaus-yellow);
+  background: var(--accent-tertiary);
 }
 .system-status.error .status-dot {
-  background: var(--bauhaus-blue);
+  background: var(--accent-secondary);
 }
 
 @keyframes flash {
-  50% {
-    opacity: 0;
-  }
+  from { opacity: 0.3; }
+  to { opacity: 1; }
 }
 
 .workbench-layout {
   flex: 1;
   display: flex;
   overflow: hidden;
-  padding: 25px;
-  gap: 25px;
+  padding: 24px;
+  gap: 24px;
 }
 .workbench-panel {
-  background: var(--atp-white);
-  border: 4px solid var(--atp-black);
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -328,28 +332,29 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
 }
 .pipeline-panel {
   flex: 1;
-  padding: 30px;
+  padding: 24px;
 }
 
 .graph-panel-v2.is-maximized {
   position: absolute;
-  top: 95px;
-  left: 25px;
-  right: 25px;
-  bottom: 85px;
+  top: 94px;
+  left: 24px;
+  right: 24px;
+  bottom: 64px;
   z-index: 50;
 }
 
 .panel-label-bar {
-  border-bottom: 4px solid var(--atp-black);
-  padding-bottom: 15px;
-  margin-bottom: 30px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 12px;
+  margin-bottom: 24px;
 }
 .panel-label-bar .label {
-  font-weight: 950;
-  font-size: 13px;
-  letter-spacing: 1px;
-  color: var(--atp-black);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
 }
 
 .pipeline-scroll {
@@ -357,20 +362,20 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
   overflow-y: auto;
 }
 .pipeline-step {
-  border: 3px solid var(--atp-black);
-  margin-bottom: 25px;
-  transition: 0.3s;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  margin-bottom: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 20px;
+  background: var(--surface-color);
 }
 .pipeline-step.is-active {
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
-  box-shadow: 8px 8px 0 var(--atp-black);
-  transform: translate(-4px, -4px);
+  border-color: var(--accent-secondary);
+  box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.08), 0 8px 10px -6px rgba(59, 130, 246, 0.03);
 }
 .pipeline-step.is-done {
   opacity: 0.6;
-  filter: grayscale(1);
+  background: var(--atp-light-gray);
 }
 
 .step-meta {
@@ -380,89 +385,102 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
 }
 .step-id {
   font-family: var(--font-mono);
-  font-weight: 950;
-  font-size: 1.5rem;
-  color: inherit;
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--text-secondary);
 }
 .step-title {
-  font-weight: 950;
+  font-weight: 600;
   font-size: 0.95rem;
   margin-bottom: 5px;
+  color: var(--text-primary);
 }
 .step-status-tag {
   display: inline-block;
   font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 9px;
-  padding: 2px 6px;
-  border: 1.5px solid var(--atp-black);
+  font-weight: 600;
+  font-size: 8px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: var(--atp-light-gray);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
 }
 
 .step-runtime-view {
-  margin-top: 20px;
+  margin-top: 16px;
 }
 
 .progress-container-bauhaus {
-  margin-top: 15px;
+  margin-top: 12px;
 }
 .progress-track {
-  height: 12px;
-  background: var(--atp-white);
-  border: 3px solid var(--atp-black);
+  height: 6px;
+  background: var(--atp-light-gray);
+  border-radius: 3px;
+  overflow: hidden;
   margin-bottom: 8px;
 }
 .progress-thumb {
   height: 100%;
-  background: var(--bauhaus-red);
+  background: var(--accent-color);
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 .progress-stats {
   display: flex;
   justify-content: space-between;
-  font-weight: 950;
+  font-weight: 500;
   font-size: 10px;
   font-family: var(--font-mono);
+  color: var(--text-secondary);
 }
 
 .ontology-status-box {
-  background: rgba(0, 0, 0, 0.05);
-  padding: 15px;
-  border-left: 6px solid var(--bauhaus-yellow);
-  font-weight: 900;
+  background: rgba(16, 185, 129, 0.05);
+  padding: 12px 16px;
+  border-left: 3px solid var(--accent-tertiary);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-weight: 500;
   font-size: 11px;
+  color: #065f46;
 }
 
 .bauhaus-cta-btn {
   width: 100%;
-  height: 60px;
-  background: var(--atp-black);
-  color: var(--atp-white);
-  border: none;
-  font-weight: 950;
-  font-size: 1.1rem;
+  height: 52px;
+  background: var(--accent-secondary);
+  color: white;
+  border: none !important;
+  font-weight: 600;
+  font-size: 0.95rem;
   cursor: pointer;
-  transition: 0.2s;
+  border-radius: var(--radius-sm) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 15px;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
 }
 .bauhaus-cta-btn:hover {
-  background: var(--bauhaus-red);
-  color: var(--atp-black);
-  transform: translate(-5px, -5px);
-  box-shadow: 8px 8px 0 var(--atp-black);
+  background: #2563eb !important;
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.25) !important;
+  transform: translateY(-1px) !important;
 }
 
 .bauhaus-footer-bar {
   height: 40px;
   padding: 0 30px;
-  border-top: 4px solid var(--atp-black);
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
-  font-weight: 950;
-  font-size: 10px;
+  font-weight: 500;
+  font-size: 9px;
+  color: var(--text-secondary);
+  background: var(--surface-color);
 }
 
 @media (max-width: 1100px) {

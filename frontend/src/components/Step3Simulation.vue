@@ -221,16 +221,29 @@
       </div>
     </div>
 
-    <!-- Main Content: Dual Timeline -->
+    <!-- Main Content: Dual Timeline & Metrics -->
     <div class="main-content-area" ref="scrollContainer">
       <!-- Timeline Header -->
-      <div class="timeline-header" v-if="allActions.length > 0">
+      <div class="timeline-header" v-if="allActions.length > 0 || phase === 2">
         <div class="timeline-stats">
-          <span class="total-count"
-            >TOTAL EVENTS:
-            <span class="mono">{{ allActions.length }}</span></span
-          >
-          <span class="platform-breakdown">
+          <div class="subtabs-nav">
+            <button
+              class="subtab-btn"
+              :class="{ 'is-active': activeSubTab === 'timeline' }"
+              @click="activeSubTab = 'timeline'"
+            >
+              TIMELINE FEED
+            </button>
+            <button
+              class="subtab-btn"
+              :class="{ 'is-active': activeSubTab === 'metrics' }"
+              @click="activeSubTab = 'metrics'"
+            >
+              NETWORK ANALYTICS
+            </button>
+          </div>
+
+          <span class="platform-breakdown" v-if="activeSubTab === 'timeline'">
             <span class="breakdown-item twitter">
               <svg
                 class="mini-icon"
@@ -267,11 +280,16 @@
               <span class="mono">{{ redditActionsCount }}</span>
             </span>
           </span>
+          <span class="platform-breakdown" v-else-if="metricsData">
+            <span class="breakdown-item mono">
+              AGENTS: {{ metricsData.total_agents }} / ACTIONS: {{ metricsData.total_actions }}
+            </span>
+          </span>
         </div>
       </div>
 
       <!-- Timeline Feed -->
-      <div class="timeline-feed">
+      <div class="timeline-feed" v-show="activeSubTab === 'timeline'">
         <div class="timeline-axis"></div>
 
         <TransitionGroup name="timeline-item">
@@ -645,6 +663,172 @@
           <span>Synchronizing simulation nodes...</span>
         </div>
       </div>
+
+      <!-- Network Metrics Content -->
+      <div class="metrics-dashboard" v-show="activeSubTab === 'metrics'">
+        <div v-if="loadingMetrics" class="metrics-loading">
+          <div class="spinner-sm"></div>
+          <span>Calculating polarization, modularity and cascades...</span>
+        </div>
+
+        <div v-else-if="metricsError" class="metrics-error">
+          <div class="error-icon">⚠️</div>
+          <div class="error-msg">Failed to load simulation metrics: {{ metricsError }}</div>
+          <button class="retry-btn" @click="fetchMetrics">Retry Metrics Calculation</button>
+        </div>
+
+        <div v-else-if="!metricsData" class="metrics-empty">
+          <span>No metrics calculated yet. Finish the simulation to calculate modularity and inequality scores.</span>
+        </div>
+
+        <div v-else class="metrics-content">
+          <!-- TOP ROW: OVERALL INDICES -->
+          <div class="metrics-grid">
+            <!-- Modularity / Polarization Score -->
+            <div class="metric-card polarization">
+              <span class="metric-label">Polarization Index (Q Score)</span>
+              <div class="metric-value-wrapper">
+                <span class="metric-value mono">{{ (metricsData.polarization_index || 0).toFixed(3) }}</span>
+                <span class="metric-badge" :class="polarizationLevelClass">
+                  {{ polarizationLevelText }}
+                </span>
+              </div>
+              <p class="metric-desc">
+                Measures network clustering modularity. High modularity (>0.4) indicates clear ideological polarization and echo-chambers.
+              </p>
+              <div class="gauge-bar">
+                <div class="gauge-fill" :style="{ width: `${(metricsData.polarization_index || 0) * 100}%`, backgroundColor: 'var(--accent-color)' }"></div>
+              </div>
+            </div>
+
+            <!-- Engagement Gini Coefficient -->
+            <div class="metric-card gini">
+              <span class="metric-label">Engagement Gini Coefficient</span>
+              <div class="metric-value-wrapper">
+                <span class="metric-value mono">{{ (metricsData.engagement_gini || 0).toFixed(3) }}</span>
+                <span class="metric-badge" :class="giniLevelClass">
+                  {{ giniLevelText }}
+                </span>
+              </div>
+              <p class="metric-desc">
+                Measures engagement skew. High coefficient (>0.6) shows that a few elite agents account for the vast majority of interactions.
+              </p>
+              <div class="gauge-bar">
+                <div class="gauge-fill" :style="{ width: `${(metricsData.engagement_gini || 0) * 100}%`, backgroundColor: 'var(--accent-secondary)' }"></div>
+              </div>
+            </div>
+
+            <!-- Echo Chamber Score -->
+            <div class="metric-card echo-chamber">
+              <span class="metric-label">Echo Chamber Index</span>
+              <div class="metric-value-wrapper">
+                <span class="metric-value mono">{{ ((metricsData.echo_chamber_score || 0) * 100).toFixed(1) }}%</span>
+                <span class="metric-badge" :class="echoLevelClass">
+                  {{ echoLevelText }}
+                </span>
+              </div>
+              <p class="metric-desc">
+                The percentage of total interactions (replies, likes, quotes) occurring between agents of the same social cluster.
+              </p>
+              <div class="gauge-bar">
+                <div class="gauge-fill" :style="{ width: `${(metricsData.echo_chamber_score || 0) * 100}%`, backgroundColor: 'var(--accent-tertiary)' }"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECOND ROW: DUAL PANELS -->
+          <div class="metrics-dual-layout">
+            <!-- Left: Top Participating Agents & Action Type Distribution -->
+            <div class="metrics-left-panel">
+              <div class="analytics-section">
+                <h3>ACTION TYPE DISTRIBUTION</h3>
+                <div class="distribution-list">
+                  <div 
+                    v-for="(count, type) in metricsData.action_type_distribution" 
+                    :key="type" 
+                    class="dist-item"
+                  >
+                    <div class="dist-meta">
+                      <span class="dist-type mono">{{ type }}</span>
+                      <span class="dist-count mono">{{ count }}</span>
+                    </div>
+                    <div class="dist-bar">
+                      <div class="dist-bar-fill" :style="{ width: `${(count / (metricsData.total_actions || 1)) * 100}%` }"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="analytics-section" style="margin-top: 30px;">
+                <h3>TOP PARTICIPATING AGENTS</h3>
+                <div class="top-agents-table">
+                  <div class="table-header">
+                    <span class="col-agent">AGENT</span>
+                    <span class="col-actions">ACTIONS</span>
+                  </div>
+                  <div 
+                    v-for="agent in metricsData.top_agents" 
+                    :key="agent.agent_id" 
+                    class="table-row"
+                  >
+                    <span class="col-agent truncate-text">
+                      <span class="agent-avatar">{{ (agent.agent_name || 'A')[0] }}</span>
+                      @{{ agent.agent_name }}
+                    </span>
+                    <span class="col-actions mono">{{ agent.action_count }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right: Top 5 Virality Cascades -->
+            <div class="metrics-right-panel">
+              <div class="analytics-section">
+                <h3>VIRALITY & INFECTIOUS CASCADES</h3>
+                <p class="section-subtitle">Top posts ordered by viral reach and multi-agent engagement cascades.</p>
+                
+                <div v-if="!metricsData.cascade_stats || metricsData.cascade_stats.length === 0" class="no-cascades">
+                  No viral cascades detected in this run.
+                </div>
+                <div v-else class="cascade-cards-list">
+                  <div 
+                    v-for="(post, index) in metricsData.cascade_stats.slice(0, 5)" 
+                    :key="post.post_id" 
+                    class="cascade-post-card"
+                  >
+                    <div class="cascade-post-header">
+                      <span class="cascade-rank mono">#{{ index + 1 }}</span>
+                      <span class="cascade-author">@{{ post.author_name }}</span>
+                      <span class="cascade-platform-badge" :class="post.platform">{{ post.platform.toUpperCase() }}</span>
+                    </div>
+                    
+                    <p class="cascade-post-content">"{{ post.content }}"</p>
+                    
+                    <div class="cascade-post-stats">
+                      <div class="stat-item">
+                        <span class="stat-icon">❤️</span>
+                        <span class="stat-num mono">{{ post.likes }}</span>
+                      </div>
+                      <div class="stat-item" v-if="post.reposts !== undefined">
+                        <span class="stat-icon">🔄</span>
+                        <span class="stat-num mono">{{ post.reposts }}</span>
+                      </div>
+                      <div class="stat-item">
+                        <span class="stat-icon">💬</span>
+                        <span class="stat-num mono">{{ post.comments }}</span>
+                      </div>
+                      <div class="stat-item total">
+                        <span class="stat-label">SCORE:</span>
+                        <span class="stat-num mono highlighted">{{ post.engagement_score }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom Info / Logs -->
@@ -672,6 +856,7 @@ import {
   getSimulationDiagnostics,
   getSimulationPreflight,
   startSimulation,
+  getSimulationMetrics,
 } from "../api/simulation";
 import { connectSimulationWs } from "../api/ws";
 
@@ -704,6 +889,12 @@ const preflight = ref(null);
 const diagnostics = ref(null);
 const diagnosticsError = ref(null);
 
+// Metrics Dashboard State
+const activeSubTab = ref("timeline");
+const metricsData = ref(null);
+const loadingMetrics = ref(false);
+const metricsError = ref(null);
+
 const chronologicalActions = computed(() => {
   return allActions.value;
 });
@@ -735,6 +926,64 @@ const redditElapsedTime = computed(() => {
 const canGenerateReport = computed(() => {
   return phase.value === 2 && runStatus.value.runner_status !== "interrupted";
 });
+
+// Computed properties for metrics levels
+const polarizationLevelText = computed(() => {
+  const q = metricsData.value?.polarization_index || 0;
+  if (q < 0.3) return "LOW";
+  if (q < 0.5) return "MODERATE";
+  return "HIGH";
+});
+const polarizationLevelClass = computed(() => {
+  const q = metricsData.value?.polarization_index || 0;
+  if (q < 0.3) return "badge-green";
+  if (q < 0.5) return "badge-yellow";
+  return "badge-red";
+});
+
+const giniLevelText = computed(() => {
+  const g = metricsData.value?.engagement_gini || 0;
+  if (g < 0.35) return "EQUAL";
+  if (g < 0.6) return "BALANCED";
+  return "CONCENTRATED";
+});
+const giniLevelClass = computed(() => {
+  const g = metricsData.value?.engagement_gini || 0;
+  if (g < 0.35) return "badge-green";
+  if (g < 0.6) return "badge-yellow";
+  return "badge-red";
+});
+
+const echoLevelText = computed(() => {
+  const e = metricsData.value?.echo_chamber_score || 0;
+  if (e < 0.45) return "OPEN";
+  if (e < 0.7) return "PARTIAL";
+  return "SEGREGATED";
+});
+const echoLevelClass = computed(() => {
+  const e = metricsData.value?.echo_chamber_score || 0;
+  if (e < 0.45) return "badge-green";
+  if (e < 0.7) return "badge-yellow";
+  return "badge-red";
+});
+
+const fetchMetrics = async (force = false) => {
+  if (!props.simulationId) return;
+  loadingMetrics.value = true;
+  metricsError.value = null;
+  try {
+    const res = await getSimulationMetrics(props.simulationId, force);
+    if (res.success && res.data) {
+      metricsData.value = res.data;
+    } else {
+      metricsError.value = res.error || "Failed to load metrics data";
+    }
+  } catch (err) {
+    metricsError.value = err.message || "Error contacting metrics API";
+  } finally {
+    loadingMetrics.value = false;
+  }
+};
 
 const addLog = (msg) => {
   emit("add-log", msg);
@@ -887,6 +1136,7 @@ const _handleWsFrame = async (frame) => {
       phase.value = 2;
       stopWs();
       emit("update-status", "completed");
+      fetchMetrics();
       // Load full action history once
       try {
         const res = await getSimulationActions(props.simulationId);
@@ -900,6 +1150,7 @@ const _handleWsFrame = async (frame) => {
     phase.value = 2;
     stopWs();
     emit("update-status", "completed");
+    fetchMetrics();
     try {
       const res = await getSimulationActions(props.simulationId);
       if (res.success && res.data) {
@@ -1027,6 +1278,14 @@ const handleNextStep = async () => {
   }
 };
 
+import { watch } from "vue";
+
+watch(activeSubTab, (newTab) => {
+  if (newTab === "metrics" && !metricsData.value && !loadingMetrics.value) {
+    fetchMetrics();
+  }
+});
+
 onMounted(() => {
   addLog("Step 3 Simulation Initialized");
   fetchExecutionContracts();
@@ -1054,41 +1313,44 @@ onUnmounted(() => {
 /* Control Bar */
 .control-bar {
   background: var(--atp-white);
-  padding: 24px 32px;
+  padding: 16px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: var(--border-width) solid var(--atp-black);
+  border-bottom: 1px solid var(--border-color);
   z-index: 10;
 }
 
 .status-group {
   display: flex;
-  gap: 24px;
+  gap: 16px;
 }
 
 .platform-status {
-  padding: 16px 24px;
+  padding: 12px 18px;
   background: var(--atp-white);
-  border: 2px solid var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   position: relative;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .platform-status.twitter {
-  border-bottom: 8px solid var(--bauhaus-red);
+  border-left: 4px solid var(--accent-color);
 }
 .platform-status.reddit {
-  border-bottom: 8px solid var(--bauhaus-blue);
+  border-left: 4px solid var(--accent-secondary);
 }
 
 .platform-status.active {
-  background: var(--bauhaus-yellow);
+  background: #fffbeb;
+  border-color: #fde68a;
 }
 
 .platform-status.completed {
-  background: var(--atp-black);
-  color: var(--atp-white);
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #e2e8f0;
 }
 
 .actions-tooltip {
@@ -1096,15 +1358,17 @@ onUnmounted(() => {
   top: 100%;
   left: 0;
   width: 100%;
-  margin-top: 12px;
-  padding: 16px;
-  background: var(--atp-black);
+  margin-top: 8px;
+  padding: 12px;
+  background: #0f172a;
   color: var(--atp-white);
-  border: 2px solid var(--atp-black);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
   opacity: 0;
   visibility: hidden;
   z-index: 100;
   pointer-events: none;
+  transition: all 0.15s ease;
 }
 
 .platform-status:hover .actions-tooltip {
@@ -1113,43 +1377,43 @@ onUnmounted(() => {
 }
 
 .tooltip-title {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 900;
-  color: var(--bauhaus-blue);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  color: #38bdf8;
   text-transform: uppercase;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .tooltip-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .tooltip-action {
   font-family: var(--font-mono);
-  font-size: 10px;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 2px 6px;
+  font-size: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 4px;
+  border-radius: 2px;
 }
 
 .platform-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .platform-name {
-  font-weight: 900;
-  text-transform: uppercase;
-  font-size: 0.85rem;
+  font-weight: 700;
+  font-size: 11px;
 }
 
 .platform-stats {
   display: flex;
-  gap: 24px;
+  gap: 16px;
 }
 
 .stat {
@@ -1158,37 +1422,36 @@ onUnmounted(() => {
 }
 
 .stat-label {
-  font-size: 10px;
-  font-weight: 900;
+  font-size: 9px;
+  font-weight: 600;
   opacity: 0.5;
   text-transform: uppercase;
 }
 
 .stat-value {
-  font-size: 1rem;
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .final-action-btn {
-  padding: 20px 40px;
-  background: var(--atp-black);
+  padding: 10px 20px;
+  background: #0f172a;
   color: var(--atp-white);
-  border: var(--border-width) solid var(--atp-black);
-  font-weight: 900;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 12px;
   text-transform: uppercase;
   cursor: pointer;
-  font-family: var(--font-mono);
-  transition: all 0.1s;
+  transition: background 0.2s ease;
 }
 
 .final-action-btn:hover:not(:disabled) {
-  background: var(--bauhaus-red);
-  transform: translate(-4px, -4px);
-  box-shadow: 6px 6px 0 var(--bauhaus-blue);
+  background: #1e293b;
 }
 
 .final-action-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -1196,37 +1459,39 @@ onUnmounted(() => {
 .contract-strip {
   display: flex;
   gap: 12px;
-  padding: 16px 32px;
-  background: var(--atp-light-gray);
-  border-bottom: 4px solid var(--atp-black);
+  padding: 12px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .contract-card {
   flex: 1;
-  padding: 12px 16px;
+  padding: 10px 14px;
   background: var(--atp-white);
-  border: 4px solid var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
 }
 
 .contract-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 900;
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 600;
   opacity: 0.5;
   text-transform: uppercase;
 }
 
 .contract-value {
-  font-weight: 900;
+  font-weight: 700;
+  font-size: 12px;
   text-transform: uppercase;
-  margin: 4px 0;
+  margin: 2px 0;
 }
 
 .contract-meta {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 9px;
+  color: #64748b;
 }
 
 .contract-ok {
@@ -1234,8 +1499,8 @@ onUnmounted(() => {
 }
 
 .contract-failed {
-  border-color: var(--bauhaus-blue);
-  color: var(--bauhaus-blue);
+  border-color: #fca5a5;
+  color: var(--accent-color);
 }
 
 /* Timeline */
@@ -1246,8 +1511,8 @@ onUnmounted(() => {
 }
 
 .timeline-header {
-  padding: 12px 32px;
-  border-bottom: 4px solid var(--atp-black);
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   background: var(--atp-white);
@@ -1257,32 +1522,32 @@ onUnmounted(() => {
 .timeline-stats {
   display: flex;
   justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 900;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
 .timeline-feed {
-  padding: 40px 32px;
-  max-width: 900px;
+  padding: 24px;
+  max-width: 800px;
   margin: 0 auto;
   position: relative;
 }
 
 .timeline-axis {
   position: absolute;
-  left: 48px;
+  left: 40px;
   top: 0;
   bottom: 0;
-  width: 4px;
-  background: var(--atp-black);
+  width: 1px;
+  background: var(--border-color);
 }
 
 .timeline-item-wrapper {
   display: flex;
-  gap: 32px;
-  margin-bottom: 40px;
+  gap: 20px;
+  margin-bottom: 24px;
   position: relative;
 }
 
@@ -1291,119 +1556,132 @@ onUnmounted(() => {
   z-index: 2;
   display: flex;
   justify-content: center;
-  padding-top: 10px;
+  padding-top: 8px;
 }
 
 .marker-dot {
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   background: var(--atp-white);
-  border: 4px solid var(--atp-black);
+  border: 2px solid var(--border-color);
+  border-radius: 50%;
 }
 
 .twitter .marker-dot {
-  background: var(--bauhaus-red);
+  background: var(--accent-color);
+  border-color: var(--accent-color);
 }
 .reddit .marker-dot {
-  background: var(--bauhaus-blue);
+  background: var(--accent-secondary);
+  border-color: var(--accent-secondary);
 }
 
 .timeline-card {
   flex: 1;
   background: var(--atp-white);
-  border: 4px solid var(--atp-black);
-  padding: 32px;
-  box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  transition: box-shadow 0.2s ease;
+}
+
+.timeline-card:hover {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
 }
 
 .twitter .timeline-card {
-  border-left: 12px solid var(--bauhaus-red);
+  border-left: 3px solid var(--accent-color);
 }
 .reddit .timeline-card {
-  border-left: 12px solid var(--bauhaus-blue);
+  border-left: 3px solid var(--accent-secondary);
 }
 
 .timeline-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
 }
 
 .agent-info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .avatar-placeholder {
-  width: 32px;
-  height: 32px;
-  background: var(--atp-black);
-  color: var(--atp-white);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 900;
+  font-weight: 700;
+  font-size: 11px;
 }
 
 .agent-name {
-  font-weight: 900;
-  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 12px;
 }
 
 .action-badge {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 900;
-  padding: 4px 12px;
-  border: 2px solid var(--atp-black);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
   text-transform: uppercase;
 }
 
 .badge-post {
-  background: var(--bauhaus-red);
-  color: var(--atp-white);
+  background: #fee2e2;
+  color: var(--accent-color);
 }
 .badge-blue {
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
+  background: #eff6ff;
+  color: var(--accent-secondary);
 }
 .badge-red {
-  background: var(--bauhaus-red);
-  color: var(--atp-white);
+  background: #fee2e2;
+  color: var(--accent-color);
 }
 .badge-yellow {
-  background: var(--bauhaus-yellow);
-  color: var(--atp-black);
+  background: #fffbeb;
+  color: var(--accent-tertiary);
 }
 .badge-black {
-  background: var(--atp-black);
-  color: var(--atp-white);
+  background: #f8fafc;
+  color: #64748b;
 }
 
 .content-text {
-  font-size: 1.1rem;
+  font-size: 12px;
   line-height: 1.6;
-  font-weight: 500;
+  color: #334155;
 }
 
 .quoted-block {
-  margin-top: 20px;
-  padding: 20px;
-  border: 2px dashed var(--atp-black);
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+  background: #f8fafc;
 }
 
 .quote-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-family: var(--font-sans);
+  font-size: 10px;
   font-weight: 700;
+  color: #64748b;
 }
 
 .repost-info,
@@ -1414,48 +1692,51 @@ onUnmounted(() => {
 .idle-info {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 8px;
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 0.85rem;
+  font-size: 10px;
+  color: #64748b;
 }
 
 .card-footer {
-  margin-top: 24px;
-  border-top: 1px solid #eee;
-  padding-top: 12px;
+  margin-top: 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
 }
 
 .time-tag {
   font-family: var(--font-mono);
-  font-size: 11px;
-  opacity: 0.5;
-  font-weight: 900;
+  font-size: 9px;
+  color: #94a3b8;
+  font-weight: 600;
 }
 
 /* Logs */
 .system-logs {
-  background: var(--atp-black);
-  padding: 40px;
-  border-top: var(--border-width) solid var(--atp-black);
+  background: #0f172a;
+  padding: 20px;
   color: var(--atp-white);
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
 }
 
 .log-title {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  font-weight: 900;
-  color: var(--bauhaus-yellow);
-  letter-spacing: 4px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-tertiary);
 }
 
 .log-content {
-  margin-top: 20px;
-  height: 120px;
+  margin-top: 10px;
+  height: 100px;
   overflow-y: auto;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 10px;
+  flex-grow: 1;
 }
 
 /* Animations */
@@ -1464,14 +1745,14 @@ onUnmounted(() => {
 }
 .timeline-item-enter-from {
   opacity: 0;
-  transform: translateY(30px);
+  transform: translateY(20px);
 }
 
 .spinner-sm {
-  width: 20px;
-  height: 20px;
-  border: 4px solid rgba(34, 211, 238, 0.2);
-  border-top-color: var(--bauhaus-yellow);
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-tertiary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -1484,5 +1765,440 @@ onUnmounted(() => {
 
 .mono {
   font-family: var(--font-mono);
+}
+
+/* Subtabs Navigation */
+.subtabs-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.subtab-btn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #64748b;
+}
+
+.subtab-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.subtab-btn.is-active {
+  background: #0f172a;
+  color: var(--atp-white);
+  border-color: #0f172a;
+}
+
+/* Metrics Dashboard */
+.metrics-dashboard {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.metrics-loading,
+.metrics-error,
+.metrics-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  border: 1px dashed var(--border-color);
+  background: var(--atp-white);
+  text-align: center;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  gap: 12px;
+  text-transform: uppercase;
+  border-radius: var(--radius-md);
+}
+
+.metrics-loading {
+  border-style: solid;
+}
+
+.error-icon {
+  font-size: 24px;
+}
+
+.error-msg {
+  color: var(--accent-color);
+}
+
+.retry-btn {
+  background: #0f172a;
+  color: var(--atp-white);
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: background 0.2s ease;
+}
+
+.retry-btn:hover {
+  background: #1e293b;
+}
+
+/* Dashboard Content */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 32px;
+}
+
+.metric-card {
+  background: var(--atp-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+}
+
+.metric-card.polarization {
+  border-top: 4px solid var(--accent-color);
+}
+
+.metric-card.gini {
+  border-top: 4px solid var(--accent-secondary);
+}
+
+.metric-card.echo-chamber {
+  border-top: 4px solid var(--accent-tertiary);
+}
+
+.metric-label {
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.6;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.metric-value-wrapper {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.metric-badge {
+  font-family: var(--font-sans);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.badge-green {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.badge-yellow {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.badge-red {
+  background: #fee2e2;
+  color: var(--accent-color);
+}
+
+.metric-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0 0 12px 0;
+  color: #64748b;
+  flex-grow: 1;
+}
+
+.gauge-bar {
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.gauge-fill {
+  height: 100%;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Dual Panel Layout */
+.metrics-dual-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 900px) {
+  .metrics-dual-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.analytics-section {
+  background: var(--atp-white);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 20px;
+}
+
+.analytics-section h3 {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 0 0 16px 0;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 6px;
+  color: #475569;
+}
+
+.section-subtitle {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: -10px;
+  margin-bottom: 16px;
+  color: #64748b;
+}
+
+/* Distribution List */
+.distribution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dist-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dist-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+}
+
+.dist-type {
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.dist-count {
+  font-weight: 700;
+}
+
+.dist-bar {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.dist-bar-fill {
+  height: 100%;
+  background: #0f172a;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Top Agents Table */
+.top-agents-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.table-header {
+  display: flex;
+  background: #f8fafc;
+  color: #475569;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table-row {
+  display: flex;
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px 12px;
+  align-items: center;
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.col-agent {
+  flex: 1;
+  font-weight: 600;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.col-actions {
+  font-weight: 700;
+  font-size: 11px;
+  width: 80px;
+  text-align: right;
+}
+
+.agent-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  color: #475569;
+  font-weight: 700;
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+}
+
+/* Cascades */
+.no-cascades {
+  padding: 24px 0;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+.cascade-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cascade-post-card {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  background: var(--atp-white);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+}
+
+.cascade-post-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 11px;
+}
+
+.cascade-rank {
+  font-weight: 700;
+  color: var(--accent-color);
+}
+
+.cascade-author {
+  font-weight: 700;
+}
+
+.cascade-platform-badge {
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.cascade-platform-badge.twitter {
+  background: #fee2e2;
+  color: var(--accent-color);
+}
+
+.cascade-platform-badge.reddit {
+  background: #eff6ff;
+  color: var(--accent-secondary);
+}
+
+.cascade-post-content {
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 0 0 8px 0;
+  color: #475569;
+  font-style: italic;
+}
+
+.cascade-post-stats {
+  display: flex;
+  gap: 12px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 6px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.stat-icon {
+  font-size: 10px;
+}
+
+.stat-num {
+  font-weight: 600;
+}
+
+.stat-item.total {
+  margin-left: auto;
+}
+
+.stat-label {
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.stat-num.highlighted {
+  background: #fffbeb;
+  padding: 0 4px;
+  border: 1px solid #fde68a;
+  border-radius: 2px;
+  font-weight: 700;
+}
+
+.truncate-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

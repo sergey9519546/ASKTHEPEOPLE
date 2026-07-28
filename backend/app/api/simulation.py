@@ -30,17 +30,18 @@ logger = get_logger('askthepeople.api.simulation')
 INTERVIEW_PROMPT_PREFIX = "Based on your persona, all past memories, and actions, reply to me directly with text without calling any tools:"
 
 
-def optimize_interview_prompt(prompt: str) -> str:
+def optimize_interview_prompt(prompt: str, bypass: bool = False) -> str:
     """
     Optimize Interview question by adding a prefix to prevent the Agent from calling tools
     
     Args:
         prompt: Original question
+        bypass: If True, bypass prefix optimization (raw mode)
         
     Returns:
         Optimized question
     """
-    if not prompt:
+    if not prompt or bypass:
         return prompt
     # Avoid duplicate prefix additions
     if prompt.startswith(INTERVIEW_PROMPT_PREFIX):
@@ -2368,7 +2369,8 @@ def interview_agent():
             }), 400
         
         # Optimize prompt, add prefix to avoid Agent calling tools
-        optimized_prompt = optimize_interview_prompt(prompt)
+        raw = data.get('raw', False) or data.get('bypass_prompt_optimization', False)
+        optimized_prompt = optimize_interview_prompt(prompt, bypass=raw)
         
         result = SimulationRunner.interview_agent(
             simulation_id=simulation_id,
@@ -2500,10 +2502,13 @@ def interview_agents_batch():
             }), 400
 
         # Optimize each interview item's prompt, adding prefix to avoid Agent calling tools
+        raw = data.get('raw', False) or data.get('bypass_prompt_optimization', False)
         optimized_interviews = []
         for interview in interviews:
             optimized_interview = interview.copy()
-            optimized_interview['prompt'] = optimize_interview_prompt(interview.get('prompt', ''))
+            # Also allow individual item bypass or global bypass
+            item_raw = raw or interview.get('raw', False) or interview.get('bypass_prompt_optimization', False)
+            optimized_interview['prompt'] = optimize_interview_prompt(interview.get('prompt', ''), bypass=item_raw)
             optimized_interviews.append(optimized_interview)
 
         result = SimulationRunner.interview_agents_batch(
@@ -2607,7 +2612,8 @@ def interview_all_agents():
             }), 400
 
         # Optimize prompt, add prefix to prevent Agent from calling tools
-        optimized_prompt = optimize_interview_prompt(prompt)
+        raw = data.get('raw', False) or data.get('bypass_prompt_optimization', False)
+        optimized_prompt = optimize_interview_prompt(prompt, bypass=raw)
 
         result = SimulationRunner.interview_all_agents(
             simulation_id=simulation_id,

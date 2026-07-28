@@ -20,10 +20,18 @@ class LLMClient:
         base_url: Optional[str] = None,
         model: Optional[str] = None,
         timeout: Optional[float] = None,
+        prefer_boost: bool = False,
     ):
-        self.api_key = api_key or Config.LLM_API_KEY
-        self.base_url = base_url or Config.LLM_BASE_URL
-        self.model = model or Config.LLM_MODEL_NAME
+        import os
+        if prefer_boost and os.environ.get("LLM_BOOST_API_KEY"):
+            self.api_key = api_key or os.environ.get("LLM_BOOST_API_KEY")
+            self.base_url = base_url or os.environ.get("LLM_BOOST_BASE_URL") or Config.LLM_BASE_URL
+            self.model = model or os.environ.get("LLM_BOOST_MODEL_NAME") or Config.LLM_MODEL_NAME
+        else:
+            self.api_key = api_key or Config.LLM_API_KEY
+            self.base_url = base_url or Config.LLM_BASE_URL
+            self.model = model or Config.LLM_MODEL_NAME
+
         self.timeout = timeout if timeout is not None else Config.LLM_TIMEOUT
 
         if not self.api_key:

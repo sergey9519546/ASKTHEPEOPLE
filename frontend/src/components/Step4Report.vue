@@ -27,16 +27,20 @@
             <button
               class="action-btn"
               @click="handleExportPDF"
-              :disabled="!isComplete"
+              :disabled="!isComplete || exportingPDF"
             >
-              EXPORT_PDF
+              <span v-if="exportingPDF">GENERATING...</span>
+              <span v-else-if="exportPDFSuccess">✓ EXPORTED PDF</span>
+              <span v-else>EXPORT_PDF</span>
             </button>
             <button
               class="action-btn secondary"
               @click="handleExportCSV"
-              :disabled="!isComplete"
+              :disabled="!isComplete || exportingCSV"
             >
-              EXPORT_CSV
+              <span v-if="exportingCSV">EXTRACTING...</span>
+              <span v-else-if="exportCSVSuccess">✓ EXPORTED CSV</span>
+              <span v-else>EXPORT_CSV</span>
             </button>
             <button
               class="action-btn"
@@ -407,6 +411,12 @@ const reportEvidenceError = ref("");
 const isEvidenceLoading = ref(false);
 const showRawResult = reactive({});
 
+// Export visual feedback states
+const exportingPDF = ref(false);
+const exportingCSV = ref(false);
+const exportPDFSuccess = ref(false);
+const exportCSVSuccess = ref(false);
+
 const leftPanel = ref(null);
 const rightPanel = ref(null);
 
@@ -417,17 +427,53 @@ const goToInteraction = () => {
   }
 };
 
-const handleExportPDF = () => {
-  if (props.reportId) {
-    emit("add-log", "Generating Bauhaus PDF...");
-    exportReportPDF(props.reportId);
+const handleExportPDF = async () => {
+  if (exportingPDF.value || !props.reportId) return;
+  exportingPDF.value = true;
+  exportPDFSuccess.value = false;
+  emit("add-log", "Generating Bauhaus PDF...");
+  try {
+    const res = await exportReportPDF(props.reportId);
+    const blob = new Blob([res.data || res], { type: "application/pdf" });
+    const link = document.createElement("a");
+    link.href = window.URL.createObjectURL(blob);
+    link.download = `ATP_REPORT_${props.reportId}.pdf`;
+    link.click();
+    window.URL.revokeObjectURL(link.href);
+    exportPDFSuccess.value = true;
+    emit("add-log", "✓ PDF exported successfully");
+    setTimeout(() => {
+      exportPDFSuccess.value = false;
+    }, 3000);
+  } catch (err) {
+    emit("add-log", `✗ Failed to export PDF: ${err.message || err}`);
+  } finally {
+    exportingPDF.value = false;
   }
 };
 
-const handleExportCSV = () => {
-  if (props.reportId) {
-    emit("add-log", "Extracting Graph Data to CSV...");
-    exportReportCSV(props.reportId);
+const handleExportCSV = async () => {
+  if (exportingCSV.value || !props.reportId) return;
+  exportingCSV.value = true;
+  exportCSVSuccess.value = false;
+  emit("add-log", "Extracting Graph Data to CSV...");
+  try {
+    const res = await exportReportCSV(props.reportId);
+    const blob = new Blob([res.data || res], { type: "text/csv" });
+    const link = document.createElement("a");
+    link.href = window.URL.createObjectURL(blob);
+    link.download = `ATP_DATA_${props.reportId}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(link.href);
+    exportCSVSuccess.value = true;
+    emit("add-log", "✓ CSV exported successfully");
+    setTimeout(() => {
+      exportCSVSuccess.value = false;
+    }, 3000);
+  } catch (err) {
+    emit("add-log", `✗ Failed to export CSV: ${err.message || err}`);
+  } finally {
+    exportingCSV.value = false;
   }
 };
 
@@ -672,55 +718,62 @@ onUnmounted(() => {
 
 <style scoped>
 .step4-report-workbench {
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--atp-white);
+  background: var(--bg-color);
   color: var(--atp-black);
   font-family: var(--font-sans);
   overflow: hidden;
 }
 
 .workbench-header {
-  height: 80px;
-  border-bottom: 4px solid var(--atp-black);
-  padding: 0 40px;
+  height: 60px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
 }
 
 .workbench-title {
-  font-weight: 900;
-  font-size: 24px;
-  letter-spacing: -1px;
-}
-
-.workbench-subtitle {
-  font-size: 14px;
-  font-weight: 600;
-  opacity: 0.8;
-}
-
-.status-indicator {
-  padding: 8px 16px;
-  border: 3px solid var(--atp-black);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.status-indicator.is-complete {
-  background: var(--bauhaus-yellow);
+  font-weight: 700;
+  font-size: 16px;
   color: var(--atp-black);
 }
 
+.workbench-subtitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.status-indicator {
+  padding: 4px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 10px;
+  background: #f8fafc;
+}
+
+.status-indicator.is-complete {
+  background: #ecfdf5;
+  color: var(--accent-tertiary);
+  border-color: #d1fae5;
+}
+
 .status-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--bauhaus-yellow);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-tertiary);
 }
 
 .workbench-layout {
@@ -731,72 +784,90 @@ onUnmounted(() => {
 
 .report-panel {
   flex: 1;
-  border-right: 4px solid var(--atp-black);
+  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  background: #ffffff;
 }
 
 .evidence-panel {
-  width: 600px;
+  width: 500px;
   display: flex;
   flex-direction: column;
+  background: #f8fafc;
 }
 
 .panel-header {
-  height: 60px;
-  border-bottom: 3px solid var(--atp-black);
-  padding: 0 20px;
+  height: 50px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: rgba(255, 255, 255, 0.8);
 }
 
 .panel-title {
-  font-weight: 800;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 11px;
+  color: #475569;
+  text-transform: uppercase;
 }
 
 .report-canvas {
   flex: 1;
-  padding: 40px;
+  padding: 24px;
   overflow-y: auto;
 }
 
 .report-section {
-  border: 4px solid var(--atp-black);
-  margin-bottom: 24px;
-  transition: transform 0.2s;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+  overflow: hidden;
+  background: #ffffff;
+  transition: all 0.25s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .report-section.is-generating {
-  border-color: var(--bauhaus-red);
-  transform: translateX(10px);
+  border-color: var(--accent-color);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.05);
 }
 
 .section-header {
-  padding: 16px 20px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--atp-black);
   cursor: pointer;
+  transition: background 0.15s ease;
+}
+.section-header:hover {
+  background: #f1f5f9;
 }
 
 .section-number {
-  font-weight: 900;
-  font-size: 24px;
-  margin-right: 20px;
+  font-weight: 700;
+  font-size: 16px;
+  color: #94a3b8;
+  margin-right: 12px;
 }
 
 .section-title {
-  font-weight: 700;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: 13px;
   flex: 1;
 }
 
 .section-body {
-  padding: 24px;
+  padding: 16px;
+  font-size: 12px;
   line-height: 1.6;
+  color: #334155;
 }
 
 .evidence-tabs {
@@ -806,114 +877,138 @@ onUnmounted(() => {
 
 .tab-btn {
   height: 100%;
-  padding: 0 30px;
+  padding: 0 16px;
   border: none;
   background: transparent;
-  font-weight: 800;
-  font-size: 12px;
-  border-right: 3px solid var(--atp-black);
+  font-weight: 700;
+  font-size: 11px;
+  color: #64748b;
+  border-right: 1px solid var(--border-color);
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tab-btn:hover {
+  background: #f1f5f9;
+  color: var(--atp-black);
 }
 
 .tab-btn.active {
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
+  background: #ffffff;
+  color: var(--atp-black);
 }
 
 .evidence-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px;
 }
 
 .timeline-item {
-  border-left: 3px solid var(--atp-black);
-  padding-left: 20px;
-  padding-bottom: 30px;
+  border-left: 1px solid var(--border-color);
+  padding-left: 16px;
+  padding-bottom: 20px;
   position: relative;
 }
 
 .marker-dot {
   position: absolute;
-  left: -8px;
-  top: 0;
-  width: 13px;
-  height: 13px;
-  border: 3px solid var(--atp-black);
-  background: var(--atp-white);
+  left: -5px;
+  top: 4px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  background: #cbd5e1;
+  box-shadow: 0 0 0 2px rgba(203, 213, 225, 0.4);
+}
+
+.timeline-item:hover .marker-dot {
+  background: var(--accent-secondary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
 }
 
 .item-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
   cursor: pointer;
 }
 
 .item-time {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
+  color: #64748b;
 }
 
 .tool-badge {
-  padding: 4px 10px;
-  border: 2px solid var(--atp-black);
-  font-weight: 800;
-  font-size: 10px;
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
+  padding: 2px 6px;
+  border: 1px solid #dbeafe;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 9px;
+  background: #eff6ff;
+  color: #2563eb;
 }
 
 .item-details {
-  border: 4px solid var(--atp-black);
-  padding: 12px;
-  background: var(--atp-light-gray);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 10px;
+  background: #ffffff;
 }
 
 .bauhaus-sub {
-  border: 2px solid var(--atp-black);
-  background: var(--atp-white);
+  border: 1px solid var(--border-color);
+  background: #ffffff;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-top: 6px;
 }
 
 .sub-header {
-  background: var(--atp-black);
-  color: var(--atp-white);
-  font-weight: 800;
-  font-size: 10px;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-color);
+  color: #475569;
+  font-weight: 700;
+  font-size: 9px;
   padding: 4px 8px;
 }
 
 .sub-body {
-  padding: 10px;
-  font-size: 12px;
+  padding: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #334155;
 }
 
 .console-logs {
-  height: 200px;
-  background: var(--atp-black);
+  height: 160px;
+  background: #0f172a;
   color: var(--atp-white);
-  padding: 15px;
+  padding: 12px;
   font-family: var(--font-mono);
+  border-top: 1px solid var(--border-color);
 }
 
 .log-line {
-  font-size: 11px;
-  margin-bottom: 4px;
-  opacity: 0.8;
+  font-size: 10px;
+  margin-bottom: 2px;
+  opacity: 0.85;
 }
 
 .log-timestamp {
-  color: var(--bauhaus-red);
-  margin-right: 10px;
+  color: var(--accent-color);
+  margin-right: 8px;
 }
 
 .bauhaus-loader {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--atp-black);
-  border-top-color: var(--bauhaus-red);
+  width: 24px;
+  height: 24px;
+  border: 2px solid #f1f5f9;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
   animation: spin 1s infinite linear;
 }
 
@@ -924,21 +1019,23 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  background: var(--atp-black);
+  background: #0f172a;
   color: var(--atp-white);
   border: none;
-  padding: 8px 16px;
-  font-weight: 800;
+  padding: 6px 12px;
+  font-weight: 600;
   font-size: 11px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .action-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .action-btn:hover:not(:disabled) {
-  background: var(--bauhaus-red);
+  background: #1e293b;
 }
 </style>

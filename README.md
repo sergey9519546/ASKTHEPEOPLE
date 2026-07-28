@@ -497,12 +497,11 @@ cp .env.example .env
 # ===== LLM API Configuration =====
 # Supports any OpenAI SDK-compatible API
 # Recommended providers:
-#   - OpenRouter (free models available): https://openrouter.ai/
-#   - Alibaba Qwen: https://bailian.console.aliyun.com/
+#   - Nvidia API Catalog (default): https://build.nvidia.com
 #   - OpenAI: https://platform.openai.com/
 LLM_API_KEY=your_api_key_here
-LLM_BASE_URL=https://api.openai.com/v1
-LLM_MODEL_NAME=gpt-4o-mini
+LLM_BASE_URL=https://integrate.api.nvidia.com/v1
+LLM_MODEL_NAME=nvidia/llama-3.1-nemotron-70b-instruct
 
 # ===== ZEP Memory Graph Configuration =====
 # Free tier sufficient for basic use: https://app.getzep.com/

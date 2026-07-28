@@ -674,6 +674,25 @@ class SimulationRunner:
         cls._follower_engines.pop(simulation_id, None)
         cls._follower_agents.pop(simulation_id, None)
 
+        # Clean up process, thread, queue, and file handles to prevent resource and memory leaks
+        cls._processes.pop(simulation_id, None)
+        cls._monitor_threads.pop(simulation_id, None)
+        cls._action_queues.pop(simulation_id, None)
+        
+        stdout_file = cls._stdout_files.pop(simulation_id, None)
+        if stdout_file:
+            try:
+                stdout_file.close()
+            except Exception as e:
+                logger.error(f"Failed to close stdout file handle for simulation {simulation_id}: {e}")
+                
+        stderr_file = cls._stderr_files.pop(simulation_id, None)
+        if stderr_file:
+            try:
+                stderr_file.close()
+            except Exception as e:
+                logger.error(f"Failed to close stderr file handle for simulation {simulation_id}: {e}")
+
         logger.info(f"Simulation monitor thread finished for {simulation_id}. Terminal state: {state.runner_status}")
         return state
     

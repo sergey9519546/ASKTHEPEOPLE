@@ -912,7 +912,7 @@ class ReportAgent:
         self.simulation_id = simulation_id
         self.simulation_requirement = simulation_requirement
 
-        self.llm = llm_client or LLMClient()
+        self.llm = llm_client or LLMClient(prefer_boost=True)
         self.zep_tools = zep_tools or ZepToolsService()
 
         # Tool definitions

@@ -4,20 +4,10 @@
     :class="{ 'empty-state': projects.length === 0 && !loading }"
     ref="historyContainer"
   >
-    <!-- Bauhaus Backdrop -->
-    <div
-      v-if="projects.length > 0 || loading"
-      class="bauhaus-backdrop"
-      aria-hidden="true"
-    >
-      <div class="geometric-pattern"></div>
-    </div>
-
     <!-- Section Header -->
     <header class="section-title-area" aria-label="Simulation Archive section">
-      <div class="bauhaus-accent-shape triangle" aria-hidden="true"></div>
       <h2 class="section-label">Simulation Archive</h2>
-      <div class="bauhaus-accent-shape square" aria-hidden="true"></div>
+      <p class="section-subtitle">Browse and replay synthetic opinion runs</p>
     </header>
 
     <!-- Project Cards Grid -->
@@ -30,7 +20,7 @@
       <div
         v-for="(project, index) in projects"
         :key="project.simulation_id"
-        class="simulation-card bauhaus-card"
+        class="simulation-card"
         :class="{
           'is-expanded': isExpanded,
           'is-hovered': hoveringCard === index,
@@ -76,13 +66,12 @@
 
         <!-- Preview Area: Files -->
         <div class="card-preview-area">
-          <div class="viewport-mark top-left" aria-hidden="true"></div>
           <div
             v-if="project.files && project.files.length > 0"
             class="file-previews"
           >
             <div
-              v-for="(file, fIdx) in project.files.slice(0, 3)"
+              v-for="(file, fIdx) in project.files.slice(0, 2)"
               :key="fIdx"
               class="file-strip"
             >
@@ -90,11 +79,11 @@
                 getShortExt(file.filename)
               }}</span>
               <span class="filename-text">{{
-                truncate(file.filename, 18)
+                truncate(file.filename, 22)
               }}</span>
             </div>
-            <div v-if="project.files.length > 3" class="more-files-indicator">
-              +{{ project.files.length - 3 }} Assets Remaining
+            <div v-if="project.files.length > 2" class="more-files-indicator">
+              +{{ project.files.length - 2 }} Assets
             </div>
           </div>
           <div
@@ -102,24 +91,23 @@
             class="empty-files-placeholder"
             aria-label="No source data available"
           >
-            <span class="empty-icon" aria-hidden="true">×</span>
-            <span class="empty-text">NO SOURCE DATA</span>
+            <span class="empty-text">No Source Data</span>
           </div>
         </div>
 
         <!-- Content Area -->
         <div class="card-content-block">
-          <h3 class="requirement-title">
+          <h3 class="requirement-title text-rose-500">
             {{ getShortRequirement(project.simulation_requirement) }}
           </h3>
-          <p class="requirement-preview">
-            {{ truncate(project.simulation_requirement, 60) }}
+          <p class="requirement-preview text-slate-500">
+            {{ truncate(project.simulation_requirement, 70) }}
           </p>
         </div>
 
         <!-- Footer -->
         <footer class="card-footer-row">
-          <div class="timestamp-group">
+          <div class="timestamp-group text-slate-400">
             <span class="date-text">{{ formatDate(project.created_at) }}</span>
             <span class="time-text">{{ formatTime(project.created_at) }}</span>
           </div>
@@ -128,8 +116,6 @@
             <span class="progress-text">{{ formatIteration(project) }}</span>
           </div>
         </footer>
-
-        <div class="hover-accent-line" aria-hidden="true"></div>
       </div>
     </div>
 
@@ -140,13 +126,13 @@
       role="status"
       aria-live="polite"
     >
-      <div class="bauhaus-spinner" aria-hidden="true"></div>
-      <span class="loading-label">RETRIEVING ARCHIVES...</span>
+      <div class="spinner" aria-hidden="true"></div>
+      <span class="loading-label text-slate-400">Retrieving simulation runs...</span>
     </div>
 
     <!-- Modal: Project Details & Playback -->
     <Teleport to="body">
-      <Transition name="bauhaus-modal">
+      <Transition name="modal-fade">
         <div
           v-if="selectedProject"
           class="workbench-modal-overlay"
@@ -155,37 +141,39 @@
           aria-modal="true"
           aria-labelledby="modal-title"
         >
-          <div class="bauhaus-modal-content">
+          <div class="modal-card">
             <!-- Modal Header -->
             <header class="modal-header-block">
               <div class="id-meta">
                 <span class="modal-sim-id" id="modal-title">{{
                   formatSimId(selectedProject.simulation_id)
                 }}</span>
-                <div
-                  class="modal-status-badge"
-                  :class="getProgressState(selectedProject)"
-                >
-                  <span class="status-dot" aria-hidden="true"></span>
-                  {{ formatIteration(selectedProject) }}
+                <div class="modal-badges">
+                  <div
+                    class="modal-status-badge"
+                    :class="getProgressState(selectedProject)"
+                  >
+                    <span class="status-dot" aria-hidden="true"></span>
+                    {{ formatIteration(selectedProject) }}
+                  </div>
+                  <span class="creation-stamp text-slate-400"
+                    >{{ formatDate(selectedProject.created_at) }} @
+                    {{ formatTime(selectedProject.created_at) }}</span
+                  >
                 </div>
-                <span class="creation-stamp"
-                  >{{ formatDate(selectedProject.created_at) }} @
-                  {{ formatTime(selectedProject.created_at) }}</span
-                >
               </div>
               <button
                 class="close-modal-btn"
                 @click="closeModal"
                 aria-label="Close modal"
               >
-                CLOSE [X]
+                ×
               </button>
             </header>
 
             <!-- Modal Body -->
             <div
-              class="modal-scroll-area"
+              class="modal-scroll-area scrollbar-thin"
               role="region"
               aria-label="Modal content"
             >
@@ -194,12 +182,12 @@
                 aria-labelledby="simulation-objective-heading"
               >
                 <h4 class="section-heading" id="simulation-objective-heading">
-                  SIMULATION OBJECTIVE
+                  Simulation Objective
                 </h4>
-                <div class="requirement-box">
+                <div class="requirement-box text-slate-700">
                   {{
                     selectedProject.simulation_requirement ||
-                    "NO OBJECTIVE DEFINED"
+                    "No objective defined"
                   }}
                 </div>
               </section>
@@ -209,7 +197,7 @@
                 aria-labelledby="linked-assets-heading"
               >
                 <h4 class="section-heading" id="linked-assets-heading">
-                  LINKED ASSETS
+                  Linked Assets
                 </h4>
                 <div
                   v-if="
@@ -232,17 +220,17 @@
                       aria-hidden="true"
                       >{{ getShortExt(file.filename) }}</span
                     >
-                    <span class="modal-filename" aria-hidden="true">{{
+                    <span class="modal-filename text-slate-700" aria-hidden="true">{{
                       file.filename
                     }}</span>
                   </div>
                 </div>
                 <div
                   v-else
-                  class="modal-no-assets"
+                  class="modal-no-assets text-slate-400"
                   aria-label="No assets detected"
                 >
-                  NO ASSETS DETECTED
+                  No assets detected
                 </div>
               </section>
             </div>
@@ -252,9 +240,7 @@
               class="modal-playback-divider"
               aria-label="Synthetic playback section"
             >
-              <div class="hr-line" aria-hidden="true"></div>
-              <span class="playback-label">SYNTHETIC PLAYBACK</span>
-              <div class="hr-line" aria-hidden="true"></div>
+              <span class="playback-label text-slate-400">Replay Pipeline</span>
             </div>
 
             <nav class="modal-navigation-grid" aria-label="Phase navigation">
@@ -264,18 +250,16 @@
                 :disabled="!selectedProject.project_id"
                 aria-label="Navigate to Phase 01: Graph Archive"
               >
-                <span class="step-num">PHASE 01</span>
-                <span class="action-icon" aria-hidden="true">◆</span>
-                <span class="action-label">GRAPH ARCHIVE</span>
+                <span class="step-num text-rose-500">PHASE 01</span>
+                <span class="action-label">Graph Archive</span>
               </button>
               <button
                 class="nav-btn btn-setup"
                 @click="jumpToSetup"
                 aria-label="Navigate to Phase 02: Environment Configuration"
               >
-                <span class="step-num">PHASE 02</span>
-                <span class="action-icon" aria-hidden="true">▲</span>
-                <span class="action-label">ENV CONFIG</span>
+                <span class="step-num text-blue-500">PHASE 02</span>
+                <span class="action-label">Environment Config</span>
               </button>
               <button
                 class="nav-btn btn-report"
@@ -283,16 +267,14 @@
                 :disabled="!selectedProject.report_id"
                 aria-label="Navigate to Phase 04: Report Synthesis"
               >
-                <span class="step-num">PHASE 04</span>
-                <span class="action-icon" aria-hidden="true">■</span>
-                <span class="action-label">REPORT SYNTHESIS</span>
+                <span class="step-num text-emerald-500">PHASE 04</span>
+                <span class="action-label">Report Synthesis</span>
               </button>
             </nav>
 
             <footer class="modal-notice" aria-label="Important notice">
               <p>
-                Phases 03 [Simulation] and 05 [Interaction] are runtime-only and
-                do not support archive playback.
+                Note: Interactive Simulation is run-time only and not saved in replay format.
               </p>
             </footer>
           </div>
@@ -331,22 +313,22 @@ let pendingState = null;
 
 // Configuration
 const CARDS_PER_ROW = 4;
-const CARD_WIDTH = 300;
-const CARD_HEIGHT = 300;
-const CARD_GAP = 30;
+const CARD_WIDTH = 280;
+const CARD_HEIGHT = 280;
+const CARD_GAP = 24;
 
 const gridContainerStyle = computed(() => {
-  if (!isExpanded.value) return { minHeight: "450px" };
+  if (!isExpanded.value) return { minHeight: "360px" };
   const total = projects.value.length;
-  if (total === 0) return { minHeight: "300px" };
+  if (total === 0) return { minHeight: "260px" };
   const rows = Math.ceil(total / CARDS_PER_ROW);
-  return { minHeight: `${rows * CARD_HEIGHT + (rows - 1) * CARD_GAP + 50}px` };
+  return { minHeight: `${rows * CARD_HEIGHT + (rows - 1) * CARD_GAP + 60}px` };
 });
 
 const getCardStyle = (index) => {
   const total = projects.value.length;
   const transition =
-    "transform 800ms cubic-bezier(0.19, 1, 0.22, 1), opacity 800ms, box-shadow 0.3s";
+    "transform 800ms cubic-bezier(0.16, 1, 0.3, 1), opacity 800ms, box-shadow 0.3s ease, border-color 0.2s ease";
 
   if (isExpanded.value) {
     const col = index % CARDS_PER_ROW;
@@ -357,7 +339,7 @@ const getCardStyle = (index) => {
       currentRowCards * CARD_WIDTH + (currentRowCards - 1) * CARD_GAP;
     const startX = -(rowWidth / 2) + CARD_WIDTH / 2;
     const x = startX + (index % CARDS_PER_ROW) * (CARD_WIDTH + CARD_GAP);
-    const y = 30 + row * (CARD_HEIGHT + CARD_GAP);
+    const y = 20 + row * (CARD_HEIGHT + CARD_GAP);
 
     return {
       transform: `translate(${x}px, ${y}px) scale(1)`,
@@ -368,10 +350,10 @@ const getCardStyle = (index) => {
   } else {
     const centerIdx = (total - 1) / 2;
     const offset = index - centerIdx;
-    const x = offset * 40;
-    const y = 30 + Math.abs(offset) * 10;
-    const r = offset * 4;
-    const s = 1 - Math.abs(offset) * 0.05;
+    const x = offset * 24;
+    const y = 20 + Math.abs(offset) * 8;
+    const r = offset * 2.5;
+    const s = 1 - Math.abs(offset) * 0.04;
 
     return {
       transform: `translate(${x}px, ${y}px) rotate(${r}deg) scale(${s})`,
@@ -385,11 +367,11 @@ const getCardStyle = (index) => {
 // Formatters
 const formatSimId = (id) =>
   id
-    ? `SIM_${id.replace("sim_", "").slice(0, 6).toUpperCase()}`
-    : "SIM_UNKNOWN";
+    ? `SIM-${id.replace("sim_", "").slice(0, 6).toUpperCase()}`
+    : "SIM-UNKNOWN";
 const truncate = (text, len) =>
   text && text.length > len ? text.slice(0, len) + "..." : text || "";
-const getShortRequirement = (req) => (req ? truncate(req, 22) : "UNTITLED_SIM");
+const getShortRequirement = (req) => (req ? truncate(req, 20) : "Untitled Simulation");
 const formatDate = (ds) => (ds ? new Date(ds).toISOString().slice(0, 10) : "");
 const formatTime = (ds) =>
   ds
@@ -401,7 +383,7 @@ const formatTime = (ds) =>
 const formatIteration = (sim) => {
   const c = sim.current_round || 0;
   const t = sim.total_rounds || 0;
-  return t === 0 ? "PENDING" : `${c}/${t} CYCLES`;
+  return t === 0 ? "Pending" : `${c}/${t} Cycles`;
 };
 
 const getProgressState = (sim) => {
@@ -524,227 +506,184 @@ onUnmounted(() => {
 .simulation-history-workbench {
   position: relative;
   width: 100%;
-  min-height: 400px;
-  margin-top: 80px;
-  padding: 60px 0;
-  background: var(--atp-white);
-  border-top: 8px solid var(--atp-black);
-}
-
-.bauhaus-backdrop {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.geometric-pattern {
-  width: 100%;
-  height: 100%;
-  background-image:
-    linear-gradient(to right, var(--atp-black) 2px, transparent 2px),
-    linear-gradient(to bottom, var(--atp-black) 2px, transparent 2px);
-  background-size: 80px 80px;
-  opacity: 0.05;
+  min-height: 380px;
+  margin-top: 60px;
+  padding: 40px 0;
+  background: var(--bg-color);
+  border-top: 1px solid var(--border-color);
 }
 
 .section-title-area {
-  position: relative;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 30px;
-  margin-bottom: 40px;
-  padding: 0 60px;
+  text-align: center;
+  margin-bottom: 32px;
 }
 
-.bauhaus-accent-shape {
-  width: 40px;
-  height: 40px;
-  border: 4px solid var(--atp-black);
-}
-.bauhaus-accent-shape.triangle {
-  border-bottom-color: var(--bauhaus-red);
-  border-right-color: transparent;
-  border-left-color: transparent;
-  border-top-color: transparent;
-  height: 0;
-  width: 0;
-  border-width: 0 20px 35px 20px;
-  border-style: solid;
-  box-sizing: border-box;
-}
-.bauhaus-accent-shape.square {
-  background: var(--bauhaus-blue);
-}
 .section-label {
-  font-weight: 950;
+  font-weight: 700;
   font-size: 1.5rem;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
   color: var(--atp-black);
-  text-transform: uppercase;
+}
+
+.section-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin-top: 4px;
 }
 
 .workbench-cards-grid {
   position: relative;
   display: flex;
   justify-content: center;
-  padding: 0 60px;
-  transition: min-height 0.8s cubic-bezier(0.19, 1, 0.22, 1);
-}
-
-.bauhaus-card {
-  border: 4px solid var(--atp-black);
-  background: var(--atp-white);
-  border-radius: 0;
-  padding: 15px;
-  cursor: pointer;
-  transition: all 0.3s;
+  padding: 0 40px;
+  transition: min-height 0.8s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .simulation-card {
   position: absolute;
-  width: 300px;
+  width: 280px;
+  height: 280px;
+  border: 1px solid var(--border-color);
+  background: var(--atp-white);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
+  display: flex;
+  flex-direction: column;
 }
 
 .simulation-card:hover {
-  box-shadow: 15px 15px 0 var(--atp-black);
-  transform: translate(-6px, -6px) !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+  transform: translate3d(0, -6px, 0) scale(1.02) !important;
   z-index: 2000 !important;
-  border-color: var(--bauhaus-red);
+  border-color: #cbd5e1;
 }
 
 .card-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 3px solid var(--atp-black);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .simulation-id {
   font-family: var(--font-mono);
-  font-weight: 900;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--atp-black);
 }
 
 .capability-flags {
   display: flex;
-  gap: 5px;
+  gap: 4px;
 }
 .flag {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--atp-black);
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
-  font-weight: 900;
-  opacity: 0.2;
+  font-size: 8px;
+  font-weight: 700;
+  color: #94a3b8;
+  background: #f8fafc;
 }
 .flag.active {
-  opacity: 1;
-  background: var(--bauhaus-blue);
+  background: var(--accent-secondary);
   color: var(--atp-white);
+  border-color: var(--accent-secondary);
 }
 
 .card-preview-area {
-  position: relative;
-  background: var(--atp-black);
-  height: 80px;
-  margin-bottom: 15px;
-  padding: 10px;
-}
-
-.viewport-mark {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid var(--atp-white);
-  border-left: 2px solid var(--atp-white);
-}
-.top-left {
-  top: 5px;
-  left: 5px;
+  background: #f8fafc;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  height: 68px;
+  margin-bottom: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .file-strip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   background: var(--atp-white);
-  border: 2px solid var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
   margin-bottom: 4px;
   padding: 2px 6px;
 }
 
 .type-tag {
   font-family: var(--font-mono);
-  font-size: 8px;
-  font-weight: 900;
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
-  padding: 1px 4px;
-}
-.filename-text {
-  font-size: 10px;
+  font-size: 7px;
   font-weight: 700;
+  background: #e2e8f0;
+  color: #475569;
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+.type-tag.pdf { background: #fee2e2; color: #ef4444; }
+.type-tag.xls { background: #d1fae5; color: #10b981; }
+.type-tag.doc { background: #dbeafe; color: #3b82f6; }
+.type-tag.ppt { background: #fef3c7; color: #f59e0b; }
+
+.filename-text {
+  font-size: 9px;
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--atp-black);
+  color: #475569;
 }
 
 .more-files-indicator {
-  font-size: 9px;
-  font-weight: 900;
-  color: var(--atp-white);
-  text-align: center;
+  font-size: 8px;
+  font-weight: 600;
+  color: #64748b;
+  text-align: right;
+  margin-top: 2px;
 }
 
 .empty-files-placeholder {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--atp-white);
-}
-.empty-icon {
-  font-size: 20px;
-  font-weight: 900;
-  color: var(--bauhaus-blue);
 }
 .empty-text {
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 500;
+  color: #94a3b8;
 }
 
+.card-content-block {
+  flex-grow: 1;
+}
 .requirement-title {
-  font-weight: 900;
-  font-size: 16px;
-  margin-bottom: 5px;
-  color: var(--bauhaus-red);
-  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 4px;
 }
 .requirement-preview {
-  font-size: 11px;
-  line-height: 1.4;
-  color: #333;
-  height: 32px;
+  font-size: 10px;
+  line-height: 1.5;
+  height: 30px;
   overflow: hidden;
 }
 
 .card-footer-row {
-  margin-top: 15px;
-  padding-top: 12px;
-  border-top: 2px solid var(--atp-black);
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -754,61 +693,63 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 8px;
+  font-weight: 500;
 }
 .execution-progress {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-weight: 900;
-  font-size: 10px;
+  gap: 4px;
+  font-weight: 700;
+  font-size: 9px;
 }
 .status-indicator {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--atp-black);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
 .state-complete {
-  color: var(--bauhaus-yellow);
+  color: var(--accent-tertiary);
 }
 .state-complete .status-indicator {
-  background: var(--bauhaus-yellow);
+  background: var(--accent-tertiary);
 }
 .state-active {
-  color: var(--bauhaus-red);
+  color: var(--accent-color);
 }
 .state-active .status-indicator {
-  background: var(--bauhaus-red);
+  background: var(--accent-color);
+  animation: pulse 1s infinite;
 }
 .state-pending {
-  color: #666;
+  color: #94a3b8;
+}
+.state-pending .status-indicator {
+  background: #cbd5e1;
 }
 
 .workbench-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 15px;
-  padding: 50px;
+  gap: 12px;
+  padding: 40px;
 }
-.bauhaus-spinner {
-  width: 40px;
-  height: 40px;
-  border: 6px solid var(--atp-black);
-  border-top-color: var(--bauhaus-red);
-  animation: spin 0.8s linear infinite;
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid #f1f5f9;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
 }
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 .loading-label {
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: 2px;
+  font-weight: 600;
+  font-size: 11px;
 }
 
 /* Modal Styles */
@@ -818,24 +759,29 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--atp-white);
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9999;
 }
 
-.bauhaus-modal-content {
+.modal-card {
   background: var(--atp-white);
-  border: 8px solid var(--atp-black);
-  width: 650px;
-  max-width: 95vw;
-  box-shadow: 20px 20px 0 var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  width: 580px;
+  max-width: 90vw;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
 }
 
 .modal-header-block {
-  padding: 30px;
-  border-bottom: 6px solid var(--atp-black);
+  padding: 24px;
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -844,148 +790,208 @@ onUnmounted(() => {
 .id-meta {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 .modal-sim-id {
-  font-weight: 900;
-  font-size: 28px;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--atp-black);
+}
+.modal-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 .modal-status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-weight: 900;
-  font-size: 12px;
-  padding: 5px 12px;
-  border: 3px solid var(--atp-black);
+  gap: 6px;
+  font-weight: 700;
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border-color);
+}
+.creation-stamp {
+  font-size: 10px;
 }
 
 .close-modal-btn {
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
-  border: 4px solid var(--atp-black);
-  padding: 10px 20px;
-  font-weight: 900;
+  background: #f1f5f9;
+  color: #475569;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 .close-modal-btn:hover {
-  background: var(--atp-black);
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 .modal-scroll-area {
-  padding: 30px;
-  max-height: 400px;
+  padding: 24px;
   overflow-y: auto;
+  flex-grow: 1;
 }
 .modal-section {
-  margin-bottom: 30px;
+  margin-bottom: 24px;
 }
 .section-heading {
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: 2px;
-  color: var(--bauhaus-blue);
-  margin-bottom: 12px;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: #64748b;
+  margin-bottom: 8px;
+  text-transform: uppercase;
 }
 .requirement-box {
-  border: 4px solid var(--atp-black);
-  padding: 20px;
-  font-size: 16px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  font-size: 13px;
   line-height: 1.6;
-  background: #f5f5f5;
+  background: #f8fafc;
 }
 
+.modal-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 .modal-file-row {
   display: flex;
   align-items: center;
-  gap: 15px;
-  padding: 12px;
-  border: 2px solid var(--atp-black);
-  margin-bottom: 8px;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--atp-white);
 }
 .file-extension-pill {
-  font-weight: 900;
-  font-size: 10px;
-  padding: 4px 8px;
-  border: 2px solid var(--atp-black);
-  background: var(--bauhaus-blue);
-  color: var(--atp-white);
+  font-weight: 700;
+  font-size: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #475569;
 }
+.file-extension-pill.pdf { background: #fee2e2; color: #ef4444; }
+.file-extension-pill.xls { background: #d1fae5; color: #10b981; }
+.file-extension-pill.doc { background: #dbeafe; color: #3b82f6; }
+.file-extension-pill.ppt { background: #fef3c7; color: #f59e0b; }
 
 .modal-playback-divider {
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 0 30px;
+  justify-content: center;
+  padding: 0 24px;
+  position: relative;
 }
-.hr-line {
-  flex: 1;
-  height: 3px;
-  background: var(--atp-black);
+.modal-playback-divider::before {
+  content: "";
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  height: 1px;
+  background: var(--border-color);
+  top: 50%;
+  z-index: 1;
 }
 .playback-label {
-  font-weight: 900;
-  font-size: 10px;
-  letter-spacing: 3px;
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: var(--atp-white);
+  padding: 0 10px;
+  position: relative;
+  z-index: 2;
 }
 
 .modal-navigation-grid {
   display: flex;
-  gap: 15px;
-  padding: 30px;
+  gap: 12px;
+  padding: 24px;
 }
 .nav-btn {
   flex: 1;
-  border: 4px solid var(--atp-black);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   background: var(--atp-white);
-  padding: 20px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   cursor: pointer;
-  transition: 0.2s;
+  transition: all 0.2s ease;
 }
 .nav-btn:hover:not(:disabled) {
-  transform: translateY(-5px);
-  box-shadow: 8px 8px 0 var(--atp-black);
-  border-color: var(--bauhaus-red);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px -1px rgba(0, 0, 0, 0.05);
+  border-color: #cbd5e1;
 }
 .nav-btn:disabled {
-  opacity: 0.3;
+  opacity: 0.4;
   cursor: not-allowed;
+  background: #f8fafc;
 }
 
 .step-num {
-  font-size: 10px;
-  font-weight: 900;
-  color: #666;
-}
-.action-icon {
-  font-size: 24px;
+  font-size: 8px;
+  font-weight: 700;
 }
 .action-label {
-  font-weight: 900;
+  font-weight: 700;
   font-size: 11px;
+  color: var(--atp-black);
 }
 
 .modal-notice {
-  padding: 0 30px 30px;
+  padding: 0 24px 24px;
   text-align: center;
 }
 .modal-notice p {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--bauhaus-blue);
+  font-size: 10px;
+  font-weight: 500;
+  color: #94a3b8;
 }
 
-/* Transition */
-.bauhaus-modal-enter-active,
-.bauhaus-modal-leave-active {
-  transition: opacity 0.4s;
+/* Transitions */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.25s ease;
 }
-.bauhaus-modal-enter-from,
-.bauhaus-modal-leave-to {
+.modal-fade-enter-active .modal-card,
+.modal-fade-leave-active .modal-card {
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
   opacity: 0;
+}
+.modal-fade-enter-from .modal-card,
+.modal-fade-leave-to .modal-card {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
 }
 </style>

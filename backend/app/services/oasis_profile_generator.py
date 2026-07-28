@@ -1097,7 +1097,7 @@ IMPORTANT:
 
         # Step 2: cluster into archetypes
         engine = ArchetypeEngine()
-        llm = LLMClient()
+        llm = LLMClient(prefer_boost=True)
         archetypes = engine.cluster_agents(source_profiles, n_archetypes, llm)
 
         # Step 3: build centroid profiles (re-IDed 0..K-1) + variants

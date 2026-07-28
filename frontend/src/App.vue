@@ -7,93 +7,57 @@
 </script>
 
 <style>
-:root {
-  /* Bauhaus Design System - Primary Palette */
-  --bauhaus-red: #e63946;
-  --bauhaus-blue: #1d3557;
-  --bauhaus-yellow: #ffb703;
-  --atp-black: #000000;
-  --atp-white: #ffffff;
-  --atp-light-gray: #f9f9f9;
-  --background: #f8f9fa;
-  --surface: #ffffff;
-  --on-background: #0f0f0f;
-  --on-surface-variant: #2d2d2d;
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
-  /* Semantic Variables - Bauhaus Mapping */
+:root {
+  /* Modern Clean Palette */
+  --bauhaus-red: #f43f5e;       /* Elegant rose/coral */
+  --bauhaus-blue: #3b82f6;      /* Modern royal blue */
+  --bauhaus-yellow: #10b981;    /* Emerald green */
+  --atp-black: #0f172a;         /* Slate-900 */
+  --atp-white: #ffffff;
+  --atp-light-gray: #f8fafc;    /* Slate-50 */
+  
+  --background: #fcfcfc;
+  --surface: #ffffff;
+  --on-background: #0f172a;
+  --on-surface-variant: #475569; /* Slate-600 */
+
+  /* Semantic Layout Variables */
   --bg-color: var(--background);
   --surface-color: var(--surface);
-  --border-color: var(--atp-black);
-  --border-width: 2px;
-  --border-width-heavy: 4px;
+  --border-color: #e2e8f0;       /* Soft border */
+  --border-width: 1px;
+  --border-width-heavy: 1px;
 
   --text-primary: var(--atp-black);
-  --text-secondary: #555555;
+  --text-secondary: var(--on-surface-variant);
   --accent-color: var(--bauhaus-red);
   --accent-secondary: var(--bauhaus-blue);
   --accent-tertiary: var(--bauhaus-yellow);
 
   /* Typography */
   --font-mono: "JetBrains Mono", monospace;
-  --font-sans: "Space Grotesk", sans-serif;
+  --font-sans: "Outfit", sans-serif;
 
-  /* Geometry - Brutalist (Zero Radius) */
-  --radius-none: 0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
+  /* Geometry - Smooth and rounded */
+  --radius-none: 12px;
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
 
   /* Spacing */
   --gap: 24px;
-  --grid-unit: 40px;
+  --grid-unit: 24px;
 }
 
-/* Custom Selection Color - Bauhaus */
+/* Custom Selection Color */
 ::selection {
-  background: var(--bauhaus-red);
-  color: var(--atp-white);
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-color);
 }
 
-/* Utility Classes - Bauhaus Palette */
-.bg-accent-red {
-  background-color: var(--bauhaus-red) !important;
-}
-.text-accent-red {
-  color: var(--bauhaus-red) !important;
-}
-.bg-accent-blue {
-  background-color: var(--bauhaus-blue) !important;
-}
-.text-accent-blue {
-  color: var(--bauhaus-blue) !important;
-}
-.bg-accent-yellow {
-  background-color: var(--bauhaus-yellow) !important;
-}
-.text-accent-yellow {
-  color: var(--bauhaus-yellow) !important;
-}
-/* Legacy support - map old classes to new colors */
-.bg-accent-cyan {
-  background-color: var(--bauhaus-red) !important;
-}
-.text-accent-cyan {
-  color: var(--bauhaus-red) !important;
-}
-.bg-accent-purple {
-  background-color: var(--bauhaus-blue) !important;
-}
-.text-accent-purple {
-  color: var(--bauhaus-blue) !important;
-}
-.bg-accent-green {
-  background-color: var(--bauhaus-yellow) !important;
-}
-.text-accent-green {
-  color: var(--bauhaus-yellow) !important;
-}
-
-/* Global Style Reset */
+/* Global Reset */
 * {
   margin: 0;
   padding: 0;
@@ -103,68 +67,140 @@
 body {
   background-color: var(--bg-color);
   color: var(--text-primary);
-}
-
-#app {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar - Modernist Brutal */
+/* Translucent & Smooth Scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--atp-white);
-  border-left: var(--border-width) solid var(--atp-black);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--atp-black);
-  border: 1px solid var(--atp-white);
+  background: #cbd5e1;
+  border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--bauhaus-red);
+  background: #94a3b8;
 }
 
-/* Global Button - Bauhaus Brutalist */
-button {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
+/* Modern Minimalist Button Reset */
+button, .btn {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
   cursor: pointer;
-  padding: 12px 24px;
-  border: var(--border-width-heavy) solid var(--atp-black);
-  background: var(--atp-white);
-  color: var(--atp-black);
-  border-radius: var(--radius-none);
-  transition: all 0.15s ease;
-  position: relative;
+  padding: 10px 20px;
+  border: 1px solid var(--border-color) !important;
+  background: var(--surface);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm) !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+  transform: none !important;
 }
 
-button:hover {
-  background: var(--atp-black);
-  color: var(--atp-white);
-  transform: translate(-4px, -4px);
-  box-shadow: 8px 8px 0px var(--bauhaus-red);
+button:hover, .btn:hover {
+  background: var(--atp-light-gray) !important;
+  border-color: #cbd5e1 !important;
+  color: var(--text-primary) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
+  transform: translateY(-1px) !important;
 }
 
-button:active {
-  transform: translate(0, 0);
-  box-shadow: none;
+button:active, .btn:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
 }
 
-button:disabled {
-  background: #eee;
-  color: #aaa;
-  border-color: #aaa;
+button:disabled, .btn:disabled {
+  background: #f1f5f9 !important;
+  color: #94a3b8 !important;
+  border-color: #e2e8f0 !important;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Global Card & Border Redefinitions (Override Brutalism) */
+.border-black, .border-4, .border-2, .border-r-4, .border-b-4, .border-t-4 {
+  border-color: var(--border-color) !important;
+  border-width: 1px !important;
+}
+
+/* Soft Modern Shadows replacing blocky offset shadows */
+[class*="shadow-["], [class*="shadow-sm"], [class*="shadow-md"] {
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02) !important;
+}
+
+/* Layout Specific Overrides */
+.atelier-grid, .content-area {
+  background-image: radial-gradient(#e2e8f0 1px, transparent 1px) !important;
+  background-size: var(--grid-unit) var(--grid-unit) !important;
+  background-color: var(--background) !important;
+}
+
+/* Custom Overrides for Color Badges/Fills */
+.bg-bauhaus-red {
+  background-color: var(--bauhaus-red) !important;
+  color: white !important;
+}
+.text-bauhaus-red {
+  color: var(--bauhaus-red) !important;
+}
+.bg-bauhaus-blue {
+  background-color: var(--bauhaus-blue) !important;
+  color: white !important;
+}
+.text-bauhaus-blue {
+  color: var(--bauhaus-blue) !important;
+}
+.bg-bauhaus-yellow {
+  background-color: var(--atp-light-gray) !important;
+  color: var(--text-primary) !important;
+}
+.text-bauhaus-yellow {
+  color: #d97706 !important; /* Soft Amber */
+}
+
+/* Inputs & Textareas */
+input[type="text"], textarea, select {
+  font-family: var(--font-sans) !important;
+  font-size: 15px !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-sm) !important;
+  background: var(--surface) !important;
+  padding: 12px 16px !important;
+  color: var(--text-primary) !important;
+  transition: all 0.2s ease !important;
+  outline: none !important;
+}
+
+input[type="text"]:focus, textarea:focus, select:focus {
+  border-color: var(--accent-secondary) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Rounded Cards */
+.panel-wrapper, .bg-white {
+  border-radius: var(--radius-md) !important;
+}
+
+/* Animation utilities */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 </style>

@@ -106,10 +106,11 @@ def create_app(config_class=Config):
     sock.init_app(app)
 
     # Register blueprints
-    from .api import graph_bp, simulation_bp, report_bp
+    from .api import graph_bp, simulation_bp, report_bp, settings_bp
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
+    app.register_blueprint(settings_bp, url_prefix='/api/settings')
 
     # Register WebSocket routes (imported here so sock is already init'd)
     from .api import ws  # noqa: F401

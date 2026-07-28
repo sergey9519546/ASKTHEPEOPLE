@@ -140,7 +140,7 @@ class OntologyGenerator:
     """
 
     def __init__(self, llm_client: Optional[LLMClient] = None):
-        self.llm_client = llm_client or LLMClient()
+        self.llm_client = llm_client or LLMClient(prefer_boost=True)
 
     def generate(
         self,
