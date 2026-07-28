@@ -120,8 +120,8 @@ const tooltipStyle = computed(() => ({
 
 const latestOpinions = computed(() => {
   const map = new Map();
-  const sorted = [...opinions.value].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
+  const sorted = [...opinions.value].sort((a, b) =>
+    String(a.timestamp || '').localeCompare(String(b.timestamp || '')),
   );
   sorted.forEach((op) => {
     map.set(op.agent_id, op);

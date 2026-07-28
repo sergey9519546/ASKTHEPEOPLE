@@ -21,8 +21,8 @@ class Config:
     """Flask Configuration Class"""
     
     # Flask Configuration
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'askthepeople-secret-key')
-    DEBUG = os.environ.get('FLASK_DEBUG', 'True').lower() == 'true'
+    SECRET_KEY = os.environ.get('SECRET_KEY') or os.urandom(24).hex()
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
     
     # JSON Configuration - Disable ASCII escaping to display characters directly (instead of \uXXXX format)

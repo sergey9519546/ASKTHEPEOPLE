@@ -42,7 +42,10 @@ def update_settings():
     try:
         data = request.get_json() or {}
         
-        # Validations (make sure values are string)
+        def _sanitize_val(val):
+            return str(val).replace('\r', '').replace('\n', '').strip()
+
+        # Validations (make sure values are string and control chars are stripped)
         settings_dict = {}
         for key in [
             "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL_NAME", 
@@ -50,7 +53,7 @@ def update_settings():
             "LLM_BOOST_API_KEY", "LLM_BOOST_BASE_URL", "LLM_BOOST_MODEL_NAME"
         ]:
             if key in data:
-                settings_dict[key] = str(data[key]).strip()
+                settings_dict[key] = _sanitize_val(data[key])
         
         # Write to .env
         env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../.env'))

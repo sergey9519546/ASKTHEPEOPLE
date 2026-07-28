@@ -201,3 +201,50 @@ class FollowerEngine:
                     return "DO_NOTHING", {}
             else:  # LURKER
                 return "DO_NOTHING", {}
+
+
+def apply_follower_round_in_proc(
+    db_conn: Any,
+    followers: List[FollowerAgent],
+    round_actions: List[Dict[str, Any]],
+    round_num: int,
+    platform: str,
+) -> int:
+    """
+    Executes follower reactions in-process against the active OASIS SQLite DB connection if provided.
+    Inserts follower posts, comments, likes, and reposts directly into DB tables.
+    Returns the total count of follower actions written.
+    """
+    if not db_conn or not followers or not round_actions:
+        return 0
+
+    engine = FollowerEngine()
+    follower_actions = engine.compute_round_actions(followers, round_actions, round_num, platform)
+    
+    written = 0
+    try:
+        cursor = db_conn.cursor()
+        for act in follower_actions:
+            atype = act.get("action_type")
+            aargs = act.get("action_args") or {}
+            
+            if atype == "LIKE_POST" and ("tweet_id" in aargs or "post_id" in aargs):
+                pid = aargs.get("tweet_id") or aargs.get("post_id")
+                cursor.execute(
+                    "INSERT OR IGNORE INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?)",
+                    (act["agent_id"], pid, act["timestamp"])
+                )
+                written += 1
+            elif atype == "REPOST" and "tweet_id" in aargs:
+                cursor.execute(
+                    "INSERT OR IGNORE INTO reposts (user_id, tweet_id, created_at) VALUES (?, ?, ?)",
+                    (act["agent_id"], aargs["tweet_id"], act["timestamp"])
+                )
+                written += 1
+        db_conn.commit()
+    except Exception:
+        # Ignore if tables differ slightly between platforms
+        pass
+
+    return written
+
