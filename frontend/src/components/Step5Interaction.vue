@@ -809,7 +809,7 @@ watch(() => props.simulationId, loadData);
   display: flex;
   flex-direction: column;
   background: var(--bg-color);
-  color: var(--atp-black);
+  color: var(--text-primary);
   font-family: var(--font-sans);
   overflow: hidden;
 }
@@ -828,12 +828,12 @@ watch(() => props.simulationId, loadData);
 .workbench-title {
   font-weight: 700;
   font-size: 16px;
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 .workbench-subtitle {
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -847,7 +847,7 @@ watch(() => props.simulationId, loadData);
   display: flex;
   gap: 16px;
   padding: 6px 12px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: 20px;
   align-items: center;
@@ -859,7 +859,7 @@ watch(() => props.simulationId, loadData);
 .dash-label {
   font-size: 8px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 .dash-value {
@@ -873,7 +873,7 @@ watch(() => props.simulationId, loadData);
   color: var(--accent-tertiary);
 }
 .dash-value.failed {
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .abort-btn {
@@ -897,7 +897,7 @@ watch(() => props.simulationId, loadData);
   border-radius: 20px;
   font-weight: 700;
   font-size: 10px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .workbench-layout {
@@ -911,7 +911,7 @@ watch(() => props.simulationId, loadData);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--bg-color);
 }
 
 .panel-header {
@@ -926,7 +926,7 @@ watch(() => props.simulationId, loadData);
 .panel-title {
   font-weight: 700;
   font-size: 11px;
-  color: #475569;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 .panel-actions {
@@ -941,13 +941,13 @@ watch(() => props.simulationId, loadData);
   font-weight: 700;
   padding: 3px 8px;
   cursor: pointer;
-  color: #64748b;
+  color: var(--text-secondary);
   transition: all 0.15s ease;
 }
 .panel-toggle-btn.active {
-  background: #0f172a;
-  color: var(--atp-white);
-  border-color: #0f172a;
+  background: var(--surface-color);
+  color: var(--bg-color);
+  border-color: var(--surface-color);
 }
 
 .panel-scroll-area {
@@ -969,14 +969,14 @@ watch(() => props.simulationId, loadData);
 .panel-subtitle {
   font-weight: 700;
   font-size: 11px;
-  color: #475569;
+  color: var(--text-secondary);
 }
 .live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  border: 1.5px solid #ffffff;
-  box-shadow: 0 0 0 1.5px #cbd5e1;
+  border: 1.5px solid var(--bg-color);
+  box-shadow: 0 0 0 1.5px var(--border-color);
 }
 .live-dot.pulse {
   background: var(--accent-tertiary);
@@ -993,7 +993,7 @@ watch(() => props.simulationId, loadData);
 .activity-item {
   margin-bottom: 10px;
   padding: 10px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: 6px;
 }
@@ -1002,7 +1002,7 @@ watch(() => props.simulationId, loadData);
   justify-content: space-between;
   font-size: 8px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin-bottom: 4px;
   text-transform: uppercase;
 }
@@ -1016,14 +1016,14 @@ watch(() => props.simulationId, loadData);
   margin-top: 4px;
   font-style: italic;
   font-size: 10px;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .interaction-hub {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .bauhaus-card {
@@ -1031,14 +1031,14 @@ watch(() => props.simulationId, loadData);
   border-radius: var(--radius-md);
   padding: 16px;
   margin-bottom: 16px;
-  background: var(--atp-white);
+  background: var(--bg-color);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 .bauhaus-card-mini {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 8px;
-  background: var(--atp-white);
+  background: var(--bg-color);
 }
 
 .interface-tabs {
@@ -1046,7 +1046,7 @@ watch(() => props.simulationId, loadData);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   position: relative;
-  background: #ffffff;
+  background: var(--bg-color);
 }
 .tab-btn {
   height: 100%;
@@ -1055,7 +1055,7 @@ watch(() => props.simulationId, loadData);
   background: transparent;
   font-weight: 700;
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
   border-right: 1px solid var(--border-color);
   cursor: pointer;
   display: flex;
@@ -1064,12 +1064,12 @@ watch(() => props.simulationId, loadData);
   transition: all 0.15s ease;
 }
 .tab-btn:hover {
-  background: #f8fafc;
-  color: var(--atp-black);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
 }
 .tab-btn.active {
-  background: #f8fafc;
-  color: var(--atp-black);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
 }
 
 .chat-viewport {
@@ -1077,7 +1077,7 @@ watch(() => props.simulationId, loadData);
   display: flex;
   flex-direction: column;
   padding: 24px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 .messages-list {
   flex: 1;
@@ -1091,17 +1091,17 @@ watch(() => props.simulationId, loadData);
 }
 .message-item.user {
   align-self: flex-end;
-  background: #ffffff;
-  border-color: #cbd5e1;
+  background: var(--bg-color);
+  border-color: var(--border-color);
 }
 .message-item.assistant {
   align-self: flex-start;
-  background: #ffffff;
+  background: var(--bg-color);
 }
 
 .chat-input-area {
   margin-top: 16px;
-  background: #ffffff;
+  background: var(--bg-color);
   border-top: 1px solid var(--border-color);
   padding: 16px;
   display: flex;
@@ -1114,7 +1114,7 @@ watch(() => props.simulationId, loadData);
 }
 .chat-input {
   flex: 1;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   padding: 10px;
@@ -1123,12 +1123,12 @@ watch(() => props.simulationId, loadData);
   outline: none;
 }
 .chat-input:focus {
-  border-color: #cbd5e1;
-  background: #ffffff;
+  border-color: var(--border-color);
+  background: var(--bg-color);
 }
 .send-btn {
-  background: #0f172a;
-  color: var(--atp-white);
+  background: var(--surface-color);
+  color: var(--bg-color);
   border: none;
   padding: 0 20px;
   font-weight: 700;
@@ -1138,7 +1138,7 @@ watch(() => props.simulationId, loadData);
   transition: background 0.15s ease;
 }
 .send-btn:hover {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .survey-viewport {
@@ -1158,8 +1158,8 @@ watch(() => props.simulationId, loadData);
   gap: 12px;
 }
 .export-csv-btn {
-  background: #f1f5f9;
-  color: #475569;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
   border: 1px solid var(--border-color);
   font-size: 9px;
   font-weight: 700;
@@ -1169,8 +1169,8 @@ watch(() => props.simulationId, loadData);
   transition: all 0.2s ease;
 }
 .export-csv-btn:hover {
-  background: #e2e8f0;
-  color: #0f172a;
+  background: var(--border-color);
+  color: var(--surface-color);
 }
 
 .agent-selection-grid {
@@ -1186,7 +1186,7 @@ watch(() => props.simulationId, loadData);
   font-weight: 600;
   font-size: 11px;
   cursor: pointer;
-  background: #ffffff;
+  background: var(--bg-color);
   transition: all 0.15s ease;
   display: flex;
   align-items: center;
@@ -1194,8 +1194,8 @@ watch(() => props.simulationId, loadData);
   text-align: center;
 }
 .agent-label:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--border-color);
 }
 .agent-label.checked {
   background: #eff6ff;
@@ -1205,8 +1205,8 @@ watch(() => props.simulationId, loadData);
 
 .submit-survey-btn {
   width: 100%;
-  background: #0f172a;
-  color: var(--atp-white);
+  background: var(--surface-color);
+  color: var(--bg-color);
   border: none;
   padding: 12px;
   font-weight: 700;
@@ -1217,13 +1217,13 @@ watch(() => props.simulationId, loadData);
   transition: background 0.15s ease;
 }
 .submit-survey-btn:hover {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .bauhaus-loader {
   width: 24px;
   height: 24px;
-  border: 2px solid #f1f5f9;
+  border: 2px solid rgba(255, 255, 255, 0.05);
   border-top-color: var(--accent-color);
   border-radius: 50%;
   animation: spin 1s infinite linear;
@@ -1238,7 +1238,7 @@ watch(() => props.simulationId, loadData);
   display: inline-block;
   width: 6px;
   height: 6px;
-  background: #cbd5e1;
+  background: var(--border-color);
   border-radius: 50%;
   margin-right: 4px;
   animation: bounce 0.6s infinite alternate;
@@ -1258,7 +1258,7 @@ watch(() => props.simulationId, loadData);
 .opinion-map-viewport {
   flex: 1;
   padding: 24px;
-  background: #ffffff;
+  background: var(--bg-color);
   overflow: hidden;
 }
 
@@ -1282,11 +1282,11 @@ watch(() => props.simulationId, loadData);
 }
 .table-wrapper td {
   padding: 6px 10px;
-  border: 1px solid #f1f5f9;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 11px;
 }
 .table-wrapper tr:nth-child(even) {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .chat-controls {
@@ -1299,7 +1299,7 @@ watch(() => props.simulationId, loadData);
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #64748b;
+  color: var(--text-secondary);
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
@@ -1308,7 +1308,7 @@ watch(() => props.simulationId, loadData);
 }
 
 .bypass-opt-checkbox.dark {
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 
 .bypass-opt-checkbox input {

@@ -337,13 +337,13 @@ watch(
 <style scoped>
 .workbench-panel {
   height: 100%;
-  background-color: var(--atp-white);
+  background-color: var(--bg-color);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
   font-family: var(--font-sans);
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 
 .scroll-container {
@@ -356,7 +356,7 @@ watch(
 }
 
 .step-card {
-  background: var(--atp-white);
+  background: var(--bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 24px;
@@ -366,7 +366,7 @@ watch(
 
 .step-card.active {
   box-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.04);
-  border-color: #cbd5e1;
+  border-color: var(--border-color);
 }
 
 .step-card.completed {
@@ -392,13 +392,13 @@ watch(
   font-family: var(--font-mono);
   font-size: 22px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .step-title {
   font-weight: 700;
   font-size: 13px;
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 
 .badge {
@@ -410,8 +410,8 @@ watch(
 }
 
 .badge.success {
-  background: #f1f5f9;
-  color: #475569;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
 }
 .badge.processing {
   background: #fee2e2;
@@ -422,14 +422,14 @@ watch(
   color: var(--accent-tertiary);
 }
 .badge.pending {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
 }
 
 .api-note {
   font-family: var(--font-mono);
   font-size: 9px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin-bottom: 10px;
   font-weight: 600;
 }
@@ -438,7 +438,7 @@ watch(
   font-size: 12px;
   line-height: 1.6;
   margin-bottom: 20px;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .progress-section {
@@ -460,7 +460,7 @@ watch(
   display: block;
   font-size: 10px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 10px;
 }
 
@@ -471,7 +471,7 @@ watch(
 }
 
 .entity-tag {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   padding: 6px 12px;
   font-size: 11px;
@@ -479,13 +479,13 @@ watch(
   cursor: pointer;
   transition: all 0.2s ease;
   font-weight: 600;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .entity-tag:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  color: var(--atp-black);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 
 /* Stats */
@@ -497,7 +497,7 @@ watch(
 
 .stat-card {
   padding: 16px 12px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   text-align: center;
@@ -514,7 +514,7 @@ watch(
 .stat-label {
   font-size: 9px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 6px;
 }
 
@@ -545,8 +545,8 @@ watch(
 .detail-type-badge {
   font-size: 9px;
   font-weight: 700;
-  background: #f1f5f9;
-  color: #475569;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
   padding: 3px 8px;
   border-radius: 4px;
   margin-right: 12px;
@@ -575,7 +575,7 @@ watch(
   font-size: 10px;
   margin-bottom: 10px;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .attr-list {
@@ -584,7 +584,7 @@ watch(
   gap: 8px;
 }
 .attr-item {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 12px;
@@ -602,7 +602,7 @@ watch(
 .attr-type {
   font-family: var(--font-mono);
   font-size: 9px;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 .attr-desc {
   font-size: 10px;
@@ -615,7 +615,7 @@ watch(
   gap: 6px;
 }
 .example-tag {
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 10px;
@@ -633,7 +633,7 @@ watch(
   gap: 10px;
   font-size: 11px;
   padding: 8px 12px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-color);
   border-radius: 6px;
 }
@@ -641,11 +641,11 @@ watch(
   font-weight: 600;
 }
 .conn-arrow {
-  color: #cbd5e1;
+  color: var(--border-color);
 }
 
 .close-btn {
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
   border: none;
   width: 24px;
   height: 24px;
@@ -660,8 +660,8 @@ watch(
 .action-btn {
   width: 100%;
   padding: 14px;
-  background: #0f172a;
-  color: var(--atp-white);
+  background: var(--surface-color);
+  color: var(--bg-color);
   border: none;
   font-weight: 600;
   border-radius: var(--radius-sm);
@@ -675,7 +675,7 @@ watch(
 }
 
 .action-btn:hover:not(:disabled) {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .action-btn:disabled {
@@ -685,9 +685,9 @@ watch(
 
 /* Logs */
 .system-logs {
-  background: #0f172a;
+  background: var(--surface-color);
   padding: 20px;
-  color: var(--atp-white);
+  color: var(--bg-color);
   display: flex;
   flex-direction: column;
   min-height: 180px;
@@ -698,7 +698,7 @@ watch(
   justify-content: space-between;
   align-items: center;
   padding-bottom: 10px;
-  border-bottom: 1px solid #1e293b;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .log-title {
   font-weight: 700;
@@ -708,7 +708,7 @@ watch(
 .log-id {
   font-family: var(--font-mono);
   font-size: 9px;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .log-content {
@@ -729,7 +729,7 @@ watch(
   width: 12px;
   height: 12px;
   border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #ffffff;
+  border-top-color: var(--bg-color);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -747,10 +747,10 @@ watch(
   background: transparent;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--border-color);
   border-radius: 2px;
 }
 .system-logs .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.1);
 }
 </style>

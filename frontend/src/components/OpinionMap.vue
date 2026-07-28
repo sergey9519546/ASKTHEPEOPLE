@@ -261,7 +261,7 @@ onUnmounted(() => {
 
 .control-btn:hover {
   background: var(--atp-light-gray);
-  border-color: #cbd5e1;
+  border-color: var(--border-color);
 }
 
 .control-btn:active {
@@ -349,7 +349,7 @@ onUnmounted(() => {
 /* Axes */
 .axis {
   position: absolute;
-  background: #cbd5e1;
+  background: var(--border-color);
   pointer-events: none;
 }
 

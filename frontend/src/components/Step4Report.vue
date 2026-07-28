@@ -722,7 +722,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: var(--bg-color);
-  color: var(--atp-black);
+  color: var(--text-primary);
   font-family: var(--font-sans);
   overflow: hidden;
 }
@@ -741,13 +741,13 @@ onUnmounted(() => {
 .workbench-title {
   font-weight: 700;
   font-size: 16px;
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 
 .workbench-subtitle {
   font-size: 11px;
   font-weight: 500;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-top: 2px;
 }
 
@@ -760,7 +760,7 @@ onUnmounted(() => {
   gap: 6px;
   font-weight: 700;
   font-size: 10px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .status-indicator.is-complete {
@@ -787,14 +787,14 @@ onUnmounted(() => {
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  background: #ffffff;
+  background: var(--bg-color);
 }
 
 .evidence-panel {
   width: 500px;
   display: flex;
   flex-direction: column;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .panel-header {
@@ -810,7 +810,7 @@ onUnmounted(() => {
 .panel-title {
   font-weight: 700;
   font-size: 11px;
-  color: #475569;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
@@ -825,7 +825,7 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   margin-bottom: 16px;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--bg-color);
   transition: all 0.25s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
@@ -840,20 +840,20 @@ onUnmounted(() => {
   padding: 12px 16px;
   display: flex;
   align-items: center;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--border-color);
-  color: var(--atp-black);
+  color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s ease;
 }
 .section-header:hover {
-  background: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .section-number {
   font-weight: 700;
   font-size: 16px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin-right: 12px;
 }
 
@@ -867,7 +867,7 @@ onUnmounted(() => {
   padding: 16px;
   font-size: 12px;
   line-height: 1.6;
-  color: #334155;
+  color: var(--text-primary);
 }
 
 .evidence-tabs {
@@ -882,19 +882,19 @@ onUnmounted(() => {
   background: transparent;
   font-weight: 700;
   font-size: 11px;
-  color: #64748b;
+  color: var(--text-secondary);
   border-right: 1px solid var(--border-color);
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .tab-btn:hover {
-  background: #f1f5f9;
-  color: var(--atp-black);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
 }
 
 .tab-btn.active {
-  background: #ffffff;
-  color: var(--atp-black);
+  background: var(--bg-color);
+  color: var(--text-primary);
 }
 
 .evidence-content {
@@ -916,9 +916,9 @@ onUnmounted(() => {
   top: 4px;
   width: 9px;
   height: 9px;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--bg-color);
   border-radius: 50%;
-  background: #cbd5e1;
+  background: var(--border-color);
   box-shadow: 0 0 0 2px rgba(203, 213, 225, 0.4);
 }
 
@@ -939,7 +939,7 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .tool-badge {
@@ -956,21 +956,21 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 10px;
-  background: #ffffff;
+  background: var(--bg-color);
 }
 
 .bauhaus-sub {
   border: 1px solid var(--border-color);
-  background: #ffffff;
+  background: var(--bg-color);
   border-radius: 6px;
   overflow: hidden;
   margin-top: 6px;
 }
 
 .sub-header {
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--border-color);
-  color: #475569;
+  color: var(--text-secondary);
   font-weight: 700;
   font-size: 9px;
   padding: 4px 8px;
@@ -980,13 +980,13 @@ onUnmounted(() => {
   padding: 8px;
   font-size: 11px;
   line-height: 1.5;
-  color: #334155;
+  color: var(--text-primary);
 }
 
 .console-logs {
   height: 160px;
-  background: #0f172a;
-  color: var(--atp-white);
+  background: var(--surface-color);
+  color: var(--bg-color);
   padding: 12px;
   font-family: var(--font-mono);
   border-top: 1px solid var(--border-color);
@@ -1006,7 +1006,7 @@ onUnmounted(() => {
 .bauhaus-loader {
   width: 24px;
   height: 24px;
-  border: 2px solid #f1f5f9;
+  border: 2px solid rgba(255, 255, 255, 0.05);
   border-top-color: var(--accent-color);
   border-radius: 50%;
   animation: spin 1s infinite linear;
@@ -1019,8 +1019,8 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  background: #0f172a;
-  color: var(--atp-white);
+  background: var(--surface-color);
+  color: var(--bg-color);
   border: none;
   padding: 6px 12px;
   font-weight: 600;
@@ -1036,6 +1036,6 @@ onUnmounted(() => {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.1);
 }
 </style>

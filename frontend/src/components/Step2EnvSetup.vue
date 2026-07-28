@@ -960,13 +960,13 @@ onUnmounted(() => {
 <style scoped>
 .env-setup-panel {
   height: 100%;
-  background-color: var(--atp-white);
+  background-color: var(--bg-color);
   display: flex;
   flex-direction: column;
   position: relative;
   overflow: hidden;
   font-family: var(--font-sans);
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 
 .scroll-container {
@@ -980,7 +980,7 @@ onUnmounted(() => {
 
 /* Step Card */
 .step-card {
-  background: var(--atp-white);
+  background: var(--bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 24px;
@@ -990,7 +990,7 @@ onUnmounted(() => {
 
 .step-card.active {
   box-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.04);
-  border-color: #cbd5e1;
+  border-color: var(--border-color);
 }
 
 .step-card.completed {
@@ -1016,13 +1016,13 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 22px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .step-title {
   font-weight: 700;
   font-size: 13px;
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 
 .badge {
@@ -1046,14 +1046,14 @@ onUnmounted(() => {
   color: var(--accent-secondary);
 }
 .badge.pending {
-  background: #f8fafc;
-  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
 }
 
 .api-note {
   font-family: var(--font-mono);
   font-size: 9px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   margin-bottom: 10px;
   font-weight: 600;
 }
@@ -1062,7 +1062,7 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.6;
   margin-bottom: 20px;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 /* Profiles */
@@ -1074,7 +1074,7 @@ onUnmounted(() => {
 }
 
 .profile-card {
-  background: var(--atp-white);
+  background: var(--bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 16px;
@@ -1094,14 +1094,14 @@ onUnmounted(() => {
   display: block;
   font-weight: 700;
   font-size: 14px;
-  color: var(--atp-black);
+  color: var(--text-primary);
 }
 
 .profile-username {
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .profile-meta {
@@ -1122,7 +1122,7 @@ onUnmounted(() => {
 .profile-bio {
   font-size: 11px;
   line-height: 1.5;
-  color: #475569;
+  color: var(--text-secondary);
   height: 33px;
   overflow: hidden;
 }
@@ -1138,10 +1138,10 @@ onUnmounted(() => {
   font-size: 9px;
   font-weight: 600;
   border: 1px solid var(--border-color);
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
   padding: 2px 6px;
   border-radius: 4px;
-  color: #475569;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
@@ -1151,7 +1151,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 24px;
-  background: #ffffff;
+  background: var(--bg-color);
   margin-bottom: 24px;
 }
 
@@ -1168,7 +1168,7 @@ onUnmounted(() => {
   font-weight: 700;
   font-size: 13px;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--text-secondary);
 }
 
 .config-block-badge {
@@ -1192,7 +1192,7 @@ onUnmounted(() => {
   padding: 16px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .platform-name {
@@ -1213,13 +1213,13 @@ onUnmounted(() => {
 
 .param-label {
   font-weight: 600;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .param-value {
   font-family: var(--font-mono);
   font-weight: 700;
-  color: #0f172a;
+  color: var(--surface-color);
 }
 
 .config-grid {
@@ -1233,14 +1233,14 @@ onUnmounted(() => {
   padding: 16px 8px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .config-item-label {
   display: block;
   font-size: 9px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 8px;
   text-transform: uppercase;
 }
@@ -1257,7 +1257,7 @@ onUnmounted(() => {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   padding: 24px;
-  background: #ffffff;
+  background: var(--bg-color);
   margin-bottom: 16px;
 }
 
@@ -1275,7 +1275,7 @@ onUnmounted(() => {
 .narrative-text {
   font-size: 12px;
   line-height: 1.7;
-  color: #334155;
+  color: var(--text-primary);
 }
 
 .hot-topics-grid {
@@ -1285,8 +1285,8 @@ onUnmounted(() => {
 }
 
 .hot-topic-tag {
-  background: #0f172a;
-  color: var(--atp-white);
+  background: var(--surface-color);
+  color: var(--bg-color);
   padding: 4px 10px;
   border-radius: 4px;
   font-family: var(--font-mono);
@@ -1309,7 +1309,7 @@ onUnmounted(() => {
 
 .timeline-marker {
   width: 2px;
-  background: #cbd5e1;
+  background: var(--border-color);
   flex-shrink: 0;
   border-radius: 2px;
 }
@@ -1319,14 +1319,14 @@ onUnmounted(() => {
   padding: 16px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .post-header {
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--border-color);
   padding-bottom: 6px;
 }
 
@@ -1334,14 +1334,14 @@ onUnmounted(() => {
   font-family: var(--font-sans);
   font-weight: 700;
   font-size: 10px;
-  color: #64748b;
+  color: var(--text-secondary);
   text-transform: uppercase;
 }
 
 .post-text {
   font-size: 11px;
   line-height: 1.5;
-  color: #334155;
+  color: var(--text-primary);
 }
 
 /* Activation / Slider */
@@ -1350,14 +1350,14 @@ onUnmounted(() => {
   border-radius: var(--radius-md);
   padding: 24px;
   margin: 24px 0;
-  background: #ffffff;
+  background: var(--bg-color);
 }
 
 .section-title {
   font-size: 14px;
   font-weight: 700;
   text-transform: uppercase;
-  color: #0f172a;
+  color: var(--surface-color);
   display: block;
   margin-bottom: 6px;
 }
@@ -1372,7 +1372,7 @@ onUnmounted(() => {
 .switch-track {
   width: 44px;
   height: 24px;
-  background: #e2e8f0;
+  background: var(--border-color);
   border-radius: 12px;
   position: relative;
   transition: background 0.2s ease;
@@ -1385,7 +1385,7 @@ onUnmounted(() => {
   left: 2px;
   width: 20px;
   height: 20px;
-  background: #ffffff;
+  background: var(--bg-color);
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: transform 0.2s ease;
@@ -1411,7 +1411,7 @@ input:checked + .switch-track::after {
   appearance: none;
   width: 100%;
   height: 6px;
-  background: #e2e8f0;
+  background: var(--border-color);
   border-radius: 3px;
   outline: none;
 }
@@ -1423,7 +1423,7 @@ input:checked + .switch-track::after {
   height: 20px;
   border-radius: 50%;
   background: var(--accent-secondary);
-  border: 2px solid #ffffff;
+  border: 2px solid var(--bg-color);
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   cursor: pointer;
 }
@@ -1443,8 +1443,8 @@ input:checked + .switch-track::after {
 .action-btn {
   width: 100%;
   padding: 14px;
-  background: #0f172a;
-  color: var(--atp-white);
+  background: var(--surface-color);
+  color: var(--bg-color);
   border: none;
   border-radius: var(--radius-sm);
   font-weight: 600;
@@ -1454,20 +1454,20 @@ input:checked + .switch-track::after {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: #1e293b;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .action-btn.secondary {
-  background: #ffffff;
+  background: var(--bg-color);
   border: 1px solid var(--border-color);
-  color: #475569;
+  color: var(--text-secondary);
   padding: 8px 16px;
   font-size: 11px;
   margin-top: 12px;
 }
 .action-btn.secondary:hover {
-  background: #f8fafc;
-  color: #0f172a;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--surface-color);
 }
 
 /* Modal */
@@ -1484,7 +1484,7 @@ input:checked + .switch-track::after {
 }
 
 .profile-modal {
-  background: var(--atp-white);
+  background: var(--bg-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   width: 100%;
@@ -1505,7 +1505,7 @@ input:checked + .switch-track::after {
 .modal-realname {
   font-size: 24px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--surface-color);
 }
 
 .modal-info-grid {
@@ -1519,7 +1519,7 @@ input:checked + .switch-track::after {
   display: block;
   font-size: 9px;
   font-weight: 700;
-  color: #64748b;
+  color: var(--text-secondary);
   margin-bottom: 4px;
   text-transform: uppercase;
 }
@@ -1527,7 +1527,7 @@ input:checked + .switch-track::after {
 .info-value {
   font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--surface-color);
 }
 
 .dimension-card {
@@ -1535,7 +1535,7 @@ input:checked + .switch-track::after {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   margin-bottom: 8px;
-  background: #f8fafc;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .dim-title {
@@ -1543,27 +1543,27 @@ input:checked + .switch-track::after {
   font-weight: 700;
   font-size: 10px;
   text-transform: uppercase;
-  color: #475569;
+  color: var(--text-secondary);
   margin-bottom: 2px;
 }
 
 .dim-desc {
   font-size: 10px;
-  color: #64748b;
+  color: var(--text-secondary);
 }
 
 .section-persona {
   font-size: 12px;
   line-height: 1.7;
   margin-top: 20px;
-  color: #334155;
+  color: var(--text-primary);
 }
 
 /* System Logs */
 .system-logs {
-  background: #0f172a;
+  background: var(--surface-color);
   padding: 20px;
-  color: var(--atp-white);
+  color: var(--bg-color);
   min-height: 180px;
   display: flex;
   flex-direction: column;
@@ -1599,10 +1599,10 @@ input:checked + .switch-track::after {
   border: none;
   cursor: pointer;
   font-weight: 400;
-  color: #64748b;
+  color: var(--text-secondary);
   transition: color 0.15s ease;
 }
 .close-btn:hover {
-  color: #0f172a;
+  color: var(--surface-color);
 }
 </style>
