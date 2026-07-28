@@ -115,6 +115,12 @@ def create_app(config_class=Config):
     # Register WebSocket routes (imported here so sock is already init'd)
     from .api import ws  # noqa: F401
     
+    # Global exception handler for uncaught API errors
+    @app.errorhandler(Exception)
+    def handle_exception(e):
+        logger.error(f"Uncaught exception: {str(e)}", exc_info=True)
+        return {"success": False, "error": str(e)}, 500
+
     # Health check
     @app.route('/health')
     def health():

@@ -11,17 +11,25 @@ from ..utils.llm_client import LLMClient
 
 from . import settings_bp
 
+def _mask_secret(val: str) -> str:
+    if not val:
+        return ""
+    val_str = str(val).strip()
+    if len(val_str) <= 8:
+        return "********"
+    return f"{val_str[:4]}...{val_str[-4:]}"
+
 @settings_bp.route('', methods=['GET'])
 def get_settings():
     """Get current configuration settings"""
     try:
         data = {
-            "LLM_API_KEY": Config.LLM_API_KEY,
+            "LLM_API_KEY": _mask_secret(Config.LLM_API_KEY),
             "LLM_BASE_URL": Config.LLM_BASE_URL,
             "LLM_MODEL_NAME": Config.LLM_MODEL_NAME,
-            "ZEP_API_KEY": Config.ZEP_API_KEY,
-            "BRAVE_SEARCH_API_KEY": os.environ.get('BRAVE_SEARCH_API_KEY', ''),
-            "LLM_BOOST_API_KEY": os.environ.get('LLM_BOOST_API_KEY', ''),
+            "ZEP_API_KEY": _mask_secret(Config.ZEP_API_KEY),
+            "BRAVE_SEARCH_API_KEY": _mask_secret(os.environ.get('BRAVE_SEARCH_API_KEY', '')),
+            "LLM_BOOST_API_KEY": _mask_secret(os.environ.get('LLM_BOOST_API_KEY', '')),
             "LLM_BOOST_BASE_URL": os.environ.get('LLM_BOOST_BASE_URL', ''),
             "LLM_BOOST_MODEL_NAME": os.environ.get('LLM_BOOST_MODEL_NAME', '')
         }
