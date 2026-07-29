@@ -1,15 +1,11 @@
-import service, { requestWithRetry } from "./index";
+import service from "./index";
 
 /**
  * Create a simulation
  * @param {Object} data - { project_id, graph_id?, enable_twitter?, enable_reddit? }
  */
 export const createSimulation = (data) => {
-  return requestWithRetry(
-    () => service.post("/api/simulation/create", data),
-    3,
-    1000,
-  );
+  return service.post("/api/simulation/create", data);
 };
 
 /**
@@ -17,11 +13,7 @@ export const createSimulation = (data) => {
  * @param {Object} data - { simulation_id, entity_types?, use_llm_for_profiles?, parallel_profile_count?, force_regenerate? }
  */
 export const prepareSimulation = (data) => {
-  return requestWithRetry(
-    () => service.post("/api/simulation/prepare", data),
-    3,
-    1000,
-  );
+  return service.post("/api/simulation/prepare", data);
 };
 
 /**
@@ -104,11 +96,7 @@ export const listSimulations = (projectId) => {
  * @param {Object} data - { simulation_id, platform?, max_rounds?, enable_graph_memory_update? }
  */
 export const startSimulation = (data) => {
-  return requestWithRetry(
-    () => service.post("/api/simulation/start", data),
-    3,
-    1000,
-  );
+  return service.post("/api/simulation/start", data);
 };
 
 /**
@@ -205,26 +193,27 @@ export const getEnvStatus = (data) => {
 };
 
 /**
- * Batch interview Agents
- * @param {Object} data - { simulation_id, interviews: [{ agent_id, prompt }] }
+ * Ask one or more synthetic profiles a follow-up question.
+ * @param {Object} data - { simulation_id, questions: [{ agent_id, prompt }] }
  */
-export const interviewAgents = (data) => {
-  return requestWithRetry(
-    () => service.post("/api/simulation/interview/batch", data),
-    3,
-    1000,
-  );
+export const askSyntheticProfiles = (data) => {
+  return service.post("/api/simulation/generated-response/batch", data);
 };
 
+// Backwards-compatible export for existing integrations.
+export const interviewAgents = askSyntheticProfiles;
+
 /**
- * Export survey results as CSV
+ * Export generated profile responses as CSV
  * @param {string} simulationId
  * @param {Array} results
  */
-export const exportSurveyCSV = (simulationId, results) => {
-  return service.post(`/api/simulation/${simulationId}/export/survey`, { results }, {
-    responseType: 'blob'
-  });
+export const exportGeneratedResponsesCSV = (simulationId, results) => {
+  return service.post(
+    `/api/simulation/${simulationId}/export/generated-responses`,
+    { results },
+    { responseType: "blob" },
+  );
 };
 
 /**
@@ -237,24 +226,23 @@ export const getSimulationHistory = (limit = 20) => {
 };
 
 /**
- * Get Agent opinion scoring history
+ * Get generated interaction records from the legacy internal scorer.
  * @param {string} simulationId
  * @param {number} limit - Result count limit
  */
 export const getSimulationOpinions = (simulationId, limit = 1000) => {
-  return service.get(`/api/simulation/${simulationId}/opinions`, {
+  return service.get(`/api/simulation/${simulationId}/generated-interactions`, {
     params: { limit },
   });
 };
 
 /**
- * Get simulation post-run analytics metrics
+ * Get descriptive within-run patterns over generated activity.
  * @param {string} simulationId
  * @param {boolean} force - Force recalculation on backend
  */
 export const getSimulationMetrics = (simulationId, force = false) => {
-  return service.get(`/api/simulation/${simulationId}/metrics`, {
+  return service.get(`/api/simulation/${simulationId}/run-patterns`, {
     params: { force },
   });
 };
-

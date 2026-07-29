@@ -1,563 +1,1108 @@
 <template>
-  <div class="opinion-map-container">
-    <div class="map-header">
-      <div class="title-group">
-        <h3 class="map-title">3D OPINION SPACE</h3>
-        <span class="map-subtitle"
-          >Polarity (X) | Intensity (Y) | Nuance (Z)</span
-        >
-      </div>
-      <div class="map-controls">
-        <button class="control-btn" @click="toggleRotation">
-          {{ isRotating ? "PAUSE_ROTATION" : "RESUME_ROTATION" }}
-        </button>
-        <div class="legend">
-          <span class="legend-item"><i class="dot reddit"></i> REDDIT</span>
-          <span class="legend-item"><i class="dot twitter"></i> TWITTER</span>
+  <section class="interaction-route" aria-labelledby="interaction-route-title">
+    <header class="route-header">
+      <div class="route-lockup">
+        <span class="route-index" aria-hidden="true">04</span>
+        <div>
+          <p>Generated interaction route</p>
+          <h3 id="interaction-route-title">What happened inside this run</h3>
+          <span>
+            Each stop is a saved piece of generated activity. Follow the route
+            to inspect the record without mistaking generated activity for
+            real people’s views.
+          </span>
         </div>
       </div>
+
+      <aside class="route-truth" aria-label="Important interpretation limits">
+        <span>Scenario records only</span>
+        <strong>0 human respondents</strong>
+        <b>Not public opinion · not a forecast</b>
+      </aside>
+    </header>
+
+    <div class="route-toolbar">
+      <div class="connection-label" aria-live="polite">
+        <span :class="{ connected: !mapError && !initialLoading }">
+          {{ connectionLabel }}
+        </span>
+        <small v-if="lastUpdatedLabel">
+          Last checked {{ lastUpdatedLabel }}
+        </small>
+      </div>
+      <button
+        type="button"
+        :disabled="initialLoading || refreshingMap"
+        @click="fetchInteractionRecords({ manual: true })"
+      >
+        {{ refreshingMap ? "Checking…" : "Refresh generated records" }}
+      </button>
     </div>
 
-    <!-- 3D Viewport -->
     <div
-      class="map-viewport"
-      @mousedown="startDrag"
-      @mousemove="onDrag"
-      @mouseup="stopDrag"
+      v-if="initialLoading"
+      class="route-state is-loading"
+      role="status"
+      aria-live="polite"
+      data-testid="interaction-map-loading"
     >
-      <div class="scene" :style="sceneStyle">
-        <!-- 3D Cage -->
-        <div class="cube-cage">
-          <!-- Back Face -->
-          <div class="face back"></div>
-          <!-- Bottom Face -->
-          <div class="face bottom"></div>
-          <!-- Left Face -->
-          <div class="face left"></div>
+      <div>
+        <p>Loading the generated route</p>
+        <strong>Checking both fictional channels for saved activity.</strong>
+      </div>
+      <div class="route-skeleton" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
 
-          <!-- Axis Indicators -->
-          <div class="axis x-line"><span class="label">STANCE</span></div>
-          <div class="axis y-line"><span class="label">INTENSITY</span></div>
-          <div class="axis z-line"><span class="label">NUANCE</span></div>
+    <div
+      v-else-if="mapError && latestRecords.length === 0"
+      class="route-state is-error"
+      role="alert"
+      data-testid="interaction-map-error"
+    >
+      <span class="state-mark" aria-hidden="true">!</span>
+      <div>
+        <p>Generated route unavailable</p>
+        <strong>The saved interaction records could not be opened.</strong>
+        <small>{{ mapError }}</small>
+      </div>
+      <button
+        type="button"
+        :disabled="refreshingMap"
+        @click="fetchInteractionRecords({ manual: true })"
+      >
+        {{ refreshingMap ? "Reconnecting…" : "Reconnect the route" }}
+      </button>
+    </div>
 
-          <!-- Agent Points -->
-          <div
-            v-for="agent in latestOpinions"
-            :key="agent.agent_id"
-            class="agent-point"
-            :class="[
-              agent.platform,
-              { 'is-active': activeAgentId === agent.agent_id },
-            ]"
-            :style="getPointStyle(agent)"
-            @mouseenter="activeAgentId = agent.agent_id"
-            @mouseleave="activeAgentId = null"
-          >
-            <!-- 3D Sphere/Cube for Agent -->
-            <div class="point-body">
-              <div class="depth-shadow"></div>
-            </div>
+    <div v-else class="route-content">
+      <div
+        v-if="mapError"
+        class="route-connection-error"
+        role="alert"
+        data-testid="interaction-map-disconnected"
+      >
+        <div>
+          <strong>Record updates disconnected.</strong>
+          <span>{{ mapError }} The last loaded route remains below.</span>
+        </div>
+        <button
+          type="button"
+          :disabled="refreshingMap"
+          @click="fetchInteractionRecords({ manual: true })"
+        >
+          {{ refreshingMap ? "Reconnecting…" : "Reconnect updates" }}
+        </button>
+      </div>
 
-            <!-- Tooltip (Billboarded) -->
-            <transition name="fade">
-              <div
-                v-if="activeAgentId === agent.agent_id"
-                class="agent-tooltip"
-                :style="tooltipStyle"
-              >
-                <div class="tooltip-header">
-                  <span class="name">@{{ agent.agent_name }}</span>
-                  <span class="plat" :class="agent.platform">{{
-                    agent.platform.toUpperCase()
-                  }}</span>
-                </div>
-                <div class="coords">
-                  X: {{ agent.x.toFixed(2) }} | Y: {{ agent.y.toFixed(2) }} | Z:
-                  {{ agent.z.toFixed(2) }}
-                </div>
-                <p class="reason">{{ agent.reason }}</p>
-                <p class="snippet">"{{ agent.text_snippet }}..."</p>
-              </div>
-            </transition>
-          </div>
+      <div v-if="latestRecords.length === 0" class="route-empty">
+        <span class="state-mark" aria-hidden="true">00</span>
+        <div>
+          <p>No generated interaction records yet</p>
+          <strong>The route will appear after this run saves activity.</strong>
+          <small>
+            This is a true empty state—not a failed connection and not evidence
+            of public agreement or disagreement.
+          </small>
         </div>
       </div>
 
-      <!-- Interaction Overlay -->
-      <div class="interaction-hint">DRAG TO ROTATE SPACE</div>
+      <div
+        v-else
+        class="route-board"
+        aria-label="Generated interaction records grouped by fictional channel"
+      >
+        <section
+          v-for="lane in interactionLanes"
+          :key="lane.id"
+          class="route-lane"
+          :class="`lane-${lane.id}`"
+          :aria-labelledby="`lane-${lane.id}-heading`"
+        >
+          <header>
+            <span>{{ lane.sequence }}</span>
+            <div>
+              <h4 :id="`lane-${lane.id}-heading`">{{ lane.label }}</h4>
+              <p>{{ lane.description }}</p>
+            </div>
+            <strong>
+              {{ lane.records.length }}
+              {{ lane.records.length === 1 ? "generated record" : "generated records" }}
+            </strong>
+          </header>
+
+          <ol class="lane-stops">
+            <li
+              v-for="(record, recordIndex) in lane.records"
+              :key="recordKey(record)"
+            >
+              <article class="route-stop">
+                <span class="stop-marker" aria-hidden="true">
+                  {{ String(recordIndex + 1).padStart(2, "0") }}
+                </span>
+                <div class="stop-copy">
+                  <header>
+                    <strong>{{ profileLabel(record, recordIndex) }}</strong>
+                    <time v-if="record.timestamp">
+                      {{ formatTimestamp(record.timestamp) }}
+                    </time>
+                  </header>
+                  <p>Generated profile activity saved in this run.</p>
+                  <blockquote v-if="record.text_snippet">
+                    {{ cleanSnippet(record.text_snippet) }}
+                  </blockquote>
+                  <span v-else>
+                    No text preview was saved for this generated record.
+                  </span>
+                  <footer>
+                    Generated record · {{ lane.label }} · not a person’s
+                    testimony
+                  </footer>
+                </div>
+              </article>
+            </li>
+          </ol>
+        </section>
+      </div>
     </div>
-  </div>
+
+    <details class="technical-record">
+      <summary>
+        <span>Technical record details</span>
+        <small>Run IDs, generated profile IDs, and timestamps · closed by default</small>
+      </summary>
+      <div class="technical-record-body">
+        <dl>
+          <div>
+            <dt>Simulation ID</dt>
+            <dd>{{ simulationId || "Unavailable" }}</dd>
+          </div>
+          <div>
+            <dt>Records shown</dt>
+            <dd>{{ latestRecords.length }}</dd>
+          </div>
+          <div>
+            <dt>Refresh cycle</dt>
+            <dd>Checks every 5 seconds while this view is open</dd>
+          </div>
+        </dl>
+
+        <ol v-if="latestRecords.length > 0">
+          <li
+            v-for="(record, recordIndex) in latestRecords"
+            :key="`technical-${recordKey(record)}`"
+          >
+            <span>Record {{ String(recordIndex + 1).padStart(2, "0") }}</span>
+            <code>generated_profile_id={{ record.agent_id ?? "unknown" }}</code>
+            <span>{{ platformLabel(record.platform) }}</span>
+            <time>{{ formatTimestamp(record.timestamp) || "Time unavailable" }}</time>
+          </li>
+        </ol>
+        <p v-else>No generated record identifiers are available.</p>
+      </div>
+    </details>
+  </section>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { getSimulationOpinions } from "../api/simulation";
 
 const props = defineProps({
   simulationId: String,
 });
 
-const OPINION_POLL_INTERVAL_MS = 5000;
+const RECORD_POLL_INTERVAL_MS = 5000;
 
-const opinions = ref([]);
-const activeAgentId = ref(null);
-const isRotating = ref(true);
-const rotation = reactive({ x: -20, y: 45 });
+const records = ref([]);
+const initialLoading = ref(true);
+const refreshingMap = ref(false);
+const mapError = ref("");
+const lastUpdatedAt = ref(null);
 let pollTimer = null;
-let animationFrame = null;
+let requestInFlight = null;
+let requestSequence = 0;
 
-// Drag state
-const isDragging = ref(false);
-const lastMousePos = reactive({ x: 0, y: 0 });
+const recordKey = (record) =>
+  [
+    record.agent_id ?? "unknown",
+    record.platform || "unknown",
+    record.timestamp || "undated",
+  ].join(":");
 
-const sceneStyle = computed(() => ({
-  transform: `rotateX(${rotation.x}deg) rotateY(${rotation.y}deg)`,
-}));
-
-// We want the tooltip to always face the user (billboarding)
-// We negate the scene rotation
-const tooltipStyle = computed(() => ({
-  transform: `rotateY(${-rotation.y}deg) rotateX(${-rotation.x}deg)`,
-}));
-
-const latestOpinions = computed(() => {
-  const map = new Map();
-  const sorted = [...opinions.value].sort((a, b) =>
-    String(a.timestamp || '').localeCompare(String(b.timestamp || '')),
+const latestRecords = computed(() => {
+  const latestByProfileAndChannel = new Map();
+  const sorted = [...records.value].sort((first, second) =>
+    String(first?.timestamp || "").localeCompare(
+      String(second?.timestamp || ""),
+    ),
   );
-  sorted.forEach((op) => {
-    map.set(op.agent_id, op);
+
+  sorted.forEach((record) => {
+    const key = `${record?.agent_id ?? "unknown"}:${record?.platform || "unknown"}`;
+    latestByProfileAndChannel.set(key, record);
   });
-  return Array.from(map.values());
+
+  return Array.from(latestByProfileAndChannel.values()).sort((first, second) =>
+    String(second?.timestamp || "").localeCompare(
+      String(first?.timestamp || ""),
+    ),
+  );
 });
 
-const getPointStyle = (agent) => {
-  // Normalize coordinates to cube pixels (assume 300px cube)
-  const size = 300;
-  const x = agent.x * (size / 2); // -150 to 150
-  const y = (1 - agent.y) * size - size / 2; // inverted Y
-  const z = (agent.z - 0.5) * size; // -150 to 150
-
-  return {
-    transform: `translate3d(${x}px, ${y}px, ${z}px)`,
-  };
+const platformLabel = (platform) => {
+  if (platform === "reddit") return "Topic community";
+  if (platform === "twitter") return "Short-post channel";
+  return "Other generated channel";
 };
 
-const fetchOpinions = async () => {
-  if (!props.simulationId) return;
-  try {
-    const res = await getSimulationOpinions(props.simulationId);
-    if (res.success && res.data) {
-      opinions.value = res.data.opinions || [];
+const laneDescription = (platform) => {
+  if (platform === "reddit") {
+    return "Longer generated posts and replies saved in the fictional topic space.";
+  }
+  if (platform === "twitter") {
+    return "Short generated posts and reactions saved in the fictional feed.";
+  }
+  return "Generated activity saved outside the two primary fictional channels.";
+};
+
+const interactionLanes = computed(() => {
+  const laneOrder = ["reddit", "twitter", "other"];
+  const grouped = new Map(
+    laneOrder.map((platform) => [platform, []]),
+  );
+
+  latestRecords.value.forEach((record) => {
+    const platform =
+      record?.platform === "reddit" || record?.platform === "twitter"
+        ? record.platform
+        : "other";
+    grouped.get(platform).push(record);
+  });
+
+  return laneOrder
+    .filter((platform) => grouped.get(platform).length > 0)
+    .map((platform, index) => ({
+      id: platform,
+      sequence: String(index + 1).padStart(2, "0"),
+      label: platformLabel(platform),
+      description: laneDescription(platform),
+      records: grouped.get(platform),
+    }));
+});
+
+const connectionLabel = computed(() => {
+  if (initialLoading.value) return "Connecting to generated records";
+  if (mapError.value) return "Updates disconnected";
+  if (refreshingMap.value) return "Checking for newer generated records";
+  return "Generated records connected";
+});
+
+const lastUpdatedLabel = computed(() => {
+  if (!lastUpdatedAt.value) return "";
+  return lastUpdatedAt.value.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+});
+
+const profileLabel = (record, index) =>
+  record?.agent_name ||
+  record?.username ||
+  `Fictional profile ${Number(index) + 1}`;
+
+const formatTimestamp = (timestamp) => {
+  if (!timestamp) return "";
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) return "Time unavailable";
+  return parsed.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const cleanSnippet = (value) => {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+  if (text.length <= 220) return text;
+  return `${text.slice(0, 217)}…`;
+};
+
+const fetchInteractionRecords = async ({ manual = false } = {}) => {
+  if (requestInFlight) return requestInFlight;
+  if (!props.simulationId) {
+    initialLoading.value = false;
+    mapError.value =
+      "This route is missing the simulation ID needed to load generated records.";
+    return false;
+  }
+
+  const sequence = ++requestSequence;
+  if (manual || !initialLoading.value) refreshingMap.value = true;
+
+  let currentRequest;
+  currentRequest = (async () => {
+    try {
+      const response = await getSimulationOpinions(props.simulationId);
+      if (!response?.success || !Array.isArray(response.data?.opinions)) {
+        throw new Error("generated_records_unavailable");
+      }
+      if (sequence !== requestSequence) return false;
+
+      records.value = response.data.opinions;
+      mapError.value = "";
+      lastUpdatedAt.value = new Date();
+      return true;
+    } catch {
+      if (sequence !== requestSequence) return false;
+      mapError.value =
+        "The app could not reach the saved generated records. Check the connection and try again.";
+      return false;
+    } finally {
+      if (sequence === requestSequence) {
+        initialLoading.value = false;
+        refreshingMap.value = false;
+      }
+      if (requestInFlight === currentRequest) requestInFlight = null;
     }
-  } catch (e) {
-    if (import.meta.env.DEV) console.error("3D Space fetch failed", e);
-  }
-};
+  })();
+  requestInFlight = currentRequest;
 
-const animate = () => {
-  if (isRotating.value && !isDragging.value) {
-    rotation.y += 0.2;
-  }
-  animationFrame = requestAnimationFrame(animate);
-};
-
-const toggleRotation = () => {
-  isRotating.value = !isRotating.value;
-};
-
-// Drag handlers
-const startDrag = (e) => {
-  isDragging.value = true;
-  lastMousePos.x = e.clientX;
-  lastMousePos.y = e.clientY;
-};
-
-const onDrag = (e) => {
-  if (!isDragging.value) return;
-  const dx = e.clientX - lastMousePos.x;
-  const dy = e.clientY - lastMousePos.y;
-
-  rotation.y += dx * 0.5;
-  rotation.x -= dy * 0.5;
-
-  lastMousePos.x = e.clientX;
-  lastMousePos.y = e.clientY;
-};
-
-const stopDrag = () => {
-  isDragging.value = false;
+  return requestInFlight;
 };
 
 onMounted(() => {
-  fetchOpinions();
-  pollTimer = setInterval(fetchOpinions, OPINION_POLL_INTERVAL_MS);
-  animate();
-  window.addEventListener("mouseup", stopDrag);
+  fetchInteractionRecords();
+  pollTimer = window.setInterval(
+    () => fetchInteractionRecords(),
+    RECORD_POLL_INTERVAL_MS,
+  );
 });
 
 onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer);
-  if (animationFrame) cancelAnimationFrame(animationFrame);
-  window.removeEventListener("mouseup", stopDrag);
+  requestSequence += 1;
+  if (pollTimer) window.clearInterval(pollTimer);
 });
+
+watch(
+  () => props.simulationId,
+  (nextSimulationId, previousSimulationId) => {
+    if (nextSimulationId === previousSimulationId) return;
+    requestSequence += 1;
+    requestInFlight = null;
+    records.value = [];
+    mapError.value = "";
+    lastUpdatedAt.value = null;
+    initialLoading.value = true;
+    fetchInteractionRecords();
+  },
+);
 </script>
 
 <style scoped>
-.opinion-map-container {
-  height: 600px;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
-  overflow: hidden;
-}
-
-.map-header {
-  padding: 18px 24px;
-  background: var(--atp-light-gray);
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.map-title {
+.interaction-route {
+  min-width: 0;
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--text-primary);
+}
+
+.route-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(18rem, 0.65fr);
+  border-bottom: 3px solid var(--ink);
+  background: var(--ink-deep);
+  color: var(--paper);
+}
+
+.route-lockup {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: clamp(1rem, 2vw, 2rem);
+  align-items: start;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+}
+
+.route-index,
+.state-mark {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  place-items: center;
+  border: 2px solid var(--signal);
+  color: var(--signal);
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+}
+
+.route-lockup p,
+.route-state p,
+.route-empty p {
+  margin: 0 0 0.45rem;
+  color: var(--signal);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.route-lockup h3 {
+  max-width: 18ch;
   margin: 0;
-  letter-spacing: 0.5px;
+  font-family: var(--font-display);
+  font-size: clamp(2.1rem, 4vw, 3.8rem);
+  font-weight: 400;
+  line-height: 0.92;
+  text-transform: uppercase;
 }
 
-.map-subtitle {
-  font-family: var(--font-sans);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  opacity: 0.8;
-  margin-top: 2px;
+.route-lockup > div > span {
+  display: block;
+  max-width: 57rem;
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line-dark);
+  color: var(--paper-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
 }
 
-.map-controls {
+.route-truth {
+  display: grid;
+  align-content: center;
+  padding: clamp(1.25rem, 3vw, 2.25rem);
+  border-left: 3px solid var(--ink);
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.route-truth span,
+.route-truth b {
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.route-truth strong {
+  max-width: 8ch;
+  margin: 0.65rem 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: clamp(2.4rem, 4vw, 3.7rem);
+  font-weight: 400;
+  line-height: 0.82;
+  text-transform: uppercase;
+}
+
+.route-toolbar {
   display: flex;
+  min-height: 4rem;
   align-items: center;
-  gap: 20px;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem clamp(1rem, 3vw, 2rem);
+  border-bottom: 2px solid var(--ink);
+  background: var(--paper-strong);
 }
 
-.control-btn {
-  background: var(--surface-color);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 6px 14px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
-  transition: all 0.2s ease;
+.connection-label {
+  display: grid;
+  gap: 0.15rem;
 }
 
-.control-btn:hover {
-  background: var(--atp-light-gray);
-  border-color: var(--border-color);
-}
-
-.control-btn:active {
-  transform: translateY(0);
-}
-
-.legend-item {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  display: inline-flex;
-  align-items: center;
-  margin-left: 12px;
-}
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-right: 6px;
-}
-
-.dot.reddit {
-  background: #ff4500;
-}
-
-.dot.twitter {
-  background: #1da1f2;
-}
-
-/* 3D Viewport */
-.map-viewport {
-  flex: 1;
-  perspective: 1000px;
-  background: var(--background);
+.connection-label > span {
   position: relative;
-  overflow: hidden;
-  cursor: grab;
+  padding-left: 1.1rem;
+  color: var(--error-text);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.map-viewport:active {
-  cursor: grabbing;
+.connection-label > span::before {
+  position: absolute;
+  top: 0.25rem;
+  left: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  background: var(--error);
+  content: "";
 }
 
-.scene {
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  display: flex;
+.connection-label > span.connected {
+  color: var(--ink);
+}
+
+.connection-label > span.connected::before {
+  background: var(--success);
+}
+
+.connection-label small {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+}
+
+.route-toolbar button,
+.route-state button,
+.route-connection-error button {
+  min-height: 2.7rem;
+  padding: 0.6rem 0.9rem;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.route-toolbar button:active:not(:disabled),
+.route-state button:active:not(:disabled),
+.route-connection-error button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.route-state,
+.route-empty {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 1rem 1.5rem;
   align-items: center;
-  justify-content: center;
-  transition: transform 0.1s ease-out;
+  min-height: 17rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+  border-bottom: 3px solid var(--ink);
 }
 
-.cube-cage {
-  width: 300px;
-  height: 300px;
+.route-state.is-loading {
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 0.65fr);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.route-state strong,
+.route-empty strong {
+  display: block;
+  max-width: 38rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 3vw, 2.4rem);
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.route-state small,
+.route-empty small {
+  display: block;
+  max-width: 48rem;
+  margin-top: 0.5rem;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.route-state.is-loading small {
+  color: var(--paper-muted);
+}
+
+.route-state.is-error {
+  border-top: 0.55rem solid var(--error);
+  background: var(--paper);
+}
+
+.route-state.is-error .state-mark {
+  border-color: var(--error);
+  background: var(--error);
+  color: var(--paper);
+}
+
+.route-skeleton {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.route-skeleton span {
+  height: 1rem;
+  transform-origin: left;
+  background: var(--line-dark);
+  animation: route-pulse 1.2s var(--ease-out) infinite alternate;
+}
+
+.route-skeleton span:nth-child(2) {
+  width: 76%;
+  animation-delay: 120ms;
+}
+
+.route-skeleton span:nth-child(3) {
+  width: 52%;
+  animation-delay: 240ms;
+}
+
+.route-connection-error {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  border-bottom: 3px solid var(--error);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.route-connection-error div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.route-connection-error strong {
+  color: var(--signal);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.route-connection-error span {
+  color: var(--paper-muted);
+  font-size: 0.76rem;
+}
+
+.route-empty {
+  grid-template-columns: auto minmax(0, 1fr);
+  background:
+    linear-gradient(var(--line-light) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-light) 1px, transparent 1px),
+    var(--paper);
+  background-size: 2.2rem 2.2rem;
+}
+
+.route-empty .state-mark {
+  border-color: var(--ink);
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.route-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.85fr);
+  border-bottom: 3px solid var(--ink);
+  background: var(--paper);
+}
+
+.route-lane + .route-lane {
+  border-left: 3px solid var(--ink);
+}
+
+.route-lane > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem 1rem;
+  align-items: center;
+  min-height: 7rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 3px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.route-lane > header > span {
+  grid-row: 1 / span 2;
+  color: var(--signal);
+  font-family: var(--font-display);
+  font-size: 2rem;
+}
+
+.route-lane > header h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: 0.035em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.route-lane > header p {
+  margin: 0.25rem 0 0;
+  color: var(--paper-muted);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.route-lane > header > strong {
+  grid-column: 2;
+  color: var(--signal);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lane-stops {
   position: relative;
-  transform-style: preserve-3d;
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+  list-style: none;
 }
 
-.face {
+.lane-stops::before {
   position: absolute;
-  width: 100%;
-  height: 100%;
-  border: 1px dashed rgba(148, 163, 184, 0.15);
-  pointer-events: none;
-}
-
-.face.back {
-  transform: translateZ(-150px);
-  background: rgba(148, 163, 184, 0.02);
-}
-
-.face.bottom {
-  transform: rotateX(90deg) translateZ(150px);
-  background: rgba(148, 163, 184, 0.04);
-}
-
-.face.left {
-  transform: rotateY(-90deg) translateZ(150px);
-  border-right: 1px solid var(--border-color);
-}
-
-/* Axes */
-.axis {
-  position: absolute;
-  background: var(--border-color);
-  pointer-events: none;
-}
-
-.axis .label {
-  position: absolute;
-  font-size: 8px;
-  font-weight: 600;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  padding: 2px 6px;
-  color: var(--text-secondary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-}
-
-.x-line {
-  width: 100%;
-  height: 1px;
-  top: 100%;
-  left: 0;
-  transform: translateZ(150px);
-}
-
-.x-line .label {
-  right: -45px;
-  top: -8px;
-}
-
-.y-line {
-  width: 1px;
-  height: 100%;
-  left: 0;
   top: 0;
-  transform: translateZ(150px);
+  bottom: 0;
+  left: 2.8rem;
+  width: 0.35rem;
+  background: var(--signal);
+  content: "";
 }
 
-.y-line .label {
-  top: -24px;
-  left: -20px;
+.lane-stops > li {
+  position: relative;
+  border-bottom: 2px solid var(--ink);
 }
 
-.z-line {
-  width: 300px;
-  height: 1px;
-  left: 0;
-  top: 100%;
-  transform: rotateY(-90deg) translateZ(0);
+.lane-stops > li:last-child {
+  border-bottom: 0;
 }
 
-.z-line .label {
-  right: -45px;
-  top: -8px;
+.route-stop {
+  position: relative;
+  display: grid;
+  grid-template-columns: 3.4rem minmax(0, 1fr);
+  gap: 1rem;
+  min-height: 10rem;
+  padding: 1.25rem 1.25rem 1.25rem 0;
+  background: var(--paper);
 }
 
-/* Agent Points */
-.agent-point {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  margin: -20px;
-  transform-style: preserve-3d;
-  z-index: 10;
+.stop-marker {
+  z-index: 1;
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  place-items: center;
+  border: 3px solid var(--ink);
+  background: var(--signal);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
 }
 
-.point-body {
-  width: 10px;
-  height: 10px;
-  position: absolute;
-  top: 15px;
-  left: 15px;
-  border-radius: 50%;
-  border: 1px solid var(--surface-color);
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.stop-copy {
+  min-width: 0;
 }
 
-.reddit .point-body {
-  background: #ff4500;
-}
-
-.twitter .point-body {
-  background: #1da1f2;
-}
-
-.agent-point.is-active .point-body {
-  transform: scale(1.6);
-  border-color: var(--surface-color);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-.depth-shadow {
-  position: absolute;
-  bottom: -300px; /* Projection to floor */
-  left: 50%;
-  width: 6px;
-  height: 6px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 50%;
-  transform: rotateX(90deg) translateZ(0);
-}
-
-/* Tooltip */
-.agent-tooltip {
-  position: absolute;
-  bottom: 40px;
-  left: 50%;
-  width: 240px;
-  margin-left: -120px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.03);
-  pointer-events: none;
-  z-index: 200;
-  backface-visibility: hidden;
-}
-
-.tooltip-header {
+.stop-copy > header {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 6px;
-  margin-bottom: 10px;
+  gap: 1rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--line-light);
 }
 
-.name {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text-primary);
+.stop-copy > header strong {
+  overflow: hidden;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.plat {
-  font-size: 9px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 12px;
+.stop-copy time {
+  flex: 0 0 auto;
+  color: var(--ink-muted);
+  font-size: 0.62rem;
 }
 
-.plat.reddit {
-  background: rgba(255, 69, 0, 0.1);
-  color: #ff4500;
+.stop-copy > p {
+  margin: 0.75rem 0 0.5rem;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
-.plat.twitter {
-  background: rgba(29, 161, 242, 0.1);
-  color: #1da1f2;
-}
-
-.coords {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  color: var(--text-secondary);
-  opacity: 0.8;
-  margin-bottom: 8px;
-}
-
-.reason {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-primary);
-  margin: 0 0 8px 0;
-  line-height: 1.4;
-}
-
-.snippet {
-  font-size: 10px;
-  font-style: italic;
-  color: var(--text-secondary);
-  border-left: 2px solid var(--border-color);
-  padding-left: 8px;
+.stop-copy blockquote {
   margin: 0;
-  line-height: 1.4;
+  padding: 0.8rem;
+  border-left: 0.4rem solid var(--signal);
+  background: var(--paper-strong);
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
-.interaction-hint {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 9px;
-  font-weight: 500;
-  background: var(--text-primary);
-  color: var(--surface-color);
-  border-radius: 20px;
-  padding: 4px 12px;
-  letter-spacing: 1px;
-  pointer-events: none;
-  opacity: 0.8;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+.stop-copy > span {
+  display: block;
+  margin-top: 0.6rem;
+  color: var(--ink-muted);
+  font-size: 0.74rem;
 }
 
-/* Animations */
-.fade-enter-active,
-.fade-leave-active {
-  transition:
-    opacity 0.2s,
-    transform 0.2s;
+.stop-copy footer {
+  margin-top: 0.75rem;
+  color: var(--ink-muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(10px) scale(0.95);
+.technical-record {
+  background: var(--paper-strong);
+}
+
+.technical-record > summary {
+  display: flex;
+  min-height: 4rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem clamp(1rem, 3vw, 2rem);
+  border-bottom: 2px solid var(--ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.technical-record > summary::-webkit-details-marker {
+  display: none;
+}
+
+.technical-record > summary::before {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  place-items: center;
+  background: var(--ink);
+  color: var(--signal);
+  content: "+";
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.technical-record[open] > summary::before {
+  content: "−";
+}
+
+.technical-record > summary span {
+  margin-right: auto;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.technical-record > summary small {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+}
+
+.technical-record-body {
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.35fr) minmax(0, 1fr);
+  gap: 2rem;
+  padding: 1.5rem clamp(1rem, 3vw, 2rem);
+  border-bottom: 3px solid var(--ink);
+}
+
+.technical-record-body dl {
+  margin: 0;
+}
+
+.technical-record-body dl > div {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--line-light);
+}
+
+.technical-record-body dt {
+  color: var(--ink-muted);
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.technical-record-body dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.technical-record-body ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.technical-record-body li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--line-light);
+  font-size: 0.68rem;
+}
+
+.technical-record-body code {
+  overflow-wrap: anywhere;
+  color: var(--ink-muted);
+}
+
+.technical-record-body p {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
+@keyframes route-pulse {
+  from {
+    opacity: 0.35;
+    transform: scaleX(0.74);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@media (max-width: 900px) {
+  .route-header,
+  .route-board,
+  .technical-record-body {
+    grid-template-columns: 1fr;
+  }
+
+  .route-truth,
+  .route-lane + .route-lane {
+    border-left: 0;
+  }
+
+  .route-truth {
+    border-top: 3px solid var(--ink);
+  }
+
+  .route-lane + .route-lane {
+    border-top: 3px solid var(--ink);
+  }
+}
+
+@media (max-width: 600px) {
+  .route-lockup {
+    grid-template-columns: 2.6rem minmax(0, 1fr);
+    gap: 0.75rem;
+    padding: 1rem;
+  }
+
+  .route-index,
+  .state-mark {
+    width: 2.6rem;
+    height: 2.6rem;
+    font-size: 1.1rem;
+  }
+
+  .route-lockup h3 {
+    font-size: 2.2rem;
+  }
+
+  .route-lockup > div > span {
+    font-size: 0.75rem;
+  }
+
+  .route-truth {
+    padding: 1rem;
+  }
+
+  .route-truth strong {
+    max-width: none;
+    font-size: 2.25rem;
+  }
+
+  .route-toolbar,
+  .route-connection-error,
+  .route-state {
+    align-items: stretch;
+    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .route-toolbar {
+    display: flex;
+  }
+
+  .route-toolbar button,
+  .route-connection-error button,
+  .route-state button {
+    width: 100%;
+  }
+
+  .route-state,
+  .route-state.is-loading,
+  .route-empty {
+    grid-template-columns: 1fr;
+    min-height: 15rem;
+    padding: 1.25rem 1rem;
+  }
+
+  .route-lane > header {
+    min-height: 0;
+    padding: 0.9rem 1rem;
+  }
+
+  .lane-stops {
+    padding-left: 0.75rem;
+  }
+
+  .lane-stops::before {
+    left: 2.15rem;
+  }
+
+  .route-stop {
+    grid-template-columns: 2.8rem minmax(0, 1fr);
+    gap: 0.75rem;
+    min-height: 0;
+    padding: 1rem 0.75rem 1rem 0;
+  }
+
+  .stop-marker {
+    width: 2.8rem;
+    height: 2.8rem;
+    font-size: 1rem;
+  }
+
+  .stop-copy > header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .technical-record > summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .technical-record > summary small {
+    width: 100%;
+    padding-left: 3rem;
+  }
+
+  .technical-record-body li {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-skeleton span {
+    animation: none;
+  }
 }
 </style>

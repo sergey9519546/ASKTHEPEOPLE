@@ -1,7 +1,11 @@
 <template>
   <div class="graph-panel-workbench">
     <!-- Header -->
-    <header class="panel-header-block">
+    <header
+      class="panel-header-block"
+      :aria-hidden="selectedItem ? 'true' : undefined"
+      :inert="selectedItem ? '' : undefined"
+    >
       <div class="header-left">
         <h2 class="panel-label" aria-live="polite">{{ phaseLabels }}</h2>
       </div>
@@ -10,8 +14,8 @@
           class="btn-action small"
           @click="$emit('refresh')"
           :disabled="loading"
-          title="Refresh Graph"
-          aria-label="Refresh graph data"
+          title="Refresh the source map"
+          aria-label="Refresh the source map"
         >
           <span
             class="btn-icon"
@@ -24,55 +28,94 @@
         <button
           class="btn-action small square"
           @click="$emit('toggle-maximize')"
-          title="Maximize View"
-          aria-label="Toggle maximize view"
+          title="Change map size"
+          aria-label="Change source map size"
         >
-          <span class="btn-icon" aria-hidden="true">⛶</span>
+          <svg class="btn-icon maximize-icon" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M3 8V3h5M12 3h5v5M17 12v5h-5M8 17H3v-5"></path>
+          </svg>
         </button>
       </div>
     </header>
 
     <div class="viewport-container" ref="graphContainer">
       <!-- D3 SVG Layer -->
-      <div v-if="graphData" class="graph-canvas-wrapper">
-        <svg ref="graphSvg" class="graph-svg-element"></svg>
-
-        <!-- Live Status Hint -->
-        <div
-          v-if="currentPhase === 1 || isSimulating"
-          class="status-overlay-hint"
-        >
-          <div class="status-icon-box">
-            <div class="pulse-dot"></div>
-          </div>
-          <span class="status-msg">{{
-            isSimulating ? "GRAPHRAG LTM BROADCASTING..." : "LIVE STREAM ACTIVE"
-          }}</span>
+      <div v-if="loading" class="state-placeholder" role="status">
+        <div class="map-loading-lines" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
         </div>
+        <strong>Loading the source map…</strong>
+        <p>Keeping source material separate from generated scenario paths.</p>
+      </div>
 
-        <!-- Completion Hint -->
+      <div v-else-if="hasGraphNodes" class="graph-canvas-wrapper">
         <div
-          v-if="showSimulationFinishedHint"
-          class="status-overlay-hint completion-hint"
+          class="graph-background-layer"
+          :aria-hidden="selectedItem ? 'true' : undefined"
+          :inert="selectedItem ? '' : undefined"
         >
-          <div class="status-icon-box">✓</div>
-          <span class="status-msg">SEQUENCE TERMINATED. REFRESH ARCHIVE.</span>
-          <button class="hint-close" @click="dismissFinishedHint">×</button>
+          <svg
+            ref="graphSvg"
+            class="graph-svg-element"
+            role="group"
+            aria-label="Source-map items. Tab to an item and press Enter for details."
+          ></svg>
+
+          <!-- Live Status Hint -->
+          <div
+            v-if="currentPhase === 1 || isSimulating"
+            class="status-overlay-hint"
+          >
+            <div class="status-icon-box">
+              <div class="pulse-dot"></div>
+            </div>
+            <span class="status-msg">{{
+              isSimulating ? "Scenario run active" : "Mapping the sources"
+            }}</span>
+          </div>
+
+          <!-- Completion Hint -->
+          <div
+            v-if="showSimulationFinishedHint"
+            class="status-overlay-hint completion-hint"
+          >
+            <div class="status-icon-box">Done</div>
+            <span class="status-msg"
+              >Scenario run finished. Refresh to see the latest map.</span
+            >
+            <button
+              class="hint-close"
+              type="button"
+              aria-label="Dismiss scenario-finished message"
+              @click="dismissFinishedHint"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <!-- Entity Detail Panel (Sidebar within Graph) -->
         <Transition name="panel-slide">
           <div
             v-if="selectedItem"
+            ref="detailPanel"
             class="entity-detail-panel"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="detail-header"
+            aria-labelledby="graph-detail-title"
+            tabindex="-1"
+            @keydown="handleDetailKeydown"
           >
-            <header class="detail-header" id="detail-header">
-              <span class="detail-category">{{
-                selectedItem.type === "node" ? "NODE DATA" : "RELATION LINK"
-              }}</span>
+            <header class="detail-header">
+              <span id="graph-detail-title" class="detail-category">
+                {{
+                  selectedItem.type === "node"
+                    ? `Map item: ${selectedItem.data.name || "Unnamed item"}`
+                    : "Source connection"
+                }}
+              </span>
               <span
                 v-if="selectedItem.type === 'node'"
                 class="type-badge"
@@ -81,7 +124,9 @@
                 {{ selectedItem.entityType }}
               </span>
               <button
+                ref="detailCloseButton"
                 class="close-detail-btn"
+                type="button"
                 @click="closeDetailPanel"
                 aria-label="Close detail panel"
               >
@@ -99,7 +144,7 @@
                   </div>
                 </div>
                 <div class="attr-row">
-                  <label>UUID Hex</label>
+                  <label>Item reference</label>
                   <div class="attr-value mono text-slate-500">
                     {{ selectedItem.data.uuid }}
                   </div>
@@ -126,7 +171,7 @@
                 </div>
 
                 <div class="attr-section" v-if="selectedItem.data.summary">
-                  <h4 class="section-label">Synthesis</h4>
+                  <h4 class="section-label">Summary</h4>
                   <div class="summary-box">{{ selectedItem.data.summary }}</div>
                 </div>
               </div>
@@ -138,7 +183,7 @@
                   class="self-loop-header"
                 >
                   Loop: {{ selectedItem.data.source_name }} —
-                  {{ selectedItem.data.selfLoopCount }} REF
+                  {{ selectedItem.data.selfLoopCount }} references
                 </div>
                 <div v-else class="edge-path-header text-slate-800">
                   {{ selectedItem.data.source_name }} →
@@ -158,7 +203,9 @@
                 </div>
 
                 <div v-if="selectedItem.data.fact" class="attr-section">
-                  <h4 class="section-label">Observed Fact</h4>
+                  <h4 class="section-label">
+                    Graph record · provenance unverified
+                  </h4>
                   <div class="fact-box">{{ selectedItem.data.fact }}</div>
                 </div>
               </div>
@@ -167,23 +214,25 @@
         </Transition>
       </div>
 
-      <!-- State Placeholders -->
-      <div v-else-if="loading" class="state-placeholder">
-        <div class="spinner-large"></div>
-        <p class="text-xs text-slate-400 font-medium">Initializing Graph Engine...</p>
-      </div>
-
       <div v-else class="state-placeholder">
         <div class="geometric-shape"></div>
-        <p class="text-xs text-slate-400 font-medium">Awaiting Ontology Deployment</p>
+        <strong>{{ emptyStateTitle }}</strong>
+        <p>{{ emptyStateMessage }}</p>
+        <button class="empty-refresh" type="button" @click="$emit('refresh')">
+          Refresh source map
+        </button>
       </div>
     </div>
 
     <!-- UI Overlays -->
-    <footer class="graph-ui-overlays">
+    <footer
+      class="graph-ui-overlays"
+      :aria-hidden="selectedItem ? 'true' : undefined"
+      :inert="selectedItem ? '' : undefined"
+    >
       <!-- Legend -->
       <div
-        v-if="graphData && entityTypes.length"
+        v-if="hasGraphNodes && entityTypes.length"
         class="type-legend"
       >
         <h5 class="legend-header">Entity Map</h5>
@@ -199,7 +248,7 @@
       </div>
 
       <!-- Toggle -->
-      <div v-if="graphData" class="view-controls">
+      <div v-if="hasGraphNodes" class="view-controls">
         <div class="control-row">
           <span class="control-label">Edge Labels</span>
           <label class="switch-control">
@@ -229,13 +278,11 @@ const props = defineProps({
 
 const phaseLabels = computed(() => {
   const labels = {
-    1: "Phase 01: Ontology Visualization",
-    2: "Phase 02: Simulation Preparation",
-    3: "Phase 03: Simulation Execution",
-    4: "Phase 04: Report Generation",
-    5: "Phase 05: Deep Interaction",
+    0: "Reading the sources",
+    1: "Connecting the source material",
+    2: "Source map ready",
   };
-  return labels[props.currentPhase] || "Ontology Visualization";
+  return labels[props.currentPhase] || "Source map";
 });
 
 const emit = defineEmits(["refresh", "toggle-maximize"]);
@@ -243,12 +290,35 @@ const emit = defineEmits(["refresh", "toggle-maximize"]);
 // Refs & State
 const graphContainer = ref(null);
 const graphSvg = ref(null);
+const detailPanel = ref(null);
+const detailCloseButton = ref(null);
 const selectedItem = ref(null);
 const showEdgeLabels = ref(true);
 const showSimulationFinishedHint = ref(false);
 const wasSimulating = ref(false);
 let currentSimulation = null;
 let gSelection = null;
+let lastGraphTrigger = null;
+let lastGraphTriggerId = null;
+let graphResizeObserver = null;
+let graphResizeTimer = null;
+
+const hasGraphNodes = computed(
+  () =>
+    Array.isArray(props.graphData?.nodes) && props.graphData.nodes.length > 0,
+);
+
+const emptyStateTitle = computed(() =>
+  props.graphData
+    ? "No source-map items were found."
+    : "The source map is not available yet.",
+);
+
+const emptyStateMessage = computed(() =>
+  props.graphData
+    ? "Review the source material, then rebuild or refresh the map."
+    : "Open source material first, then refresh when mapping is complete.",
+);
 
 // Watchers
 watch(
@@ -264,15 +334,13 @@ const dismissFinishedHint = () => (showSimulationFinishedHint.value = false);
 
 const entityTypes = computed(() => {
   if (!props.graphData?.nodes) return [];
-  // Elegant Slate/Rose Palette
+  // The map uses the Public Signal accent plus high-contrast neutrals.
   const palette = [
-    "#ef4444", // Rose/Red 500
-    "#3b82f6", // Blue 500
-    "#10b981", // Emerald 500
-    "#6366f1", // Indigo 500
-    "#f59e0b", // Amber 500
-    "#8b5cf6", // Purple 500
-    "#ec4899", // Pink 500
+    "#e5c21d",
+    "#f1eee6",
+    "#9b7f00",
+    "#bcb8ad",
+    "#646761",
   ];
   const map = {};
   props.graphData.nodes.forEach((n) => {
@@ -286,7 +354,76 @@ const entityTypes = computed(() => {
   return Object.values(map);
 });
 
-const closeDetailPanel = () => (selectedItem.value = null);
+const getDetailFocusableElements = () =>
+  Array.from(
+    detailPanel.value?.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) || [],
+  ).filter(
+    (element) =>
+      !element.hidden && element.getAttribute("aria-hidden") !== "true",
+  );
+
+const openNodeDetail = (event, node) => {
+  event?.stopPropagation();
+  lastGraphTrigger = event?.currentTarget || null;
+  lastGraphTriggerId = node.id;
+  selectedItem.value = {
+    type: "node",
+    data: node.raw,
+    entityType: node.type,
+    color: entityTypes.value.find((type) => type.name === node.type)?.color,
+  };
+  nextTick(() => {
+    (detailCloseButton.value || detailPanel.value)?.focus();
+  });
+};
+
+const closeDetailPanel = () => {
+  const trigger = lastGraphTrigger;
+  const triggerId = lastGraphTriggerId;
+  selectedItem.value = null;
+  nextTick(() => {
+    const replacementTrigger = Array.from(
+      graphSvg.value?.querySelectorAll(".graph-node") || [],
+    ).find((element) => element.getAttribute("data-node-id") === triggerId);
+    const focusTarget = trigger?.isConnected ? trigger : replacementTrigger;
+    focusTarget?.focus();
+    lastGraphTrigger = null;
+    lastGraphTriggerId = null;
+  });
+};
+
+const handleDetailKeydown = (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    closeDetailPanel();
+    return;
+  }
+
+  if (event.key !== "Tab") return;
+  const focusable = getDetailFocusableElements();
+  if (focusable.length === 0) {
+    event.preventDefault();
+    detailPanel.value?.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey && (active === first || !detailPanel.value?.contains(active))) {
+    event.preventDefault();
+    last.focus();
+  } else if (
+    !event.shiftKey &&
+    (active === last || !detailPanel.value?.contains(active))
+  ) {
+    event.preventDefault();
+    first.focus();
+  }
+};
 
 // D3 Rendering Logic
 const render = () => {
@@ -348,7 +485,7 @@ const render = () => {
     .data(edges)
     .enter()
     .append("line")
-    .attr("stroke", "rgba(148, 163, 184, 0.5)")
+    .attr("stroke", "rgba(188, 184, 173, 0.58)")
     .attr("stroke-width", 1.5);
 
   const nodeDots = g
@@ -357,22 +494,29 @@ const render = () => {
     .data(nodes)
     .enter()
     .append("circle")
+    .attr("class", "graph-node")
+    .attr("data-node-id", (d) => d.id)
+    .attr("role", "button")
+    .attr("tabindex", 0)
+    .attr("focusable", "true")
+    .attr(
+      "aria-label",
+      (d) =>
+        `${d.name || "Unnamed source-map item"}, ${d.type}. Open details.`,
+    )
     .attr("r", 12)
     .attr(
       "fill",
-      (d) => entityTypes.value.find((t) => t.name === d.type)?.color || "#94a3b8",
+      (d) => entityTypes.value.find((t) => t.name === d.type)?.color || "#bcb8ad",
     )
-    .attr("stroke", "#ffffff")
+    .attr("stroke", "#111513")
     .attr("stroke-width", 2)
     .style("cursor", "pointer")
-    .on("click", (event, d) => {
-      event.stopPropagation();
-      selectedItem.value = {
-        type: "node",
-        data: d.raw,
-        entityType: d.type,
-        color: entityTypes.value.find((t) => t.name === d.type)?.color,
-      };
+    .on("click", openNodeDetail)
+    .on("keydown", (event, d) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openNodeDetail(event, d);
     })
     .call(
       d3
@@ -389,11 +533,12 @@ const render = () => {
     .enter()
     .append("text")
     .text((d) => d.name)
-    .attr("font-size", "10px")
+    .attr("font-size", width < 520 ? "12px" : "13px")
     .attr("font-weight", "700")
-    .attr("fill", "#1e293b")
-    .attr("dx", 16)
-    .attr("dy", 4);
+    .attr("fill", "#f1eee6")
+    .attr("dy", 4)
+    .attr("aria-hidden", "true")
+    .style("pointer-events", "none");
 
   simulation.on("tick", () => {
     links
@@ -402,7 +547,11 @@ const render = () => {
       .attr("x2", (d) => d.target.x)
       .attr("y2", (d) => d.target.y);
     nodeDots.attr("cx", (d) => d.x).attr("cy", (d) => d.y);
-    labels.attr("x", (d) => d.x).attr("y", (d) => d.y);
+    labels
+      .attr("x", (d) => d.x)
+      .attr("y", (d) => d.y)
+      .attr("dx", (d) => (d.x > width * 0.62 ? -16 : 16))
+      .attr("text-anchor", (d) => (d.x > width * 0.62 ? "end" : "start"));
   });
 
   function dragStarted(event, d) {
@@ -422,16 +571,28 @@ const render = () => {
 };
 
 watch(
-  () => props.graphData,
+  [() => props.graphData, () => props.loading],
   () => nextTick(render),
   { deep: true },
 );
 onMounted(() => {
   nextTick(render);
   window.addEventListener("resize", render);
+  if (typeof ResizeObserver !== "undefined" && graphContainer.value) {
+    graphResizeObserver = new ResizeObserver(() => {
+      if (!hasGraphNodes.value || props.loading) return;
+      window.clearTimeout(graphResizeTimer);
+      graphResizeTimer = window.setTimeout(render, 80);
+    });
+    graphResizeObserver.observe(graphContainer.value);
+  }
 });
 onUnmounted(() => {
   window.removeEventListener("resize", render);
+  graphResizeObserver?.disconnect();
+  graphResizeObserver = null;
+  window.clearTimeout(graphResizeTimer);
+  graphResizeTimer = null;
   if (currentSimulation) currentSimulation.stop();
 });
 </script>
@@ -486,10 +647,23 @@ onUnmounted(() => {
   position: relative;
 }
 
+.graph-background-layer {
+  width: 100%;
+  height: 100%;
+}
+
 .graph-svg-element {
   width: 100%;
   height: 100%;
   display: block;
+}
+
+:deep(.graph-node:focus-visible) {
+  outline: 3px solid var(--signal);
+  outline-offset: 4px;
+  stroke: var(--signal) !important;
+  stroke-width: 6px;
+  stroke-dasharray: 2 2;
 }
 
 .status-overlay-hint {
@@ -807,23 +981,76 @@ input:checked + .switch-slider:before {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 0.75rem;
+  padding: 1.5rem;
   color: var(--text-secondary);
+  text-align: center;
 }
-.spinner-large {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--border-color);
-  border-top-color: var(--accent-color);
-  border-radius: 50%;
-  animation: spin 1s infinite linear;
+
+.state-placeholder strong {
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
 }
+
+.state-placeholder p {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--paper-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.map-loading-lines {
+  display: grid;
+  gap: 0.45rem;
+  width: min(100%, 18rem);
+}
+
+.map-loading-lines span {
+  height: 0.38rem;
+  border: 1px solid var(--line-dark);
+  background: var(--signal);
+  transform: scaleX(0.35);
+  transform-origin: left;
+  animation: map-line-read 1.2s var(--ease-out) infinite alternate;
+}
+
+.map-loading-lines span:nth-child(2) {
+  animation-delay: 140ms;
+}
+
+.map-loading-lines span:nth-child(3) {
+  animation-delay: 280ms;
+}
+
+.empty-refresh {
+  min-height: 2.75rem;
+  margin-top: 0.35rem;
+  border-color: var(--signal);
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--ink);
+  font-family: var(--font-display);
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
 .geometric-shape {
   width: 24px;
   height: 24px;
   border: 2px solid var(--border-color);
   border-radius: 4px;
   transform: rotate(45deg);
+}
+
+@keyframes map-line-read {
+  to {
+    transform: scaleX(1);
+  }
 }
 
 .scrollbar-thin::-webkit-scrollbar {
@@ -836,5 +1063,127 @@ input:checked + .switch-slider:before {
   background: var(--border-color);
   border-radius: 2px;
 }
-</style>
 
+.maximize-icon {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+/* Public Signal map geometry */
+.graph-panel-workbench {
+  border: 0;
+  border-radius: 0;
+  background: var(--ink);
+}
+
+.panel-header-block {
+  min-height: 3.1rem;
+  border-color: var(--line-dark);
+  background: var(--ink-deep);
+  backdrop-filter: none;
+}
+
+.panel-label {
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.btn-action {
+  border-radius: 0;
+  background: var(--ink-raised);
+  box-shadow: none;
+}
+
+.btn-action:hover {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.status-overlay-hint,
+.completion-hint {
+  border-color: var(--signal);
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--ink);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.status-overlay-hint :is(.status-msg, .status-icon-box) {
+  color: var(--ink) !important;
+}
+
+.type-legend,
+.view-controls,
+.entity-detail-panel {
+  border-color: var(--line-light);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0.35rem 0.35rem 0 rgba(12, 16, 15, 0.55);
+  backdrop-filter: none;
+}
+
+.legend-header,
+.type-name,
+.control-label,
+.entity-detail-panel :is(.detail-category, .attr-row label, .attr-value, .section-label) {
+  color: var(--ink) !important;
+}
+
+.color-swatch {
+  border-radius: 0;
+}
+
+.summary-box {
+  border-color: var(--line-light);
+  border-radius: 0;
+  background: var(--paper-strong);
+  color: var(--ink);
+}
+
+.type-badge {
+  border-radius: 0;
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .graph-panel-workbench {
+    min-height: 28rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .panel-header-block {
+    padding: 0 0.7rem;
+  }
+
+  .graph-ui-overlays {
+    right: 0.55rem;
+    bottom: 0.55rem;
+    left: 0.55rem;
+    padding: 0;
+  }
+
+  .type-legend {
+    max-width: 9rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-loading-lines span,
+  .pulse-dot,
+  .is-spinning {
+    animation: none;
+    transform: none;
+  }
+}
+</style>

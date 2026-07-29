@@ -12,6 +12,8 @@
  */
 
 import { ref } from 'vue'
+import service from './index.js'
+import { requireAccess } from '../composables/useAccessKey.js'
 
 export const globalWsStatus = ref('OFFLINE')
 
@@ -24,9 +26,26 @@ function wsBaseUrl() {
   return `${proto}//${window.location.host}`
 }
 
+function ticketedWsUrl(path, ticket) {
+  const url = new URL(path, `${wsBaseUrl()}/`)
+  url.searchParams.set('ticket', ticket)
+  return url.toString()
+}
+
+async function requestWsTicket(scope, resourceId) {
+  const response = await service.post('/api/auth/ws-ticket', {
+    scope,
+    resource_id: resourceId,
+  })
+  const ticket = response?.ticket ?? response?.data?.ticket
+  if (!ticket) throw new Error('The server did not return a live-update ticket.')
+  return ticket
+}
+
 class ResilientWebSocket {
-  constructor(url, { onMessage, onClose, onError } = {}) {
-    this.url = url;
+  constructor(path, ticketRequest, { onMessage, onClose, onError } = {}) {
+    this.path = path;
+    this.ticketRequest = ticketRequest;
     this.onMessage = onMessage;
     this.onClose = onClose;
     this.onError = onError;
@@ -41,21 +60,28 @@ class ResilientWebSocket {
     this.connect();
   }
 
-  connect() {
+  async connect() {
     if (this.closedByUser) return;
 
     globalWsStatus.value = this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING'
-    console.log(`[WS] Connecting to: ${this.url}`);
     try {
-      this.ws = new WebSocket(this.url);
+      const ticket = await this.ticketRequest()
+      if (this.closedByUser) return
+      this.ws = new WebSocket(ticketedWsUrl(this.path, ticket));
     } catch (err) {
+      if (err?.status === 401 || err?.code === 'ACCESS_REQUIRED') {
+        requireAccess('A valid access key is required for live updates.')
+        globalWsStatus.value = 'OFFLINE'
+        this.onError?.(err)
+        return
+      }
+      this.onError?.(err)
       this.handleDisconnect(err);
       return;
     }
 
     this.ws.onopen = () => {
       globalWsStatus.value = 'ONLINE'
-      console.log(`[WS] Connection established: ${this.url}`);
       this.reconnectAttempts = 0;
       this.startWatchdog();
     };
@@ -64,6 +90,13 @@ class ResilientWebSocket {
       this.feedWatchdog();
       try {
         const parsed = JSON.parse(e.data);
+        if (
+          parsed?.type === 'error' &&
+          ['unauthorized', 'authentication_not_configured', 'origin_not_allowed'].includes(parsed.code)
+        ) {
+          requireAccess('The live connection was rejected. Check the deployment access key.')
+          this.close()
+        }
         this.onMessage?.(parsed);
       } catch (_) {
         // Skip parse errors or non-JSON heartbeats
@@ -74,17 +107,22 @@ class ResilientWebSocket {
       this.stopWatchdog();
       if (this.closedByUser) {
         globalWsStatus.value = 'OFFLINE';
-        console.log(`[WS] Connection closed cleanly by client request.`);
         this.onClose?.(e);
       } else {
+        if (e.code === 1008 || e.code === 4401) {
+          requireAccess('The live connection needs a valid access key.')
+          this.closedByUser = true
+          globalWsStatus.value = 'OFFLINE'
+          this.onClose?.(e)
+          return
+        }
         globalWsStatus.value = 'RECONNECTING';
-        console.warn(`[WS] Connection closed unexpectedly. Scheduling reconnect.`);
         this.handleDisconnect(e);
       }
     };
 
     this.ws.onerror = (e) => {
-      console.error(`[WS] Error:`, e);
+      if (import.meta.env.DEV) console.error('[WS] Connection error', e);
       this.onError?.(e);
     };
   }
@@ -96,17 +134,12 @@ class ResilientWebSocket {
     }
     globalWsStatus.value = 'RECONNECTING';
     
-    // Clean up current reference
-    if (this.ws) {
-      try { this.ws.close(); } catch (_) {}
-      this.ws = null;
-    }
+    // The close/error path already owns the native socket lifecycle.
+    this.ws = null;
 
     // Schedule next reconnect attempt with exponential backoff
     const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), this.maxReconnectDelay);
     this.reconnectAttempts++;
-    console.log(`[WS] Attempting reconnect in ${Math.round(delay)}ms (Attempt #${this.reconnectAttempts})`);
-    
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = setTimeout(() => {
       this.connect();
@@ -121,7 +154,7 @@ class ResilientWebSocket {
   startWatchdog() {
     if (this.closedByUser) return;
     this.watchdogTimer = setTimeout(() => {
-      console.warn(`[WS] Inactivity threshold exceeded on ${this.url}. Reconnecting...`);
+      if (import.meta.env.DEV) console.warn('[WS] Live updates timed out. Reconnecting.')
       globalWsStatus.value = 'RECONNECTING';
       if (this.ws) {
         try { this.ws.close(); } catch (_) {}
@@ -160,8 +193,15 @@ class ResilientWebSocket {
  * @returns {ResilientWebSocket}
  */
 export function connectSimulationWs(simulationId, { onMessage, onClose, onError } = {}) {
-  const url = `${wsBaseUrl()}/ws/simulation/${simulationId}`;
-  return new ResilientWebSocket(url, { onMessage, onClose, onError });
+  return new ResilientWebSocket(
+    `/ws/simulation/${encodeURIComponent(simulationId)}`,
+    () => requestWsTicket('simulation', simulationId),
+    {
+      onMessage,
+      onClose,
+      onError,
+    },
+  );
 }
 
 /**
@@ -171,6 +211,13 @@ export function connectSimulationWs(simulationId, { onMessage, onClose, onError 
  * @returns {ResilientWebSocket}
  */
 export function connectReportWs(reportId, { onMessage, onClose, onError } = {}) {
-  const url = `${wsBaseUrl()}/ws/report/${reportId}`;
-  return new ResilientWebSocket(url, { onMessage, onClose, onError });
+  return new ResilientWebSocket(
+    `/ws/report/${encodeURIComponent(reportId)}`,
+    () => requestWsTicket('report', reportId),
+    {
+      onMessage,
+      onClose,
+      onError,
+    },
+  );
 }

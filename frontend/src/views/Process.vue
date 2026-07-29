@@ -10,7 +10,7 @@
       <div class="header-center">
         <div class="phase-indicator">
           <span class="phase-label">Phase 1</span>
-          <span class="phase-name">Knowledge Construction</span>
+          <span class="phase-name">Map the source material</span>
         </div>
       </div>
 
@@ -41,7 +41,7 @@
       <!-- RIGHT: EXECUTION PIPELINE -->
       <section class="workbench-panel pipeline-panel" v-if="!isFullScreen">
         <header class="panel-label-bar">
-          <span class="label">Execution Pipeline</span>
+          <span class="label">Source-mapping progress</span>
         </header>
 
         <div class="pipeline-scroll">
@@ -61,10 +61,10 @@
                 <div class="step-status-tag">
                   {{
                     currentPhase === phase.id
-                      ? "PROCESSING"
+                      ? "IN PROGRESS"
                       : currentPhase > phase.id
-                        ? "TERMINATED"
-                        : "STAGED"
+                        ? "READY"
+                        : "WAITING"
                   }}
                 </div>
               </div>
@@ -82,7 +82,7 @@
                   </div>
                   <div class="progress-stats">
                     <span class="stat-msg">{{
-                      buildProgress?.message || "AWAITING INPUT..."
+                      buildProgress?.message || "Waiting for source material…"
                     }}</span>
                     <span class="stat-pct"
                       >{{ buildProgress?.progress || 0 }}%</span
@@ -91,7 +91,7 @@
                 </div>
                 <!-- Info for Phase 2/3 -->
                 <div v-else class="ontology-status-box">
-                  CORE ONTOLOGY SYNTHESIZED. READY FOR INJECTION PROXY.
+                  The source map is ready. Continue to set the scenario assumptions.
                 </div>
               </div>
             </Transition>
@@ -100,7 +100,7 @@
           <!-- LAUNCH CTA -->
           <div class="launch-sequence-box" v-if="currentPhase >= 2">
             <button class="app-cta-btn" @click="goToNextStep">
-              INITIALIZE ENVIRONMENT <span class="arrow">→</span>
+              SET THE ASSUMPTIONS <span class="arrow">→</span>
             </button>
           </div>
         </div>
@@ -109,10 +109,8 @@
 
     <!-- FOOTER STATUS -->
     <footer class="app-footer-bar">
-      <div class="f-left">LOC: Workspace Phase 01</div>
-      <div class="f-right">
-        System Time: {{ new Date().toLocaleTimeString() }}
-      </div>
+      <div class="f-left">Synthetic scenarios · 0 human respondents</div>
+      <div class="f-right">Not a forecast</div>
     </footer>
   </div>
 </template>

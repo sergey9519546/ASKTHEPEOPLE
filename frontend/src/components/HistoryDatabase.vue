@@ -7,7 +7,7 @@
     <!-- Section Header -->
     <header class="section-title-area" aria-label="Simulation Archive section">
       <h2 class="section-label">Simulation Archive</h2>
-      <p class="section-subtitle">Browse and replay synthetic opinion runs</p>
+      <p class="section-subtitle">Browse and replay synthetic scenario runs</p>
     </header>
 
     <!-- Project Cards Grid -->
@@ -1010,4 +1010,3 @@ onUnmounted(() => {
   border-radius: 2px;
 }
 </style>
-

@@ -1,49 +1,23 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Staatliches&display=swap"
-      rel="stylesheet"
-    />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "bauhaus-red": "#E63946",
-                        "bauhaus-blue": "#1D3557",
-                        "bauhaus-yellow": "#FFB703",
-                        "on-background": "#0F0F0F",
-                        "background": "#F8F9FA",
-                        "surface": "#FFFFFF",
-                        "outline": "#000000",
-                        "on-surface-variant": "#2D2D2D",
-                    },
-                    fontFamily: {
-                        "headline": ["Space Grotesk", "sans-serif"],
-                        "body": ["Space Grotesk", "sans-serif"],
-                        "mono": ["JetBrains Mono", "monospace"]
-                    },
-                    borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
-                },
-            },
-        }
-    </script>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/mark.svg" />
+    <meta name="theme-color" content="#111513" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="ASKTHEPEOPLE - Crowd Simulation Engine. Upload documents, simulate public opinion, predict outcomes."
+      content="Explore source-informed synthetic scenarios before validating a decision with real people. Generated outputs are not public opinion or forecasts."
     />
-    <title>ATP | Command Interface</title>
+    <meta property="og:title" content="Ask The People — See the paths before you choose" />
+    <meta
+      property="og:description"
+      content="Explore source-informed synthetic scenarios. Zero human respondents; not a forecast."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/social-card.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>Ask The People — Synthetic scenario explorer</title>
   </head>
   <body>
     <div id="app"></div>

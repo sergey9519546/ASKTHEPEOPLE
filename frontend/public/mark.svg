@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Ask The People</title>
+  <rect width="64" height="64" fill="#e5c21d"/>
+  <path d="M51 0h13v64H43z" fill="#111513"/>
+  <path d="M11 47 21 16h9l10 31h-8l-2-7H20l-2 7zm11-14h6l-3-11z" fill="#111513"/>
+</svg>

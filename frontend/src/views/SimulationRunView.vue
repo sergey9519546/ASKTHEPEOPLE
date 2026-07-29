@@ -2,21 +2,30 @@
   <div class="bauhaus-view-root">
     <!-- HEADER -->
     <header class="bauhaus-header">
-      <div class="header-left" @click="router.push('/')">
-        <span class="brand-monogram">ATP</span>
-        <span class="brand-full">ASK THE PEOPLE</span>
-      </div>
+      <button
+        class="header-left run-brand"
+        type="button"
+        aria-label="Ask The People — home"
+        @click="router.push('/')"
+      >
+        <span class="brand-monogram">ASK</span>
+        <span class="brand-full">THE PEOPLE</span>
+      </button>
 
       <div class="header-center">
-        <div class="view-mode-selector">
+        <div
+          class="view-mode-selector"
+          role="group"
+          aria-label="View generated run activity or inspect supporting source material"
+        >
           <button
-            v-for="m in ['graph', 'split', 'workbench']"
+            v-for="m in ['workbench', 'graph', 'split']"
             :key="m"
             class="mode-btn"
             :class="{ 'is-active': viewMode === m }"
             @click="viewMode = m"
           >
-            {{ m.toUpperCase() }}
+            {{ { graph: "Source map", split: "Compare", workbench: "Run activity" }[m] }}
           </button>
         </div>
       </div>
@@ -24,19 +33,34 @@
       <div class="header-right">
         <div class="step-indicator">
           <span class="step-val">STEP 03/05</span>
-          <span class="step-label">SIMULATION_RUNTIME</span>
+          <span class="step-label">Run scenarios</span>
         </div>
         <div class="status-box" :class="currentStatus">
           <span class="status-dot"></span>
-          <span class="status-msg">{{ statusText.toUpperCase() }}</span>
+          <span class="status-msg">{{ statusText }}</span>
         </div>
       </div>
     </header>
 
+    <div v-if="contextError" class="context-alert" role="alert">
+      <div>
+        <strong>The saved run context needs attention.</strong>
+        <span>{{ contextError }}</span>
+      </div>
+      <button type="button" :disabled="contextLoading" @click="loadSimulationData">
+        {{ contextLoading ? "Trying again…" : "Try again" }}
+      </button>
+    </div>
+
     <!-- CONTENT -->
-    <main class="workbench-viewport">
+    <main class="workbench-viewport" :class="`view-${viewMode}`">
       <!-- LEFT: GRAPH -->
-      <div class="panel-container left" :style="leftPanelStyle">
+      <div
+        v-if="viewMode !== 'workbench'"
+        class="panel-container left"
+        :style="leftPanelStyle"
+        aria-label="Supporting source map"
+      >
         <GraphPanel
           :graphData="graphData"
           :loading="graphLoading"
@@ -48,11 +72,14 @@
       </div>
 
       <!-- RIGHT: WORKBENCH -->
-      <div class="panel-container right" :style="rightPanelStyle">
+      <div
+        class="panel-container right"
+        :style="rightPanelStyle"
+        :aria-hidden="viewMode === 'graph'"
+        :inert="viewMode === 'graph'"
+        aria-label="Generated run activity"
+      >
         <div class="workbench-frame">
-          <header class="workbench-header">
-            <span class="wb-label">RUNTIME_EXECUTOR</span>
-          </header>
           <div class="wb-content">
             <Step3Simulation
               :simulationId="currentSimulationId"
@@ -71,11 +98,6 @@
       </div>
     </main>
 
-    <!-- FOOTER -->
-    <footer class="bauhaus-footer-mini">
-      <div class="f-block">RUNTIME: {{ isSimulating ? "ACTIVE" : "IDLE" }}</div>
-      <div class="f-block">LOC: WORKSPACE_SIMULATION_RUN</div>
-    </footer>
   </div>
 </template>
 
@@ -94,7 +116,7 @@ import Step3Simulation from "../components/Step3Simulation.vue";
 const route = useRoute();
 const router = useRouter();
 
-const viewMode = ref("split");
+const viewMode = ref("workbench");
 const currentSimulationId = ref(route.params.simulationId);
 const maxRounds = ref(
   route.query.maxRounds ? parseInt(route.query.maxRounds) : null,
@@ -103,6 +125,8 @@ const minutesPerRound = ref(30);
 const projectData = ref(null);
 const graphData = ref(null);
 const graphLoading = ref(false);
+const contextLoading = ref(false);
+const contextError = ref(null);
 const systemLogs = ref([]);
 const currentStatus = ref("processing");
 
@@ -134,9 +158,9 @@ const rightPanelStyle = computed(() => {
 });
 
 const statusText = computed(() => {
-  if (currentStatus.value === "error") return "Error";
-  if (currentStatus.value === "completed") return "Completed";
-  return "Running";
+  if (currentStatus.value === "error") return "Needs attention";
+  if (currentStatus.value === "completed") return "Run complete";
+  return "Routes unfolding";
 });
 
 const isSimulating = computed(() => currentStatus.value === "processing");
@@ -155,10 +179,10 @@ const addLog = (msg) => {
 const updateStatus = (status) => (currentStatus.value = status);
 
 const toggleMaximize = (target) =>
-  (viewMode.value = viewMode.value === target ? "split" : target);
+  (viewMode.value = viewMode.value === target ? "workbench" : target);
 
 const handleGoBack = async () => {
-  addLog("Terminating runtime context...");
+  addLog("Closing the current scenario run…");
   stopGraphRefresh();
   try {
     const envStatusRes = await getEnvStatus({
@@ -171,7 +195,7 @@ const handleGoBack = async () => {
       });
     }
   } catch (err) {
-    addLog(`Cleanup error: ${err.message}`);
+    addLog(`The run could not be closed cleanly: ${err.message}`);
   }
   router.push({
     name: "Simulation",
@@ -180,32 +204,61 @@ const handleGoBack = async () => {
 };
 
 const handleNextStep = () =>
-  addLog("Simulation cycle final. Proceeding to Synthesis.");
+  addLog("Scenario run complete. The decision brief can now be opened.");
 
 const loadSimulationData = async () => {
+  if (contextLoading.value) return;
+  contextLoading.value = true;
+  contextError.value = null;
   try {
-    addLog(`Resuming simulation context: ${currentSimulationId.value}`);
+    addLog("Loading the saved scenario run…");
     const simRes = await getSimulation(currentSimulationId.value);
-    if (simRes.success && simRes.data) {
-      const simData = simRes.data;
-      if (simData.project_id) {
-        const projRes = await getProject(simData.project_id);
-        if (projRes.success && projRes.data) {
-          projectData.value = projRes.data;
-          if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id);
-        }
-      }
+    if (!simRes.success || !simRes.data) {
+      throw new Error("simulation");
+    }
+
+    const simData = simRes.data;
+    if (!simData.project_id) {
+      contextError.value =
+        "The run is available, but its decision context is not linked.";
+      return;
+    }
+
+    const projRes = await getProject(simData.project_id);
+    if (!projRes.success || !projRes.data) {
+      throw new Error("project");
+    }
+
+    projectData.value = projRes.data;
+    if (projRes.data.graph_id) {
+      await loadGraph(projRes.data.graph_id, true);
     }
   } catch (err) {
-    addLog(`API Exception: ${err.message}`);
+    contextError.value =
+      "Its decision and source material could not be loaded. The run itself may still be available below.";
+    addLog("The saved run context could not be loaded.");
+  } finally {
+    contextLoading.value = false;
   }
 };
 
-const loadGraph = async (id) => {
+const loadGraph = async (id, surfaceError = false) => {
   if (!isSimulating.value) graphLoading.value = true;
   try {
     const res = await getGraphData(id);
-    if (res.success) graphData.value = res.data;
+    if (!res.success || !res.data) {
+      if (surfaceError) {
+        contextError.value =
+          "The decision loaded, but its supporting source map is temporarily unavailable.";
+      }
+      return;
+    }
+    graphData.value = res.data;
+  } catch {
+    if (surfaceError) {
+      contextError.value =
+        "The decision loaded, but its supporting source map is temporarily unavailable.";
+    }
   } finally {
     graphLoading.value = false;
   }
@@ -231,7 +284,7 @@ watch(isSimulating, (val) => (val ? startGraphRefresh() : stopGraphRefresh()), {
 });
 
 onMounted(() => {
-  addLog("Runtime View Active");
+  addLog("Scenario run view opened.");
   loadSimulationData();
 });
 onUnmounted(stopGraphRefresh);
@@ -239,75 +292,120 @@ onUnmounted(stopGraphRefresh);
 
 <style scoped>
 .bauhaus-view-root {
-  height: 100vh;
-  background: var(--bg-color);
-  color: var(--text-primary);
   display: flex;
   flex-direction: column;
+  min-height: 100dvh;
+  background: var(--ink-deep);
+  color: var(--paper);
   overflow: hidden;
 }
 
 .bauhaus-header {
-  height: 70px;
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 40px;
-  z-index: 100;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  border-bottom: 1px solid var(--line-dark);
+  background: var(--ink-deep);
+}
+
+.context-alert {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem clamp(1rem, 3vw, 2.5rem);
+  border-bottom: 1px solid var(--error);
+  background: #ead5cf;
+  color: #612b26;
+  font-size: 0.8rem;
+}
+
+.context-alert strong,
+.context-alert span {
+  display: block;
+}
+
+.context-alert span {
+  margin-top: 0.18rem;
+}
+
+.context-alert button {
+  flex: 0 0 auto;
+  min-height: 2.4rem;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+}
+
+.context-alert button:hover:not(:disabled) {
+  background: #612b26;
+  color: var(--paper);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0.42rem;
   cursor: pointer;
 }
-.brand-monogram {
-  background: var(--accent-color);
-  color: white;
-  padding: 4px 8px;
-  font-weight: 700;
-  font-size: 1rem;
-  border-radius: 4px;
+
+.run-brand {
+  border: 0;
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--ink);
+  text-align: left;
 }
+
+.run-brand:hover {
+  background: var(--signal-strong) !important;
+  color: var(--ink) !important;
+}
+
 .brand-full {
-  font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: -0.5px;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 400;
+  letter-spacing: 0.035em;
 }
 
 .view-mode-selector {
   display: flex;
-  border: 1px solid var(--border-color);
-  background: var(--atp-light-gray);
-  padding: 4px;
-  border-radius: var(--radius-sm);
-  gap: 4px;
+  border: 1px solid var(--line-dark);
+  background: transparent;
 }
+
 .mode-btn {
-  border: none !important;
+  min-height: 2.6rem;
+  border: 0 !important;
+  border-right: 1px solid var(--line-dark) !important;
+  border-radius: 0 !important;
   background: transparent !important;
-  padding: 6px 16px !important;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 10px;
+  color: var(--paper-muted) !important;
+  font-family: var(--font-display);
+  font-size: 0.88rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   cursor: pointer;
-  border-radius: 6px !important;
   box-shadow: none !important;
   transform: none !important;
 }
-.mode-btn.is-active {
-  background: var(--surface-color) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+
+.mode-btn:last-child {
+  border-right: 0 !important;
 }
+
+.mode-btn.is-active {
+  background: var(--signal) !important;
+  color: var(--ink) !important;
+}
+
 .mode-btn:hover:not(.is-active) {
-  background: rgba(15, 23, 42, 0.03) !important;
-  color: var(--text-primary) !important;
+  background: var(--ink-raised) !important;
+  color: var(--paper) !important;
 }
 
 .header-right {
@@ -317,35 +415,51 @@ onUnmounted(stopGraphRefresh);
 }
 .step-indicator {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  font-size: 11px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
 }
+
 .step-val {
-  color: var(--accent-secondary);
-  font-family: var(--font-mono);
+  color: var(--signal);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
 }
+
+.step-label {
+  color: var(--paper);
+  font-size: 0.74rem;
+}
+
 .status-box {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 10px;
+  gap: 0.5rem;
+  color: var(--paper-muted);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
 }
+
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 0.55rem;
+  height: 0.55rem;
   border-radius: 50%;
 }
+
 .status-box.processing .status-dot {
-  background: var(--accent-color);
-  animation: flash 1s infinite alternate;
+  background: var(--signal);
+  animation: flash 1.5s var(--ease-out) infinite alternate;
 }
+
 .status-box.completed .status-dot {
-  background: var(--accent-tertiary);
+  background: var(--paper);
 }
+
+.status-box.error .status-dot {
+  background: var(--error);
+}
+
 @keyframes flash {
   from { opacity: 0.3; }
   to { opacity: 1; }
@@ -354,19 +468,28 @@ onUnmounted(stopGraphRefresh);
 .workbench-viewport {
   flex: 1;
   display: flex;
-  padding: 24px;
-  gap: 24px;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
+
+.workbench-viewport.view-workbench {
+  gap: 0 !important;
+  padding: 0 !important;
+  background: var(--ink-deep) !important;
+}
+
 .panel-container {
   height: 100%;
-  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
+  border: 1px solid var(--line-dark);
+  border-radius: 0;
+  background: var(--ink-soft);
+  box-shadow: none;
   overflow: hidden;
+}
+
+.view-workbench .panel-container.right {
+  border: 0 !important;
 }
 
 .workbench-frame {
@@ -374,48 +497,47 @@ onUnmounted(stopGraphRefresh);
   display: flex;
   flex-direction: column;
 }
-.workbench-header {
-  height: 50px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  background: var(--atp-light-gray);
-}
-.wb-label {
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
+
 .wb-content {
   flex: 1;
+  height: 100% !important;
+  min-height: 0;
   overflow-y: auto;
-  padding: 0px;
-}
-
-.bauhaus-footer-mini {
-  height: 40px;
-  padding: 0 40px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 9px;
-  color: var(--text-secondary);
-  background: var(--surface-color);
 }
 
 @media (max-width: 1100px) {
-  .workbench-viewport {
+  .workbench-viewport.view-split {
     flex-direction: column;
   }
-  .panel-container {
+
+  .workbench-viewport.view-split .panel-container {
     width: 100% !important;
     height: 50% !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .bauhaus-header {
+    grid-template-columns: minmax(8rem, 0.8fr) minmax(0, 1.5fr) !important;
+  }
+
+  .bauhaus-header .header-right {
+    display: none;
+  }
+
+  .mode-btn {
+    min-height: 2.35rem;
+    padding: 0.45rem 0.55rem !important;
+    font-size: 0.72rem !important;
+  }
+
+  .context-alert {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .context-alert button {
+    width: 100%;
   }
 }
 </style>

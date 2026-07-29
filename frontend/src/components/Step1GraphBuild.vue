@@ -9,22 +9,23 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">01</span>
-            <span class="step-title">Ontology Generation</span>
+            <span class="step-title">Read the source material</span>
           </div>
           <div class="step-status">
             <span v-if="currentPhase > 0" class="badge success">Completed</span>
             <span v-else-if="currentPhase === 0" class="badge processing"
-              >Generating</span
+              >Reading</span
             >
             <span v-else class="badge pending">Waiting</span>
           </div>
         </div>
 
         <div class="card-content">
-          <p class="api-note">POST /api/graph/ontology/generate</p>
+          <p class="api-note">SOURCE READING</p>
           <p class="description">
-            LLM analyzes document content and requirements to extract reality
-            seeds and automatically generate an optimal ontology structure.
+            A model proposes actor, place, concept, and relationship categories
+            from the submitted material. Review them: they may be incomplete,
+            ambiguous, or wrong.
           </p>
 
           <!-- Loading / Progress -->
@@ -34,12 +35,21 @@
           >
             <div class="spinner-sm"></div>
             <span>{{
-              ontologyProgress.message || "Analyzing documents..."
+              ontologyProgress.message || "Reading source material…"
             }}</span>
           </div>
 
           <!-- Detail Overlay -->
-          <div v-if="selectedOntologyItem" class="ontology-detail-overlay">
+          <div
+            v-if="selectedOntologyItem"
+            ref="detailDialog"
+            class="ontology-detail-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ontology-detail-title"
+            tabindex="-1"
+            @keydown="handleDetailKeydown"
+          >
             <div class="detail-header">
               <div class="detail-title-group">
                 <span class="detail-type-badge">{{
@@ -47,9 +57,17 @@
                     ? "Entity"
                     : "Relation"
                 }}</span>
-                <span class="detail-name">{{ selectedOntologyItem.name }}</span>
+                <span id="ontology-detail-title" class="detail-name">{{
+                  selectedOntologyItem.name
+                }}</span>
               </div>
-              <button class="close-btn" @click="selectedOntologyItem = null">
+              <button
+                ref="detailCloseButton"
+                class="close-btn"
+                type="button"
+                aria-label="Close source-map detail"
+                @click="closeOntologyDetail"
+              >
                 ×
               </button>
             </div>
@@ -122,16 +140,17 @@
             class="tags-container"
             :class="{ dimmed: selectedOntologyItem }"
           >
-            <span class="tag-label">Generated Entity Types</span>
+            <span class="tag-label">People, places, and concepts</span>
             <div class="tags-list">
-              <span
+              <button
                 v-for="entity in projectData.ontology.entity_types"
                 :key="entity.name"
                 class="entity-tag clickable"
-                @click="selectOntologyItem(entity, 'entity')"
+                type="button"
+                @click="openOntologyItem(entity, 'entity')"
               >
                 {{ entity.name }}
-              </span>
+              </button>
             </div>
           </div>
 
@@ -141,16 +160,17 @@
             class="tags-container"
             :class="{ dimmed: selectedOntologyItem }"
           >
-            <span class="tag-label">Generated Relation Types</span>
+            <span class="tag-label">Relationship categories proposed from the sources</span>
             <div class="tags-list">
-              <span
+              <button
                 v-for="rel in projectData.ontology.edge_types"
                 :key="rel.name"
                 class="entity-tag clickable"
-                @click="selectOntologyItem(rel, 'relation')"
+                type="button"
+                @click="openOntologyItem(rel, 'relation')"
               >
                 {{ rel.name }}
-              </span>
+              </button>
             </div>
           </div>
         </div>
@@ -164,7 +184,7 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">02</span>
-            <span class="step-title">GraphRAG Build</span>
+            <span class="step-title">Connect the source material</span>
           </div>
           <div class="step-status">
             <span v-if="currentPhase > 1" class="badge success">Completed</span>
@@ -176,11 +196,11 @@
         </div>
 
         <div class="card-content">
-          <p class="api-note">POST /api/graph/build</p>
+          <p class="api-note">SOURCE MAP</p>
           <p class="description">
-            Based on the generated ontology, documents are chunked and processed
-            using GraphRAG to extract entities, relationships, temporal
-            memories, and community summaries.
+            A model connects submitted material into an inspectable map. Open
+            any item to inspect the generated record. Map entries are not
+            independently verified facts or evidence of causality.
           </p>
 
           <!-- Stats Cards -->
@@ -195,7 +215,7 @@
             </div>
             <div class="stat-card">
               <span class="stat-value text-emerald-500">{{ graphStats.types }}</span>
-              <span class="stat-label">Schema Types</span>
+              <span class="stat-label">Types</span>
             </div>
           </div>
         </div>
@@ -209,53 +229,64 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">03</span>
-            <span class="step-title">Build Complete</span>
+            <span class="step-title">Source map ready</span>
           </div>
           <div class="step-status">
             <span v-if="currentPhase >= 2" class="badge accent"
-              >In Progress</span
+              >Ready</span
             >
           </div>
         </div>
 
         <div class="card-content">
-          <p class="api-note">POST /api/simulation/create</p>
+          <p class="api-note">NEXT: SET ASSUMPTIONS</p>
           <p class="description text-slate-500">
-            Graph construction complete. Please proceed to the next step for
-            environment setup.
+            Review the map, then define how the synthetic scenario should run.
           </p>
           <button
             class="action-btn"
-            :disabled="currentPhase < 2 || creatingSimulation"
+            type="button"
+            :disabled="!canContinue || creatingSimulation"
+            :aria-describedby="!canContinue ? 'source-map-requirements' : undefined"
             @click="handleEnterEnvSetup"
           >
             <span v-if="creatingSimulation" class="spinner-sm"></span>
-            {{ creatingSimulation ? "Creating..." : "Configure Environment ➝" }}
+            {{ creatingSimulation ? "Opening…" : "Set the assumptions →" }}
           </button>
+          <p
+            v-if="!canContinue"
+            id="source-map-requirements"
+            class="readiness-note"
+            aria-live="polite"
+          >
+            {{ sourceMapRequirement }}
+          </p>
+          <p v-if="creationError" class="inline-error" role="alert">{{ creationError }}</p>
         </div>
       </div>
     </div>
 
-    <!-- Bottom Info / Logs -->
-    <div class="system-logs">
-      <div class="log-header">
-        <span class="log-title">System Dashboard</span>
-        <span class="log-id">{{
-          projectData?.project_id || "NO PROJECT"
-        }}</span>
-      </div>
-      <div class="log-content scrollbar-thin" ref="logContent">
-        <div class="log-line text-slate-300" v-for="(log, idx) in systemLogs" :key="idx">
-          <span class="log-time text-slate-500">{{ log.time }}</span>
-          <span class="log-msg">{{ log.msg }}</span>
+    <div class="activity-status" role="status" aria-live="polite">
+      <span>Current status</span>
+      <strong>{{ latestActivityMessage }}</strong>
+    </div>
+    <details v-if="systemLogs.length" class="activity-disclosure">
+      <summary>
+        Detailed activity
+        <span>{{ systemLogs.length }} {{ systemLogs.length === 1 ? "update" : "updates" }}</span>
+      </summary>
+      <div class="activity-list scrollbar-thin">
+        <div class="activity-line" v-for="(log, idx) in systemLogs" :key="idx">
+          <span class="activity-time">{{ log.time }}</span>
+          <span>{{ log.msg }}</span>
         </div>
       </div>
-    </div>
+    </details>
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { useRouter } from "vue-router";
 import { createSimulation } from "../api/simulation";
 
@@ -273,12 +304,56 @@ const props = defineProps({
 const emit = defineEmits(["next-step"]);
 
 const selectedOntologyItem = ref(null);
-const logContent = ref(null);
+const detailDialog = ref(null);
+const detailCloseButton = ref(null);
 const creatingSimulation = ref(false);
+const creationError = ref("");
+let detailReturnTarget = null;
+
+const graphStats = computed(() => {
+  const nodes =
+    props.graphData?.node_count || props.graphData?.nodes?.length || 0;
+  const edges =
+    props.graphData?.edge_count || props.graphData?.edges?.length || 0;
+  const types = props.projectData?.ontology?.entity_types?.length || 0;
+  return { nodes, edges, types };
+});
+
+const hasProjectReferences = computed(
+  () => Boolean(props.projectData?.project_id && props.projectData?.graph_id),
+);
+const hasGraphContent = computed(() => graphStats.value.nodes > 0);
+const canContinue = computed(
+  () => props.currentPhase >= 2 && hasGraphContent.value && hasProjectReferences.value,
+);
+const sourceMapRequirement = computed(() => {
+  if (props.currentPhase < 2) return "Wait until the source map is finished.";
+  if (!hasGraphContent.value) {
+    return "The source map is empty. Rebuild it before setting assumptions.";
+  }
+  if (!hasProjectReferences.value) {
+    return "The workspace is missing its project or source-map reference. Reopen the run or rebuild the map.";
+  }
+  return "";
+});
+const latestActivityMessage = computed(
+  () =>
+    props.systemLogs.at(-1)?.msg ||
+    (props.currentPhase >= 2
+      ? "Source map ready for review."
+      : props.buildProgress?.message || props.ontologyProgress?.message || "Reading the source material."),
+);
 
 const handleEnterEnvSetup = async () => {
+  creationError.value = "";
+  if (!hasGraphContent.value) {
+    creationError.value =
+      "The source map contains no entities. Rebuild it before continuing.";
+    return;
+  }
   if (!props.projectData?.project_id || !props.projectData?.graph_id) {
-    if (import.meta.env.DEV) console.error("Missing project or graph info");
+    creationError.value =
+      "The workspace is missing its project or source-map reference. Reopen the run or rebuild the map.";
     return;
   }
 
@@ -298,39 +373,59 @@ const handleEnterEnvSetup = async () => {
       });
     } else {
       if (import.meta.env.DEV) console.error("Failed to create simulation:", res.error);
-      alert("Failed to create simulation: " + (res.error || "Unknown error"));
+      creationError.value =
+        res.error || "The scenario workspace could not be created. Try again.";
     }
   } catch (err) {
     if (import.meta.env.DEV) console.error("Simulation creation exception:", err);
-    alert("Simulation creation exception: " + err.message);
+    creationError.value =
+      err?.message || "The scenario workspace could not be created. Try again.";
   } finally {
     creatingSimulation.value = false;
   }
 };
 
-const selectOntologyItem = (item, type) => {
+const openOntologyItem = (item, type) => {
+  detailReturnTarget = document.activeElement;
   selectedOntologyItem.value = { ...item, itemType: type };
+  nextTick(() => detailCloseButton.value?.focus());
 };
 
-const graphStats = computed(() => {
-  const nodes =
-    props.graphData?.node_count || props.graphData?.nodes?.length || 0;
-  const edges =
-    props.graphData?.edge_count || props.graphData?.edges?.length || 0;
-  const types = props.projectData?.ontology?.entity_types?.length || 0;
-  return { nodes, edges, types };
-});
+const closeOntologyDetail = () => {
+  selectedOntologyItem.value = null;
+  nextTick(() => {
+    if (detailReturnTarget?.isConnected) detailReturnTarget.focus();
+  });
+};
 
-watch(
-  () => props.systemLogs.length,
-  () => {
-    nextTick(() => {
-      if (logContent.value) {
-        logContent.value.scrollTop = logContent.value.scrollHeight;
-      }
-    });
-  },
-);
+const handleDetailKeydown = (event) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeOntologyDetail();
+    return;
+  }
+  if (event.key !== "Tab") return;
+
+  const focusable = Array.from(
+    detailDialog.value?.querySelectorAll(
+      'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    ) || [],
+  );
+  if (!focusable.length) {
+    event.preventDefault();
+    detailDialog.value?.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+};
 </script>
 
 <style scoped>
@@ -497,6 +592,10 @@ watch(
   transition: all 0.2s ease;
   font-weight: 600;
   color: #a5b4fc;
+  font-family: var(--font-sans);
+  line-height: 1.2;
+  text-transform: none;
+  box-shadow: none;
 }
 
 .entity-tag:hover {
@@ -812,5 +911,247 @@ watch(
 }
 .system-logs .scrollbar-thin::-webkit-scrollbar-thumb {
   background: var(--line-strong);
+}
+
+/* Public Signal: readable editorial work surface */
+.workbench-panel {
+  border: 0 !important;
+  background: var(--paper) !important;
+  color: var(--ink);
+}
+
+.scroll-container {
+  gap: 1rem;
+  padding: clamp(0.85rem, 2vw, 1.5rem);
+  background:
+    linear-gradient(rgba(17, 21, 19, 0.045) 1px, transparent 1px),
+    var(--paper);
+  background-size: 100% 2.4rem;
+}
+
+.step-card,
+.step-card.active,
+.step-card.completed {
+  padding: clamp(1rem, 2vw, 1.45rem);
+  border: 1px solid var(--line-light) !important;
+  border-radius: 0;
+  background: var(--paper-strong) !important;
+  color: var(--ink);
+  opacity: 1;
+  box-shadow: 0.4rem 0.4rem 0 var(--line-light) !important;
+  backdrop-filter: none;
+}
+
+.step-card.active,
+.step-card:hover {
+  border-color: var(--ink) !important;
+  box-shadow: 0.4rem 0.4rem 0 var(--signal) !important;
+  transform: none;
+}
+
+.card-header {
+  margin: calc(clamp(1rem, 2vw, 1.45rem) * -1)
+    calc(clamp(1rem, 2vw, 1.45rem) * -1) 1.25rem;
+  padding: 0.75rem clamp(1rem, 2vw, 1.45rem);
+  border-color: var(--ink);
+  background: var(--ink-deep) !important;
+}
+
+.step-num {
+  background: none;
+  color: var(--signal) !important;
+  -webkit-text-fill-color: currentColor;
+}
+
+.step-title {
+  color: var(--paper) !important;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.badge,
+.badge.success,
+.badge.processing,
+.badge.accent {
+  border: 1px solid var(--signal);
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.badge.pending {
+  border-color: var(--line-dark);
+  border-radius: 0;
+  background: var(--ink-raised);
+  color: var(--paper-muted);
+}
+
+.api-note {
+  color: var(--signal-text) !important;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.description,
+.tag-label,
+.stat-label {
+  color: var(--ink-muted) !important;
+}
+
+.description {
+  font-size: 0.88rem;
+}
+
+.entity-tag,
+.example-tag,
+.detail-type-badge {
+  border: 1px solid var(--line-light);
+  border-radius: 0;
+  background: var(--signal-soft);
+  color: var(--ink);
+}
+
+.entity-tag:hover {
+  border-color: var(--ink);
+  background: var(--signal);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.stat-card,
+.attr-item,
+.conn-item {
+  border: 1px solid var(--line-light);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.stat-value {
+  color: var(--signal-text) !important;
+}
+
+.ontology-detail-overlay {
+  border-radius: 0;
+  background: var(--paper-strong);
+  color: var(--ink);
+  backdrop-filter: none;
+}
+
+.ontology-detail-overlay :is(.detail-name, .attr-item, .conn-item) {
+  color: var(--ink);
+}
+
+.ontology-detail-overlay :is(.detail-desc, .section-label, .attr-desc, .attr-type) {
+  color: var(--ink-muted) !important;
+}
+
+.inline-error {
+  margin: 0.75rem 0 0;
+  color: var(--error-text);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.readiness-note {
+  margin: 0.75rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.activity-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: baseline;
+  padding: 0.85rem 1rem;
+  border-top: 1px solid var(--line-dark);
+  background: var(--ink-deep);
+  color: var(--paper);
+}
+
+.activity-status > span,
+.activity-disclosure summary {
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.activity-status strong {
+  overflow: hidden;
+  color: var(--paper-muted);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-disclosure {
+  border-top: 1px solid var(--line-dark);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.activity-disclosure summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.7rem 1rem;
+  color: var(--paper-muted);
+  cursor: pointer;
+}
+
+.activity-disclosure summary span {
+  color: var(--paper-dim);
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.activity-list {
+  max-height: 9rem;
+  overflow-y: auto;
+  padding: 0 1rem 0.75rem;
+  border-top: 1px solid var(--line-dark);
+}
+
+.activity-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.65rem;
+  padding-top: 0.45rem;
+  color: var(--paper-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.activity-time {
+  color: var(--paper-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.ontology-detail-overlay:focus {
+  outline: none;
+}
+
+@media (max-width: 620px) {
+  .stats-grid {
+    gap: 0.4rem;
+  }
+
+  .stat-card {
+    padding: 0.8rem 0.3rem;
+  }
+
+  .activity-status {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
 }
 </style>

@@ -2,21 +2,32 @@
   <div class="app-view-root">
     <!-- HEADER -->
     <header class="app-header">
-      <div class="header-left" @click="router.push('/')">
+      <button
+        class="header-left"
+        type="button"
+        aria-label="Ask The People — home"
+        @click="router.push('/')"
+      >
         <span class="brand-monogram">ATP</span>
         <span class="brand-full">ASK THE PEOPLE</span>
-      </div>
+      </button>
 
       <div class="header-center">
-        <div class="view-mode-selector">
+        <div
+          class="view-mode-selector"
+          role="group"
+          aria-label="Choose source map, comparison, or conversation view"
+        >
           <button
             v-for="m in ['graph', 'split', 'workbench']"
             :key="m"
             class="mode-btn"
+            type="button"
             :class="{ 'is-active': viewMode === m }"
+            :aria-pressed="viewMode === m"
             @click="viewMode = m"
           >
-            {{ m.toUpperCase() }}
+            {{ { graph: "Source map", split: "Compare", workbench: "Conversation" }[m] }}
           </button>
         </div>
       </div>
@@ -24,19 +35,25 @@
       <div class="header-right">
         <div class="step-indicator">
           <span class="step-val">STEP 05/05</span>
-          <span class="step-label">DEEP_INTERACTION</span>
+          <span class="step-label">Ask follow-up questions</span>
         </div>
-        <div class="status-box" :class="currentStatus">
+        <div class="status-box" :class="currentStatus" aria-live="polite">
           <span class="status-dot"></span>
-          <span class="status-msg">{{ currentStatus.toUpperCase() }}</span>
+          <span class="status-msg">{{ statusLabel }}</span>
         </div>
       </div>
     </header>
 
     <!-- CONTENT -->
-    <main class="workbench-viewport">
+    <main class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
-      <div class="panel-container left" :style="leftPanelStyle">
+      <div
+        class="panel-container left"
+        :style="leftPanelStyle"
+        :aria-hidden="viewMode === 'workbench' ? 'true' : undefined"
+        :inert="viewMode === 'workbench' ? '' : undefined"
+        aria-label="Supporting source map"
+      >
         <GraphPanel
           :graphData="graphData"
           :loading="graphLoading"
@@ -48,13 +65,73 @@
       </div>
 
       <!-- RIGHT: WORKBENCH -->
-      <div class="panel-container right" :style="rightPanelStyle">
+      <div
+        class="panel-container right"
+        :style="rightPanelStyle"
+        :aria-hidden="viewMode === 'graph' ? 'true' : undefined"
+        :inert="viewMode === 'graph' ? '' : undefined"
+        aria-label="Follow-up conversation"
+      >
         <div class="workbench-frame">
           <header class="workbench-header">
-            <span class="wb-label">WORKBENCH_INTERACTIVE</span>
+            <span class="wb-label">Ask the report or explore fictional responses</span>
           </header>
           <div class="wb-content">
+            <section
+              v-if="error"
+              ref="shellError"
+              class="interaction-shell-state is-error"
+              role="alert"
+              aria-labelledby="interaction-shell-error-heading"
+              tabindex="-1"
+            >
+              <span class="shell-state-index" aria-hidden="true">!</span>
+              <div>
+                <p>Follow-up workspace needs attention</p>
+                <h1 id="interaction-shell-error-heading">
+                  The follow-up workspace could not be opened.
+                </h1>
+                <p>{{ error }}</p>
+                <div class="shell-state-actions">
+                  <button
+                    class="shell-retry"
+                    type="button"
+                    :disabled="currentStatus === 'processing'"
+                    @click="loadReportData"
+                  >
+                    {{
+                      currentStatus === "processing"
+                        ? "Trying again…"
+                        : "Retry opening follow-up questions"
+                    }}
+                  </button>
+                  <button
+                    class="shell-home"
+                    type="button"
+                    @click="router.push({ name: 'Home' })"
+                  >
+                    Return home
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section
+              v-else-if="currentStatus === 'processing' || !simulationId"
+              class="interaction-shell-state is-loading"
+              role="status"
+              aria-live="polite"
+            >
+              <span class="shell-state-index" aria-hidden="true">05</span>
+              <div>
+                <p>Opening follow-up questions</p>
+                <h1>Loading the report and its saved run.</h1>
+                <div class="shell-loading-route" aria-hidden="true">
+                  <span></span>
+                </div>
+              </div>
+            </section>
             <Step5Interaction
+              v-else
               :reportId="currentReportId"
               :simulationId="simulationId"
               :systemLogs="systemLogs"
@@ -68,14 +145,14 @@
 
     <!-- FOOTER -->
     <footer class="app-footer-mini">
-      <div class="f-block">SYS_STATUS: READY</div>
-      <div class="f-block">LOC: WORKSPACE_DEEP_INTERACTION</div>
+      <div class="f-block">0 human respondents · not a forecast</div>
+      <div class="f-block">Fictional generated responses are not interviews</div>
     </footer>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { getGraphData, getProject } from "../api/graph";
 import { getReport } from "../api/report";
@@ -94,7 +171,17 @@ const graphData = ref(null);
 const graphLoading = ref(false);
 const systemLogs = ref([]);
 const error = ref("");
-const currentStatus = ref("ready");
+const shellError = ref(null);
+const currentStatus = ref("processing");
+let loadSequence = 0;
+const statusLabel = computed(
+  () =>
+    ({
+      processing: "OPENING",
+      ready: "READY",
+      error: "NEEDS ATTENTION",
+    })[currentStatus.value] || currentStatus.value.toUpperCase(),
+);
 
 // Layout Styles
 const leftPanelStyle = computed(() => {
@@ -134,39 +221,75 @@ const addLog = (msg) => {
   if (systemLogs.value.length > 200) systemLogs.value.shift();
 };
 
-const updateStatus = (status) => (currentStatus.value = status);
+const updateStatus = (status) => {
+  currentStatus.value = ["processing", "ready", "error"].includes(status)
+    ? status
+    : "error";
+};
 
 const toggleMaximize = (target) =>
   (viewMode.value = viewMode.value === target ? "split" : target);
 
 const loadReportData = async () => {
+  const sequence = ++loadSequence;
+  currentStatus.value = "processing";
+  error.value = "";
+  simulationId.value = null;
+  projectData.value = null;
+  graphData.value = null;
+
   try {
-    addLog(`Accessing interaction layer: ${currentReportId.value}`);
+    addLog("Opening follow-up questions…");
     const reportRes = await getReport(currentReportId.value);
-    if (reportRes.success && reportRes.data) {
-      const reportData = reportRes.data;
-      simulationId.value = reportData.simulation_id;
-      if (!simulationId.value) {
-        error.value = "Report data missing simulation reference";
-        addLog("Error: Report data missing simulation reference");
-        return;
-      }
-      if (simulationId.value) {
-        const simRes = await getSimulation(simulationId.value);
-        if (simRes.success && simRes.data) {
-          const simData = simRes.data;
-          if (simData.project_id) {
-            const projRes = await getProject(simData.project_id);
-            if (projRes.success && projRes.data) {
-              projectData.value = projRes.data;
-              if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id);
-            }
+    if (sequence !== loadSequence) return;
+    if (!reportRes?.success || !reportRes?.data) {
+      throw new Error("report_unavailable");
+    }
+
+    const reportData = reportRes.data;
+    simulationId.value = reportData.simulation_id;
+    if (!simulationId.value) {
+      error.value =
+        "The saved report is missing its linked scenario run. Return home and reopen the project.";
+      currentStatus.value = "error";
+      addLog("This report is missing its linked scenario run.");
+      await nextTick();
+      shellError.value?.focus();
+      return;
+    }
+
+    const simRes = await getSimulation(simulationId.value);
+    if (sequence !== loadSequence) return;
+    if (!simRes?.success || !simRes?.data) {
+      throw new Error("simulation_unavailable");
+    }
+
+    const simData = simRes.data;
+    if (simData.project_id) {
+      try {
+        const projRes = await getProject(simData.project_id);
+        if (sequence !== loadSequence) return;
+        if (projRes?.success && projRes.data) {
+          projectData.value = projRes.data;
+          if (projRes.data.graph_id) {
+            await loadGraph(projRes.data.graph_id);
           }
         }
+      } catch (_) {
+        addLog("The supporting source map could not be loaded.");
       }
     }
-  } catch (err) {
-    addLog(`DB Error: ${err.message}`);
+
+    if (sequence !== loadSequence) return;
+    currentStatus.value = "ready";
+  } catch (_) {
+    if (sequence !== loadSequence) return;
+    error.value =
+      "The saved report or its linked run is unavailable right now. Check the link and try again, or return home.";
+    currentStatus.value = "error";
+    addLog("The follow-up workspace could not be opened.");
+    await nextTick();
+    shellError.value?.focus();
   }
 };
 
@@ -175,6 +298,8 @@ const loadGraph = async (id) => {
   try {
     const res = await getGraphData(id);
     if (res.success) graphData.value = res.data;
+  } catch (_) {
+    addLog("The supporting source map could not be refreshed.");
   } finally {
     graphLoading.value = false;
   }
@@ -186,25 +311,23 @@ const refreshGraph = () =>
 watch(
   () => route.params.reportId,
   (newId) => {
-    if (newId && newId !== currentReportId.value) {
-      currentReportId.value = newId;
-      loadReportData();
-    }
+    if (!newId) return;
+    currentReportId.value = newId;
+    loadReportData();
   },
   { immediate: true },
 );
 
 onMounted(() => {
-  addLog("Interaction View Initialized");
-  loadReportData();
+  addLog("Follow-up workspace opened.");
 });
 </script>
 
 <style scoped>
 .app-view-root {
   height: 100vh;
-  background: var(--bg-color);
-  color: var(--text-primary);
+  background: var(--ink);
+  color: var(--paper);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -212,65 +335,85 @@ onMounted(() => {
 
 .app-header {
   height: 70px;
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
+  flex: 0 0 70px;
+  background: var(--ink-deep);
+  border-bottom: 3px solid var(--signal);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 40px;
   z-index: 100;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 2.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
+  text-align: left;
+  text-transform: none;
+  transform: none;
+}
+
+.header-left:hover {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  transform: none;
 }
 .brand-monogram {
-  background: var(--accent-color);
-  color: white;
-  padding: 4px 8px;
-  font-weight: 700;
-  font-size: 1rem;
-  border-radius: 4px;
+  background: var(--signal);
+  color: var(--ink);
+  padding: 5px 9px 4px;
+  font-family: var(--font-display);
+  font-size: 1.18rem;
+  line-height: 1;
+  letter-spacing: 0.04em;
 }
 .brand-full {
-  font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: -0.5px;
+  font-family: var(--font-display);
+  font-size: 1.28rem;
+  letter-spacing: 0.045em;
 }
 
 .view-mode-selector {
   display: flex;
-  border: 1px solid var(--border-color);
-  background: var(--atp-light-gray);
-  padding: 4px;
-  border-radius: var(--radius-sm);
-  gap: 4px;
+  border: 1px solid var(--line-dark);
+  background: var(--ink);
+  padding: 0;
+  gap: 0;
 }
 .mode-btn {
   border: none !important;
   background: transparent !important;
-  padding: 6px 16px !important;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 10px;
+  border-right: 1px solid var(--line-dark) !important;
+  padding: 8px 16px 7px !important;
+  color: var(--paper-muted) !important;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.68rem;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
   cursor: pointer;
-  border-radius: 6px !important;
+  border-radius: 0 !important;
   box-shadow: none !important;
   transform: none !important;
 }
+.mode-btn:last-child {
+  border-right: 0 !important;
+}
 .mode-btn.is-active {
-  background: var(--surface-color) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  background: var(--signal) !important;
+  color: var(--ink) !important;
 }
 .mode-btn:hover:not(.is-active) {
-  background: rgba(15, 23, 42, 0.03) !important;
-  color: var(--text-primary) !important;
+  background: var(--ink-raised) !important;
+  color: var(--paper) !important;
 }
 
 .header-right {
@@ -282,20 +425,25 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 600;
-  font-size: 11px;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
 }
 .step-val {
-  color: var(--accent-secondary);
-  font-family: var(--font-mono);
+  color: var(--signal);
+  font-family: var(--font-sans);
 }
 .status-box {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 10px;
+  border-left: 1px solid var(--line-dark);
+  padding-left: 1rem;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
 }
 .status-dot {
   width: 8px;
@@ -303,11 +451,14 @@ onMounted(() => {
   border-radius: 50%;
 }
 .status-box.processing .status-dot {
-  background: var(--accent-color);
+  background: var(--signal) !important;
   animation: flash 1s infinite alternate;
 }
 .status-box.ready .status-dot {
-  background: var(--accent-tertiary);
+  background: var(--success) !important;
+}
+.status-box.error .status-dot {
+  background: var(--error) !important;
 }
 @keyframes flash {
   from { opacity: 0.3; }
@@ -317,18 +468,18 @@ onMounted(() => {
 .workbench-viewport {
   flex: 1;
   display: flex;
-  padding: 24px;
-  gap: 24px;
+  padding: 18px;
+  gap: 18px;
   overflow: hidden;
   position: relative;
 }
 .panel-container {
   height: 100%;
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
+  background: var(--paper);
+  border: 2px solid var(--line-dark);
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -339,17 +490,18 @@ onMounted(() => {
 }
 .workbench-header {
   height: 50px;
-  border-bottom: 1px solid var(--border-color);
+  flex: 0 0 50px;
+  border-bottom: 3px solid var(--ink);
   display: flex;
   align-items: center;
   padding: 0 20px;
-  background: var(--atp-light-gray);
+  background: var(--signal);
 }
 .wb-label {
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--ink);
   text-transform: uppercase;
 }
 .wb-content {
@@ -358,27 +510,267 @@ onMounted(() => {
   padding: 0px;
 }
 
+.interaction-shell-state {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 1.5rem;
+  align-content: center;
+  min-height: 100%;
+  padding: clamp(1.5rem, 6vw, 6rem);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.shell-state-index {
+  display: grid;
+  width: 4.25rem;
+  height: 4.25rem;
+  place-items: center;
+  background: var(--signal);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.65rem;
+}
+
+.interaction-shell-state.is-error .shell-state-index {
+  background: var(--error);
+  color: var(--paper-strong);
+}
+
+.interaction-shell-state > div {
+  max-width: 48rem;
+  padding-top: 0.4rem;
+  border-top: 0.65rem solid var(--signal);
+}
+
+.interaction-shell-state.is-error > div {
+  border-top-color: var(--error);
+}
+
+.interaction-shell-state > div > p:first-child {
+  margin: 0.8rem 0 0.4rem;
+  color: var(--signal-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.interaction-shell-state.is-error > div > p:first-child {
+  color: var(--error-text);
+}
+
+.interaction-shell-state h1 {
+  max-width: 15ch;
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 7vw, 6.2rem);
+  font-weight: 400;
+  line-height: 0.9;
+}
+
+.interaction-shell-state h1 + p {
+  max-width: 54ch;
+  margin: 1.2rem 0 0;
+  color: var(--ink-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.shell-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1.5rem;
+}
+
+.shell-retry,
+.shell-home {
+  min-height: 3.25rem;
+  padding: 0.75rem 1.1rem;
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.shell-retry {
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.shell-home {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.shell-loading-route {
+  width: min(100%, 32rem);
+  height: 0.6rem;
+  margin-top: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--ink);
+  background: var(--line-light);
+}
+
+.shell-loading-route span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--signal);
+  transform: scaleX(0.35);
+  transform-origin: left;
+  animation: open-followup 1.2s var(--ease-out) infinite alternate;
+}
+
+@keyframes open-followup {
+  to {
+    transform: scaleX(1);
+  }
+}
+
 .app-footer-mini {
   height: 40px;
+  flex: 0 0 40px;
   padding: 0 40px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--line-dark);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 9px;
-  color: var(--text-secondary);
-  background: var(--surface-color);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.65rem;
+  letter-spacing: 0.055em;
+  color: var(--paper-muted);
+  background: var(--ink-deep);
+  text-transform: uppercase;
 }
 
 @media (max-width: 1100px) {
   .workbench-viewport {
     flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.75rem;
   }
-  .panel-container {
+
+  .workbench-viewport.mode-workbench .panel-container.left,
+  .workbench-viewport.mode-graph .panel-container.right {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border: 0;
+    opacity: 0 !important;
+  }
+
+  .workbench-viewport.mode-workbench .panel-container.right,
+  .workbench-viewport.mode-graph .panel-container.left {
+    display: block !important;
     width: 100% !important;
-    height: 50% !important;
+    height: calc(100dvh - 11rem) !important;
+    min-height: 32rem !important;
+    margin: 0 !important;
+  }
+
+  .workbench-viewport.mode-split .panel-container {
+    display: block !important;
+    width: 100% !important;
+    height: calc(50dvh - 2rem) !important;
+    min-height: 28rem !important;
+    margin-bottom: 0.75rem;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-header {
+    height: auto;
+    min-height: 0;
+    flex: 0 0 auto;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    padding: 0.8rem 0.9rem;
+  }
+
+  .brand-full,
+  .step-label,
+  .status-msg {
+    display: none;
+  }
+
+  .header-center {
+    order: 3;
+    flex: 0 0 100% !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    padding: 0 0 0.55rem !important;
+  }
+
+  .view-mode-selector {
+    width: 100%;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding-inline: 0.45rem !important;
+  }
+
+  .header-right {
+    width: auto !important;
+    margin-left: auto;
+    padding: 0.8rem 0.9rem !important;
+    border-top: 0 !important;
+    border-left: 1px solid var(--line-dark) !important;
+    gap: 0.7rem;
+  }
+
+  .workbench-viewport.mode-workbench .panel-container.right,
+  .workbench-viewport.mode-graph .panel-container.left {
+    height: calc(100dvh - 10.75rem) !important;
+    min-height: 28rem !important;
+  }
+
+  .workbench-header {
+    min-height: 3rem;
+    height: auto;
+    padding: 0.65rem 0.8rem;
+  }
+
+  .app-footer-mini {
+    height: auto;
+    min-height: 2.5rem;
+    flex: 0 0 auto;
+    padding: 0.5rem 0.8rem;
+  }
+
+  .app-footer-mini .f-block:last-child {
+    display: none;
+  }
+
+  .interaction-shell-state {
+    grid-template-columns: 1fr;
+    align-content: start;
+    padding: 1.5rem 1rem;
+  }
+
+  .interaction-shell-state h1 {
+    font-size: clamp(3rem, 15vw, 4.5rem);
+  }
+
+  .shell-state-actions {
+    display: grid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-box.processing .status-dot,
+  .shell-loading-route span {
+    animation: none;
+    transform: none;
   }
 }
 </style>

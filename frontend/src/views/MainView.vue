@@ -1,23 +1,26 @@
 <template>
   <div class="main-view">
-    <!-- Header -->
     <header class="app-header">
-      <div class="header-left">
-        <div class="brand" @click="router.push('/')">ASK THE PEOPLE</div>
-      </div>
+      <button class="header-left brand-home" type="button" @click="router.push('/')">
+        <span class="brand">ASK THE PEOPLE</span>
+      </button>
 
       <div class="header-center">
-        <div class="view-switcher">
+        <div
+          class="view-switcher"
+          role="group"
+          aria-label="View decision steps or inspect supporting source material"
+        >
           <button
-            v-for="mode in ['graph', 'split', 'workbench']"
+            v-for="mode in ['workbench', 'graph', 'split']"
             :key="mode"
             class="switch-btn"
             :class="{ active: viewMode === mode }"
+            type="button"
+            :aria-pressed="viewMode === mode"
             @click="viewMode = mode"
           >
-            {{
-              { graph: "Graph", split: "Split", workbench: "Workbench" }[mode]
-            }}
+            {{ { graph: "Source map", split: "Compare", workbench: "Decision steps" }[mode] }}
           </button>
         </div>
       </div>
@@ -27,21 +30,48 @@
           <span class="step-num">Step {{ currentStep }}/5</span>
           <span class="step-name">{{ stepNames[currentStep - 1] }}</span>
         </div>
-        <div class="step-divider"></div>
         <span class="status-indicator" :class="statusClass">
           <span class="dot"></span>
           {{ statusText }}
         </span>
-        <span class="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider border" :class="globalWsStatus === 'ONLINE' ? 'bg-[#1a2e05] border-[#a3e635] text-[#a3e635]' : 'bg-[#451a03] border-[#f59e0b] text-[#f59e0b]'">
-          WS: {{ globalWsStatus }}
-        </span>
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="content-area">
-      <!-- Left Panel: Graph -->
-      <div class="panel-wrapper left" :style="leftPanelStyle">
+    <nav ref="workflowPath" class="workflow-path" aria-label="Scenario workflow">
+      <div
+        v-for="(step, index) in stepNames"
+        :key="step"
+        :ref="(element) => setWorkflowStepRef(element, index)"
+        class="workflow-path-step"
+        :class="{ current: currentStep === index + 1, complete: currentStep > index + 1 }"
+        :aria-current="currentStep === index + 1 ? 'step' : undefined"
+      >
+        <span>{{ String(index + 1).padStart(2, "0") }}</span>
+        <strong>{{ step }}</strong>
+      </div>
+      <p><strong>0 human respondents</strong> · Synthetic scenarios, not a forecast</p>
+    </nav>
+
+    <div v-if="error" class="workspace-error" role="alert">
+      <div>
+        <strong>This step needs attention</strong>
+        <span>{{ error }}</span>
+      </div>
+      <div class="workspace-error-actions">
+        <button type="button" @click="recoverWorkspace">Try again</button>
+        <button type="button" @click="router.push('/')">Return to the decision</button>
+      </div>
+    </div>
+
+    <main class="content-area" :class="`view-${viewMode}`">
+      <section
+        v-if="viewMode !== 'workbench'"
+        class="panel-wrapper left"
+        :style="leftPanelStyle"
+        :aria-hidden="viewMode === 'workbench'"
+        :inert="viewMode === 'workbench'"
+        aria-label="Supporting source map"
+      >
         <GraphPanel
           :graphData="graphData"
           :loading="graphLoading"
@@ -49,11 +79,15 @@
           @refresh="refreshGraph"
           @toggle-maximize="toggleMaximize('graph')"
         />
-      </div>
+      </section>
 
-      <!-- Right Panel: Step Components -->
-      <div class="panel-wrapper right" :style="rightPanelStyle">
-        <!-- Step 1: Graph Build -->
+      <section
+        class="panel-wrapper right"
+        :style="rightPanelStyle"
+        :aria-hidden="viewMode === 'graph'"
+        :inert="viewMode === 'graph'"
+        aria-label="Decision workflow"
+      >
         <Step1GraphBuild
           v-if="currentStep === 1"
           :currentPhase="currentPhase"
@@ -64,7 +98,6 @@
           :systemLogs="systemLogs"
           @next-step="handleNextStep"
         />
-        <!-- Step 2: Env Setup -->
         <Step2EnvSetup
           v-else-if="currentStep === 2"
           :simulationId="processState.simulationId"
@@ -74,8 +107,8 @@
           @go-back="handleGoBack"
           @next-step="handleNextStep"
           @add-log="addLog"
+          @update-status="updateStepStatus"
         />
-        <!-- Step 3: Simulation -->
         <Step3Simulation
           v-else-if="currentStep === 3"
           :simulationId="processState.simulationId"
@@ -87,8 +120,8 @@
           @go-back="handleGoBack"
           @next-step="handleNextStep"
           @add-log="addLog"
+          @update-status="updateStepStatus"
         />
-        <!-- Step 4: Report Generation -->
         <Step4Report
           v-else-if="currentStep === 4"
           :simulationId="processState.simulationId"
@@ -99,8 +132,8 @@
           @go-back="handleGoBack"
           @next-step="handleNextStep"
           @add-log="addLog"
+          @update-status="updateStepStatus"
         />
-        <!-- Step 5: Deep Interaction -->
         <Step5Interaction
           v-else-if="currentStep === 5"
           :simulationId="processState.simulationId"
@@ -109,16 +142,16 @@
           :graphData="graphData"
           :systemLogs="systemLogs"
           @go-back="handleGoBack"
+          @update-status="updateStepStatus"
         />
-      </div>
+      </section>
     </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { globalWsStatus } from "../api/ws";
 import {
   buildGraph,
   generateOntology,
@@ -133,80 +166,154 @@ import Step3Simulation from "../components/Step3Simulation.vue";
 import Step4Report from "../components/Step4Report.vue";
 import Step5Interaction from "../components/Step5Interaction.vue";
 import { clearPendingUpload, getPendingUpload } from "../store/pendingUpload";
+import { listSimulations } from "../api/simulation";
+import { deriveWorkflowStep } from "../utils/workflow.js";
 
 const route = useRoute();
 const router = useRouter();
 
-// Layout State
-const viewMode = ref("split"); // graph | split | workbench
-
-// Step State
-const currentStep = ref(1); // 1: Graph Build, 2: Env Setup, 3: Start Simulation, 4: Report Generation, 5: Deep Interaction
+const viewMode = ref("workbench");
+const currentStep = ref(1);
 const stepNames = [
-  "Graph Build",
-  "Env Setup",
-  "Start Simulation",
-  "Report Generation",
-  "Deep Interaction",
+  "Map the sources",
+  "Set assumptions",
+  "Run scenarios",
+  "Review the brief",
+  "Ask follow-ups",
 ];
 
-// Data State
 const currentProjectId = ref(route.params.projectId);
 const loading = ref(false);
 const graphLoading = ref(false);
 const error = ref("");
 const projectData = ref(null);
 const graphData = ref(null);
-const currentPhase = ref(-1); // -1: Upload, 0: Ontology, 1: Build, 2: Complete
+const currentPhase = ref(-1);
 const ontologyProgress = ref(null);
 const buildProgress = ref(null);
 const systemLogs = ref([]);
-
-// Process State passed between steps
+const stepRuntimeStatus = ref("processing");
+const workflowPath = ref(null);
+const workflowStepElements = [];
 const processState = ref({
   simulationId: null,
-  maxRounds: 40,
-  reportId: null
+  maxRounds: null,
+  reportId: null,
 });
 
-// Polling timers
+const hasGraphContent = computed(
+  () =>
+    Number(graphData.value?.node_count || 0) > 0 ||
+    (Array.isArray(graphData.value?.nodes) && graphData.value.nodes.length > 0),
+);
+
 let pollTimer = null;
 let graphPollTimer = null;
 let ontologyPollTimer = null;
+let recoveryAction = null;
 
-// --- Computed Layout Styles ---
+const showRecoverableError = (message, action = null) => {
+  error.value = message;
+  recoveryAction = action;
+  stepRuntimeStatus.value = "error";
+};
+
+const recoverWorkspace = async () => {
+  const action = recoveryAction;
+  recoveryAction = null;
+  error.value = "";
+  stepRuntimeStatus.value = "processing";
+  if (action) {
+    await action();
+    return;
+  }
+  await loadProject();
+};
+
 const leftPanelStyle = computed(() => {
-  if (viewMode.value === "graph")
+  if (viewMode.value === "graph") {
     return { width: "100%", opacity: 1, transform: "translateX(0)" };
-  if (viewMode.value === "workbench")
-    return { width: "0%", opacity: 0, transform: "translateX(-20px)" };
+  }
+  if (viewMode.value === "workbench") {
+    return {
+      width: "0%",
+      opacity: 0,
+      transform: "translateX(-20px)",
+      pointerEvents: "none",
+    };
+  }
   return { width: "50%", opacity: 1, transform: "translateX(0)" };
 });
 
 const rightPanelStyle = computed(() => {
-  if (viewMode.value === "workbench")
+  if (viewMode.value === "workbench") {
     return { width: "100%", opacity: 1, transform: "translateX(0)" };
-  if (viewMode.value === "graph")
-    return { width: "0%", opacity: 0, transform: "translateX(20px)" };
+  }
+  if (viewMode.value === "graph") {
+    return {
+      width: "0%",
+      opacity: 0,
+      transform: "translateX(20px)",
+      pointerEvents: "none",
+    };
+  }
   return { width: "50%", opacity: 1, transform: "translateX(0)" };
 });
 
-// --- Status Computed ---
 const statusClass = computed(() => {
   if (error.value) return "error";
-  if (currentPhase.value >= 2) return "completed";
+  if (currentStep.value === 1 && currentPhase.value >= 2) {
+    return hasGraphContent.value ? "completed" : "error";
+  }
+  if (currentStep.value > 1) return stepRuntimeStatus.value;
   return "processing";
 });
 
 const statusText = computed(() => {
-  if (error.value) return "Error";
-  if (currentPhase.value >= 2) return "Ready";
-  if (currentPhase.value === 1) return "Building Graph";
-  if (currentPhase.value === 0) return "Generating Ontology";
-  return "Initializing";
+  if (error.value) return "Needs attention";
+  if (currentStep.value > 1) {
+    return {
+      completed: "Ready",
+      error: "Needs attention",
+      failed: "Needs attention",
+      processing: "Preparing",
+    }[stepRuntimeStatus.value] || "Preparing";
+  }
+  if (currentPhase.value >= 2) {
+    return hasGraphContent.value ? "Ready" : "Needs attention";
+  }
+  if (currentPhase.value === 1) return "Mapping sources";
+  if (currentPhase.value === 0) return "Reading sources";
+  return "Preparing";
 });
 
-// --- Helpers ---
+const updateStepStatus = (status) => {
+  stepRuntimeStatus.value = status === "failed" ? "error" : status;
+};
+
+const setWorkflowStepRef = (element, index) => {
+  if (element) workflowStepElements[index] = element;
+};
+
+const keepCurrentStepVisible = () => {
+  if (window.innerWidth > 700) return;
+  const element = workflowStepElements[currentStep.value - 1];
+  if (!element || !workflowPath.value) return;
+  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  element.scrollIntoView({
+    behavior: reduceMotion ? "auto" : "smooth",
+    block: "nearest",
+    inline: "center",
+  });
+};
+
+const normalizeRounds = (value) => {
+  const rounds = Number(value);
+  return Number.isInteger(rounds) && rounds >= 10 && rounds <= 200
+    ? rounds
+    : null;
+};
+
 const addLog = (msg) => {
   const time =
     new Date().toLocaleTimeString("en-US", {
@@ -218,52 +325,42 @@ const addLog = (msg) => {
     "." +
     new Date().getMilliseconds().toString().padStart(3, "0");
   systemLogs.value.push({ time, msg });
-  // Keep last 100 logs
-  if (systemLogs.value.length > 100) {
-    systemLogs.value.shift();
-  }
+  if (systemLogs.value.length > 100) systemLogs.value.shift();
 };
 
-// --- Layout Methods ---
 const toggleMaximize = (target) => {
-  if (viewMode.value === target) {
-    viewMode.value = "split";
-  } else {
-    viewMode.value = target;
-  }
+  viewMode.value = viewMode.value === target ? "workbench" : target;
 };
 
 const handleNextStep = (params = {}) => {
-  if (currentStep.value < 5) {
-    currentStep.value++;
-    addLog(
-      `Entering Step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`,
-    );
-
-    // Save step params into state
-    if (params.simulationId) processState.value.simulationId = params.simulationId;
-    if (params.maxRounds) processState.value.maxRounds = params.maxRounds;
-    if (params.reportId) processState.value.reportId = params.reportId;
-
-    if (currentStep.value === 3 && params.maxRounds) {
-      addLog(`Custom simulation rounds: ${params.maxRounds}`);
+  if (currentStep.value >= 5) return;
+  if (currentStep.value === 2) {
+    const resolvedRounds = normalizeRounds(params.maxRounds);
+    if (!resolvedRounds) {
+      error.value =
+        "Choose a valid scenario length between 10 and 200 rounds before continuing.";
+      stepRuntimeStatus.value = "error";
+      return;
     }
+    processState.value.maxRounds = resolvedRounds;
   }
+  error.value = "";
+  currentStep.value += 1;
+  stepRuntimeStatus.value = "processing";
+  addLog(`Opened step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`);
+  if (params.simulationId) processState.value.simulationId = params.simulationId;
+  if (params.reportId) processState.value.reportId = params.reportId;
 };
 
 const handleGoBack = () => {
-  if (currentStep.value > 1) {
-    currentStep.value--;
-    addLog(
-      `Returning Step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`,
-    );
-  }
+  if (currentStep.value <= 1) return;
+  currentStep.value -= 1;
+  stepRuntimeStatus.value = "processing";
+  addLog(`Returned to step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`);
 };
 
-// --- Data Logic ---
-
 const initProject = async () => {
-  addLog("Project view initialized.");
+  addLog("Workspace opened.");
   if (currentProjectId.value === "new") {
     await handleNewProject();
   } else {
@@ -274,70 +371,75 @@ const initProject = async () => {
 const handleNewProject = async () => {
   const pending = getPendingUpload();
   if (!pending.isPending || pending.files.length === 0) {
-    error.value = "No pending files found.";
-    addLog("Error: No pending files found for new project.");
+    error.value = "No source files were carried into this workspace.";
     return;
   }
 
   try {
     loading.value = true;
     currentPhase.value = 0;
-    ontologyProgress.value = { message: "Uploading files..." };
-    addLog("Starting ontology generation: Uploading files...");
+    ontologyProgress.value = { message: "Uploading source material…" };
 
     const formData = new FormData();
-    pending.files.forEach((f) => formData.append("files", f));
+    pending.files.forEach((file) => formData.append("files", file));
     formData.append("simulation_requirement", pending.simulationRequirement);
-
-    // This now returns immediately with {task_id, project_id}
-    const res = await generateOntology(formData);
-    if (res.success) {
-      clearPendingUpload();
-      currentProjectId.value = res.data.project_id;
-
-      router.replace({
-        name: "Process",
-        params: { projectId: res.data.project_id },
-      });
-
-      ontologyProgress.value = { message: "Analyzing documents with LLM..." };
-      addLog(`Files uploaded. Ontology task started: ${res.data.task_id}`);
-      startPollingOntologyTask(res.data.task_id);
-    } else {
-      error.value = res.error || "Ontology generation failed";
-      addLog(`Error starting ontology task: ${error.value}`);
+    if (pending.projectName) formData.append("project_name", pending.projectName);
+    if (pending.additionalContext) {
+      formData.append("additional_context", pending.additionalContext);
     }
-  } catch (err) {
-    error.value = err.message;
-    addLog(`Exception in handleNewProject: ${err.message}`);
+    formData.append(
+      "use_policy_acknowledged",
+      pending.usePolicyAcknowledged ? "true" : "false",
+    );
+    formData.append("intended_use", "scenario_planning");
+
+    const response = await generateOntology(formData);
+    if (!response.success) {
+      error.value = response.error || "The source material could not be read.";
+      return;
+    }
+
+    clearPendingUpload();
+    currentProjectId.value = response.data.project_id;
+    await router.replace({
+      name: "Process",
+      params: { projectId: response.data.project_id },
+    });
+    ontologyProgress.value = { message: "Reading sources and identifying key entities…" };
+    startPollingOntologyTask(response.data.task_id);
+  } catch (caughtError) {
+    error.value = caughtError.message || "The source material could not be uploaded.";
   } finally {
     loading.value = false;
   }
 };
 
 const startPollingOntologyTask = (taskId) => {
+  stopOntologyPolling();
   pollOntologyTask(taskId);
   ontologyPollTimer = setInterval(() => pollOntologyTask(taskId), 3000);
 };
 
 const stopOntologyPolling = () => {
-  if (ontologyPollTimer) {
-    clearInterval(ontologyPollTimer);
-    ontologyPollTimer = null;
-  }
+  if (!ontologyPollTimer) return;
+  clearInterval(ontologyPollTimer);
+  ontologyPollTimer = null;
 };
 
 const pollOntologyTask = async (taskId) => {
   try {
-    const res = await getTaskStatus(taskId);
-    if (!res.success) {
-      error.value = "Ontology poll failed";
+    const response = await getTaskStatus(taskId);
+    if (!response.success) {
+      stopOntologyPolling();
+      showRecoverableError(
+        "Source-reading progress could not be checked. Your uploaded material is still saved.",
+        () => startPollingOntologyTask(taskId),
+      );
       return;
     }
 
-    const task = res.data;
-
-    if (task.message && (task.message ?? "") !== (ontologyProgress.value?.message ?? "")) {
+    const task = response.data;
+    if (task.message && task.message !== ontologyProgress.value?.message) {
       addLog(task.message);
     }
     ontologyProgress.value = {
@@ -349,58 +451,75 @@ const pollOntologyTask = async (taskId) => {
       stopOntologyPolling();
       ontologyProgress.value = null;
       projectData.value = task.result;
-      addLog(`Ontology generated for project ${task.result.project_id}`);
       await startBuildGraph();
     } else if (task.status === "failed") {
       stopOntologyPolling();
-      error.value = task.error || task.message;
-      addLog(`Ontology generation failed: ${error.value}`);
+      error.value = task.error || task.message || "The sources could not be mapped.";
     }
-  } catch (e) {
-    console.error("Ontology poll error:", e);
+  } catch (caughtError) {
+    stopOntologyPolling();
+    showRecoverableError(
+      "Source-reading updates stopped. Try reconnecting to the saved task.",
+      () => startPollingOntologyTask(taskId),
+    );
+    if (import.meta.env.DEV) console.error("Source progress error", caughtError);
   }
 };
 
 const loadProject = async () => {
   try {
     loading.value = true;
-    addLog(`Loading project ${currentProjectId.value}...`);
-    const res = await getProject(currentProjectId.value);
-    if (res.success) {
-      projectData.value = res.data;
-      updatePhaseByStatus(res.data.status);
-      addLog(`Project loaded. Status: ${res.data.status}`);
-
-      if (res.data.latest_simulation_id) {
-        processState.value.simulationId = res.data.latest_simulation_id;
-      }
-      if (res.data.latest_report_id) {
-        processState.value.reportId = res.data.latest_report_id;
-      }
-
-      if (res.data.status === "ontology_generated" && !res.data.graph_id) {
-        await startBuildGraph();
-      } else if (
-        res.data.status === "graph_building" &&
-        res.data.graph_build_task_id
-      ) {
-        currentPhase.value = 1;
-        startPollingTask(res.data.graph_build_task_id);
-        startGraphPolling();
-      } else if (res.data.status === "graph_completed" && res.data.graph_id) {
-        currentPhase.value = 2;
-        await loadGraph(res.data.graph_id);
-      }
-    } else {
-      error.value = res.error;
-      addLog(`Error loading project: ${res.error}`);
+    const response = await getProject(currentProjectId.value);
+    if (!response.success) {
+      error.value = response.error || "This workspace could not be loaded.";
+      return;
     }
-  } catch (err) {
-    error.value = err.message;
-    addLog(`Exception in loadProject: ${err.message}`);
+
+    projectData.value = response.data;
+    updatePhaseByStatus(response.data.status);
+    await hydrateSavedWorkflow();
+
+    if (response.data.status === "ontology_generated" && !response.data.graph_id) {
+      await startBuildGraph();
+    } else if (
+      response.data.status === "graph_building" &&
+      response.data.graph_build_task_id
+    ) {
+      currentPhase.value = 1;
+      startPollingTask(response.data.graph_build_task_id);
+      startGraphPolling();
+    } else if (
+      response.data.status === "graph_completed" &&
+      response.data.graph_id
+    ) {
+      currentPhase.value = 2;
+      await loadGraph(response.data.graph_id);
+    }
+  } catch (caughtError) {
+    error.value = caughtError.message || "This workspace could not be loaded.";
   } finally {
     loading.value = false;
   }
+};
+
+const hydrateSavedWorkflow = async () => {
+  const response = await listSimulations(currentProjectId.value);
+  if (!response.success || !Array.isArray(response.data) || response.data.length === 0) {
+    return;
+  }
+
+  const savedRun = response.data[0];
+  processState.value.simulationId = savedRun.simulation_id || null;
+  processState.value.reportId = savedRun.report_id || null;
+  if (Number(savedRun.total_rounds) > 0) {
+    processState.value.maxRounds = normalizeRounds(savedRun.total_rounds);
+  }
+  currentStep.value = deriveWorkflowStep(savedRun);
+  addLog(
+    `Resumed saved work at step ${currentStep.value}: ${
+      stepNames[currentStep.value - 1]
+    }.`,
+  );
 };
 
 const updatePhaseByStatus = (status) => {
@@ -416,7 +535,7 @@ const updatePhaseByStatus = (status) => {
       currentPhase.value = 2;
       break;
     case "failed":
-      error.value = "Project failed";
+      error.value = "The source map could not be completed.";
       break;
   }
 };
@@ -424,136 +543,138 @@ const updatePhaseByStatus = (status) => {
 const startBuildGraph = async () => {
   try {
     currentPhase.value = 1;
-    buildProgress.value = { progress: 0, message: "Starting build..." };
-    addLog("Initiating graph build...");
-
-    const res = await buildGraph({ project_id: currentProjectId.value });
-    if (res.success) {
-      addLog(`Graph build task started. Task ID: ${res.data.task_id}`);
-      startGraphPolling();
-      startPollingTask(res.data.task_id);
-    } else {
-      error.value = res.error;
-      addLog(`Error starting build: ${res.error}`);
+    buildProgress.value = { progress: 0, message: "Starting the source map…" };
+    const response = await buildGraph({ project_id: currentProjectId.value });
+    if (!response.success) {
+      error.value = response.error || "The source map could not be started.";
+      return;
     }
-  } catch (err) {
-    error.value = err.message;
-    addLog(`Exception in startBuildGraph: ${err.message}`);
+    startGraphPolling();
+    startPollingTask(response.data.task_id);
+  } catch (caughtError) {
+    error.value = caughtError.message || "The source map could not be started.";
   }
 };
 
 const startGraphPolling = () => {
-  addLog("Started polling for graph data...");
+  stopGraphPolling();
   fetchGraphData();
   graphPollTimer = setInterval(fetchGraphData, 10000);
 };
 
 const fetchGraphData = async () => {
   try {
-    // Refresh project info to check for graph_id
-    const projRes = await getProject(currentProjectId.value);
-    if (projRes.success && projRes.data?.graph_id) {
-      const gRes = await getGraphData(projRes.data.graph_id);
-      if (gRes.success) {
-        graphData.value = gRes.data;
-        const nodeCount = gRes.data.node_count || gRes.data.nodes?.length || 0;
-        const edgeCount = gRes.data.edge_count || gRes.data.edges?.length || 0;
-        addLog(
-          `Graph data refreshed. Nodes: ${nodeCount}, Edges: ${edgeCount}`,
-        );
-      }
+    const projectResponse = await getProject(currentProjectId.value);
+    if (!projectResponse.success || !projectResponse.data?.graph_id) {
+      return;
     }
-  } catch (err) {
-    console.warn("Graph fetch error:", err);
+    const graphResponse = await getGraphData(projectResponse.data.graph_id);
+    if (graphResponse.success) {
+      graphData.value = graphResponse.data;
+    } else {
+      stopGraphPolling();
+      showRecoverableError(
+        "Source-map updates paused. The saved workspace is still available.",
+        startGraphPolling,
+      );
+    }
+  } catch (caughtError) {
+    stopGraphPolling();
+    showRecoverableError(
+      "Source-map updates paused. Try reconnecting to the saved workspace.",
+      startGraphPolling,
+    );
+    if (import.meta.env.DEV) console.warn("Source map refresh error", caughtError);
   }
 };
 
 const startPollingTask = (taskId) => {
+  stopPolling();
   pollTaskStatus(taskId);
   pollTimer = setInterval(() => pollTaskStatus(taskId), 2000);
 };
 
 const pollTaskStatus = async (taskId) => {
   try {
-    const res = await getTaskStatus(taskId);
-    if (res.success) {
-      const task = res.data;
-
-      // Log progress message if it changed
-      if (task.message && task.message !== buildProgress.value?.message) {
-        addLog(task.message);
-      }
-
-      buildProgress.value = {
-        progress: task.progress || 0,
-        message: task.message,
-      };
-
-      if (task.status === "completed") {
-        addLog("Graph build task completed.");
-        stopPolling();
-        stopGraphPolling(); // Stop polling, do final load
-        currentPhase.value = 2;
-
-        // Final load
-        const projRes = await getProject(currentProjectId.value);
-        if (projRes.success && projRes.data?.graph_id) {
-          projectData.value = projRes.data;
-          await loadGraph(projRes.data.graph_id);
-        }
-      } else if (task.status === "failed") {
-        stopPolling();
-        error.value = task.error;
-        addLog(`Graph build task failed: ${task.error}`);
-      }
+    const response = await getTaskStatus(taskId);
+    if (!response.success) {
+      stopPolling();
+      showRecoverableError(
+        "Source-map progress could not be checked. The saved task can be retried.",
+        () => startPollingTask(taskId),
+      );
+      return;
     }
-  } catch (e) {
-    console.error(e);
+    const task = response.data;
+    if (task.message && task.message !== buildProgress.value?.message) {
+      addLog(task.message);
+    }
+    buildProgress.value = {
+      progress: task.progress || 0,
+      message: task.message,
+    };
+
+    if (task.status === "completed") {
+      stopPolling();
+      stopGraphPolling();
+      currentPhase.value = 2;
+      const projectResponse = await getProject(currentProjectId.value);
+      if (projectResponse.success && projectResponse.data?.graph_id) {
+        projectData.value = projectResponse.data;
+        await loadGraph(projectResponse.data.graph_id);
+      }
+    } else if (task.status === "failed") {
+      stopPolling();
+      error.value = task.error || "The source map could not be completed.";
+    }
+  } catch (caughtError) {
+    stopPolling();
+    showRecoverableError(
+      "Source-map progress updates stopped. Try reconnecting to the saved task.",
+      () => startPollingTask(taskId),
+    );
+    if (import.meta.env.DEV) console.error("Source map progress error", caughtError);
   }
 };
 
 const loadGraph = async (graphId) => {
   graphLoading.value = true;
-  addLog(`Loading full graph data: ${graphId}`);
   try {
-    const res = await getGraphData(graphId);
-    if (res.success) {
-      graphData.value = res.data;
-      addLog("Graph data loaded successfully.");
+    const response = await getGraphData(graphId);
+    if (response.success) {
+      graphData.value = response.data;
     } else {
-      addLog(`Failed to load graph data: ${res.error}`);
+      error.value = response.error || "The source map could not be loaded.";
     }
-  } catch (e) {
-    addLog(`Exception loading graph: ${e.message}`);
+  } catch (caughtError) {
+    error.value = caughtError.message || "The source map could not be loaded.";
   } finally {
     graphLoading.value = false;
   }
 };
 
 const refreshGraph = () => {
-  if (projectData.value?.graph_id) {
-    addLog("Manual graph refresh triggered.");
-    loadGraph(projectData.value.graph_id);
-  }
+  if (projectData.value?.graph_id) loadGraph(projectData.value.graph_id);
 };
 
 const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
+  if (!pollTimer) return;
+  clearInterval(pollTimer);
+  pollTimer = null;
 };
 
 const stopGraphPolling = () => {
-  if (graphPollTimer) {
-    clearInterval(graphPollTimer);
-    graphPollTimer = null;
-    addLog("Graph polling stopped.");
-  }
+  if (!graphPollTimer) return;
+  clearInterval(graphPollTimer);
+  graphPollTimer = null;
 };
 
-onMounted(() => {
-  initProject();
+watch(currentStep, () => nextTick(keepCurrentStepVisible));
+
+onMounted(async () => {
+  await initProject();
+  await nextTick();
+  keepCurrentStepVisible();
 });
 
 onUnmounted(() => {
@@ -565,174 +686,231 @@ onUnmounted(() => {
 
 <style scoped>
 .main-view {
-  height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg-void);
+  min-height: 100dvh;
   overflow: hidden;
-  font-family: var(--font-sans);
-  color: var(--text-void);
 }
 
-/* Header - Modern Bloomberg Command Bar */
-.app-header {
-  height: 54px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  background: var(--bg-base);
-  z-index: 100;
-  position: relative;
-}
-
-.header-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.brand {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 0.95rem;
-  letter-spacing: 0.05em;
-  cursor: pointer;
-  color: var(--accent-ink);
-  background: var(--accent);
-  padding: 4px 10px;
-  border: 1px solid var(--accent);
-  transition: background 0.15s ease;
-}
-.brand:hover {
-  background: var(--accent-bright);
-}
-
-.view-switcher {
-  display: flex;
-  background: var(--bg-void);
-  padding: 3px;
-  border: 1px solid var(--line);
+.brand-home {
+  border: 0;
   border-radius: 0;
-  gap: 2px;
+  text-align: left;
 }
 
-.switch-btn {
-  border: 1px solid transparent !important;
-  background: transparent !important;
-  padding: 5px 14px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transform: none !important;
-}
-
-.switch-btn.active {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border-color: var(--accent) !important;
-}
-
-.switch-btn:hover:not(.active) {
-  background: var(--bg-hover) !important;
-  color: var(--text-void) !important;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.workflow-step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  font-family: var(--font-mono);
-}
-
-.step-num {
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.step-name {
-  color: var(--text-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.step-divider {
-  width: 1px;
-  height: 12px;
-  background-color: var(--line);
-}
-
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  font-weight: 500;
-  font-family: var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.dot {
-  width: 6px;
-  height: 6px;
-  background: var(--text-muted);
-  border-radius: 50%;
+.brand-home:hover {
+  background: var(--signal-strong) !important;
+  color: var(--ink) !important;
 }
 
 .status-indicator.processing .dot {
-  background: var(--accent);
-  animation: smooth-pulse 1.2s infinite ease-in-out;
+  animation: smooth-pulse 1.4s infinite var(--ease-out);
 }
-.status-indicator.completed .dot {
-  background: var(--status-live);
-}
+
 .status-indicator.error .dot {
-  background: var(--status-error);
+  background: var(--error) !important;
 }
 
-@keyframes smooth-pulse {
-  0% { transform: scale(0.9); opacity: 0.6; }
-  50% { transform: scale(1.1); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.6; }
+.workflow-path {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(7rem, 1fr)) minmax(16rem, 1.25fr);
+  align-items: stretch;
+  border-bottom: 1px solid var(--line-dark);
+  background: var(--ink);
 }
 
-/* Content Area */
-.content-area {
-  flex: 1;
-  display: flex;
+.workflow-path-step {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  min-height: 3.4rem;
+  padding: 0.7rem 0.8rem;
+  border-right: 1px solid var(--line-dark);
+  color: var(--paper-dim);
+}
+
+.workflow-path-step::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 0.22rem;
+  background: transparent;
+}
+
+.workflow-path-step.current {
+  color: var(--paper);
+}
+
+.workflow-path-step.current::after,
+.workflow-path-step.complete::after {
+  background: var(--signal);
+}
+
+.workflow-path-step span {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+
+.workflow-path-step strong {
   overflow: hidden;
-  padding: 12px;
-  gap: 12px;
-  background-color: var(--bg-void) !important;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.035em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.workflow-path > p {
+  align-self: center;
+  margin: 0;
+  padding: 0.7rem 1rem;
+  color: var(--paper-dim);
+  font-size: 0.66rem;
+  text-align: right;
+}
+
+.workflow-path > p strong {
+  color: var(--paper-muted);
+}
+
+.workspace-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--error);
+  background: #291817;
+}
+
+.workspace-error div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.workspace-error strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.workspace-error span {
+  color: var(--paper-muted);
+  font-size: 0.72rem;
+}
+
+.workspace-error .workspace-error-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 0.55rem;
+}
+
+.workspace-error-actions button:first-child {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.content-area {
+  position: relative;
+}
+
+.content-area.view-workbench {
+  gap: 0 !important;
+  padding: 0 !important;
+  background: var(--ink-deep) !important;
+}
+
+.content-area.view-workbench .panel-wrapper.right {
+  border: 0 !important;
 }
 
 .panel-wrapper {
   height: 100%;
-  overflow: hidden;
-  transition: all 0.2s ease;
-  background: var(--bg-panel);
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+}
+
+@keyframes smooth-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 1080px) {
+  .workflow-path {
+    grid-template-columns: repeat(5, minmax(6rem, 1fr));
+  }
+
+  .workflow-path > p {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line-dark);
+    text-align: left;
+  }
+}
+
+@media (max-width: 900px) {
+  .content-area.view-graph .panel-wrapper.right,
+  .content-area.view-workbench .panel-wrapper.left {
+    display: none !important;
+  }
+
+  .content-area.view-graph .panel-wrapper.left,
+  .content-area.view-workbench .panel-wrapper.right {
+    display: block !important;
+    width: 100% !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .workspace-error {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .workspace-error .workspace-error-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .workflow-path {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .workflow-path::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workflow-path-step {
+    flex: 0 0 auto;
+    min-width: 9.5rem;
+  }
+
+  .workflow-path > p {
+    display: none;
+  }
+
+  .workspace-error {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>

@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
+  <title id="title">Ask The People</title>
+  <desc id="description">See the paths before you choose. Synthetic scenarios, not a forecast.</desc>
+  <rect width="1200" height="630" fill="#111513"/>
+  <path d="M0 0h330l-42 630H0z" fill="#e5c21d"/>
+  <g fill="#111513" font-family="Arial Narrow, sans-serif" font-weight="900" font-size="112">
+    <text x="42" y="170">ASK THE</text>
+    <text x="42" y="285">PEOPLE</text>
+  </g>
+  <g fill="#f1eee6" font-family="Arial Narrow, sans-serif" font-weight="900">
+    <text x="380" y="205" font-size="80">SEE THE PATHS</text>
+    <text x="380" y="290" font-size="80">BEFORE YOU CHOOSE.</text>
+  </g>
+  <text x="384" y="354" fill="#bcb8ad" font-family="Arial, sans-serif" font-size="28">
+    Source-informed synthetic scenarios for better-informed decisions.
+  </text>
+  <path d="M385 445h635" stroke="#e5c21d" stroke-width="10"/>
+  <g fill="#111513" stroke="#e5c21d" stroke-width="7">
+    <circle cx="430" cy="445" r="17"/>
+    <circle cx="650" cy="445" r="17"/>
+    <circle cx="860" cy="445" r="17"/>
+    <circle cx="1020" cy="445" r="17"/>
+  </g>
+  <text x="384" y="535" fill="#bcb8ad" font-family="Arial, sans-serif" font-size="24">
+    0 human respondents · Not a forecast
+  </text>
+</svg>

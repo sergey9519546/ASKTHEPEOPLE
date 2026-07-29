@@ -1,720 +1,1101 @@
 <template>
-  <div class="fixed inset-0 z-[100] flex items-center justify-center bg-[#000000]/80 p-4 font-sans">
-    <!-- Modal Window (Command Center Minimalist Style) -->
-    <div class="w-full max-w-4xl bg-[#0a0a0a] border border-[#333333] flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
-      
-      <!-- HEADER -->
-      <header class="bg-[#121212] border-b border-[#222222] p-5 flex justify-between items-center">
-        <div class="flex items-center gap-3">
-          <span class="material-symbols-outlined text-2xl text-[#a3e635]">settings_input_component</span>
-          <h2 class="text-lg font-mono font-bold text-[#f3f4f6] tracking-tight uppercase">System Configuration</h2>
+  <div class="settings-overlay" @click.self="close">
+    <section
+      ref="settingsSheet"
+      class="settings-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="settings-title"
+      :aria-busy="loading"
+    >
+      <header class="settings-header">
+        <div class="settings-index" aria-hidden="true">SET</div>
+        <div>
+          <p>Workspace controls</p>
+          <h2 id="settings-title">Settings</h2>
         </div>
-        <button 
-          @click="$emit('close')" 
-          class="border-none bg-transparent hover:bg-[#222222] text-[#9ca3af] hover:text-[#f3f4f6] w-8 h-8 flex items-center justify-center p-0 cursor-pointer transition-colors"
+        <button
+          ref="closeButton"
+          class="close-button"
+          type="button"
+          aria-label="Close settings"
+          @click="close"
         >
-          <span class="material-symbols-outlined text-lg">close</span>
+          Close
         </button>
       </header>
 
-      <!-- BODY -->
-      <div class="flex-grow p-6 md:p-8 overflow-y-auto space-y-6 scrollbar-thin bg-[#000000]">
-        
-        <!-- PRESETS PICKER -->
-        <section class="border border-[#222222] p-5 bg-[#0a0a0a]">
-          <h3 class="text-xs font-mono font-bold text-[#a3e635] uppercase tracking-wider mb-1">
-            Endpoint Presets
-          </h3>
-          <p class="text-[11px] font-mono text-[#9ca3af] mb-4">
-            Select a preset provider to automatically populate endpoints and model configurations:
-          </p>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <button 
-              v-for="p in presets" 
-              :key="p.id" 
-              @click="applyPreset(p)"
-              class="w-full py-2 px-3 border text-xs font-mono font-semibold text-center transition-all p-0 flex flex-col justify-center items-center gap-0.5 cursor-pointer"
-              :class="p.id === activePresetId ? 'bg-[#1a2e05] border-[#a3e635] text-[#a3e635] font-bold' : 'bg-[#121212] border-[#222222] text-[#9ca3af] hover:bg-[#1c1c1c] hover:text-[#f3f4f6]'"
-            >
-              <span>{{ p.name }}</span>
-              <span class="text-[8px] font-normal opacity-60">{{ p.sub }}</span>
-            </button>
-          </div>
-        </section>
-
-        <!-- LLM SETTINGS -->
-        <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          <!-- PRIMARY MODEL CONFIG -->
-          <div class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
-            <h3 class="text-xs font-mono font-bold text-[#a3e635] uppercase tracking-wider mb-2">
-              Primary Engine (Simulation & Context)
-            </h3>
-            
-            <div class="space-y-1">
-              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">LLM API Key</label>
-              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#a3e635] transition-all">
-                <input 
-                  :type="showKeys.primary ? 'text' : 'password'" 
-                  v-model="form.LLM_API_KEY"
-                  placeholder="nvapi-... or sk-..."
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
-                />
-                <button 
-                  @click="showKeys.primary = !showKeys.primary"
-                  type="button"
-                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
-                >
-                  {{ showKeys.primary ? 'HIDE' : 'SHOW' }}
-                </button>
-              </div>
-            </div>
-
-            <div class="space-y-1">
-              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">LLM Base URL</label>
-              <input 
-                type="text" 
-                v-model="form.LLM_BASE_URL" 
-                placeholder="https://integrate.api.nvidia.com/v1"
-                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#a3e635] transition-all"
-              />
-            </div>
-
-            <div class="space-y-1">
-              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">LLM Model Name</label>
-              <input 
-                type="text" 
-                v-model="form.LLM_MODEL_NAME" 
-                placeholder="meta/llama-4-maverick-17b-128e-instruct"
-                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#a3e635] transition-all"
-              />
-            </div>
-          </div>
-
-          <!-- BOOST MODEL CONFIG (OPTIONAL) -->
-          <div class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
-            <h3 class="text-xs font-mono font-bold text-[#60a5fa] uppercase tracking-wider mb-2">
-              Boost Engine (Reports & Analysis)
-            </h3>
-
-            <div class="space-y-1">
-              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Boost API Key</label>
-              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#60a5fa] transition-all">
-                <input 
-                  :type="showKeys.boost ? 'text' : 'password'" 
-                  v-model="form.LLM_BOOST_API_KEY"
-                  placeholder="Same as Primary if left blank"
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
-                />
-                <button 
-                  @click="showKeys.boost = !showKeys.boost"
-                  type="button"
-                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
-                >
-                  {{ showKeys.boost ? 'HIDE' : 'SHOW' }}
-                </button>
-              </div>
-            </div>
-
-            <div class="space-y-1">
-              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Boost Base URL</label>
-              <input 
-                type="text" 
-                v-model="form.LLM_BOOST_BASE_URL" 
-                placeholder="https://integrate.api.nvidia.com/v1"
-                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#60a5fa] transition-all"
-              />
-            </div>
-
-            <div class="space-y-1">
-              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Boost Model Name</label>
-              <input 
-                type="text" 
-                v-model="form.LLM_BOOST_MODEL_NAME" 
-                placeholder="mistralai/mistral-large-3-675b-instruct-2512"
-                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#60a5fa] transition-all"
-              />
-            </div>
-          </div>
-        </section>
-
-        <!-- GRAPH DATABASE & AUX SETTINGS -->
-        <section class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
-          <h3 class="text-xs font-mono font-bold text-[#f3f4f6] uppercase tracking-wider mb-2">
-            Zep Graph Memory & Search Configurations
-          </h3>
-          
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Zep Graph API Key</label>
-              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#a3e635] transition-all">
-                <input 
-                  :type="showKeys.zep ? 'text' : 'password'" 
-                  v-model="form.ZEP_API_KEY"
-                  placeholder="z_..."
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
-                />
-                <button 
-                  @click="showKeys.zep = !showKeys.zep"
-                  type="button"
-                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
-                >
-                  {{ showKeys.zep ? 'HIDE' : 'SHOW' }}
-                </button>
-              </div>
-            </div>
-
-            <div class="space-y-1">
-              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Brave Search API Key (Optional)</label>
-              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#a3e635] transition-all">
-                <input 
-                  :type="showKeys.brave ? 'text' : 'password'" 
-                  v-model="form.BRAVE_SEARCH_API_KEY"
-                  placeholder="BSA_..."
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
-                />
-                <button 
-                  @click="showKeys.brave = !showKeys.brave"
-                  type="button"
-                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
-                >
-                  {{ showKeys.brave ? 'HIDE' : 'SHOW' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- CONNECTION DIAGNOSTICS -->
-        <section class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h3 class="text-xs font-mono font-bold text-[#f3f4f6] uppercase tracking-wider">Connection Diagnostics</h3>
-              <p class="text-[11px] font-mono text-[#9ca3af] mt-1">Verify that your primary engine configurations can authenticate successfully.</p>
-            </div>
-            <button 
-              @click="runConnectionTest" 
-              :disabled="testing"
-              class="w-full md:w-auto bg-[#a3e635] text-[#1a2e05] hover:bg-[#bef264] transition-colors px-5 py-2.5 text-xs font-mono font-bold uppercase tracking-wider border-none cursor-pointer"
-            >
-              <span v-if="testing">Diagnosing...</span>
-              <span v-else>Test Connection</span>
-            </button>
-          </div>
-
-          <!-- Connection Test Feedback -->
-          <div v-if="testResult" class="border p-4 text-xs font-mono" :class="testResult.success ? 'bg-[#1a2e05] border-[#a3e635] text-[#a3e635]' : 'bg-[#451a03] border-[#f59e0b] text-[#f59e0b]'">
-            <div class="flex items-center gap-2 font-bold mb-1">
-              <span class="material-symbols-outlined text-lg">{{ testResult.success ? 'check_circle' : 'error' }}</span>
-              <span>{{ testResult.success ? 'CONNECTION SUCCESSFUL' : 'CONNECTION FAILED' }}</span>
-            </div>
-            <p class="whitespace-pre-wrap mt-1 leading-relaxed text-[11px]">
-              {{ testResult.message }}
+      <div class="settings-body">
+        <section class="access-strip" aria-labelledby="access-title">
+          <div>
+            <p class="section-number">01 / Access</p>
+            <h3 id="access-title">Deployment access</h3>
+            <p>
+              {{
+                hasAccessKey
+                  ? "This browser tab has an access key. It is removed when the tab closes."
+                  : "No access key is stored in this browser tab."
+              }}
             </p>
           </div>
+          <button
+            v-if="hasAccessKey"
+            class="secondary-action"
+            type="button"
+            @click="forgetAccessKey"
+          >
+            Forget access key
+          </button>
         </section>
 
-        <!-- LOCAL MODEL INSTRUCTIONS -->
-        <section class="border border-dashed border-[#333333] p-5 bg-[#0a0a0a] text-xs text-[#9ca3af] space-y-2 font-mono">
-          <div class="flex items-center gap-2 font-bold uppercase text-[#a3e635]">
-            <span class="material-symbols-outlined text-sm">info</span>
-            <span>Running Local LLM Models (Ollama / LM Studio)</span>
+        <div v-if="loading" class="settings-state" role="status">
+          <span class="state-marker" aria-hidden="true"></span>
+          <div>
+            <strong>Checking this deployment</strong>
+            <span>Reading which controls are available here.</span>
           </div>
-          <ul class="list-disc pl-5 space-y-1.5 leading-relaxed text-[11px]">
-            <li>
-              <strong>Ollama</strong>: Set Base URL to <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">http://localhost:11434/v1</code>, set Model Name to your pulled model (e.g. <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">llama3</code>), and enter a dummy key (like <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">ollama</code>).
-            </li>
-            <li>
-              <strong>LM Studio</strong>: Set Base URL to <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">http://localhost:1234/v1</code>, set Model Name to your active model, and set API Key to any dummy text.
-            </li>
-          </ul>
-        </section>
+        </div>
 
+        <div v-else-if="loadError" class="settings-state is-error" role="alert">
+          <span class="state-marker" aria-hidden="true">!</span>
+          <div>
+            <strong>Settings could not be read</strong>
+            <span>{{ loadError }}</span>
+          </div>
+          <button type="button" class="secondary-action" @click="loadSettings">
+            Try again
+          </button>
+        </div>
+
+        <template v-else-if="!runtimeSettingsEnabled">
+          <section class="managed-panel" aria-labelledby="managed-title">
+            <p class="section-number">02 / Model service</p>
+            <h3 id="managed-title">Managed by this deployment</h3>
+            <p>
+              Model credentials and endpoints are set by the deployment owner.
+              They cannot be viewed or changed from this browser.
+            </p>
+
+            <dl class="service-status">
+              <div>
+                <dt>Scenario model</dt>
+                <dd :class="{ ready: configured.LLM_API_KEY_CONFIGURED }">
+                  {{ configured.LLM_API_KEY_CONFIGURED ? "Configured" : "Not configured" }}
+                </dd>
+              </div>
+              <div>
+                <dt>Report model</dt>
+                <dd :class="{ ready: configured.LLM_BOOST_API_KEY_CONFIGURED }">
+                  {{
+                    configured.LLM_BOOST_API_KEY_CONFIGURED
+                      ? "Separate model configured"
+                      : "Uses scenario model"
+                  }}
+                </dd>
+              </div>
+              <div>
+                <dt>Source-map memory</dt>
+                <dd :class="{ ready: configured.ZEP_API_KEY_CONFIGURED }">
+                  {{ configured.ZEP_API_KEY_CONFIGURED ? "Configured" : "Not configured" }}
+                </dd>
+              </div>
+              <div>
+                <dt>Research search</dt>
+                <dd :class="{ ready: configured.BRAVE_SEARCH_API_KEY_CONFIGURED }">
+                  {{
+                    configured.BRAVE_SEARCH_API_KEY_CONFIGURED
+                      ? "Configured"
+                      : "Not configured"
+                  }}
+                </dd>
+              </div>
+            </dl>
+
+            <p class="managed-note">
+              To change these values, update the deployment environment and restart the
+              service. Runtime editing is intentionally off.
+            </p>
+          </section>
+        </template>
+
+        <template v-else>
+          <section class="preset-section" aria-labelledby="provider-title">
+            <div class="section-heading">
+              <div>
+                <p class="section-number">02 / Provider</p>
+                <h3 id="provider-title">Choose a starting point</h3>
+              </div>
+              <p>Choose a provider, then review the details below before saving.</p>
+            </div>
+            <div class="preset-grid">
+              <button
+                v-for="preset in availablePresets"
+                :key="preset.id"
+                type="button"
+                class="preset-button"
+                :class="{ active: preset.id === activePresetId }"
+                :aria-pressed="preset.id === activePresetId"
+                @click="applyPreset(preset)"
+              >
+                <strong>{{ preset.name }}</strong>
+                <span>{{ preset.sub }}</span>
+              </button>
+            </div>
+            <div class="provider-policy">
+              <strong>Operator-permitted endpoints</strong>
+              <p v-if="allowedBaseUrls.length">
+                Only the endpoints listed below can be saved or tested.
+              </p>
+              <p v-else>
+                No endpoint is currently allowlisted. Ask the deployment
+                operator to configure one before changing providers.
+              </p>
+              <ul v-if="allowedBaseUrls.length">
+                <li v-for="url in allowedBaseUrls" :key="url">{{ url }}</li>
+              </ul>
+              <p>
+                Local-service presets appear only when private endpoints are
+                explicitly enabled. Every connection test requires a new API key.
+              </p>
+            </div>
+          </section>
+
+          <section class="model-section" aria-labelledby="model-title">
+            <div class="section-heading">
+              <div>
+                <p class="section-number">03 / Models</p>
+                <h3 id="model-title">Model connections</h3>
+              </div>
+              <p>New secrets replace existing ones. Stored secrets are never shown.</p>
+            </div>
+
+            <div class="model-grid">
+              <fieldset class="model-card">
+                <legend>Scenario model</legend>
+                <p>Creates profiles and synthetic conversation actions.</p>
+                <label>
+                  <span>API key</span>
+                  <span class="secret-field">
+                    <input
+                      v-model="form.LLM_API_KEY"
+                      :type="showKeys.primary ? 'text' : 'password'"
+                      maxlength="8192"
+                      autocomplete="new-password"
+                      placeholder="Enter a new key"
+                    />
+                    <button type="button" @click="showKeys.primary = !showKeys.primary">
+                      {{ showKeys.primary ? "Hide" : "Show" }}
+                    </button>
+                  </span>
+                </label>
+                <label>
+                  <span>API base URL</span>
+                  <input
+                    v-model="form.LLM_BASE_URL"
+                    type="text"
+                    maxlength="2048"
+                    inputmode="url"
+                    placeholder="https://provider.example/v1"
+                  />
+                </label>
+                <label>
+                  <span>Model name</span>
+                  <input
+                    v-model="form.LLM_MODEL_NAME"
+                    type="text"
+                    maxlength="256"
+                    placeholder="Provider model identifier"
+                  />
+                </label>
+              </fieldset>
+
+              <fieldset class="model-card">
+                <legend>Report model</legend>
+                <p>Optional separate connection for reports; leave blank to use the scenario model.</p>
+                <label>
+                  <span>API key</span>
+                  <span class="secret-field">
+                    <input
+                      v-model="form.LLM_BOOST_API_KEY"
+                      :type="showKeys.boost ? 'text' : 'password'"
+                      maxlength="8192"
+                      autocomplete="new-password"
+                      placeholder="Optional new key"
+                    />
+                    <button type="button" @click="showKeys.boost = !showKeys.boost">
+                      {{ showKeys.boost ? "Hide" : "Show" }}
+                    </button>
+                  </span>
+                </label>
+                <label>
+                  <span>API base URL</span>
+                  <input
+                    v-model="form.LLM_BOOST_BASE_URL"
+                    type="text"
+                    maxlength="2048"
+                    inputmode="url"
+                    placeholder="Optional separate endpoint"
+                  />
+                </label>
+                <label>
+                  <span>Model name</span>
+                  <input
+                    v-model="form.LLM_BOOST_MODEL_NAME"
+                    type="text"
+                    maxlength="256"
+                    placeholder="Optional separate model"
+                  />
+                </label>
+              </fieldset>
+            </div>
+          </section>
+
+          <section class="support-section" aria-labelledby="support-title">
+            <div class="section-heading">
+              <div>
+                <p class="section-number">04 / Supporting services</p>
+                <h3 id="support-title">Memory and search</h3>
+              </div>
+              <p>Optional keys used for source-map memory and report research.</p>
+            </div>
+            <div class="support-grid">
+              <label>
+                <span>Source-map memory key</span>
+                <span class="secret-field">
+                  <input
+                    v-model="form.ZEP_API_KEY"
+                    :type="showKeys.zep ? 'text' : 'password'"
+                    maxlength="8192"
+                    autocomplete="new-password"
+                    placeholder="Enter a new key"
+                  />
+                  <button type="button" @click="showKeys.zep = !showKeys.zep">
+                    {{ showKeys.zep ? "Hide" : "Show" }}
+                  </button>
+                </span>
+              </label>
+              <label>
+                <span>Research search key</span>
+                <span class="secret-field">
+                  <input
+                    v-model="form.BRAVE_SEARCH_API_KEY"
+                    :type="showKeys.brave ? 'text' : 'password'"
+                    maxlength="8192"
+                    autocomplete="new-password"
+                    placeholder="Enter a new key"
+                  />
+                  <button type="button" @click="showKeys.brave = !showKeys.brave">
+                    {{ showKeys.brave ? "Hide" : "Show" }}
+                  </button>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section class="connection-section" aria-labelledby="check-title">
+            <div>
+              <p class="section-number">05 / Check</p>
+              <h3 id="check-title">Test the scenario model</h3>
+              <p>This makes one short request with the values currently entered above.</p>
+            </div>
+            <button
+              type="button"
+              class="secondary-action"
+              :disabled="testing || !canTest"
+              @click="runConnectionTest"
+            >
+              {{ testing ? "Testing…" : "Test connection" }}
+            </button>
+          </section>
+
+          <p
+            v-if="testResult"
+            class="feedback"
+            :class="testResult.success ? 'is-success' : 'is-error'"
+            role="status"
+          >
+            {{ testResult.message }}
+          </p>
+        </template>
+
+        <p v-if="saveError" class="feedback is-error" role="alert">{{ saveError }}</p>
       </div>
 
-      <!-- FOOTER -->
-      <footer class="bg-[#0a0a0a] px-6 py-4 flex flex-col sm:flex-row justify-end items-center gap-3 border-t border-[#222222]">
-        <button 
-          @click="$emit('close')" 
-          class="w-full sm:w-auto px-6 py-2.5 text-xs font-mono font-semibold text-[#9ca3af] hover:bg-[#121212] hover:text-[#f3f4f6] rounded-none transition-colors border border-[#333333] uppercase tracking-wider"
-        >
-          Cancel
-        </button>
-        <button 
-          @click="save" 
-          :disabled="saving"
-          class="w-full sm:w-auto bg-[#a3e635] text-[#1a2e05] hover:bg-[#bef264] transition-colors px-6 py-2.5 rounded-none text-xs font-mono font-bold uppercase tracking-wider flex items-center justify-center gap-2 border-none disabled:opacity-50 disabled:bg-[#121212] disabled:text-[#6b7280] cursor-pointer"
-        >
-          <span v-if="saving" class="app-spinner-small border-t-[#1a2e05]"></span>
-          <span v-else>Save Configurations</span>
-        </button>
+      <footer class="settings-footer">
+        <span v-if="runtimeSettingsEnabled">
+          Saving updates the running deployment and may affect new runs.
+        </span>
+        <span v-else>Nothing on this screen reveals stored credentials.</span>
+        <div>
+          <button type="button" class="secondary-action" @click="close">Close</button>
+          <button
+            v-if="runtimeSettingsEnabled"
+            type="button"
+            class="primary-action"
+            :disabled="saving"
+            @click="save"
+          >
+            {{ saving ? "Saving…" : "Save settings" }}
+          </button>
+        </div>
       </footer>
-
-    </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { getSettings, updateSettings, testConnection } from '../api/settings'
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { getSettings, testConnection, updateSettings } from "../api/settings";
+import { clearAccessKey, getAccessKey } from "../composables/useAccessKey.js";
 
-const emit = defineEmits(['close', 'saved'])
+const emit = defineEmits(["close", "saved"]);
 
-// Key visibility states
+const settingsSheet = ref(null);
+const closeButton = ref(null);
+const loading = ref(true);
+const loadError = ref("");
+const saveError = ref("");
+const testing = ref(false);
+const saving = ref(false);
+const testResult = ref(null);
+const runtimeSettingsEnabled = ref(false);
+const activePresetId = ref("");
+const allowedBaseUrls = ref([]);
+const allowPrivateEndpoints = ref(false);
+const hasAccessKey = ref(Boolean(getAccessKey()));
+const configured = ref({
+  LLM_API_KEY_CONFIGURED: false,
+  LLM_BOOST_API_KEY_CONFIGURED: false,
+  ZEP_API_KEY_CONFIGURED: false,
+  BRAVE_SEARCH_API_KEY_CONFIGURED: false,
+});
 const showKeys = ref({
   primary: false,
   boost: false,
   zep: false,
-  brave: false
-})
-
-const activePresetId = ref('')
-const testing = ref(false)
-const saving = ref(false)
-const testResult = ref(null)
-
+  brave: false,
+});
 const form = ref({
-  LLM_API_KEY: '',
-  LLM_BASE_URL: '',
-  LLM_MODEL_NAME: '',
-  ZEP_API_KEY: '',
-  BRAVE_SEARCH_API_KEY: '',
-  LLM_BOOST_API_KEY: '',
-  LLM_BOOST_BASE_URL: '',
-  LLM_BOOST_MODEL_NAME: ''
-})
+  LLM_API_KEY: "",
+  LLM_BASE_URL: "",
+  LLM_MODEL_NAME: "",
+  ZEP_API_KEY: "",
+  BRAVE_SEARCH_API_KEY: "",
+  LLM_BOOST_API_KEY: "",
+  LLM_BOOST_BASE_URL: "",
+  LLM_BOOST_MODEL_NAME: "",
+});
 
 const presets = [
   {
-    id: 'nvidia',
-    name: 'Nvidia NIM',
-    sub: 'API Catalog',
-    LLM_BASE_URL: 'https://integrate.api.nvidia.com/v1',
-    LLM_MODEL_NAME: 'meta/llama-4-maverick-17b-128e-instruct',
-    LLM_BOOST_BASE_URL: 'https://integrate.api.nvidia.com/v1',
-    LLM_BOOST_MODEL_NAME: 'mistralai/mistral-large-3-675b-instruct-2512'
+    id: "github-models",
+    name: "GitHub Models",
+    sub: "Hosted API",
+    LLM_BASE_URL: "https://models.github.ai/inference",
+    LLM_MODEL_NAME: "openai/gpt-4.1-mini",
+    LLM_BOOST_BASE_URL: "https://models.github.ai/inference",
+    LLM_BOOST_MODEL_NAME: "openai/gpt-4.1",
   },
   {
-    id: 'together',
-    name: 'Together AI',
-    sub: 'Llama-3.1',
-    LLM_BASE_URL: 'https://api.together.xyz/v1',
-    LLM_MODEL_NAME: 'MiniMaxAI/MiniMax-M2.7',
-    LLM_BOOST_BASE_URL: 'https://api.together.xyz/v1',
-    LLM_BOOST_MODEL_NAME: 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo'
+    id: "nvidia",
+    name: "NVIDIA NIM",
+    sub: "Hosted API",
+    LLM_BASE_URL: "https://integrate.api.nvidia.com/v1",
+    LLM_MODEL_NAME: "meta/llama-4-maverick-17b-128e-instruct",
+    LLM_BOOST_BASE_URL: "https://integrate.api.nvidia.com/v1",
+    LLM_BOOST_MODEL_NAME: "mistralai/mistral-large-3-675b-instruct-2512",
   },
   {
-    id: 'openai',
-    name: 'OpenAI Cloud',
-    sub: 'Standard API',
-    LLM_BASE_URL: 'https://api.openai.com/v1',
-    LLM_MODEL_NAME: 'gpt-4o-mini',
-    LLM_BOOST_BASE_URL: 'https://api.openai.com/v1',
-    LLM_BOOST_MODEL_NAME: 'gpt-4o'
+    id: "together",
+    name: "Together AI",
+    sub: "Hosted API",
+    LLM_BASE_URL: "https://api.together.xyz/v1",
+    LLM_MODEL_NAME: "moonshotai/Kimi-K2.5",
+    LLM_BOOST_BASE_URL: "https://api.together.xyz/v1",
+    LLM_BOOST_MODEL_NAME: "moonshotai/Kimi-K2.5",
   },
   {
-    id: 'ollama',
-    name: 'Ollama Local',
-    sub: 'Port 11434',
-    LLM_BASE_URL: 'http://localhost:11434/v1',
-    LLM_MODEL_NAME: 'llama3',
-    LLM_BOOST_BASE_URL: 'http://localhost:11434/v1',
-    LLM_BOOST_MODEL_NAME: 'llama3'
+    id: "openai",
+    name: "OpenAI",
+    sub: "Hosted API",
+    LLM_BASE_URL: "https://api.openai.com/v1",
+    LLM_MODEL_NAME: "gpt-4.1-mini",
+    LLM_BOOST_BASE_URL: "https://api.openai.com/v1",
+    LLM_BOOST_MODEL_NAME: "gpt-4.1",
   },
   {
-    id: 'lm_studio',
-    name: 'LM Studio',
-    sub: 'Port 1234',
-    LLM_BASE_URL: 'http://localhost:1234/v1',
-    LLM_MODEL_NAME: 'meta-llama-3-8b-instruct',
-    LLM_BOOST_BASE_URL: 'http://localhost:1234/v1',
-    LLM_BOOST_MODEL_NAME: 'meta-llama-3-8b-instruct'
-  }
-]
+    id: "ollama",
+    name: "Ollama",
+    sub: "Local service",
+    LLM_BASE_URL: "http://localhost:11434/v1",
+    LLM_MODEL_NAME: "llama3",
+    LLM_BOOST_BASE_URL: "http://localhost:11434/v1",
+    LLM_BOOST_MODEL_NAME: "llama3",
+  },
+  {
+    id: "lm-studio",
+    name: "LM Studio",
+    sub: "Local service",
+    LLM_BASE_URL: "http://localhost:1234/v1",
+    LLM_MODEL_NAME: "meta-llama-3-8b-instruct",
+    LLM_BOOST_BASE_URL: "http://localhost:1234/v1",
+    LLM_BOOST_MODEL_NAME: "meta-llama-3-8b-instruct",
+  },
+];
 
-onMounted(async () => {
-  try {
-    const res = await getSettings()
-    if (res.success && res.data) {
-      // Map response to form fields (pre-populate)
-      Object.keys(form.value).forEach(key => {
-        form.value[key] = res.data[key] || ''
-      })
-      
-      // Determine if a preset is active
-      detectPreset()
-    }
-  } catch (err) {
-    if (import.meta.env.DEV) console.error('Failed to load settings:', err)
-  }
-})
+const normalizedAllowedBaseUrls = computed(
+  () => new Set(allowedBaseUrls.value.map((url) => url.replace(/\/$/, ""))),
+);
+const availablePresets = computed(() =>
+  presets.filter((preset) => {
+    const primary = preset.LLM_BASE_URL.replace(/\/$/, "");
+    const boost = preset.LLM_BOOST_BASE_URL.replace(/\/$/, "");
+    const isPrivate =
+      primary.startsWith("http://") || boost.startsWith("http://");
+    return (
+      normalizedAllowedBaseUrls.value.has(primary) &&
+      normalizedAllowedBaseUrls.value.has(boost) &&
+      (!isPrivate || allowPrivateEndpoints.value)
+    );
+  }),
+);
+
+const canTest = computed(
+  () =>
+    form.value.LLM_API_KEY.trim() &&
+    form.value.LLM_BASE_URL.trim() &&
+    form.value.LLM_MODEL_NAME.trim(),
+);
+
+function close() {
+  emit("close");
+}
+
+function forgetAccessKey() {
+  clearAccessKey();
+  hasAccessKey.value = false;
+  close();
+  window.location.reload();
+}
 
 function detectPreset() {
-  const match = presets.find(p => 
-    form.value.LLM_BASE_URL.trim().replace(/\/$/, '') === p.LLM_BASE_URL.trim().replace(/\/$/, '') &&
-    form.value.LLM_MODEL_NAME.trim() === p.LLM_MODEL_NAME.trim()
-  )
-  activePresetId.value = match ? match.id : ''
+  const baseUrl = form.value.LLM_BASE_URL.trim().replace(/\/$/, "");
+  const model = form.value.LLM_MODEL_NAME.trim();
+  const match = availablePresets.value.find(
+    (preset) =>
+      baseUrl === preset.LLM_BASE_URL.replace(/\/$/, "") &&
+      model === preset.LLM_MODEL_NAME,
+  );
+  activePresetId.value = match?.id || "";
 }
 
 function applyPreset(preset) {
-  activePresetId.value = preset.id
-  form.value.LLM_BASE_URL = preset.LLM_BASE_URL
-  form.value.LLM_MODEL_NAME = preset.LLM_MODEL_NAME
-  form.value.LLM_BOOST_BASE_URL = preset.LLM_BOOST_BASE_URL
-  form.value.LLM_BOOST_MODEL_NAME = preset.LLM_BOOST_MODEL_NAME
+  activePresetId.value = preset.id;
+  form.value.LLM_BASE_URL = preset.LLM_BASE_URL;
+  form.value.LLM_MODEL_NAME = preset.LLM_MODEL_NAME;
+  form.value.LLM_BOOST_BASE_URL = preset.LLM_BOOST_BASE_URL;
+  form.value.LLM_BOOST_MODEL_NAME = preset.LLM_BOOST_MODEL_NAME;
+}
+
+async function loadSettings() {
+  loading.value = true;
+  loadError.value = "";
+  try {
+    const response = await getSettings();
+    const data = response?.data || {};
+    runtimeSettingsEnabled.value = data.runtime_settings_enabled === true;
+    allowedBaseUrls.value = Array.isArray(data.allowed_llm_base_urls)
+      ? data.allowed_llm_base_urls.filter((value) => typeof value === "string")
+      : [];
+    allowPrivateEndpoints.value = data.allow_private_llm_endpoints === true;
+    Object.keys(configured.value).forEach((key) => {
+      configured.value[key] = data[key] === true;
+    });
+    if (runtimeSettingsEnabled.value) {
+      Object.keys(form.value).forEach((key) => {
+        form.value[key] = typeof data[key] === "string" ? data[key] : "";
+      });
+      detectPreset();
+    }
+  } catch (error) {
+    loadError.value = error?.message || "Check the connection and try again.";
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function runConnectionTest() {
-  testing.value = true
-  testResult.value = null
-  
+  testing.value = true;
+  testResult.value = null;
   try {
-    const res = await testConnection({
+    const response = await testConnection({
       LLM_API_KEY: form.value.LLM_API_KEY,
       LLM_BASE_URL: form.value.LLM_BASE_URL,
-      LLM_MODEL_NAME: form.value.LLM_MODEL_NAME
-    })
-    
-    if (res.success) {
-      testResult.value = {
-        success: true,
-        message: `Success! The model responded correctly: "${res.response}"`
-      }
-    } else {
-      testResult.value = {
-        success: false,
-        message: res.error || 'Connection failed without details'
-      }
-    }
-  } catch (err) {
+      LLM_MODEL_NAME: form.value.LLM_MODEL_NAME,
+    });
+    testResult.value = {
+      success: true,
+      message: response?.message || "Connection succeeded.",
+    };
+  } catch (error) {
     testResult.value = {
       success: false,
-      message: err.message || 'Network request failed. Ensure your backend is running.'
-    }
+      message: error?.message || "The connection could not be tested.",
+    };
   } finally {
-    testing.value = false
+    testing.value = false;
   }
 }
 
 async function save() {
-  saving.value = true
+  saving.value = true;
+  saveError.value = "";
   try {
-    const res = await updateSettings(form.value)
-    if (res.success) {
-      emit('saved')
-      emit('close')
-    } else {
-      alert(`Failed to save settings: ${res.error}`)
-    }
-  } catch (err) {
-    alert(`Failed to save settings: ${err.message}`)
+    await updateSettings(form.value);
+    emit("saved");
+    close();
+  } catch (error) {
+    saveError.value = error?.message || "Settings could not be saved.";
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
+
+function handleKeydown(event) {
+  if (event.key === "Escape") {
+    close();
+    return;
+  }
+  if (event.key !== "Tab" || !settingsSheet.value) return;
+  const focusable = Array.from(
+    settingsSheet.value.querySelectorAll(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
+    ),
+  ).filter((element) => element.getClientRects().length > 0);
+  if (focusable.length === 0) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+let previouslyFocused = null;
+let previousBodyOverflow = "";
+
+onMounted(async () => {
+  previouslyFocused = document.activeElement;
+  previousBodyOverflow = document.body.style.overflow;
+  document.body.style.overflow = "hidden";
+  document.addEventListener("keydown", handleKeydown);
+  loadSettings();
+  await nextTick();
+  closeButton.value?.focus();
+});
+
+onUnmounted(() => {
+  document.removeEventListener("keydown", handleKeydown);
+  document.body.style.overflow = previousBodyOverflow;
+  previouslyFocused?.focus?.();
+});
 </script>
 
 <style scoped>
-/* Scoped overrides — convert light theme to dark glass (matches App.vue design system) */
-
-.scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(12, 16, 15, 0.9);
 }
-.scrollbar-thin::-webkit-scrollbar-track {
+
+.settings-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 68rem);
+  max-height: min(92dvh, 58rem);
+  overflow: hidden;
+  border: 1px solid var(--line-light);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 1rem 1rem 0 rgba(0, 0, 0, 0.32);
+}
+
+.settings-header {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr) auto;
+  align-items: stretch;
+  min-height: 7rem;
+  border-bottom: 1px solid var(--line-dark);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.settings-index {
+  display: grid;
+  place-items: center;
+  background: var(--signal);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 3.3rem;
+  letter-spacing: -0.03em;
+}
+
+.settings-header > div:nth-child(2) {
+  align-self: center;
+  padding: 1.2rem 1.6rem;
+}
+
+.settings-header p,
+.section-number {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.settings-header p {
+  color: var(--paper-muted);
+}
+
+.settings-header h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 6vw, 4.2rem);
+  font-weight: 400;
+  line-height: 0.85;
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+}
+
+.close-button {
+  align-self: center;
+  margin-right: 1.3rem;
+  border-color: var(--line-dark);
   background: transparent;
-  border-left: none;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-.scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+  color: var(--paper-muted);
+  text-transform: uppercase;
 }
 
-/* Modal container → solid dark command center modal */
-.w-full.max-w-4xl.bg-white.border.border-slate-200.rounded-2xl.shadow-xl {
-  background: var(--bg-elevated, #121212) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  border: 1px solid var(--line-strong, #333333) !important;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8) !important;
-  color: #f8fafc;
-  border-radius: 0px !important;
+.settings-body {
+  display: grid;
+  gap: 1.2rem;
+  padding: 1.4rem;
+  overflow-y: auto;
 }
 
-/* Header */
-.bg-white.border-b.border-slate-100 {
-  background: rgba(15, 23, 42, 0.6) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+.access-strip,
+.connection-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.2rem;
+  border: 1px solid var(--line-light);
+  background: var(--paper-strong);
 }
 
-.text-2xl.text-rose-500 {
-  color: #f43f5e !important;
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.015em;
+  text-transform: uppercase;
 }
 
-.text-lg.font-bold.text-slate-800.tracking-tight.uppercase {
-  color: #f8fafc !important;
+.access-strip p:last-child,
+.managed-panel > p,
+.section-heading > p,
+.connection-section p:last-child,
+.model-card > p {
+  max-width: 44rem;
+  margin: 0.38rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
-button.border-none.bg-transparent.hover\:bg-slate-100 {
-  color: #94a3b8 !important;
-}
-button.border-none.bg-transparent.hover\:bg-slate-100:hover {
-  background: rgba(30, 41, 59, 0.6) !important;
-  color: #f8fafc !important;
+.section-number {
+  color: var(--signal-deep) !important;
 }
 
-/* Body scroll */
-.flex-grow.p-6.md\:p-8.overflow-y-auto.space-y-6 {
-  color: #f8fafc;
+.settings-state {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 6rem;
+  padding: 1rem;
+  border: 1px solid var(--line-light);
 }
 
-/* Preset picker card */
-section.border.border-slate-200.rounded-xl.p-5.bg-slate-50 {
-  background: rgba(30, 41, 59, 0.4) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+.settings-state div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
-.text-xs.font-bold.text-slate-400.uppercase.tracking-wider {
-  color: #94a3b8 !important;
+.settings-state span:last-child {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
 }
 
-.text-\[11px\].text-slate-500 {
-  color: #94a3b8 !important;
+.state-marker {
+  display: grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 2px solid var(--signal-deep);
+  background: var(--signal);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-weight: 700;
 }
 
-/* Preset buttons */
-button.w-full.py-2.px-3.border.border-slate-200.rounded-lg.bg-white {
-  background: rgba(30, 41, 59, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  color: #cbd5e1 !important;
-  transition: all 0.2s ease !important;
+.settings-state:not(.is-error) .state-marker {
+  animation: square-turn 1.2s steps(4, end) infinite;
 }
 
-button.w-full.py-2.px-3.border.border-slate-200.rounded-lg.bg-white:hover {
-  background: rgba(99, 102, 241, 0.15) !important;
-  border-color: rgba(99, 102, 241, 0.3) !important;
-  color: #a5b4fc !important;
-  transform: translateY(-1px);
+.managed-panel,
+.preset-section,
+.model-section,
+.support-section {
+  padding: 1.35rem;
+  border: 1px solid var(--line-light);
+  background:
+    linear-gradient(rgba(17, 21, 19, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 21, 19, 0.035) 1px, transparent 1px),
+    var(--paper-strong);
+  background-size: 2rem 2rem;
 }
 
-/* Active preset */
-button.bg-rose-50.border-rose-400.text-rose-600.font-bold,
-button[class*="bg-rose-50"] {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2)) !important;
-  border: 1px solid #6366f1 !important;
-  color: #a5b4fc !important;
-  box-shadow: 0 0 20px rgba(99, 102, 241, 0.25) !important;
+.managed-panel h3 {
+  font-size: clamp(2.2rem, 5vw, 4rem);
 }
 
-/* Settings section cards (Primary/Boost Engine) */
-section.grid.grid-cols-1.md\:grid-cols-2.gap-6 > div,
-section.border.border-slate-200.rounded-xl.p-5.bg-white {
-  background: rgba(15, 23, 42, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+.service-status {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 1.4rem 0 1rem;
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
 }
 
-.text-xs.font-bold.text-rose-500.uppercase.tracking-wider {
-  background: linear-gradient(135deg, #f43f5e, #8b5cf6);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  color: transparent !important;
+.service-status > div {
+  min-height: 6.2rem;
+  padding: 0.85rem;
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
 }
 
-.text-xs.font-bold.text-blue-500.uppercase.tracking-wider {
-  background: linear-gradient(135deg, #06b6d4, #6366f1);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  color: transparent !important;
+.service-status dt {
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 
-.text-xs.font-bold.text-slate-700.uppercase.tracking-wider {
-  color: #f8fafc !important;
+.service-status dd {
+  margin: 1rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
-/* Form labels */
-.text-\[11px\].font-bold.text-slate-500.uppercase.tracking-wider {
-  color: #94a3b8 !important;
+.service-status dd.ready {
+  color: var(--signal-deep);
 }
 
-/* Input containers */
-.relative.flex.border.border-slate-200.rounded-lg {
-  background: var(--bg-input) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
+.managed-note {
+  padding-left: 0.8rem;
+  border-left: 4px solid var(--signal);
+  font-weight: 600;
 }
 
-.relative.flex.border.border-slate-200.rounded-lg:focus-within {
-  border-color: var(--accent) !important;
-  box-shadow: none !important;
+.section-heading {
+  display: grid;
+  grid-template-columns: minmax(13rem, 0.7fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: end;
+  margin-bottom: 1rem;
 }
 
-input.w-full.px-3.py-2.font-mono.text-xs.outline-none.bg-white.border-none {
-  background: transparent !important;
-  color: var(--text-void) !important;
-  border: none !important;
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-top: 1px solid var(--ink);
+  border-left: 1px solid var(--ink);
 }
 
-input.w-full.px-3.py-2.font-mono.text-xs.outline-none.bg-white.border-none::placeholder {
-  color: var(--text-dim) !important;
+.preset-button {
+  display: flex;
+  min-height: 5rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.8rem;
+  border-width: 0 1px 1px 0;
+  border-color: var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  text-align: left;
 }
 
-/* Show/hide buttons */
-button.border-l.border-slate-200.border-r-0.border-t-0.border-b-0.px-3.py-1.bg-slate-50 {
-  background: var(--bg-elevated) !important;
-  border-left: 1px solid var(--line) !important;
-  color: var(--text-secondary) !important;
-  font-family: var(--font-mono) !important;
-  border-radius: 0 !important;
+.preset-button span {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
 }
 
-button.border-l.border-slate-200.border-r-0.border-t-0.border-b-0.px-3.py-1.bg-slate-50:hover {
-  background: var(--bg-hover) !important;
-  color: var(--accent-bright) !important;
+.preset-button.active {
+  background: var(--signal);
+  color: var(--ink);
 }
 
-/* Standalone inputs */
-input.w-full.px-3.py-2.border.border-slate-200.rounded-lg.font-mono.text-xs.outline-none.bg-white {
-  background: var(--bg-input) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text-void) !important;
-  border-radius: 0 !important;
+.preset-button.active span {
+  color: var(--ink);
 }
 
-input.w-full.px-3.py-2.border.border-slate-200.rounded-lg.font-mono.text-xs.outline-none.bg-white:focus {
-  border-color: var(--accent) !important;
-  box-shadow: none !important;
+.provider-policy {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--signal);
+  background: var(--paper);
 }
 
-input.w-full.px-3.py-2.border.border-slate-200.rounded-lg.font-mono.text-xs.outline-none.bg-white::placeholder {
-  color: var(--text-dim) !important;
+.provider-policy strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
-/* Connection diagnostics section */
-section.border.border-slate-200.rounded-xl.p-5.bg-white.space-y-4 {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
+.provider-policy p {
+  margin: 0.35rem 0 0;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
 }
 
-/* Test connection button */
-button.w-full.md\:w-auto.bg-slate-900.text-white.hover\:bg-rose-600 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border: 1px solid var(--accent) !important;
-  font-family: var(--font-mono) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+.provider-policy ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
 }
 
-button.w-full.md\:w-auto.bg-slate-900.text-white.hover\:bg-rose-600:hover {
-  background: var(--accent-bright) !important;
-  border-color: var(--accent-bright) !important;
-  transform: none !important;
+.provider-policy li {
+  max-width: 100%;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--line-light);
+  overflow-wrap: anywhere;
+  font-size: 0.68rem;
 }
 
-/* Connection feedback */
-div.border.rounded-lg.p-4.text-xs.font-mono.bg-emerald-50,
-div.border.rounded-lg.p-4.text-xs.font-mono.bg-rose-50 {
-  color: var(--text-void) !important;
-  border-radius: 0 !important;
+.model-grid,
+.support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
 }
 
-.bg-emerald-50.border-emerald-200 {
-  background: var(--bg-panel) !important;
-  border: 1px solid var(--accent) !important;
-  color: var(--accent-bright) !important;
+.model-card {
+  min-width: 0;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--ink);
 }
 
-.bg-rose-50.border-rose-200 {
-  background: var(--bg-panel) !important;
-  border: 1px solid var(--status-error) !important;
-  color: var(--status-error) !important;
+.model-card legend {
+  padding: 0 0.45rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
-.bg-emerald-50 .material-symbols-outlined,
-.bg-rose-50 .material-symbols-outlined {
-  color: inherit !important;
+.model-card label,
+.support-grid label {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
 }
 
-/* Local model instructions */
-section.border.border-dashed.border-slate-200.rounded-xl.p-5.bg-slate-50 {
-  background: var(--bg-base) !important;
-  border: 1px dashed var(--line-strong) !important;
-  border-radius: 0 !important;
+.model-card input,
+.support-grid input {
+  width: 100%;
+  min-height: 2.65rem;
+  padding: 0.65rem 0.75rem;
+  border-color: var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: none;
 }
 
-section.border-dashed.text-xs.text-slate-500 {
-  color: var(--text-secondary) !important;
+.secret-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
-section.border-dashed strong {
-  color: var(--text-void) !important;
+.secret-field button {
+  border-left: 0;
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 0.7rem;
+  text-transform: uppercase;
 }
 
-section.border-dashed code {
-  background: var(--bg-void) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--accent) !important;
-  padding: 1px 6px;
-  border-radius: 0;
-  font-size: 11px;
+.connection-section h3 {
+  font-size: 1.8rem;
 }
 
-/* Footer */
-footer.bg-slate-50.px-6.py-4.flex {
-  background: var(--bg-base) !important;
-  border-top: 1px solid var(--line) !important;
+.feedback {
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--ink);
+  background: var(--paper-strong);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
-button.w-full.sm\:w-auto.px-6.py-2-5.text-xs.font-semibold.text-slate-600 {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text-secondary) !important;
-  border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
+.feedback.is-success {
+  border-left: 0.5rem solid var(--success);
 }
 
-button.w-full.sm\:w-auto.px-6.py-2-5.text-xs.font-semibold.text-slate-600:hover {
-  background: var(--bg-hover) !important;
-  color: var(--text-void) !important;
+.feedback.is-error,
+.settings-state.is-error {
+  border-left: 0.5rem solid var(--error);
 }
 
-button.w-full.sm\:w-auto.bg-rose-500.hover\:bg-rose-600 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border: 1px solid var(--accent) !important;
-  font-family: var(--font-mono) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
+.settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.4rem;
+  border-top: 1px solid var(--line-dark);
+  background: var(--ink);
+  color: var(--paper-muted);
+  font-size: 0.7rem;
 }
 
-button.w-full.sm\:w-auto.bg-rose-500.hover\:bg-rose-600:hover {
-  background: var(--accent-bright) !important;
-  border-color: var(--accent-bright) !important;
-  transform: none !important;
+.settings-footer > div {
+  display: flex;
+  gap: 0.6rem;
 }
 
-.spinner-small {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--line-strong);
-  border-radius: 0;
-  border-top-color: var(--accent-ink);
-  animation: spin 0.8s linear infinite;
+.secondary-action,
+.primary-action {
+  min-height: 2.6rem;
+  border-color: var(--ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+.secondary-action {
+  background: transparent;
+  color: inherit;
+}
+
+.settings-body .secondary-action {
+  color: var(--ink);
+}
+
+.primary-action {
+  background: var(--signal);
+  color: var(--ink);
+}
+
+@keyframes square-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 760px) {
+  .settings-overlay {
+    padding: 0;
+  }
+
+  .settings-sheet {
+    width: 100%;
+    max-height: 100dvh;
+    min-height: 100dvh;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .settings-header {
+    grid-template-columns: 5rem minmax(0, 1fr) auto;
+    min-height: 5.5rem;
+  }
+
+  .settings-index {
+    font-size: 2.2rem;
+  }
+
+  .settings-header > div:nth-child(2) {
+    padding: 0.8rem;
+  }
+
+  .close-button {
+    margin-right: 0.6rem;
+  }
+
+  .settings-body {
+    padding: 0.8rem;
+  }
+
+  .access-strip,
+  .connection-section,
+  .settings-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .service-status,
+  .model-grid,
+  .support-grid,
+  .section-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .preset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .settings-footer > div,
+  .settings-footer button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-state:not(.is-error) .state-marker {
+    animation: none;
+  }
 }
 </style>

@@ -2,21 +2,25 @@
   <div class="bauhaus-view-root">
     <!-- HEADER -->
     <header class="bauhaus-header">
-      <div class="header-left" @click="router.push('/')">
-        <span class="brand-monogram">ATP</span>
+      <button class="header-left" type="button" @click="router.push('/')">
         <span class="brand-full">ASK THE PEOPLE</span>
-      </div>
+      </button>
 
       <div class="header-center">
-        <div class="view-mode-selector">
+        <div
+          class="view-mode-selector"
+          aria-label="View assumptions or inspect supporting material"
+        >
           <button
-            v-for="m in ['graph', 'split', 'workbench']"
+            v-for="m in ['workbench', 'graph', 'split']"
             :key="m"
             class="mode-btn"
             :class="{ 'is-active': viewMode === m }"
+            type="button"
+            :aria-pressed="viewMode === m"
             @click="viewMode = m"
           >
-            {{ m.toUpperCase() }}
+            {{ { graph: "Source map", split: "Compare", workbench: "Assumptions" }[m] }}
           </button>
         </div>
       </div>
@@ -24,33 +28,51 @@
       <div class="header-right">
         <div class="step-indicator">
           <span class="step-val">STEP 02/05</span>
-          <span class="step-label">ENV_SETUP</span>
+          <span class="step-label">Set assumptions</span>
         </div>
         <div class="status-box" :class="currentStatus">
           <span class="status-dot"></span>
-          <span class="status-msg">{{ currentStatus.toUpperCase() }}</span>
+          <span class="status-msg">{{ statusLabel }}</span>
         </div>
       </div>
     </header>
 
+    <div v-if="error" class="workspace-error" role="alert">
+      <div>
+        <strong>The assumptions could not be opened</strong>
+        <span>{{ error }}</span>
+      </div>
+      <button type="button" @click="loadSimulationData">Try again</button>
+    </div>
+
     <!-- CONTENT -->
-    <main class="workbench-viewport">
+    <main class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
-      <div class="panel-container left" :style="leftPanelStyle">
+      <div
+        class="panel-container left"
+        :style="leftPanelStyle"
+        :aria-hidden="viewMode === 'workbench'"
+        :inert="viewMode === 'workbench'"
+      >
         <GraphPanel
           :graphData="graphData"
           :loading="graphLoading"
-          :currentPhase="2"
+          :currentPhase="hasGraphContent ? 2 : 0"
           @refresh="refreshGraph"
           @toggle-maximize="toggleMaximize('graph')"
         />
       </div>
 
       <!-- RIGHT: WORKBENCH -->
-      <div class="panel-container right" :style="rightPanelStyle">
+      <div
+        class="panel-container right"
+        :style="rightPanelStyle"
+        :aria-hidden="viewMode === 'graph'"
+        :inert="viewMode === 'graph'"
+      >
         <div class="workbench-frame">
           <header class="workbench-header">
-            <span class="wb-label">WORKBENCH_ENV</span>
+            <span class="wb-label">Set the scenario assumptions</span>
           </header>
           <div class="wb-content">
             <Step2EnvSetup
@@ -70,8 +92,8 @@
 
     <!-- FOOTER -->
     <footer class="bauhaus-footer-mini">
-      <div class="f-block">SYS_STATUS: NOMINAL</div>
-      <div class="f-block">LOC: WORKSPACE_ENV_SETUP</div>
+      <div class="f-block">Synthetic scenarios · 0 human respondents</div>
+      <div class="f-block">Use outputs as hypotheses, not forecasts</div>
     </footer>
   </div>
 </template>
@@ -87,13 +109,28 @@ import Step2EnvSetup from "../components/Step2EnvSetup.vue";
 const route = useRoute();
 const router = useRouter();
 
-const viewMode = ref("split");
+const viewMode = ref("workbench");
 const currentSimulationId = ref(route.params.simulationId);
 const projectData = ref(null);
 const graphData = ref(null);
 const graphLoading = ref(false);
 const systemLogs = ref([]);
 const currentStatus = ref("processing");
+const error = ref("");
+const statusLabel = computed(
+  () =>
+    ({
+      completed: "Ready",
+      error: "Needs attention",
+      failed: "Needs attention",
+      processing: "Preparing",
+    })[currentStatus.value] || "Preparing",
+);
+const hasGraphContent = computed(
+  () =>
+    Number(graphData.value?.node_count || 0) > 0 ||
+    (Array.isArray(graphData.value?.nodes) && graphData.value.nodes.length > 0),
+);
 
 // Layout Styles
 const leftPanelStyle = computed(() => {
@@ -133,7 +170,9 @@ const addLog = (msg) => {
   if (systemLogs.value.length > 100) systemLogs.value.shift();
 };
 
-const updateStatus = (status) => (currentStatus.value = status);
+const updateStatus = (status) => {
+  currentStatus.value = status === "failed" ? "error" : status;
+};
 
 const toggleMaximize = (target) =>
   (viewMode.value = viewMode.value === target ? "split" : target);
@@ -150,31 +189,46 @@ const handleGoBack = () => {
 };
 
 const handleNextStep = (params = {}) => {
-  addLog("Entering Stage 03: Engine Runtime");
+  const maxRounds = Number(params.maxRounds);
+  if (!Number.isInteger(maxRounds) || maxRounds < 10 || maxRounds > 200) {
+    error.value =
+      "Choose a valid scenario length between 10 and 200 rounds before continuing.";
+    currentStatus.value = "error";
+    return;
+  }
+  error.value = "";
+  addLog("Opening the scenario run.");
   const routeParams = {
     name: "SimulationRun",
     params: { simulationId: currentSimulationId.value },
+    query: { maxRounds },
   };
-  if (params.maxRounds) routeParams.query = { maxRounds: params.maxRounds };
   router.push(routeParams);
 };
 
 const loadSimulationData = async () => {
+  error.value = "";
+  currentStatus.value = "processing";
   try {
-    addLog(`Accessing database: ${currentSimulationId.value}`);
+    addLog("Loading the prepared scenario…");
     const simRes = await getSimulation(currentSimulationId.value);
-    if (simRes.success && simRes.data) {
-      const simData = simRes.data;
-      if (simData.project_id) {
-        const projRes = await getProject(simData.project_id);
-        if (projRes.success && projRes.data) {
-          projectData.value = projRes.data;
-          if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id);
-        }
-      }
+    if (!simRes.success || !simRes.data) {
+      throw new Error(simRes.error || "The scenario was not found.");
     }
+    const simData = simRes.data;
+    if (!simData.project_id) {
+      throw new Error("The scenario is missing its project reference.");
+    }
+    const projRes = await getProject(simData.project_id);
+    if (!projRes.success || !projRes.data) {
+      throw new Error(projRes.error || "The source project could not be loaded.");
+    }
+    projectData.value = projRes.data;
+    if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id);
   } catch (err) {
-    addLog(`DB Error: ${err.message}`);
+    error.value = err.message || "The prepared scenario could not be loaded.";
+    currentStatus.value = "error";
+    addLog(`The prepared scenario could not be loaded: ${error.value}`);
   }
 };
 
@@ -182,7 +236,15 @@ const loadGraph = async (id) => {
   graphLoading.value = true;
   try {
     const res = await getGraphData(id);
-    if (res.success) graphData.value = res.data;
+    if (res.success) {
+      graphData.value = res.data;
+    } else {
+      throw new Error(res.error || "The source map could not be loaded.");
+    }
+  } catch (err) {
+    error.value = err.message || "The source map could not be loaded.";
+    currentStatus.value = "error";
+    throw err;
   } finally {
     graphLoading.value = false;
   }
@@ -192,8 +254,8 @@ const refreshGraph = () =>
   projectData.value?.graph_id && loadGraph(projectData.value.graph_id);
 
 onMounted(async () => {
-  addLog("Runtime View Initialized");
-  loadSimulationData();
+  addLog("Scenario workspace opened.");
+  await loadSimulationData();
 });
 </script>
 
@@ -224,22 +286,19 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0 !important;
+  border-radius: 0;
+  box-shadow: none;
+  transform: none;
   cursor: pointer;
 }
-.brand-monogram {
-  background: var(--accent);
-  color: var(--accent-ink);
-  padding: 4px 8px;
-  font-weight: 700;
-  font-size: 0.95rem;
-  font-family: var(--font-mono);
-  letter-spacing: 0.05em;
-  border-radius: 0;
-}
 .brand-full {
-  font-weight: 600;
-  font-size: 0.95rem;
-  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 1.2rem;
+  font-family: var(--font-display);
   letter-spacing: 0.05em;
   color: var(--text-primary);
 }
@@ -313,6 +372,9 @@ onMounted(async () => {
 .status-box.completed .status-dot {
   background: var(--status-live);
 }
+.status-box.error .status-dot {
+  background: var(--error);
+}
 @keyframes flash {
   from { opacity: 0.3; }
   to { opacity: 1; }
@@ -382,9 +444,94 @@ onMounted(async () => {
   .workbench-viewport {
     flex-direction: column;
   }
-  .panel-container {
+
+  .workbench-viewport.mode-workbench .panel-container.left,
+  .workbench-viewport.mode-graph .panel-container.right {
+    display: none;
+  }
+
+  .workbench-viewport.mode-workbench .panel-container.right,
+  .workbench-viewport.mode-graph .panel-container.left {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  .workbench-viewport.mode-split .panel-container {
     width: 100% !important;
     height: 50% !important;
+  }
+}
+
+.workspace-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--error);
+  background: #291817;
+  color: var(--paper);
+}
+
+.workspace-error div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.workspace-error strong {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.workspace-error span {
+  color: var(--paper-muted);
+  font-size: 0.72rem;
+}
+
+.workspace-error button {
+  flex: 0 0 auto;
+  border-color: var(--signal);
+  background: var(--signal);
+  color: var(--ink);
+}
+
+@media (max-width: 760px) {
+  .bauhaus-header {
+    height: 58px;
+    padding: 0 0.75rem;
+    gap: 0.6rem;
+  }
+
+  .header-right {
+    display: none;
+  }
+
+  .brand-full {
+    display: inline-block !important;
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+
+  .view-mode-selector {
+    padding: 0;
+    gap: 0;
+  }
+
+  .mode-btn {
+    padding: 0.45rem 0.5rem !important;
+    font-size: 0.65rem;
+  }
+
+  .workbench-viewport {
+    padding: 0;
+    gap: 0;
+  }
+
+  .workspace-error {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>
