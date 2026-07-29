@@ -28,27 +28,27 @@
     </header>
 
     <!-- SIDEBAR -->
-    <aside class="hidden lg:flex fixed left-6 top-24 bottom-6 w-20 hover:w-64 bg-[#0a0a0a] border border-[#222222] flex-col z-40 pt-12 transition-all duration-300 group overflow-hidden shadow-2xl">
-        <div class="flex-grow space-y-2 px-3">
-            <a class="flex items-center w-full px-4 py-4 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-colors text-slate-600" href="#">
-                <span class="material-symbols-outlined text-xl min-w-[32px]">sensors</span>
-                <span class="ml-4 text-xs font-semibold uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Realtime_Stream</span>
+    <aside class="hidden lg:flex fixed left-6 top-24 bottom-6 w-20 hover:w-64 bg-[#0a0a0a] border border-[#222222] flex-col z-40 pt-12 transition-all duration-300 group overflow-hidden shadow-none rounded-none">
+        <div class="flex-grow space-y-1 px-3">
+            <a class="flex items-center w-full px-4 py-4 rounded-none hover:bg-[#1a1a1a] hover:text-[#a3e635] transition-colors text-[#9ca3af] group/link" href="#">
+                <span class="material-symbols-outlined text-xl min-w-[32px] group-hover/link:text-[#a3e635]">sensors</span>
+                <span class="ml-4 text-[10px] font-mono font-semibold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Realtime_Stream</span>
             </a>
-            <a class="flex items-center w-full px-4 py-4 rounded-xl hover:bg-amber-50 hover:text-amber-600 transition-colors text-slate-600" href="#">
-                <span class="material-symbols-outlined text-xl min-w-[32px]">account_balance</span>
-                <span class="ml-4 text-xs font-semibold uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Macro_Econ</span>
+            <a class="flex items-center w-full px-4 py-4 rounded-none hover:bg-[#1a1a1a] hover:text-[#a3e635] transition-colors text-[#9ca3af] group/link" href="#">
+                <span class="material-symbols-outlined text-xl min-w-[32px] group-hover/link:text-[#a3e635]">account_balance</span>
+                <span class="ml-4 text-[10px] font-mono font-semibold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Macro_Econ</span>
             </a>
-            <a class="flex items-center w-full px-4 py-4 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-colors text-slate-600" href="#">
-                <span class="material-symbols-outlined text-xl min-w-[32px]">biotech</span>
-                <span class="ml-4 text-xs font-semibold uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Sovereign_Tech</span>
+            <a class="flex items-center w-full px-4 py-4 rounded-none hover:bg-[#1a1a1a] hover:text-[#a3e635] transition-colors text-[#9ca3af] group/link" href="#">
+                <span class="material-symbols-outlined text-xl min-w-[32px] group-hover/link:text-[#a3e635]">biotech</span>
+                <span class="ml-4 text-[10px] font-mono font-semibold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Sovereign_Tech</span>
             </a>
-            <a class="flex items-center w-full px-4 py-4 rounded-xl hover:bg-slate-100 hover:text-slate-900 transition-colors text-slate-600" href="#">
-                <span class="material-symbols-outlined text-xl min-w-[32px]">data_exploration</span>
-                <span class="ml-4 text-xs font-semibold uppercase tracking-wider whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Vector_Maps</span>
+            <a class="flex items-center w-full px-4 py-4 rounded-none hover:bg-[#1a1a1a] hover:text-[#a3e635] transition-colors text-[#9ca3af] group/link" href="#">
+                <span class="material-symbols-outlined text-xl min-w-[32px] group-hover/link:text-[#a3e635]">data_exploration</span>
+                <span class="ml-4 text-[10px] font-mono font-semibold uppercase tracking-widest whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">Vector_Maps</span>
             </a>
         </div>
-        <div class="p-3 bg-slate-50 border-t border-slate-100 rounded-b-2xl">
-            <button @click="scrollToSection('hero')" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-medium py-3 rounded-lg text-xs uppercase tracking-wider flex justify-center border-none shadow-none">
+        <div class="p-3 bg-transparent border-t border-[#222222]">
+            <button @click="scrollToSection('hero')" class="w-full bg-[#a3e635] hover:bg-[#bef264] text-[#1a2e05] py-3 rounded-none text-[10px] font-mono font-bold uppercase tracking-[0.2em] flex justify-center border-none transition-colors">
                 <span class="group-hover:hidden">++</span>
                 <span class="hidden group-hover:inline">NEW_ENTRY</span>
             </button>
@@ -56,26 +56,25 @@
     </aside>
 
     <!-- MAIN CONTENT -->
-    <!-- MAIN CONTENT -->
     <main class="lg:ml-28 pt-8 pb-24 px-6 md:px-16 min-h-screen">
         <!-- HERO / DEPLOY SECTION -->
-        <section id="hero" class="py-16 flex flex-col items-start relative overflow-hidden border-b border-slate-200">
+        <section id="hero" class="py-16 flex flex-col items-start relative overflow-hidden border-b border-[#222222]">
             <div class="absolute right-0 top-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
                 <svg height="400" viewBox="0 0 100 100" width="400">
-                    <circle cx="50" cy="50" fill="none" r="48" stroke="currentColor" stroke-dasharray="2 2" stroke-width="0.5" class="text-slate-400"></circle>
-                    <rect fill="none" height="60" stroke="currentColor" stroke-width="0.5" width="60" x="20" y="20" class="text-slate-400"></rect>
-                    <path d="M0 50 L100 50 M50 0 L50 100" stroke="currentColor" stroke-width="0.2" class="text-slate-400"></path>
+                    <circle cx="50" cy="50" fill="none" r="48" stroke="currentColor" stroke-dasharray="2 2" stroke-width="0.5" class="text-[#9ca3af]"></circle>
+                    <rect fill="none" height="60" stroke="currentColor" stroke-width="0.5" width="60" x="20" y="20" class="text-[#9ca3af]"></rect>
+                    <path d="M0 50 L100 50 M50 0 L50 100" stroke="currentColor" stroke-width="0.2" class="text-[#9ca3af]"></path>
                 </svg>
             </div>
-            <div class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-[0.3em] mb-6">
+            <div class="bg-[#121212] border border-[#333333] text-[#9ca3af] px-3 py-1 rounded-none text-[10px] font-mono font-bold uppercase tracking-[0.3em] mb-6">
                 COMMAND_INTERFACE // 00-CORE
             </div>
-            <h1 class="text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] tracking-tight mb-8 text-slate-900 uppercase">
-                DECISION<br>MATRIX<span class="text-rose-500">.</span>
+            <h1 class="text-[clamp(2.5rem,6vw,5rem)] font-extrabold leading-[1.05] tracking-tight mb-8 text-[#f3f4f6] uppercase font-serif">
+                DECISION<br>MATRIX<span class="text-[#a3e635]">.</span>
             </h1>
             
             <div class="w-full max-w-6xl space-y-12">
-                <p class="text-lg md:text-xl font-normal max-w-2xl leading-relaxed text-slate-500 border-l-2 border-rose-500 pl-6 py-1">
+                <p class="text-lg md:text-xl font-normal max-w-2xl leading-relaxed text-[#9ca3af] border-l-2 border-[#a3e635] pl-6 py-1 font-serif">
                     High-fidelity consensus mapping. Simplified for rapid systemic evolution.
                 </p>
 
@@ -84,20 +83,20 @@
                     <!-- INPUT AREA -->
                     <div class="space-y-6 flex flex-col justify-between">
                         <div class="space-y-2 flex-grow flex flex-col">
-                            <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Simulation Objective</span>
+                            <span class="text-[10px] font-mono font-semibold uppercase tracking-widest text-[#6b7280]">Simulation Objective</span>
                             <textarea 
                                 v-model="formData.simulationRequirement"
                                 placeholder="What reality do you wish to manifest? Define your scenario, audience, or core question..."
-                                class="w-full h-44 border border-slate-200 rounded-xl p-5 font-sans font-normal text-base focus:border-rose-500 focus:ring-4 focus:ring-rose-500/5 outline-none transition-all resize-none shadow-sm flex-grow"
+                                class="w-full h-44 bg-[#0a0a0a] border border-[#333333] rounded-none p-5 font-mono text-sm text-[#d4d4d4] focus:border-[#a3e635] outline-none transition-all resize-none shadow-none flex-grow placeholder:text-[#4b5563]"
                             ></textarea>
                         </div>
                         
                         <div class="flex gap-4">
                             <button @click="startSimulation" :disabled="!canSubmit || loading"
-                                        class="w-full bg-slate-900 text-white p-5 rounded-xl font-medium text-base flex items-center justify-center gap-4 hover:bg-slate-800 transition-all group border-none shadow-md">
+                                        class="w-full bg-[#a3e635] text-[#1a2e05] p-5 rounded-none font-mono font-bold text-[13px] uppercase tracking-[0.1em] flex items-center justify-center gap-4 hover:bg-[#bef264] disabled:opacity-50 disabled:bg-[#121212] disabled:text-[#6b7280] disabled:border disabled:border-[#333333] transition-all group border-none shadow-none cursor-pointer">
                                     <span v-if="!loading">INITIALIZE ENGINE SEQUENCE</span>
-                                    <span v-else class="app-spinner-small"></span>
-                                    <span class="material-symbols-outlined group-hover:translate-x-1.5 transition-transform text-slate-300">arrow_forward</span>
+                                    <span v-else class="app-spinner-small border-t-[#1a2e05]"></span>
+                                    <span class="material-symbols-outlined group-hover:translate-x-1.5 transition-transform text-[#1a2e05]">arrow_forward</span>
                                 </button>
                         </div>
                     </div>
@@ -456,592 +455,3 @@ const scrollToSection = (id) => {
 fetchTemplates();
 fetchHistory();
 </script>
-
-<style scoped>
-/* ==========================================================================
-   Home — Editorial Command Center
-   ========================================================================== */
-
-.app-interface {
-  background: var(--bg-void);
-  color: var(--text-void);
-  font-family: var(--font-sans);
-  min-height: 100vh;
-}
-
-/* ===== HEADER ===== */
-header.bg-white\/80 {
-  background: var(--bg-void) !important;
-  border-bottom: 1px solid var(--line) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-
-header .text-xl.font-bold.tracking-tight {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  -webkit-text-fill-color: var(--accent-ink) !important;
-  border: 1px solid var(--accent) !important;
-  padding: 6px 10px !important;
-  font-family: var(--font-mono) !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.05em !important;
-}
-
-header .text-\[9px\].font-bold.font-mono {
-  color: var(--text-muted) !important;
-}
-
-header nav.bg-slate-100\/50 {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--line) !important;
-}
-
-header nav button {
-  color: var(--text-secondary) !important;
-  border-radius: 0 !important;
-  border: 1px solid transparent !important;
-  font-family: var(--font-mono) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
-}
-header nav button.bg-slate-900 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border-color: var(--accent) !important;
-}
-header nav button:hover:not(.bg-slate-900) {
-  background: var(--bg-elevated) !important;
-  color: var(--text-void) !important;
-}
-
-header .text-rose-500 {
-  color: var(--accent-bright) !important;
-}
-header .opacity-40 {
-  color: var(--text-muted) !important;
-}
-
-header button.border.border-slate-200 {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text-secondary) !important;
-  border-radius: 0 !important;
-}
-header button.border.border-slate-200:hover {
-  background: var(--bg-hover) !important;
-  border-color: var(--line-active) !important;
-  color: var(--text-void) !important;
-}
-header button .material-symbols-outlined {
-  color: inherit !important;
-}
-
-/* ===== SIDEBAR ===== */
-aside.bg-white\/90 {
-  background: var(--bg-base) !important;
-  backdrop-filter: none !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-}
-
-aside a {
-  color: var(--text-secondary) !important;
-  border-radius: 0 !important;
-  border-left: 2px solid transparent !important;
-}
-aside a:hover {
-  background: var(--bg-elevated) !important;
-  color: var(--accent-bright) !important;
-  border-left-color: var(--accent) !important;
-}
-aside a .material-symbols-outlined {
-  color: inherit !important;
-}
-
-aside .bg-slate-50.border-t.border-slate-100 {
-  background: var(--bg-base) !important;
-  border-top: 1px solid var(--line) !important;
-}
-aside .bg-slate-50 button {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border-radius: 0 !important;
-  border: none !important;
-  font-family: var(--font-mono) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  font-weight: 600 !important;
-}
-
-/* ===== HERO ===== */
-section#hero.border-b.border-slate-200 {
-  border-bottom: 1px solid var(--line) !important;
-  padding: 80px 0 60px !important;
-  position: relative;
-}
-
-section#hero .bg-slate-100.text-slate-600 {
-  background: transparent !important;
-  color: var(--text-muted) !important;
-  border: 1px solid var(--line) !important;
-  padding: 6px 12px !important;
-  font-family: var(--font-mono) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.15em !important;
-  font-size: 10px !important;
-}
-
-/* Hero headline — large serif with mixed weights */
-section#hero h1 {
-  font-family: var(--font-serif) !important;
-  font-weight: 400 !important;
-  font-size: clamp(3rem, 7vw, 6rem) !important;
-  line-height: 0.95 !important;
-  letter-spacing: -0.03em !important;
-  color: var(--text-void) !important;
-  background: none !important;
-  -webkit-text-fill-color: var(--text-void) !important;
-  text-transform: none !important;
-  margin-bottom: 24px !important;
-}
-
-section#hero h1 .text-rose-500 {
-  color: var(--accent) !important;
-  background: none !important;
-  -webkit-text-fill-color: var(--accent) !important;
-  font-style: italic !important;
-  font-weight: 300 !important;
-}
-
-section#hero p.text-slate-500 {
-  color: var(--text-secondary) !important;
-  font-family: var(--font-serif) !important;
-  font-size: 20px !important;
-  font-weight: 300 !important;
-  border-left: none !important;
-  max-width: 600px !important;
-  line-height: 1.5 !important;
-  padding-left: 0 !important;
-}
-
-/* Textarea — clean dark */
-section#hero textarea {
-  background: var(--bg-input) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text-void) !important;
-  border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
-  font-size: 14px !important;
-  line-height: 1.7 !important;
-  backdrop-filter: none !important;
-  padding: 16px !important;
-}
-section#hero textarea::placeholder {
-  color: var(--text-dim) !important;
-}
-section#hero textarea:focus {
-  border-color: var(--accent) !important;
-  box-shadow: none !important;
-  outline: none !important;
-}
-
-section#hero .text-xs.font-semibold.uppercase.tracking-wider.text-slate-400 {
-  color: var(--text-muted) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 10px !important;
-  letter-spacing: 0.15em !important;
-}
-
-/* PRIMARY CTA — sharp, single accent */
-section#hero button.bg-slate-900 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border: 1px solid var(--accent) !important;
-  border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.1em !important;
-  font-size: 13px !important;
-  padding: 20px !important;
-  box-shadow: none !important;
-}
-section#hero button.bg-slate-900:hover {
-  background: var(--accent-bright) !important;
-  border-color: var(--accent-bright) !important;
-  transform: none !important;
-  box-shadow: none !important;
-}
-section#hero button.bg-slate-900 .material-symbols-outlined {
-  color: var(--accent-ink) !important;
-}
-
-/* Dropzone */
-section#hero div.border-dashed.border-slate-300 {
-  background: var(--bg-base) !important;
-  border: 1px dashed var(--line-strong) !important;
-  border-radius: 0 !important;
-  color: var(--text-secondary) !important;
-}
-section#hero div.border-dashed:hover {
-  background: var(--bg-panel) !important;
-  border-color: var(--accent-dim) !important;
-}
-section#hero div.border-dashed.bg-rose-50\/30 {
-  background: var(--bg-panel) !important;
-  border-color: var(--accent) !important;
-}
-section#hero div.border-dashed .text-5xl {
-  color: var(--accent) !important;
-  font-family: var(--font-mono) !important;
-}
-section#hero div.border-dashed .material-symbols-outlined {
-  color: inherit !important;
-}
-
-section#hero .bg-white.border.border-slate-200.rounded-lg {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  color: var(--text-primary) !important;
-}
-section#hero .bg-white .text-rose-500 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.05em !important;
-}
-section#hero .text-xs.font-medium.text-slate-700 {
-  color: var(--text-primary) !important;
-}
-
-/* ===== SECTIONS — eyebrow + heading layout ===== */
-section#sessions,
-section#archive {
-  padding: 80px 0 !important;
-  color: var(--text-void);
-}
-
-section#sessions .border-b.border-slate-200,
-section#archive .border-b.border-slate-200 {
-  border-bottom: 1px solid var(--line) !important;
-}
-
-section h2 {
-  font-family: var(--font-serif) !important;
-  font-weight: 400 !important;
-  font-size: clamp(1.75rem, 4vw, 2.5rem) !important;
-  letter-spacing: -0.02em !important;
-  color: var(--text-void) !important;
-  text-transform: none !important;
-}
-
-section#sessions .text-\[10px\].font-mono.font-bold.text-slate-400,
-section#archive .text-\[10px\].font-mono.font-bold.text-slate-400 {
-  color: var(--text-muted) !important;
-}
-section#sessions .text-rose-500 {
-  color: var(--accent) !important;
-}
-
-/* Vote cards */
-section#sessions .bg-white.border.border-slate-200,
-section#sessions .md\:col-span-4 > div {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transition: border-color 0.1s ease, background 0.1s ease !important;
-}
-section#sessions .bg-white:hover {
-  border-color: var(--accent-dim) !important;
-  background: var(--bg-panel) !important;
-  transform: none !important;
-}
-section#sessions .bg-white .bg-slate-50\/50 {
-  background: var(--bg-elevated) !important;
-  border-bottom: 1px solid var(--line) !important;
-}
-section#sessions .bg-white .bg-rose-500 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border-radius: 0 !important;
-}
-section#sessions .text-2xl.md\:text-3xl {
-  font-family: var(--font-serif) !important;
-  font-weight: 500 !important;
-  letter-spacing: -0.02em !important;
-  text-transform: none !important;
-  color: var(--text-void) !important;
-}
-section#sessions .text-xs.font-semibold.tracking-wider.text-slate-500 {
-  color: var(--text-muted) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 10px !important;
-  letter-spacing: 0.12em !important;
-  text-transform: uppercase !important;
-}
-section#sessions .text-\[9px\].font-mono.font-bold.text-slate-400 {
-  color: var(--text-dim) !important;
-  font-family: var(--font-mono) !important;
-}
-section#sessions .text-xs.font-semibold.uppercase.tracking-wider.text-slate-400 {
-  color: var(--text-muted) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 10px !important;
-}
-section#sessions .text-2xl.font-bold.text-slate-800 {
-  font-family: var(--font-serif) !important;
-  font-weight: 500 !important;
-  color: var(--text-void) !important;
-}
-section#sessions .h-6.bg-slate-100 {
-  background: var(--line) !important;
-  border-radius: 0 !important;
-  height: 4px !important;
-}
-section#sessions .h-6 .bg-rose-500 {
-  background: var(--accent) !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-}
-section#sessions button.bg-slate-900 {
-  background: var(--bg-elevated) !important;
-  color: var(--text-void) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
-  font-weight: 600 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  font-size: 11px !important;
-  transition: background 0.1s ease, border-color 0.1s ease !important;
-}
-section#sessions button.bg-slate-900:hover {
-  background: var(--bg-hover) !important;
-  border-color: var(--accent-dim) !important;
-}
-
-section#sessions .bg-white .text-\[10px\].font-bold.text-amber-600.bg-amber-50 {
-  background: transparent !important;
-  color: var(--status-warn) !important;
-  border: 1px solid var(--status-warn) !important;
-  padding: 2px 8px !important;
-  border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-}
-section#sessions .bg-white .text-\[10px\].font-bold.text-rose-600.bg-rose-50 {
-  background: transparent !important;
-  color: var(--status-error) !important;
-  border: 1px solid var(--status-error) !important;
-  padding: 2px 8px !important;
-  border-radius: 0 !important;
-  font-family: var(--font-mono) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-}
-
-section#sessions .text-lg.font-bold.text-slate-800 {
-  font-family: var(--font-serif) !important;
-  font-weight: 500 !important;
-  text-transform: none !important;
-  color: var(--text-void) !important;
-}
-section#sessions .material-symbols-outlined.text-slate-400 {
-  color: var(--text-dim) !important;
-}
-
-/* ===== ARCHIVE ===== */
-section#archive.border-t.border-slate-200 {
-  border-top: 1px solid var(--line) !important;
-}
-section#archive .bg-white.border.border-slate-200.rounded-2xl {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  backdrop-filter: none !important;
-}
-
-/* ===== METRICS ===== */
-section.py-16.border-t.border-slate-200 {
-  border-top: 1px solid var(--line) !important;
-  padding: 80px 0 !important;
-}
-section .bg-slate-900.text-white.p-8.rounded-2xl {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  backdrop-filter: none !important;
-}
-section .bg-slate-900 .text-\[10px\].font-mono.font-bold.tracking-\[0\.2em\] {
-  color: var(--text-muted) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 10px !important;
-  letter-spacing: 0.15em !important;
-  text-transform: uppercase !important;
-}
-section .bg-slate-900 .text-2xl.font-bold.leading-snug {
-  font-family: var(--font-serif) !important;
-  font-weight: 400 !important;
-  font-size: 24px !important;
-  background: none !important;
-  -webkit-text-fill-color: var(--text-void) !important;
-  color: var(--text-void) !important;
-  text-transform: none !important;
-  letter-spacing: -0.02em !important;
-}
-section .bg-slate-900 .w-full.h-1.bg-white\/20 {
-  background: var(--line) !important;
-  height: 2px !important;
-}
-section .bg-slate-900 .w-2\/3.h-full.bg-rose-500 {
-  background: var(--accent) !important;
-}
-
-section .border.border-slate-200.rounded-2xl.bg-white {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  color: var(--text-void);
-  backdrop-filter: none !important;
-}
-section .text-\[10px\].font-bold.uppercase.tracking-widest.text-slate-400 {
-  color: var(--text-muted) !important;
-  font-family: var(--font-mono) !important;
-  font-size: 10px !important;
-  letter-spacing: 0.12em !important;
-}
-section .text-4xl.font-extrabold.text-slate-800 {
-  font-family: var(--font-mono) !important;
-  font-weight: 600 !important;
-  font-size: 32px !important;
-  color: var(--accent) !important;
-}
-section .h-28 .bg-rose-500 { background: var(--accent-dim) !important; }
-section .h-28 .bg-slate-800 { background: var(--line-strong) !important; }
-section .h-28 .bg-blue-500 { background: var(--accent) !important; }
-section .h-28 .bg-emerald-500 { background: var(--accent-dim) !important; }
-section .h-28 .bg-slate-400 { background: var(--line-strong) !important; }
-section .h-28 .bg-rose-400 { background: var(--accent-dim) !important; }
-section .h-28 {
-  align-items: flex-end !important;
-  gap: 4px !important;
-}
-section .h-28 > div {
-  border-radius: 0 !important;
-}
-section .text-\[8px\].font-mono.font-bold.text-slate-400 {
-  color: var(--text-dim) !important;
-}
-
-/* ===== TEMPLATE GALLERY ===== */
-section.bg-slate-900.text-white.rounded-2xl.p-8 {
-  background: var(--bg-base) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 0 !important;
-  padding: 60px 40px !important;
-  color: var(--text-void);
-  backdrop-filter: none !important;
-}
-section.bg-slate-900 .text-3xl.md\:text-5xl {
-  font-family: var(--font-serif) !important;
-  font-weight: 400 !important;
-  font-size: clamp(2rem, 5vw, 3rem) !important;
-  background: none !important;
-  -webkit-text-fill-color: var(--text-void) !important;
-  color: var(--text-void) !important;
-  text-transform: none !important;
-  letter-spacing: -0.02em !important;
-}
-section.bg-slate-900 .border-white\/20 {
-  border: 1px solid var(--line) !important;
-  color: var(--text-muted) !important;
-  font-family: var(--font-mono) !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.12em !important;
-  font-size: 10px !important;
-}
-section.bg-slate-900 button.bg-white\/10 {
-  background: var(--bg-elevated) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text-void) !important;
-  border-radius: 0 !important;
-  text-align: left !important;
-  text-transform: none !important;
-  transition: border-color 0.1s ease, background 0.1s ease !important;
-}
-section.bg-slate-900 button.bg-white\/10:hover {
-  background: var(--bg-panel) !important;
-  border-color: var(--accent) !important;
-}
-
-/* ===== MOBILE NAV ===== */
-nav.md\:hidden {
-  background: var(--bg-base) !important;
-  border-top: 1px solid var(--line) !important;
-  backdrop-filter: none !important;
-  color: var(--text-secondary);
-}
-nav.md\:hidden button.bg-slate-900 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-}
-nav.md\:hidden button .material-symbols-outlined {
-  color: inherit !important;
-}
-
-/* ===== FAB ===== */
-.fixed.bottom-8.right-8 button.bg-rose-500 {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border-radius: 0 !important;
-  border: 1px solid var(--accent) !important;
-  box-shadow: none !important;
-}
-.fixed.bottom-8.right-8 button.bg-rose-500:hover {
-  background: var(--accent-bright) !important;
-  border-color: var(--accent-bright) !important;
-}
-
-/* Material icons line up */
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
-}
-
-/* Override HistoryDatabase to fit theme */
-:deep(.simulation-history-workbench) {
-  border: none !important;
-  padding: 0 !important;
-  margin-top: 0 !important;
-}
-
-/* Geometric decorative elements */
-.atelier-grid {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-.stat-value {
-  font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
-}
-
-.app-spinner-small {
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--line-strong);
-  border-top-color: var(--accent);
-  border-radius: 0;
-  animation: spin 1s infinite linear;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-</style>
