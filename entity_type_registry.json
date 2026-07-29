@@ -1,0 +1,19 @@
+[
+  {
+    "normalized_role": "community",
+    "role_family": "community",
+    "is_individual": false,
+    "is_institution": true,
+    "is_media": false,
+    "is_official": false,
+    "confidence": 0.91,
+    "raw_type": "Community",
+    "default_platform_presence": {
+      "twitter": 0.7,
+      "reddit": 0.7
+    },
+    "platform_presence_basis": "neutral_fictional_default",
+    "human_respondents": 0,
+    "reasoning": "Structural source-label normalization only. The mapping does not infer behavior, platform preference, public opinion, representativeness, or a forecast."
+  }
+]

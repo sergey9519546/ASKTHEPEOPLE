@@ -1,0 +1,198 @@
+[
+  {
+    "agent_id": 0,
+    "source_entity_uuid": "u1",
+    "source_entity_type_raw": "Community",
+    "source_entity_type_normalized": "community",
+    "display_name": "Profile A",
+    "username": "profile_a",
+    "public_bio": "Bio A",
+    "internal_persona": "Persona A",
+    "profession": "community",
+    "age": 28,
+    "gender": "female",
+    "mbti": "INTJ",
+    "country": "United States",
+    "interested_topics": [
+      "policy",
+      "housing"
+    ],
+    "stance_seed": "neutral",
+    "activity_seed": {
+      "base_activity_level": 0.55,
+      "reaction_style": "measured",
+      "conflict_tolerance": 0.45,
+      "authority_sensitivity": 0.4,
+      "novelty_seeking": 0.45,
+      "platform_preference": "both",
+      "assumption_basis": "neutral_fictional_default",
+      "human_respondents": 0,
+      "role_behavior_inferred": false,
+      "disclosure": "Neutral fictional activity controls; role labels do not supply behavioral evidence or representative patterns."
+    },
+    "platform_overrides": {
+      "twitter": {
+        "repost_bias": 0.35,
+        "quote_bias": 0.25,
+        "post_brevity": "medium",
+        "follow_bias": 0.45,
+        "assumption_basis": "neutral_fictional_default"
+      },
+      "reddit": {
+        "comment_depth_bias": 0.55,
+        "threading_bias": 0.55,
+        "search_bias": 0.4,
+        "vote_bias": 0.5,
+        "assumption_basis": "neutral_fictional_default"
+      },
+      "methodology": {
+        "human_respondents": 0,
+        "role_behavior_inferred": false,
+        "disclosure": "Neutral fictional platform controls; no role-based behavior, platform preference, public opinion, or forecast is inferred."
+      }
+    },
+    "graph_records": [
+      {
+        "kind": "summary",
+        "text": "Fictional profile seed.",
+        "ref": "entity:u1",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Fictional profile seed."
+      },
+      {
+        "kind": "edge_record",
+        "text": "Profile A supports Profile B.",
+        "ref": "edge:u1:0",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Profile A supports Profile B."
+      }
+    ],
+    "source_facts": [
+      {
+        "kind": "summary",
+        "text": "Fictional profile seed.",
+        "ref": "entity:u1",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Fictional profile seed."
+      },
+      {
+        "kind": "edge_record",
+        "text": "Profile A supports Profile B.",
+        "ref": "edge:u1:0",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Profile A supports Profile B."
+      }
+    ],
+    "source_facts_deprecated": true
+  },
+  {
+    "agent_id": 1,
+    "source_entity_uuid": "u2",
+    "source_entity_type_raw": "Community",
+    "source_entity_type_normalized": "community",
+    "display_name": "Profile B",
+    "username": "profile_b",
+    "public_bio": "Bio B",
+    "internal_persona": "Persona B",
+    "profession": "community",
+    "age": 28,
+    "gender": "female",
+    "mbti": "INTJ",
+    "country": "United States",
+    "interested_topics": [
+      "policy",
+      "housing"
+    ],
+    "stance_seed": "neutral",
+    "activity_seed": {
+      "base_activity_level": 0.55,
+      "reaction_style": "measured",
+      "conflict_tolerance": 0.45,
+      "authority_sensitivity": 0.4,
+      "novelty_seeking": 0.45,
+      "platform_preference": "both",
+      "assumption_basis": "neutral_fictional_default",
+      "human_respondents": 0,
+      "role_behavior_inferred": false,
+      "disclosure": "Neutral fictional activity controls; role labels do not supply behavioral evidence or representative patterns."
+    },
+    "platform_overrides": {
+      "twitter": {
+        "repost_bias": 0.35,
+        "quote_bias": 0.25,
+        "post_brevity": "medium",
+        "follow_bias": 0.45,
+        "assumption_basis": "neutral_fictional_default"
+      },
+      "reddit": {
+        "comment_depth_bias": 0.55,
+        "threading_bias": 0.55,
+        "search_bias": 0.4,
+        "vote_bias": 0.5,
+        "assumption_basis": "neutral_fictional_default"
+      },
+      "methodology": {
+        "human_respondents": 0,
+        "role_behavior_inferred": false,
+        "disclosure": "Neutral fictional platform controls; no role-based behavior, platform preference, public opinion, or forecast is inferred."
+      }
+    },
+    "graph_records": [
+      {
+        "kind": "summary",
+        "text": "Fictional profile seed.",
+        "ref": "entity:u2",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Fictional profile seed."
+      },
+      {
+        "kind": "edge_record",
+        "text": "Profile B opposes Profile A.",
+        "ref": "edge:u2:0",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Profile B opposes Profile A."
+      }
+    ],
+    "source_facts": [
+      {
+        "kind": "summary",
+        "text": "Fictional profile seed.",
+        "ref": "entity:u2",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Fictional profile seed."
+      },
+      {
+        "kind": "edge_record",
+        "text": "Profile B opposes Profile A.",
+        "ref": "edge:u2:0",
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Profile B opposes Profile A."
+      }
+    ],
+    "source_facts_deprecated": true
+  }
+]

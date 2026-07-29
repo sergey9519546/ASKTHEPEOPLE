@@ -1,0 +1,66 @@
+[
+  {
+    "source_agent_id": 0,
+    "target_agent_id": 1,
+    "relation_type": "supports",
+    "affinity_score": 0.65,
+    "platforms": [
+      "twitter",
+      "reddit"
+    ],
+    "follow_seed": 0.7,
+    "interaction_bias": 0.65,
+    "assumption_basis": "neutral_fictional_default",
+    "relationship_behavior_inferred": false,
+    "record_origin": "graph_record_origin_unverified",
+    "external_validation": false,
+    "causal_evidence": false,
+    "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+    "record_text": "Profile A supports Profile B.",
+    "source_graph_records": [
+      {
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Profile A supports Profile B."
+      }
+    ],
+    "source_edge_refs": [
+      "Profile A supports Profile B."
+    ],
+    "source_edge_refs_deprecated": true
+  },
+  {
+    "source_agent_id": 1,
+    "target_agent_id": 0,
+    "relation_type": "opposes",
+    "affinity_score": 0.65,
+    "platforms": [
+      "twitter",
+      "reddit"
+    ],
+    "follow_seed": 0.7,
+    "interaction_bias": 0.65,
+    "assumption_basis": "neutral_fictional_default",
+    "relationship_behavior_inferred": false,
+    "record_origin": "graph_record_origin_unverified",
+    "external_validation": false,
+    "causal_evidence": false,
+    "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+    "record_text": "Profile B opposes Profile A.",
+    "source_graph_records": [
+      {
+        "record_origin": "graph_record_origin_unverified",
+        "external_validation": false,
+        "causal_evidence": false,
+        "interpretation": "Model-generated extraction from submitted or pre-existing graph material; not independently verified and not evidence of causality.",
+        "record_text": "Profile B opposes Profile A."
+      }
+    ],
+    "source_edge_refs": [
+      "Profile B opposes Profile A."
+    ],
+    "source_edge_refs_deprecated": true
+  }
+]
