@@ -1,5 +1,21 @@
 # Security & Dependency Audit — ASKTHEPEOPLE
 
+> **SUPERSEDED BASELINE — DO NOT USE AS CURRENT RELEASE STATUS.** This file
+> records the state observed before the 2026-07-28 hardening work. Its path,
+> authentication, CORS, secret-response, traceback, container-user, CI-audit,
+> and related findings have since been remediated in the worktree. Credential
+> fragments from the original notes have been removed. Use
+> [the current full audit](AUDIT-2026-07-28.md) for fixed items, verification,
+> and residual blockers.
+
+> **CRITICAL CORRECTION — 2026-07-29:** A later redacted full-history review
+> proved that public commit `65403183ba37` contained real provider credentials
+> in `.env.example`. Its Zep and Brave values still matched current local and
+> Railway production configuration at discovery time. The “no committed
+> secrets” conclusions below are false. See
+> [the incident record](SECURITY-INCIDENT-2026-07-29.md). Values are
+> intentionally omitted.
+
 - **Date:** 2026-07-28
 - **Scope:** READ-ONLY audit. No source, configs, or dependencies were modified.
 - **Auditor:** ZCode security review (static review only — no network scanners run)
@@ -12,7 +28,10 @@
 
 ## Summary
 
-No committed real secrets were found in git (current tree or full history). `.env` is correctly gitignored, untracked, and excluded from Docker builds. The most serious live issues are **(1) a path-traversal vector across the report/simulation filesystem APIs**, **(2) plaintext API keys returned by the settings endpoint**, and **(3) a fully unauthenticated API surface with no rate limiting or auth of any kind**. Secrets are NOT printed in logs.
+This baseline incorrectly concluded that no real secrets had been committed.
+The current `.env` is gitignored, but a public historical `.env.example`
+revision exposed provider credentials. See the correction above before reading
+the pre-hardening findings below.
 
 ---
 
@@ -157,14 +176,20 @@ No `print()` of credentials and no `logger.*` calls that emit `api_key`/`secret`
 
 ---
 
-## Secrets / committed-key check
+## Secrets / committed-key check — superseded and incorrect
 
-- `.env` (local) contains real-looking live keys: an NVIDIA `nvapi-…` LLM key, a Zep `z_…` key, a Brave `BSA_…` key, and an `LLM_BOOST_API_KEY` (same `nvapi` value). **These are NOT committed to git.** Confirmed via:
+- `.env` (local) contained provider credentials. Their values and identifying
+  fragments are intentionally omitted here. **They were not committed to git.**
+  This was confirmed via:
   - `git ls-files --error-unmatch .env` → not tracked.
   - `git log --all -- .env` → never committed.
-  - `git log --all -S '<full-key-value>'` → the full `nvapi-NDBOwb…` value appears in **no** historical blob.
-  - The `git log -S 'nvapi-'` / `-S 'z_1dWlk'` hits map only to `backend/tests/test_settings.py` (placeholder values like `test-nvapi-key`) and `frontend/src/components/SettingsModal.vue` (`placeholder="nvapi-..."` text) — not real secrets.
-- **Conclusion:** No CRITICAL committed-secret finding. **Recommendation:** because the keys are now visible to this audit session and to anyone with filesystem access, treat them as potentially exposed — rotate the NVIDIA/Zep/Brave keys as standard hygiene, but **no `git filter-repo` is required** (nothing is in history).
+  - A history search for the full credential values found no historical blob.
+  - Prefix searches only matched explicit test placeholders and input-help
+    text, not real credentials.
+- **Correction:** this conclusion was disproved by the 2026-07-29 full-history
+  review. Rotation is urgent, and an operator-coordinated history rewrite is
+  required after containment. See
+  [the incident record](SECURITY-INCIDENT-2026-07-29.md).
 
 ---
 

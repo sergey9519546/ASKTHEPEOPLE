@@ -2,7 +2,13 @@
 
 **Date:** 2026-03-23
 **Scope:** Rate limiting, report generation timeout, CORS production config
-**Status:** Ready for execution
+**Status:** Superseded historical plan
+
+> Do not use this file as current configuration guidance. Its line references,
+> defaults, and “not installed” statements describe the March 2026 baseline.
+> The implemented controls and remaining risks are recorded in
+> [`../AUDIT-2026-07-28.md`](../AUDIT-2026-07-28.md) and
+> [`../DEPLOYMENT.md`](../DEPLOYMENT.md).
 
 ---
 
