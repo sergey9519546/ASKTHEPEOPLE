@@ -220,15 +220,40 @@ release process, see [Deployment](docs/DEPLOYMENT.md).
 
 ## Documentation
 
-- [Methodology and claim boundary](docs/METHODOLOGY.md)
-- [Design Direction C: civic wayfinding](docs/DESIGN-DIRECTION-C.md)
-- [Appropriate use and prohibited uses](docs/APPROPRIATE_USE.md)
-- [Validation with real people](docs/VALIDATE_WITH_PEOPLE.md)
-- [Project provenance and lineage](docs/PROVENANCE.md)
-- [Third-party software and media notices](docs/THIRD_PARTY_NOTICES.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [Current full audit, 2026-07-28](docs/AUDIT-2026-07-28.md)
-- [Superseded pre-hardening security baseline](docs/AUDIT-security-2026-07-28.md)
+**Start here:** the production documentation system is at
+[`docs/README.md`](docs/README.md). It is the normative authority for the
+product, methodology, security, privacy, and architecture. 12 ADRs, 48
+modular docs, validated by [`tools/validate_docs.py`](tools/validate_docs.py).
+
+For agents and CI, the operational contract is at
+[`AGENTS.md`](AGENTS.md).
+
+- [Product Truth Contract](docs/product/PRODUCT_TRUTH_CONTRACT.md) — non-negotiable claim boundary
+- [Methodology](docs/product/METHODOLOGY.md) — canonical scenario method
+- [Use Policy](docs/product/USE_POLICY.md) — allowed, elevated, and prohibited uses
+- [Architecture overview](docs/architecture/index.md) — project-specific, with `file:line` references
+- [Data model](docs/architecture/data-model.md) and [state machines](docs/architecture/state-machines.md)
+- [ADRs](docs/architecture/adr/README.md) — 12 accepted architecture decisions
+- [Threat model](docs/security/THREAT_MODEL.md), [secure source ingestion](docs/security/SOURCE_INGESTION.md), [incident response](docs/security/INCIDENT_RESPONSE.md)
+- [Privacy: data map](docs/privacy/DATA_MAP.md), [retention](docs/privacy/RETENTION.md), [subprocessors](docs/privacy/SUBPROCESSORS.md)
+- [AI: prompt registry](docs/ai/PROMPT_REGISTRY.md), [evals](docs/ai/EVALS.md), [model releases](docs/ai/MODEL_RELEASES.md), [failure modes](docs/ai/FAILURE_MODES.md)
+- [Design Direction C — Civic Wayfinding](docs/design/DIRECTION_C.md), [route grammar](docs/design/ROUTE_GRAMMAR.md), [accessibility](docs/design/ACCESSIBILITY.md), [content system](docs/design/CONTENT_SYSTEM.md)
+- [Execution plans](docs/exec-plans/README.md) (8 plans, dependency-ordered)
+- [Release acceptance](docs/release/ACCEPTANCE.md) and [runbook](docs/release/RUNBOOK.md)
+- [Source register](docs/SOURCES.md) — research and standards backing the docs
+
+Project-specific lineage and license attributions live at the repo root:
+
+- [Project provenance and lineage](PROVENANCE.md)
+- [Third-party software and media notices](THIRD_PARTY_NOTICES.md)
+
+The full integration audit is at
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md).
+The integration procedure is at
+[`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md). Pre-authority legacy
+documents are archived at
+[`docs/archive/legacy-2026-07-29/`](docs/archive/legacy-2026-07-29/README.md)
+with a per-file reconciliation map.
 
 ## Research basis for the caution
 
