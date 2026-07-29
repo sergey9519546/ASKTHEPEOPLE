@@ -1,11 +1,12 @@
 ---
 title: "Execution Plan 05 — Brief, Handoff, Exports, and Provenance"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Product + Content + Export Platform"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Execution Plan 05 — brief, handoff, exports, and provenance
@@ -124,3 +125,27 @@ or superseding correction. The audit record remains.
 Disable generation of a faulty export type while preserving validated in-app
 briefs. Restore prior template/release and revoke affected artifacts. Never
 fall back to an export without disclosure or provenance validation.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-ai-eval-steward + askthepeople-architect`
+
+**Audit relevance:** Server-derived exports with canonical record IDs, the Truth Rail in the frontend, the decision-owner conclusion as a separate aggregate. Audit P1 export hazard is closed here.
+
+**Current state:** Brief is generated as a single synthetic JSON/Markdown report. The frontend renders the report via Vue + D3 but does not yet render the Truth Rail, the disclosure block, or the decision-owner conclusion. The export route accepts client-supplied rows (audit P1 hazard).
+
+**Key file:line references:**
+
+- `backend/app/services/report_agent.py:1 (114 KB agent)`
+- `backend/app/services/export_service.py:1 (15 KB export, audit P1)`
+- `frontend/src/ (Vue 3 + D3, no Truth Rail yet)`
+
+The numbered implementation steps in this plan are NOT STARTED at the
+baseline. The first deliverable is the
+[`docs/exec-plans/00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
+census, which must run against the current baseline and produce a
+per-aggregate divergence report from the doc-system baseline before
+any work in this plan begins.

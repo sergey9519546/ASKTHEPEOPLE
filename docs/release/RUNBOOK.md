@@ -1,11 +1,12 @@
 ---
 title: "Release Runbook"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Release Manager + SRE"
 last_reviewed: "2026-07-29"
-review_cycle: "Every release and quarterly drill"
+review_cycle: "Per release; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Runbook
@@ -384,3 +385,54 @@ Exercise:
 - [OpenTelemetry documentation](https://opentelemetry.io/docs/) — Vendor-neutral traces, metrics, and logs.
 - [Temporal documentation](https://docs.temporal.io/) — Reference implementation for durable, resumable workflow orchestration; the architecture requires an interface rather than vendor lock-in.
 - [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-release-operator` (Release Manager + SRE).
+
+**Current state at the baseline:** the deployment today is a
+single Flask process plus a Celery worker plus Redis. There is no
+worker-drain procedure, no migration rehearsal procedure, no
+quarterly incident-response drill, and no documented rollback
+procedure that survives a multi-worker topology. The runbook is
+TARGET in full and must be implemented as gates 2 and 4 land.
+
+**Key file:line references:**
+
+- Flask application factory and process registration:
+  [`backend/app/__init__.py:25-330`](../../backend/app/__init__.py:25).
+- Web request/response middleware (auth, security headers,
+  traceback stripping, no body logging):
+  [`backend/app/__init__.py:111-267`](../../backend/app/__init__.py:111).
+- Health check with storage writability and revision id:
+  [`backend/app/__init__.py:290-307`](../../backend/app/__init__.py:290).
+- In-process cleanup worker (audit pattern; to be removed):
+  [`backend/app/__init__.py:229-239`](../../backend/app/__init__.py:229).
+- Simulation process cleanup hook (to be replaced with worker drain):
+  [`backend/app/__init__.py:106-109`](../../backend/app/__init__.py:106).
+- Celery app and the single registered task:
+  [`backend/app/celery_app.py:21`](../../backend/app/celery_app.py:21),
+  [`backend/app/tasks/simulation_tasks.py:16`](../../backend/app/tasks/simulation_tasks.py:16).
+
+**Required additions to the runbook (gate 2 + gate 4):**
+
+- Worker drain order and timeout. Drain Celery workers, drain
+  the API replicas, drain the reverse proxy, then upgrade.
+- Migration rehearsal procedure (rehearse against a copy of
+  the database, prove counts, hashes, relationships, and
+  authorization).
+- Backup restoration procedure (per ADR-0012).
+- Quarterly incident-response drill per
+  [`docs/security/INCIDENT_RESPONSE.md`](../security/INCIDENT_RESPONSE.md).
+- Rollback procedure per attempt type, including
+  per-attempt immutability under the canonical persistence
+  layer.
+- Provider-degradation behavior per
+  [`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md).
+- Observability runbook (which metric, which trace, which
+  log; how to read a degraded-state trace; what counts as
+  "the system is operating normally" vs "the system is
+  operating with reduced service").

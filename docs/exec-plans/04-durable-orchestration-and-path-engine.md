@@ -1,11 +1,12 @@
 ---
 title: "Execution Plan 04 — Durable Orchestration and Path Engine"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "AI Platform + Workflow + Research"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Execution Plan 04 — durable orchestration and path engine
@@ -122,3 +123,28 @@ concurrency, and organization budgets.
 Keep the current runner available only for read/replay of legacy fixtures during
 transition. New production runs use the orchestrator. Rollback restores the
 previous workflow code/release set; persisted event history remains readable.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-orchestration-engineer + askthepeople-architect`
+
+**Audit relevance:** The audit P0 daemon-thread finding and the P1 process-local runtime ownership are the persistent work of this plan. Gate 2.
+
+**Current state:** Celery is wired (backend/app/celery_app.py, backend/app/tasks/simulation_tasks.py:16) but the preparation endpoint in api/simulation.py still creates a daemon thread. Idempotency keys, leases, fencing tokens, and push-based event delivery are NOT IMPLEMENTED.
+
+**Key file:line references:**
+
+- `backend/app/celery_app.py:1 (Celery config)`
+- `backend/app/tasks/simulation_tasks.py:16 (run_simulation_task)`
+- `backend/app/api/simulation.py (daemon-thread prep endpoint, audit P0)`
+- `backend/app/services/simulation_manager.py:1 (26 KB manager)`
+
+The numbered implementation steps in this plan are NOT STARTED at the
+baseline. The first deliverable is the
+[`docs/exec-plans/00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
+census, which must run against the current baseline and produce a
+per-aggregate divergence report from the doc-system baseline before
+any work in this plan begins.

@@ -1,11 +1,12 @@
 ---
 title: "Execution Plan 00 — Repository Census and Governance"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Program Lead + Principal Engineer"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Execution Plan 00 — Repository census and governance
@@ -169,3 +170,30 @@ Add:
 This plan changes governance and documentation only. If a linter initially
 blocks the branch because of legacy content, introduce a versioned baseline
 allowlist with file/line/owner/expiry. Do not disable the linter globally.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-docs-steward + askthepeople-architect`
+
+**Audit relevance:** The 30-commit gap between the doc-system baseline c33a6a91 and the current baseline 8b616dc7 must be expanded into a full per-aggregate divergence report before any release claim cites the new authority docs as already-live.
+
+**Current state:** Census is the first deliverable. The 30-commit gap is recorded in docs/archive/legacy-2026-07-29/README.md and the bare code structure is described in docs/architecture/index.md. A full per-aggregate census is NOT STARTED.
+
+**Key file:line references:**
+
+- `backend/app/api/__init__.py:13-17 (Flask blueprints)`
+- `backend/app/api/simulation.py (3,526 lines, the monolith)`
+- `backend/app/services/simulation_runner.py:1 (82 KB runner)`
+- `backend/app/services/report_agent.py:1 (114 KB agent)`
+- `backend/uploads/ (filesystem storage)`
+- `backend/app/tasks/simulation_tasks.py:16 (Celery task)`
+
+The numbered implementation steps in this plan are NOT STARTED at the
+baseline. The first deliverable is the
+[`docs/exec-plans/00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
+census, which must run against the current baseline and produce a
+per-aggregate divergence report from the doc-system baseline before
+any work in this plan begins.

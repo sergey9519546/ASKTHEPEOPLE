@@ -1,11 +1,12 @@
 ---
 title: "Execution Plan 03 — Method Inputs and Review"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Research + Product + Frontend/Domain Leads"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Execution Plan 03 — method inputs and review
@@ -133,3 +134,27 @@ Test whether users understand:
 The new input model may be feature-flagged. Legacy persona-based runs remain
 read-only and labeled legacy. New runs cannot fall back to unreviewed persona
 generation.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-architect + askthepeople-ai-eval-steward`
+
+**Audit relevance:** Strict request schemas (Pydantic with extra=forbid), the Epistemic Ledger, the policy engine, the decision-review state machine. Gate 1 work.
+
+**Current state:** Pydantic is in use (config.py and model files) but the request schemas are not strict. The Epistemic Ledger is NOT IMPLEMENTED. The policy engine is NOT IMPLEMENTED. The decision-review state machine is NOT IMPLEMENTED.
+
+**Key file:line references:**
+
+- `backend/app/config.py (Pydantic config)`
+- `backend/app/services/claim_boundary.py:1 (3 KB claim boundary)`
+- `backend/app/services/validation_engine.py:1 (14 KB validation engine)`
+
+The numbered implementation steps in this plan are NOT STARTED at the
+baseline. The first deliverable is the
+[`docs/exec-plans/00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
+census, which must run against the current baseline and produce a
+per-aggregate divergence report from the doc-system baseline before
+any work in this plan begins.

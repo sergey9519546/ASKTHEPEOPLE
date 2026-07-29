@@ -1,11 +1,12 @@
 ---
 title: "Execution Plan 07 — Evals, Accessibility, and Release"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Release Lead + QA + Research + Accessibility"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Execution Plan 07 — evals, accessibility, and release
@@ -126,3 +127,27 @@ Canary rollback is rehearsed before promotion. A post-release critical failure
 activates the relevant kill switch and restores the last approved application,
 prompt, model, validator, template, or policy release while preserving audit
 history.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-ai-eval-steward + askthepeople-release-operator + askthepeople-frontend-steward`
+
+**Audit relevance:** Eval suite, comprehension-test program, accessibility conformance evidence, release evidence bundle. Gate 5 work.
+
+**Current state:** No automated eval suite. No comprehension-test program. No accessibility conformance report. No per-prompt regression gate. The release evidence bundle is described in docs/release/ACCEPTANCE.md but is not yet produced for any release.
+
+**Key file:line references:**
+
+- `docs/ai/EVALS.md (eval categories, no implementation)`
+- `docs/design/ACCESSIBILITY.md (WCAG 2.2 target, no evidence)`
+- `docs/release/ACCEPTANCE.md (evidence bundle, no runs)`
+
+The numbered implementation steps in this plan are NOT STARTED at the
+baseline. The first deliverable is the
+[`docs/exec-plans/00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
+census, which must run against the current baseline and produce a
+per-aggregate divergence report from the doc-system baseline before
+any work in this plan begins.

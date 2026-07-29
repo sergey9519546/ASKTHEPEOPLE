@@ -1,11 +1,12 @@
 ---
 title: "Execution Plan 02 — Tenancy, Data, and Secure Ingestion"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Platform + Security + Privacy"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Execution Plan 02 — tenancy, data, and secure ingestion
@@ -116,3 +117,28 @@ During dual-read migration, the legacy store remains read-only after cutover.
 Rollback restores traffic to the reconciled snapshot and replays accepted
 writes if designed and tested. Uploaded files remain quarantined until the new
 pipeline is proven; never fall back to unsandboxed parsing.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-persistence-engineer + askthepeople-security-reviewer`
+
+**Audit relevance:** Multi-tenant isolation (ADR-0009) and the canonical persistence layer (ADR-0012) are the persistent work of this plan.
+
+**Current state:** Both are NOT STARTED. No organization_id or workspace_id exists anywhere. Filesystem JSON, per-platform SQLite, Redis, ZEP, and NetworkX are the five current storage substrates. None satisfies PostgreSQL canonical + object storage. The audit P1 finding on client-supplied export data is closed in this plan.
+
+**Key file:line references:**
+
+- `backend/app/models/project.py:30-99 (Project dataclass, no tenant)`
+- `backend/app/models/task.py:30-43 (Task dataclass, no tenant)`
+- `backend/app/services/export_service.py:1 (audit P1 export hazard)`
+- `docs/architecture/data-model.md (per-aggregate gap table)`
+
+The numbered implementation steps in this plan are NOT STARTED at the
+baseline. The first deliverable is the
+[`docs/exec-plans/00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
+census, which must run against the current baseline and produce a
+per-aggregate divergence report from the doc-system baseline before
+any work in this plan begins.

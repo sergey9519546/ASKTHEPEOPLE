@@ -1,11 +1,12 @@
 ---
 title: "Release Acceptance"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Release Council"
 last_reviewed: "2026-07-29"
-review_cycle: "Every release"
+review_cycle: "Per release; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Acceptance
@@ -615,3 +616,54 @@ and export-template releases. Verbal approval is not sufficient.
 - [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) — Current accessibility conformance target for the product.
 - [NIST SP 800-61 Rev. 3](https://csrc.nist.gov/pubs/sp/800/61/r3/final) — Final incident-response recommendations aligned with CSF 2.0.
 - [European Commission Article 50 transparency guidelines](https://digital-strategy.ec.europa.eu/en/library/guidelines-transparency-obligations-providers-and-deployers-ai-systems) — Final July 2026 guidance on transparency obligations that apply from 2 August 2026.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-release-operator` (Release Manager + SRE).
+
+**Current state at the baseline:** no release has produced the
+acceptance evidence bundle described in this doc. The audit and
+the project-specific status sections in the other 47 docs are
+the working inventory of which items in this acceptance evidence
+are CURRENT, PARTIAL, or TARGET.
+
+**Key file:line references for the evidence items:**
+
+- **Commit and deployment identifiers:** every doc carries
+  `baseline_commit: 8b616dc7...` and the build revision is read
+  from `RAILWAY_GIT_COMMIT_SHA` or `BUILD_REVISION` at
+  [`backend/app/__init__.py:300-303`](../../backend/app/__init__.py:300).
+- **Database and schema versions:** PostgreSQL is TARGET (gate 3);
+  current canonical store is filesystem JSON +
+  [`backend/uploads/`](../../backend/uploads/).
+- **Prompt, model, validator, and policy versions:** prompt registry
+  is TARGET (gate 1); the doc set is the policy version
+  (`docs/product/PRODUCT_TRUTH_CONTRACT.md`,
+  `docs/product/USE_POLICY.md`).
+- **Automated test and evaluation reports:** `cd backend &&
+  .\.venv\Scripts\pytest` runs the test suite; the CI workflow
+  at `.github/workflows/ci.yml` runs the backend. The eval
+  suite is TARGET (gate 5).
+- **Accessibility and comprehension-test evidence:** WCAG 2.2
+  conformance is TARGET; the comprehension-test program is
+  TARGET (gate 5).
+- **Security and privacy sign-offs:** the security headers and
+  SafePathError handler are CURRENT
+  ([`backend/app/__init__.py:74-267`](../../backend/app/__init__.py:74));
+  the security review of the P0 cluster is gate 0.
+- **Provenance/disclosure validation for every export type:** the
+  export route currently accepts client-supplied rows (audit P1);
+  the disclosure block is not yet attached to detached artifacts.
+- **Migration and rollback evidence:** the canonical persistence
+  layer is TARGET (gate 3); migration rehearsal procedure is
+  TARGET.
+- **Known-risk register and approved exceptions:** the audit is
+  the working risk register; the docs/archive/legacy-2026-07-29
+  reconciliation map is the working exception list.
+
+A release that claims the docs as already-live must expand the
+per-doc "Project-specific implementation status" sections to
+show the corresponding evidence in the release-evidence bundle.

@@ -1,11 +1,12 @@
 ---
 title: "Execution Plan 01 — Truth Layer and Foundations"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Product Truth Lead + Frontend/Domain Leads"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Execution Plan 01 — Truth layer and foundations
@@ -148,3 +149,28 @@ Feature-flag the new shell by organization only during internal migration.
 Database truth fields are forward-only and must not be rolled back to ambiguous
 states. UI rollback may return to the prior layout only if the Truth Rail and
 truth fields remain.
+
+
+---
+
+## Project-specific implementation status (baseline `8b616dc7`)
+
+**Owner:** `askthepeople-docs-steward + askthepeople-architect`
+
+**Audit relevance:** The audit P0 cluster and the gate-0 deliverables are listed under this plan. The Truth Rail and the deprecation headers for legacy routes are the work.
+
+**Current state:** Truth layer is PARTIAL. The wire-level enforcement (security headers, traceback stripping, no body logging, SafePathError -> 400) is in place at app/__init__.py:74-226. The Truth Rail UI, the in-product refusal flow, and the deprecation headers for /interview, /opinions, /export/survey, interviews_count, export_survey_results are NOT STARTED.
+
+**Key file:line references:**
+
+- `backend/app/__init__.py:74-226 (security headers, traceback stripping)`
+- `backend/app/api/simulation.py (P0 path-escape endpoint)`
+- `backend/app/api/auth.py:1 (auth surface)`
+- `docs/product/PRODUCT_TRUTH_CONTRACT.md (truth clauses, validator-enforced)`
+
+The numbered implementation steps in this plan are NOT STARTED at the
+baseline. The first deliverable is the
+[`docs/exec-plans/00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
+census, which must run against the current baseline and produce a
+per-aggregate divergence report from the doc-system baseline before
+any work in this plan begins.
