@@ -1,11 +1,14 @@
 ---
 title: "Data Model"
-status: "Proposed"
-version: "1.0.0"
+status: "Normative"
+version: "1.1.0"
 owner: "Domain Engineering + Database Engineering + Privacy"
 last_reviewed: "2026-07-29"
-review_cycle: "Quarterly"
+review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Non-atomic file persistence' / §5 P1 'Client-supplied export data can fabricate provenance'"
+applies_to: "all aggregates under backend/app/models/, all state.json files under backend/uploads/, all per-platform SQLite DBs, all ZEP graph memory, all generated reports and exports"
 ---
 
 # Data model
@@ -539,6 +542,170 @@ search. Vector IDs do not become provenance.
 
 ## References
 
-- [PostgreSQL — Row security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) — Database-enforced tenant-isolation reference, including owner/superuser bypass considerations.
-- [RFC 9562 — UUIDs](https://www.rfc-editor.org/rfc/rfc9562.html) — UUIDv7 specification used for time-ordered identifiers.
-- [C2PA Technical Specifications](https://spec.c2pa.org/specifications/) — Cryptographically verifiable provenance structure; provenance does not prove that content is true.
+- [PostgreSQL - Row security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html) - Database-enforced tenant-isolation reference, including owner/superuser bypass considerations.
+- [RFC 9562 - UUIDs](https://www.rfc-editor.org/rfc/rfc9562.html) - UUIDv7 specification used for time-ordered identifiers.
+- [C2PA Technical Specifications](https://spec.c2pa.org/specifications/) - Cryptographically verifiable provenance structure; provenance does not prove that content is true.
+
+---
+
+## Project-specific data-model status (baseline `8b616dc7`)
+
+This section maps every aggregate in this doc to the actual code under
+[`backend/app/`](../../backend/app/) and to the persisted state on disk
+under [`backend/uploads/`](../../backend/uploads/). Items are marked
+**CURRENT** (implemented and verified), **PARTIAL** (implemented but
+materially deficient against this doc), or **TARGET** (the doc is
+normative; the implementation has not reached it). See
+[`docs/architecture/index.md`](index.md) for the legend.
+
+### Storage today (CURRENT)
+
+The current implementation uses five storage substrates, none of which
+satisfies the "PostgreSQL is the target system of record" rule in
+"Design rules" above:
+
+| Substrate | Path / service | Holds | Status |
+|---|---|---|---|
+| Filesystem JSON | `backend/uploads/projects/{project_id}/project.json` | `Project` aggregate, source files, extracted text | CURRENT, non-atomic |
+| Filesystem JSON | `backend/uploads/simulations/{simulation_id}/state.json` | `Simulation` lifecycle (audit-flagged) | CURRENT, non-atomic, repair-on-read |
+| Filesystem JSON | `backend/uploads/reports/{report_id}/...` | Generated report | CURRENT |
+| SQLite (per platform) | `backend/uploads/simulations/{simulation_id}/reddit_simulation.db` and `twitter_simulation.db` | Per-action records | CURRENT, opened by an audit-flagged path-escape route |
+| Redis | `task:{task_id}` keys with 24h TTL, plus `tasks:all` set | `Task` aggregate | CURRENT, best-effort |
+| ZEP Cloud | external graph memory service | Entity / relationship graph, optional | CURRENT |
+| NetworkX | in-process | Intermediate graph computation | CURRENT |
+
+See [`docs/architecture/index.md`](index.md) §"State and persistence" for
+the per-substrate defect list.
+
+### Aggregates in the code (vs. this doc)
+
+| Aggregate | Doc target | Code today | Status |
+|---|---|---|---|
+| `organizations` | Required | Not modeled; only `project_id` exists | TARGET |
+| `users` | Required | Not modeled; auth is bearer-token only via `APP_TOKEN` | TARGET |
+| `memberships` | Required with OWNER/ADMIN/EDITOR/REVIEWER/VIEWER/SECURITY | Not modeled | TARGET |
+| `projects` | Container for related decisions | [`models/project.py:28-99`](../../backend/app/models/project.py:28) (5-state dataclass) | PARTIAL (no `organization_id`, no version, no append-only) |
+| `decisions` / `decision_versions` | Append-only once referenced by a run | `simulation_requirement` is a free-text field on `Project` | TARGET |
+| `sources` / `source_versions` / `source_segments` | Quarantined, scanned, parsed, user-approved | `Project.files` is a list of `{filename, path, size}` | PARTIAL (no quarantine, no scan, no per-version) |
+| `starting_conditions` / `assumptions` / `critical_uncertainties` | First-class aggregates | Implicit in extracted text and prompts | TARGET |
+| `generated_profiles` | First-class aggregate with version and approval | Files written by [`services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py) | PARTIAL (no version, no approval workflow) |
+| `run_configs` | Frozen, content-hashed | [`services/simulation_config_generator.py`](../../backend/app/services/simulation_config_generator.py) (52 KB) generates config files | PARTIAL (no freeze, no hash, no per-version row) |
+| `runs` / `run_stages` / `run_events` | Independent aggregates with optimistic concurrency | `state.json` per simulation; no rows | TARGET |
+| `possible_paths` / `path_steps` / `considerations` / `validation_questions` | First-class in the report | Produced in [`services/report_agent.py`](../../backend/app/services/report_agent.py) (114 KB) | PARTIAL (no per-path rows, no DB) |
+| `decision_briefs` | Separate, human-authored conclusion store | The "report" today mixes synthetic content with an editorial voice | TARGET |
+| `exports` | Server-derived from canonical records | [`services/export_service.py`](../../backend/app/services/export_service.py) (15 KB) accepts client-supplied rows | **PARTIAL — audit P1** |
+| `epistemic_assertions` / `epistemic_edges` | Normalized and validated ledger | Not implemented | TARGET |
+| `audit_events` | Append-only | Per-task status in Redis is best-effort | PARTIAL |
+
+### Source material as data, not instruction (PARTIAL — audit P0)
+
+`ProjectManager.save_file_to_project`
+([`models/project.py:247-278`](../../backend/app/models/project.py:247))
+writes uploaded files with a randomized safe filename and never exposes
+the original filename downstream. The extracted text is written to
+`extracted_text.txt`
+([`models/project.py:280-296`](../../backend/app/models/project.py:280)).
+
+**Gap:** the source material is consumed by LLM calls in
+[`services/ontology_generator.py`](../../backend/app/services/ontology_generator.py),
+[`services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py),
+and
+[`services/simulation_config_generator.py`](../../backend/app/services/simulation_config_generator.py).
+The current code does not isolate source text as a separate prompt role
+and does not run a deterministic prompt-injection scanner. The P0 fix is
+in [`adr/ADR-0005-zero-trust-source-ingestion.md`](adr/ADR-0005-zero-trust-source-ingestion.md)
+and the audit's P0 finding. Gate 0, owned by
+`askthepeople-security-reviewer`.
+
+### Identifiers today vs. UUIDv7
+
+This doc specifies UUIDv7 identifiers. The current code uses
+`uuid.uuid4().hex[:12]` truncated to 12 hex chars
+([`models/project.py:146`](../../backend/app/models/project.py:146)) and
+`uuid.uuid4()` for task IDs
+([`models/task.py:184`](../../backend/app/models/task.py:184)). The
+12-hex truncation reduces the identifier space from 128 bits to 48 bits
+and is not time-ordered. The migration to UUIDv7 is **TARGET** and
+requires the canonical persistence layer.
+
+### Optimistic concurrency — TARGET
+
+No aggregate today carries a `version` column. `ProjectManager.save_project`
+([`models/project.py:168-175`](../../backend/app/models/project.py:168))
+writes JSON non-atomically. The audit's P1 finding "Non-atomic file
+persistence" applies to every JSON write. Reaching optimistic
+concurrency requires the canonical persistence layer in gate 3.
+
+### Tenant isolation — TARGET
+
+No `organization_id` exists anywhere in the data model. A valid bearer
+token is allowed to read and write every project, every simulation, and
+every report. Multi-tenant isolation is **TARGET** and is the subject of
+[`adr/ADR-0009-multi-tenant-isolation.md`](adr/ADR-0009-multi-tenant-isolation.md).
+Gate 3, owned by `askthepeople-persistence-engineer`.
+
+### Append-only after a run starts — PARTIAL (force restart hazard)
+
+The current code's force-restart path can stop an existing run, delete
+logs, reset state, and rerun under the same simulation ID. This violates
+"Historical run inputs and outputs are append-only after a run starts"
+and "Completed runs are immutable". The audit's P1 finding "Force restart
+destores provenance" applies. Reaching the contract requires
+separation of identifiers (project_id, decision_version_id,
+source_bundle_version_id, scenario_version_id, simulation_id,
+preparation_attempt_id, run_attempt_id, report_version_id, export_id)
+and immutability of completed attempts. Gate 3.
+
+### Export provenance — PARTIAL (audit P1)
+
+The export route accepts arbitrary `results` rows from the caller and
+returns a file under the ASKTHEPEOPLE wordmark. The server cannot prove
+those rows originated from the referenced simulation. The fix is
+documented in the audit:
+
+> The client should send canonical record IDs. The server MUST
+> authorize the caller, retrieve canonical records, confirm they belong
+> to the same attempt, generate the export, add the truth contract, add
+> a provenance manifest, hash the output, record the export event, return
+> an immutable export ID.
+
+The replacement flow is **TARGET** and is part of gate 5 / exec plan
+[`docs/exec-plans/05-brief-handoff-exports-and-provenance.md`](../exec-plans/05-brief-handoff-exports-and-provenance.md).
+
+### Epistemic Ledger — TARGET
+
+The Epistemic Ledger (origin types, epistemic roles, allowed and
+prohibited relationships) is not yet implemented. ADR
+[`adr/ADR-0002-epistemic-ledger.md`](adr/ADR-0002-epistemic-ledger.md)
+defines it; the data model and the validation layer are part of gate 1
+and gate 3.
+
+### Chain-of-thought retention — CURRENT (NOT stored)
+
+The current code never persists the model's chain-of-thought. The
+`Task` aggregate stores a `result: Optional[Dict]` and a `message: str`
+([`models/task.py:38-40`](../../backend/app/models/task.py:38)) but
+neither is the model's reasoning trace. The `claim_boundary` and
+`validation_engine` services only consume the structured output of the
+model. The audit's P1 finding and
+[`adr/ADR-0010-no-chain-of-thought-retention.md`](adr/ADR-0010-no-chain-of-thought-retention.md)
+require explicit non-retention; the current behavior satisfies the rule
+by accident of implementation rather than by design. A future change
+that adds any reasoning-trace field to `Task` MUST be blocked.
+
+### Hidden chain-of-thought in any future table — TARGET (negative rule)
+
+Any table that the canonical persistence layer introduces MUST declare
+explicitly that no chain-of-thought field is permitted. The database
+acceptance criterion "no table stores hidden chain-of-thought" is
+enforced by a schema-review CI check that is **TARGET** and is part of
+gate 5.
+
+### Retention and deletion — PARTIAL
+
+`ProjectManager.delete_project`
+([`models/project.py:227-244`](../../backend/app/models/project.py:227))
+calls `shutil.rmtree` synchronously. There is no retention policy, no
+LEGAL_HOLD state, no provider-deletion step, and no backup aging
+record. Reaching the deletion state machine in `state-machines.md`
+requires the canonical persistence layer.
