@@ -416,6 +416,8 @@ async function save() {
 </script>
 
 <style scoped>
+/* Scoped overrides — convert light theme to dark glass (matches App.vue design system) */
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
 }
@@ -424,11 +426,265 @@ async function save() {
   border-left: none;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Modal overlay → dark glass backdrop */
+.fixed.inset-0.z-\[100\].flex.items-center.justify-center.bg-slate-900\/40.backdrop-blur-sm.p-4.font-sans {
+  background: rgba(9, 13, 22, 0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
+
+/* Modal container → dark glass card */
+.w-full.max-w-4xl.bg-white.border.border-slate-200.rounded-2xl.shadow-xl {
+  background: rgba(15, 23, 42, 0.9) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5) !important;
+  color: #f8fafc;
+}
+
+/* Header */
+.bg-white.border-b.border-slate-100 {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.text-2xl.text-rose-500 {
+  color: #f43f5e !important;
+}
+
+.text-lg.font-bold.text-slate-800.tracking-tight.uppercase {
+  color: #f8fafc !important;
+}
+
+button.border-none.bg-transparent.hover\:bg-slate-100 {
+  color: #94a3b8 !important;
+}
+button.border-none.bg-transparent.hover\:bg-slate-100:hover {
+  background: rgba(30, 41, 59, 0.6) !important;
+  color: #f8fafc !important;
+}
+
+/* Body scroll */
+.flex-grow.p-6.md\:p-8.overflow-y-auto.space-y-6 {
+  color: #f8fafc;
+}
+
+/* Preset picker card */
+section.border.border-slate-200.rounded-xl.p-5.bg-slate-50 {
+  background: rgba(30, 41, 59, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.text-xs.font-bold.text-slate-400.uppercase.tracking-wider {
+  color: #94a3b8 !important;
+}
+
+.text-\[11px\].text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+/* Preset buttons */
+button.w-full.py-2.px-3.border.border-slate-200.rounded-lg.bg-white {
+  background: rgba(30, 41, 59, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #cbd5e1 !important;
+  transition: all 0.2s ease !important;
+}
+
+button.w-full.py-2.px-3.border.border-slate-200.rounded-lg.bg-white:hover {
+  background: rgba(99, 102, 241, 0.15) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  color: #a5b4fc !important;
+  transform: translateY(-1px);
+}
+
+/* Active preset */
+button.bg-rose-50.border-rose-400.text-rose-600.font-bold,
+button[class*="bg-rose-50"] {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2)) !important;
+  border: 1px solid #6366f1 !important;
+  color: #a5b4fc !important;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.25) !important;
+}
+
+/* Settings section cards (Primary/Boost Engine) */
+section.grid.grid-cols-1.md\:grid-cols-2.gap-6 > div,
+section.border.border-slate-200.rounded-xl.p-5.bg-white {
+  background: rgba(15, 23, 42, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.text-xs.font-bold.text-rose-500.uppercase.tracking-wider {
+  background: linear-gradient(135deg, #f43f5e, #8b5cf6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent !important;
+}
+
+.text-xs.font-bold.text-blue-500.uppercase.tracking-wider {
+  background: linear-gradient(135deg, #06b6d4, #6366f1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: transparent !important;
+}
+
+.text-xs.font-bold.text-slate-700.uppercase.tracking-wider {
+  color: #f8fafc !important;
+}
+
+/* Form labels */
+.text-\[11px\].font-bold.text-slate-500.uppercase.tracking-wider {
+  color: #94a3b8 !important;
+}
+
+/* Input containers */
+.relative.flex.border.border-slate-200.rounded-lg {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.relative.flex.border.border-slate-200.rounded-lg:focus-within {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+}
+
+input.w-full.px-3.py-2.font-mono.text-xs.outline-none.bg-white.border-none {
+  background: transparent !important;
+  color: #f8fafc !important;
+  border: none !important;
+}
+
+input.w-full.px-3.py-2.font-mono.text-xs.outline-none.bg-white.border-none::placeholder {
+  color: #64748b !important;
+}
+
+/* Show/hide buttons */
+button.border-l.border-slate-200.border-r-0.border-t-0.border-b-0.px-3.py-1.bg-slate-50 {
+  background: rgba(30, 41, 59, 0.6) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #94a3b8 !important;
+}
+
+button.border-l.border-slate-200.border-r-0.border-t-0.border-b-0.px-3.py-1.bg-slate-50:hover {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: #a5b4fc !important;
+}
+
+/* Standalone inputs */
+input.w-full.px-3.py-2.border.border-slate-200.rounded-lg.font-mono.text-xs.outline-none.bg-white {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #f8fafc !important;
+}
+
+input.w-full.px-3.py-2.border.border-slate-200.rounded-lg.font-mono.text-xs.outline-none.bg-white:focus {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+}
+
+input.w-full.px-3.py-2.border.border-slate-200.rounded-lg.font-mono.text-xs.outline-none.bg-white::placeholder {
+  color: #64748b !important;
+}
+
+/* Connection diagnostics section */
+section.border.border-slate-200.rounded-xl.p-5.bg-white.space-y-4 {
+  background: rgba(15, 23, 42, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Test connection button */
+button.w-full.md\:w-auto.bg-slate-900.text-white.hover\:bg-rose-600 {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  border: 1px solid rgba(139, 92, 246, 0.4) !important;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.25) !important;
+}
+
+button.w-full.md\:w-auto.bg-slate-900.text-white.hover\:bg-rose-600:hover {
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.4) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Connection feedback */
+div.border.rounded-lg.p-4.text-xs.font-mono.bg-emerald-50,
+div.border.rounded-lg.p-4.text-xs.font-mono.bg-rose-50 {
+  color: #f8fafc !important;
+}
+
+.bg-emerald-50.border-emerald-200 {
+  background: rgba(16, 185, 129, 0.1) !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+}
+
+.bg-rose-50.border-rose-200 {
+  background: rgba(244, 63, 94, 0.1) !important;
+  border: 1px solid rgba(244, 63, 94, 0.3) !important;
+}
+
+.bg-emerald-50 .material-symbols-outlined,
+.bg-rose-50 .material-symbols-outlined {
+  color: inherit !important;
+}
+
+/* Local model instructions */
+section.border.border-dashed.border-slate-200.rounded-xl.p-5.bg-slate-50 {
+  background: rgba(30, 41, 59, 0.3) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.1) !important;
+}
+
+section.border-dashed.text-xs.text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+section.border-dashed strong {
+  color: #f8fafc !important;
+}
+
+section.border-dashed code {
+  background: rgba(15, 23, 42, 0.8) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #a5b4fc !important;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* Footer */
+footer.bg-slate-50.px-6.py-4.flex {
+  background: rgba(15, 23, 42, 0.6) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+button.w-full.sm\:w-auto.px-6.py-2-5.text-xs.font-semibold.text-slate-600 {
+  background: transparent !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  color: #94a3b8 !important;
+}
+
+button.w-full.sm\:w-auto.px-6.py-2-5.text-xs.font-semibold.text-slate-600:hover {
+  background: rgba(30, 41, 59, 0.6) !important;
+  color: #f8fafc !important;
+}
+
+button.w-full.sm\:w-auto.bg-rose-500.hover\:bg-rose-600 {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(139, 92, 246, 0.4) !important;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.3) !important;
+}
+
+button.w-full.sm\:w-auto.bg-rose-500.hover\:bg-rose-600:hover {
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.5) !important;
+  transform: translateY(-1px) !important;
 }
 
 .spinner-small {

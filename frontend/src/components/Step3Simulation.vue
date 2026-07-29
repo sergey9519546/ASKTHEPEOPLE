@@ -1396,7 +1396,7 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-color);
+  background-color: transparent;
   font-family: var(--font-sans);
   overflow: hidden;
   color: var(--text-primary);
@@ -1404,12 +1404,14 @@ onUnmounted(() => {
 
 /* Control Bar */
 .control-bar {
-  background: var(--bg-color);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   padding: 16px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   z-index: 10;
 }
 
@@ -1420,29 +1422,32 @@ onUnmounted(() => {
 
 .platform-status {
   padding: 12px 18px;
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   position: relative;
-  transition: all 0.2s ease;
+  transition: all 0.25s ease;
 }
 
 .platform-status.twitter {
-  border-left: 4px solid var(--accent-color);
+  border-left: 4px solid var(--primary);
 }
 .platform-status.reddit {
-  border-left: 4px solid var(--accent-secondary);
+  border-left: 4px solid var(--accent-purple);
 }
 
 .platform-status.active {
-  background: #fffbeb;
-  border-color: #fde68a;
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
 }
 
 .platform-status.completed {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(16, 185, 129, 0.05);
   color: var(--text-secondary);
-  border-color: var(--border-color);
+  border-color: rgba(16, 185, 129, 0.3);
+  border-left-color: var(--accent-emerald);
 }
 
 .actions-tooltip {
@@ -1452,10 +1457,12 @@ onUnmounted(() => {
   width: 100%;
   margin-top: 8px;
   padding: 12px;
-  background: var(--surface-color);
-  color: var(--bg-color);
+  background: rgba(9, 13, 22, 0.95);
+  backdrop-filter: blur(16px);
+  color: var(--text-primary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
   opacity: 0;
   visibility: hidden;
   z-index: 100;
@@ -1472,9 +1479,10 @@ onUnmounted(() => {
   font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 700;
-  color: #38bdf8;
+  color: #06b6d4;
   text-transform: uppercase;
   margin-bottom: 8px;
+  letter-spacing: 0.5px;
 }
 
 .tooltip-actions {
@@ -1486,9 +1494,11 @@ onUnmounted(() => {
 .tooltip-action {
   font-family: var(--font-mono);
   font-size: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 4px;
-  border-radius: 2px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
 }
 
 .platform-header {
@@ -1501,6 +1511,7 @@ onUnmounted(() => {
 .platform-name {
   font-weight: 700;
   font-size: 11px;
+  color: var(--text-primary);
 }
 
 .platform-stats {
@@ -1516,30 +1527,34 @@ onUnmounted(() => {
 .stat-label {
   font-size: 9px;
   font-weight: 600;
-  opacity: 0.5;
+  color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .stat-value {
   font-size: 12px;
   font-weight: 700;
+  color: var(--text-primary);
 }
 
 .final-action-btn {
   padding: 10px 20px;
-  background: var(--surface-color);
-  color: var(--bg-color);
-  border: none;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  color: #ffffff;
+  border: 1px solid rgba(139, 92, 246, 0.4);
   border-radius: var(--radius-sm);
   font-weight: 600;
   font-size: 12px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.25);
 }
 
 .final-action-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
 }
 
 .final-action-btn:disabled {
@@ -1552,26 +1567,33 @@ onUnmounted(() => {
   display: flex;
   gap: 12px;
   padding: 12px 24px;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .contract-card {
   flex: 1;
   padding: 10px 14px;
-  background: var(--bg-color);
-  border: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
+  transition: all 0.2s ease;
+}
+
+.contract-card:hover {
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 .contract-label {
   font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 600;
-  opacity: 0.5;
+  color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .contract-value {
@@ -1579,6 +1601,10 @@ onUnmounted(() => {
   font-size: 12px;
   text-transform: uppercase;
   margin: 2px 0;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .contract-meta {

@@ -19,16 +19,12 @@ COPY backend/pyproject.toml backend/uv.lock ./
 # uv sync (without --frozen) lets Docker resolve new deps not yet in uv.lock
 # (e.g. flask-sock) while keeping all pinned packages at their locked versions.
 # Run `uv lock` locally and commit the updated uv.lock to restore --frozen.
-RUN uv sync
-# Swap GPU torch for CPU-only and strip all NVIDIA/CUDA packages
-# (OASIS uses API-based LLMs via OpenRouter, not local GPU inference)
-RUN uv pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall --no-deps && \
-    uv pip uninstall \
-        nvidia-cublas-cu12 nvidia-cuda-cupti-cu12 nvidia-cuda-nvrtc-cu12 \
-        nvidia-cuda-runtime-cu12 nvidia-cudnn-cu12 nvidia-cufft-cu12 \
-        nvidia-curand-cu12 nvidia-cusolver-cu12 nvidia-cusparse-cu12 \
-        nvidia-nccl-cu12 nvidia-nvjitlink-cu12 nvidia-nvtx-cu12 triton \
-        2>/dev/null || true
+#
+# CPU-only torch is pinned via [tool.uv.sources] in pyproject.toml, and all
+# nvidia-*/triton transitive GPU packages are blocked via [tool.uv] override
+# markers (sys_platform == 'never'). This eliminates the ~3GB CUDA download
+# that previously caused Railway build timeouts.
+RUN uv sync --extra dev
 
 # Stage 3: Runtime
 FROM python:3.11-slim

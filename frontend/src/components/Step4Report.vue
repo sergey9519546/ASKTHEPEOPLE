@@ -760,7 +760,7 @@ onUnmounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--bg-color);
+  background: transparent;
   color: var(--text-primary);
   font-family: var(--font-sans);
   overflow: hidden;
@@ -768,51 +768,64 @@ onUnmounted(() => {
 
 .workbench-header {
   height: 60px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(8px);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(20px);
 }
 
 .workbench-title {
   font-weight: 700;
   font-size: 16px;
-  color: var(--text-primary);
+  background: linear-gradient(135deg, var(--text-primary), #cbd5e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .workbench-subtitle {
   font-size: 11px;
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   margin-top: 2px;
+  font-family: var(--font-mono);
 }
 
 .status-indicator {
   padding: 4px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   gap: 6px;
   font-weight: 700;
   font-size: 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(30, 41, 59, 0.5);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .status-indicator.is-complete {
-  background: #ecfdf5;
-  color: var(--accent-tertiary);
-  border-color: #d1fae5;
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border-color: rgba(16, 185, 129, 0.3);
 }
 
 .status-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent-tertiary);
+  background: var(--primary);
+  animation: pulseRingPrimary 2s infinite;
+}
+
+.status-indicator.is-complete .status-dot {
+  background: var(--accent-emerald);
+  animation: pulseRing 2s infinite;
 }
 
 .workbench-layout {
@@ -823,27 +836,29 @@ onUnmounted(() => {
 
 .report-panel {
   flex: 1;
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  background: var(--bg-color);
+  background: transparent;
 }
 
 .evidence-panel {
   width: 500px;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(12px);
 }
 
 .panel-header {
   height: 50px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(12px);
 }
 
 .panel-title {
@@ -851,6 +866,7 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-secondary);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .report-canvas {
@@ -860,39 +876,50 @@ onUnmounted(() => {
 }
 
 .report-section {
-  border: 1px solid var(--border-color);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-md);
   margin-bottom: 16px;
   overflow: hidden;
-  background: var(--bg-color);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
   transition: all 0.25s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+}
+
+.report-section:hover {
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .report-section.is-generating {
-  border-color: var(--accent-color);
-  transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(244, 63, 94, 0.05);
+  border-color: var(--primary);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.report-section.is-complete {
+  border-color: rgba(16, 185, 129, 0.3);
 }
 
 .section-header {
   padding: 12px 16px;
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid var(--border-color);
+  background: rgba(15, 23, 42, 0.5);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s ease;
 }
 .section-header:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .section-number {
   font-weight: 700;
   font-size: 16px;
-  color: var(--text-secondary);
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   margin-right: 12px;
 }
 
@@ -900,6 +927,7 @@ onUnmounted(() => {
   font-weight: 600;
   font-size: 13px;
   flex: 1;
+  color: var(--text-primary);
 }
 
 .section-body {
@@ -922,18 +950,21 @@ onUnmounted(() => {
   font-weight: 700;
   font-size: 11px;
   color: var(--text-secondary);
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
   transition: all 0.15s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 .tab-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(99, 102, 241, 0.1);
   color: var(--text-primary);
 }
 
 .tab-btn.active {
-  background: var(--bg-color);
-  color: var(--text-primary);
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border-bottom: 2px solid var(--primary);
 }
 
 .evidence-content {
@@ -943,7 +974,7 @@ onUnmounted(() => {
 }
 
 .timeline-item {
-  border-left: 1px solid var(--border-color);
+  border-left: 2px solid rgba(255, 255, 255, 0.08);
   padding-left: 16px;
   padding-bottom: 20px;
   position: relative;
@@ -955,15 +986,15 @@ onUnmounted(() => {
   top: 4px;
   width: 9px;
   height: 9px;
-  border: 2px solid var(--bg-color);
+  border: 2px solid rgba(15, 23, 42, 0.9);
   border-radius: 50%;
-  background: var(--border-color);
-  box-shadow: 0 0 0 2px rgba(203, 213, 225, 0.4);
+  background: var(--primary);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
 }
 
 .timeline-item:hover .marker-dot {
-  background: var(--accent-secondary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+  background: var(--accent-purple);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.6);
 }
 
 .item-header {
@@ -1007,12 +1038,14 @@ onUnmounted(() => {
 }
 
 .sub-header {
-  background: rgba(255, 255, 255, 0.03);
-  border-bottom: 1px solid var(--border-color);
+  background: rgba(30, 41, 59, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text-secondary);
   font-weight: 700;
   font-size: 9px;
   padding: 4px 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .sub-body {
@@ -1024,29 +1057,30 @@ onUnmounted(() => {
 
 .console-logs {
   height: 160px;
-  background: var(--surface-color);
-  color: var(--bg-color);
+  background: rgba(15, 23, 42, 0.6);
+  color: var(--text-primary);
   padding: 12px;
   font-family: var(--font-mono);
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
 }
 
 .log-line {
   font-size: 10px;
   margin-bottom: 2px;
-  opacity: 0.85;
+  color: var(--text-secondary);
 }
 
 .log-timestamp {
-  color: var(--accent-color);
+  color: var(--primary);
   margin-right: 8px;
 }
 
 .bauhaus-loader {
   width: 24px;
   height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.05);
-  border-top-color: var(--accent-color);
+  border: 2px solid rgba(99, 102, 241, 0.2);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 1s infinite linear;
 }
@@ -1058,15 +1092,16 @@ onUnmounted(() => {
 }
 
 .action-btn {
-  background: var(--surface-color);
-  color: var(--bg-color);
-  border: none;
+  background: linear-gradient(135deg, var(--primary), var(--accent-purple));
+  color: #ffffff;
+  border: 1px solid rgba(139, 92, 246, 0.4);
   padding: 6px 12px;
   font-weight: 600;
   font-size: 11px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.25s ease;
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
 }
 
 .action-btn:disabled {
@@ -1075,6 +1110,7 @@ onUnmounted(() => {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 25px rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
 }
 </style>

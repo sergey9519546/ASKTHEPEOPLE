@@ -24,204 +24,395 @@ function reloadPage() {
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+/* ==========================================================================
+   ASKTHEPEOPLE — Simulation Command Center
+   Aesthetic: Bloomberg terminal × editorial serif × stripe-docs clarity.
+   Solid dark, hairline borders, single bold accent, no glass.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Modern Clean Palette */
-  --bauhaus-red: #f43f5e;       /* Elegant rose/coral */
-  --bauhaus-blue: #3b82f6;      /* Modern royal blue */
-  --bauhaus-yellow: #10b981;    /* Emerald green */
-  --atp-black: #0f172a;         /* Slate-900 */
-  --atp-white: #ffffff;
-  --atp-light-gray: #f8fafc;    /* Slate-50 */
-  
-  --background: #fcfcfc;
-  --surface: #ffffff;
-  --on-background: #0f172a;
-  --on-surface-variant: #475569; /* Slate-600 */
+  /* Pure dark surfaces — NO transparency/blur */
+  --bg-void: #000000;
+  --bg-base: #0a0a0a;
+  --bg-panel: #111111;
+  --bg-elevated: #161616;
+  --bg-input: #0d0d0d;
+  --bg-hover: #1c1c1c;
 
-  /* Semantic Layout Variables */
-  --bg-color: var(--background);
-  --surface-color: var(--surface);
-  --border-color: #e2e8f0;       /* Soft border */
-  --border-width: 1px;
-  --border-width-heavy: 1px;
+  /* Hairline border tokens */
+  --line: #1f1f1f;
+  --line-strong: #2a2a2a;
+  --line-active: #3a3a3a;
 
-  --text-primary: var(--atp-black);
-  --text-secondary: var(--on-surface-variant);
-  --accent-color: var(--bauhaus-red);
-  --accent-secondary: var(--bauhaus-blue);
-  --accent-tertiary: var(--bauhaus-yellow);
+  /* Text hierarchy */
+  --text-void: #ededed;
+  --text-primary: #d4d4d4;
+  --text-secondary: #8a8a8a;
+  --text-muted: #595959;
+  --text-dim: #3f3f3f;
+
+  /* Single bold accent — electric lime for live/active state.
+     This is the ONLY chromatic accent in the system. Everything else
+     uses neutral grays. This single-color discipline is what gives
+     the design its distinctive character vs the multi-color rainbow
+     that defines generic AI SaaS. */
+  --accent: #a3e635;
+  --accent-bright: #bef264;
+  --accent-dim: #65a30d;
+  --accent-ink: #1a2e05;        /* accent on dark for text/shadow use */
+
+  /* Status colors — used SPARINGLY, only for true state indicators */
+  --status-live: #a3e635;
+  --status-warn: #f59e0b;
+  --status-error: #ef4444;
+  --status-info: #60a5fa;
 
   /* Typography */
-  --font-mono: "JetBrains Mono", monospace;
-  --font-sans: "Outfit", sans-serif;
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
 
-  /* Geometry - Smooth and rounded */
-  --radius-none: 12px;
-  --radius-sm: 8px;
-  --radius-md: 14px;
-  --radius-lg: 24px;
+  /* Geometry — sharp by default */
+  --radius-xs: 0px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-full: 9999px;        /* only for status dots */
 
-  /* Spacing */
-  --gap: 24px;
-  --grid-unit: 24px;
+  /* Legacy aliases */
+  --bg-color: var(--bg-void);
+  --surface-color: var(--bg-panel);
+  --surface-hover: var(--bg-hover);
+  --border-color: var(--line);
+  --border-color-hover: var(--line-active);
+  --accent-color: var(--accent);
+  --accent-secondary: var(--accent);
+  --accent-tertiary: var(--accent);
+  --accent-amber: var(--status-warn);
+  --accent-cyan: var(--status-info);
+  --atp-light-gray: var(--bg-elevated);
+  --text-color: var(--text-primary);
+  --shadow-glass: none;
+  --shadow-glass-hover: none;
+  --shadow-card: none;
+  --bg-dark: var(--bg-void);
+  --bg-card: var(--bg-panel);
+  --bg-card-hover: var(--bg-elevated);
+  --bg-glass: var(--bg-panel);
+  --bg-glass-heavy: var(--bg-panel);
+  --primary: var(--accent);
+  --accent-purple: var(--accent);
+  --accent-emerald: var(--accent);
+  --accent-rose: var(--status-error);
+  --glow-primary: none;
+  --glow-purple: none;
+  --glow-emerald: none;
 }
 
-/* Custom Selection Color */
-::selection {
-  background: rgba(244, 63, 94, 0.15);
-  color: var(--accent-color);
-}
-
-/* Global Reset */
+/* Global Reset — NO rounded corners anywhere by default */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-body {
-  background-color: var(--bg-color);
-  color: var(--text-primary);
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--bg-void);
+  color: var(--text-void);
   font-family: var(--font-sans);
+  font-feature-settings: 'ss01', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
-/* Translucent & Smooth Scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Subtle dot grid — visible but quiet, gives surface texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, #1a1a1a 1px, transparent 1px);
+  background-size: 24px 24px;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
+#app {
+  position: relative;
+  z-index: 1;
 }
 
+/* Scrollbar — thin, dark, minimal */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-void); }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 10px;
+  background: #2a2a2a;
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+/* ==========================================================================
+   TYPOGRAPHY UTILITIES
+   ========================================================================== */
+
+.serif {
+  font-family: var(--font-serif);
+  font-feature-settings: 'ss01';
+  font-optical-sizing: auto;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
-/* Modern Minimalist Button Reset */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-muted);
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+
+/* ==========================================================================
+   BUTTONS — sharp edges, monochrome, accent on primary
+   ========================================================================== */
+
 button, .btn {
   font-family: var(--font-sans);
   font-weight: 500;
-  text-transform: none;
-  letter-spacing: normal;
   cursor: pointer;
-  padding: 10px 20px;
-  border: 1px solid var(--border-color) !important;
-  background: var(--surface);
+  padding: 9px 16px;
+  border-radius: 0;
+  border: 1px solid var(--line-strong);
+  background: var(--bg-elevated);
   color: var(--text-primary);
-  border-radius: var(--radius-sm) !important;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
-  transform: none !important;
+  transition: background 0.1s ease, border-color 0.1s ease, color 0.1s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  outline: none;
+  font-size: 13px;
+  letter-spacing: -0.01em;
 }
 
 button:hover, .btn:hover {
-  background: var(--atp-light-gray) !important;
-  border-color: #cbd5e1 !important;
-  color: var(--text-primary) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
-  transform: translateY(-1px) !important;
+  background: var(--bg-hover);
+  border-color: var(--line-active);
+  color: var(--text-void);
 }
 
 button:active, .btn:active {
-  transform: translateY(0) !important;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+  background: var(--bg-elevated);
+  transform: translateY(1px);
+}
+
+button.btn-primary, .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+button.btn-primary:hover, .btn-primary:hover {
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
+  color: var(--accent-ink);
 }
 
 button:disabled, .btn:disabled {
-  background: #f1f5f9 !important;
-  color: #94a3b8 !important;
-  border-color: #e2e8f0 !important;
+  opacity: 0.4;
   cursor: not-allowed;
-  transform: none !important;
-  box-shadow: none !important;
 }
 
-/* Global Card & Border Redefinitions (Override Brutalism) */
-.border-black, .border-4, .border-2, .border-r-4, .border-b-4, .border-t-4 {
-  border-color: var(--border-color) !important;
-  border-width: 1px !important;
-}
+/* ==========================================================================
+   INPUTS — flat, dark, with bottom-border-only accent on focus
+   ========================================================================== */
 
-/* Soft Modern Shadows replacing blocky offset shadows */
-[class*="shadow-["], [class*="shadow-sm"], [class*="shadow-md"] {
-  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02) !important;
-}
-
-/* Layout Specific Overrides */
-.atelier-grid, .content-area {
-  background-image: radial-gradient(#e2e8f0 1px, transparent 1px) !important;
-  background-size: var(--grid-unit) var(--grid-unit) !important;
-  background-color: var(--background) !important;
-}
-
-/* Custom Overrides for Color Badges/Fills */
-.bg-bauhaus-red {
-  background-color: var(--bauhaus-red) !important;
-  color: white !important;
-}
-.text-bauhaus-red {
-  color: var(--bauhaus-red) !important;
-}
-.bg-bauhaus-blue {
-  background-color: var(--bauhaus-blue) !important;
-  color: white !important;
-}
-.text-bauhaus-blue {
-  color: var(--bauhaus-blue) !important;
-}
-.bg-bauhaus-yellow {
-  background-color: var(--atp-light-gray) !important;
-  color: var(--text-primary) !important;
-}
-.text-bauhaus-yellow {
-  color: #d97706 !important; /* Soft Amber */
-}
-
-/* Inputs & Textareas */
-input[type="text"], textarea, select {
+input[type="text"], input[type="password"], textarea, select {
   font-family: var(--font-sans) !important;
-  font-size: 15px !important;
-  border: 1px solid var(--border-color) !important;
-  border-radius: var(--radius-sm) !important;
-  background: var(--surface) !important;
-  padding: 12px 16px !important;
-  color: var(--text-primary) !important;
-  transition: all 0.2s ease !important;
+  font-size: 13px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  background: var(--bg-input) !important;
+  color: var(--text-void) !important;
+  padding: 10px 14px !important;
   outline: none !important;
+  transition: border-color 0.1s ease !important;
 }
 
-input[type="text"]:focus, textarea:focus, select:focus {
-  border-color: var(--accent-secondary) !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+input[type="text"]:focus, input[type="password"]:focus, textarea:focus, select:focus {
+  border-color: var(--accent) !important;
 }
 
-/* Rounded Cards */
-.panel-wrapper, .bg-white {
-  border-radius: var(--radius-md) !important;
+/* ==========================================================================
+   STATUS & CHIPS — sharp pills with dot prefix
+   ========================================================================== */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-panel);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  border-radius: 0;
 }
 
-/* Animation utilities */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+.chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.chip-dot.live { background: var(--status-live); }
+.chip-dot.warn { background: var(--status-warn); }
+.chip-dot.error { background: var(--status-error); }
+.chip-dot.info { background: var(--status-info); }
+
+.chip-live {
+  border-color: var(--accent-dim);
+  color: var(--accent-bright);
+}
+.chip-live .chip-dot {
+  background: var(--status-live);
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--accent); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 4px transparent; }
+}
+
+/* ==========================================================================
+   DIVIDERS & RULES
+   ========================================================================== */
+
+hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 16px 0;
+}
+
+.rule-thick {
+  border-top: 1px solid var(--line-strong);
+}
+
+/* ==========================================================================
+   PANELS — flat, with hairline borders, no shadows
+   ========================================================================== */
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+/* ==========================================================================
+   STATUS / SIGNAL BARS
+   ========================================================================== */
+
+.signal-bar {
+  height: 2px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+
+.signal-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+/* ==========================================================================
+   DATA DISPLAY — monospace tabular nums
+   ========================================================================== */
+
+.data-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text-void);
+}
+
+.data-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.2s ease-out forwards;
 }
 
-/* Global crash banner (Layer 1 safety net) — dark glass theme */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ==========================================================================
+   GLOBAL CRASH OVERLAY — kept functional, restyled to match aesthetic
+   ========================================================================== */
+
 .crash-overlay {
   position: fixed;
   inset: 0;
@@ -229,21 +420,19 @@ input[type="text"]:focus, textarea:focus, select:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.95);
 }
 
 .crash-banner {
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 24px 32px;
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius-md);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-  color: #ffffff;
+  padding: 20px 28px;
+  background: var(--bg-panel);
+  border: 1px solid var(--status-error);
+  border-radius: 0;
+  color: var(--text-void);
+  max-width: 600px;
 }
 
 .crash-message {
@@ -253,33 +442,34 @@ input[type="text"]:focus, textarea:focus, select:focus {
 }
 
 .crash-title {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   font-weight: 600;
   font-size: 17px;
-  color: #ffffff;
+  color: var(--text-void);
 }
 
 .crash-subtitle {
   font-family: var(--font-sans);
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 
 .crash-reload {
-  font-family: var(--font-sans) !important;
-  font-weight: 500 !important;
-  padding: 10px 22px !important;
-  background: var(--bauhaus-red) !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+  padding: 9px 18px !important;
+  background: var(--status-error) !important;
   color: #ffffff !important;
-  border: 1px solid var(--bauhaus-red) !important;
-  border-radius: var(--radius-sm) !important;
+  border: 1px solid var(--status-error) !important;
+  border-radius: 0 !important;
   cursor: pointer;
   white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px !important;
 }
 
 .crash-reload:hover {
-  background: #e11d48 !important;
-  border-color: #e11d48 !important;
-  color: #ffffff !important;
+  background: #dc2626 !important;
 }
 </style>
