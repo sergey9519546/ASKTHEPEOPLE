@@ -164,3 +164,76 @@ def test_get_simulation_and_task_status_endpoints(api_client, monkeypatch):
     assert data2["success"] is True
     assert data2["simulation_id"] == "sim_status_123"
     assert data2["task_id"] == tid
+
+
+def test_prepare_simulation_returns_202_and_enqueues_task(monkeypatch, api_client):
+    """P0 daemon-thread fix (audit §5 P0). The /prepare route enqueues
+    work to a Celery worker and returns 202 Accepted with a Location
+    header. The route no longer creates a `threading.Thread`; the work
+    runs in a worker process that can survive a web restart.
+    """
+    from app.tasks.simulation_tasks import prepare_simulation_task
+
+    # Patch the heavy work so the test is fast and deterministic.
+    captured_kwargs = {}
+
+    def fake_delay(**kwargs):
+        captured_kwargs.update(kwargs)
+        return SimpleNamespace(id="celery-task-id-fake")
+
+    monkeypatch.setattr(prepare_simulation_task, "delay", staticmethod(fake_delay))
+
+    # Patch the synchronous entity-count read so the test does not hit Zep.
+    fake_state = SimpleNamespace(
+        project_id="proj_x",
+        entities_count=10,
+        entity_types=["Student"],
+        status=SimulationStatus.CREATED,
+        error=None,
+    )
+    fake_prepare_info = {"already_prepared": False}
+    monkeypatch.setattr(
+        simulation_api, "_check_simulation_prepared", lambda sim_id: (False, fake_prepare_info)
+    )
+    monkeypatch.setattr(
+        SimulationManager, "get_simulation", lambda self, sim_id: fake_state
+    )
+    monkeypatch.setattr(
+        SimulationManager, "_save_simulation_state", lambda self, state: None
+    )
+    fake_project = SimpleNamespace(simulation_requirement="a decision")
+    monkeypatch.setattr(
+        "app.api.simulation.ProjectManager.get_project",
+        lambda project_id: fake_project,
+    )
+    # Skip the synchronous entity count read.
+    class _FakeReader:
+        def filter_defined_entities(self, **_):
+            return SimpleNamespace(filtered_count=0, entity_types=[])
+    monkeypatch.setattr(
+        simulation_api, "ZepEntityReader", _FakeReader
+    )
+
+    response = api_client.post(
+        "/api/simulation/prepare",
+        json={"simulation_id": "sim_test_prepare"},
+    )
+
+    assert response.status_code == 202
+    data = response.get_json()
+    assert data["success"] is True
+    assert data["data"]["simulation_id"] == "sim_test_prepare"
+    assert data["data"]["task_id"]  # non-empty
+    assert data["data"]["already_prepared"] is False
+
+    # The Location header is set to /api/jobs/{task_id}.
+    assert response.headers.get("Location", "").startswith("/api/jobs/")
+
+    # The Celery task was enqueued with the right parameters.
+    assert captured_kwargs["simulation_id"] == "sim_test_prepare"
+    # entity_types comes from the request body, not from the simulation
+    # state. The test does not pass entity_types, so the default (None)
+    # is enqueued.
+    assert captured_kwargs["entity_types"] is None
+    assert captured_kwargs["use_llm_for_profiles"] is True
+    assert captured_kwargs["document_text"] == ""  # no Zep reads

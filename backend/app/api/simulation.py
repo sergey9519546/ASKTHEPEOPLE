@@ -624,9 +624,8 @@ def prepare_simulation():
             }
         }
     """
-    import threading
     import os
-    from ..models.task import TaskManager, TaskStatus
+    from ..models.task import TaskManager
     from ..config import Config
     
     try:
@@ -749,133 +748,41 @@ def prepare_simulation():
         # Update simulation state (including pre-fetched entity count)
         state.status = SimulationStatus.PREPARING
         manager._save_simulation_state(state)
-        
-        # Define background task
-        def run_prepare():
-            try:
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    progress=0,
-                    message="Starting simulation environment preparation..."
-                )
-                
-                # Prepare simulation (with progress callback)
-                # Store stage progress details
-                stage_details = {}
-                
-                def progress_callback(stage, progress, message, **kwargs):
-                    # Calculate total progress
-                    stage_weights = {
-                        "reading": (0, 20),           # 0-20%
-                        "generating_profiles": (20, 70),  # 20-70%
-                        "generating_config": (70, 90),    # 70-90%
-                        "copying_scripts": (90, 100)       # 90-100%
-                    }
-                    
-                    start, end = stage_weights.get(stage, (0, 100))
-                    current_progress = int(start + (end - start) * progress / 100)
-                    
-                    # Build detailed progress info
-                    stage_names = {
-                        "reading": "Reading graph entities",
-                        "generating_profiles": "Generating Agent personas",
-                        "generating_config": "Generating simulation configuration",
-                        "copying_scripts": "Preparing simulation scripts"
-                    }
-                    
-                    stage_index = list(stage_weights.keys()).index(stage) + 1 if stage in stage_weights else 1
-                    total_stages = len(stage_weights)
-                    
-                    # Update stage details
-                    stage_details[stage] = {
-                        "stage_name": stage_names.get(stage, stage),
-                        "stage_progress": progress,
-                        "current": kwargs.get("current", 0),
-                        "total": kwargs.get("total", 0),
-                        "item_name": kwargs.get("item_name", "")
-                    }
-                    
-                    # Build detailed progress info
-                    progress_detail_data = {
-                        "current_stage": stage,
-                        "current_stage_name": stage_names.get(stage, stage),
-                        "stage_index": stage_index,
-                        "total_stages": total_stages,
-                        "stage_progress": progress,
-                        "current_item": stage_details[stage]["current"],
-                        "total_items": stage_details[stage]["total"],
-                        "item_description": message
-                    }
-                    
-                    # Build concise message
-                    if stage_details[stage]["total"] > 0:
-                        detailed_message = (
-                            f"[{stage_index}/{total_stages}] {stage_names.get(stage, stage)}: "
-                            f"{stage_details[stage]['current']}/{stage_details[stage]['total']} - {message}"
-                        )
-                    else:
-                        detailed_message = f"[{stage_index}/{total_stages}] {stage_names.get(stage, stage)}: {message}"
-                    
-                    task_manager.update_task(
-                        task_id,
-                        progress=current_progress,
-                        message=detailed_message,
-                        progress_detail=progress_detail_data
-                    )
-                
-                result_state = manager.prepare_simulation(
-                    simulation_id=simulation_id,
-                    simulation_requirement=simulation_requirement,
-                    document_text=document_text,
-                    defined_entity_types=entity_types_list,
-                    use_llm_for_profiles=use_llm_for_profiles,
-                    progress_callback=progress_callback,
-                    parallel_profile_count=parallel_profile_count,
-                    use_archetypes=use_archetypes,
-                    archetype_count=archetype_count,
-                    expansion_factor=expansion_factor,
-                )
-                
-                # Task completed
-                task_manager.complete_task(
-                    task_id,
-                    result=result_state.to_simple_dict()
-                )
-                
-            except Exception as e:
-                logger.error(f"Failed to prepare simulation: {str(e)}")
-                task_manager.fail_task(
-                    task_id,
-                    str(e),
-                    public_error="simulation_prepare_failed",
-                )
-                
-                # Update simulation status to failed
-                state = manager.get_simulation(simulation_id)
-                if state:
-                    state.status = SimulationStatus.FAILED
-                    state.error = (
-                        str(e) if Config.DEBUG else "simulation_prepare_failed"
-                    )
-                    manager._save_simulation_state(state)
-        
-        # Start background thread
-        thread = threading.Thread(target=run_prepare, daemon=True)
-        thread.start()
-        
-        return jsonify({
+
+        # P0 daemon-thread fix (audit §5 P0). The route enqueues work to
+        # a Celery worker and returns 202 Accepted. The route no longer
+        # creates a `threading.Thread(..., daemon=True)`; the work
+        # runs in a worker process that can survive a web restart.
+        # Full durable workflow (idempotency keys, leases, fencing
+        # tokens, heartbeats, cancellation, retry classification)
+        # lands with gate 2 in adr/ADR-0003-durable-run-orchestration.md.
+        from ..tasks.simulation_tasks import prepare_simulation_task
+
+        prepare_simulation_task.delay(
+            simulation_id=simulation_id,
+            task_id=task_id,
+            entity_types=entity_types_list,
+            use_llm_for_profiles=use_llm_for_profiles,
+            parallel_profile_count=parallel_profile_count,
+            use_archetypes=use_archetypes,
+            archetype_count=archetype_count,
+            expansion_factor=expansion_factor,
+            document_text=document_text,
+        )
+
+        response = jsonify({
             "success": True,
             "data": {
                 "simulation_id": simulation_id,
                 "task_id": task_id,
                 "status": "preparing",
-                "message": "Preparation task started, please check progress via /api/simulation/prepare/status",
+                "message": "Preparation task enqueued. Poll /api/simulation/prepare/status for progress.",
                 "already_prepared": False,
                 "expected_entities_count": state.entities_count,  # Expected total Agents
                 "entity_types": state.entity_types  # Entity types list
             }
         })
+        return response, 202, {"Location": f"/api/jobs/{task_id}"}
         
     except ValueError as e:
         return jsonify({

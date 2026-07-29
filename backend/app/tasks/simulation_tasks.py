@@ -139,3 +139,175 @@ def run_simulation_task(
         if effective_task_id:
             task_manager.fail_task(effective_task_id, error=str(exc))
         raise
+
+
+# Stage weights for the prepare progress callback. The percentages are
+# used only to produce a 0-100 progress number; they carry no quantitative
+# meaning about the run's expected outcome or duration.
+_PREPARE_STAGE_WEIGHTS = {
+    "reading": (0, 20),
+    "generating_profiles": (20, 70),
+    "generating_config": (70, 90),
+    "copying_scripts": (90, 100),
+}
+
+_PREPARE_STAGE_NAMES = {
+    "reading": "Reading graph entities",
+    "generating_profiles": "Generating Agent personas",
+    "generating_config": "Generating simulation configuration",
+    "copying_scripts": "Preparing simulation scripts",
+}
+
+
+@celery_app.task(name='tasks.prepare_simulation_task', bind=True)
+def prepare_simulation_task(
+    self,
+    simulation_id: str,
+    task_id: str,
+    entity_types,
+    use_llm_for_profiles: bool,
+    parallel_profile_count: int,
+    use_archetypes: bool,
+    archetype_count: int,
+    expansion_factor: int,
+    document_text: str,
+):
+    """Celery task wrapper for the simulation preparation work.
+
+    The previous implementation started a `threading.Thread(..., daemon=True)`
+    inside the web route. That route is now an enqueue-and-return boundary;
+    the work runs in a worker process. Full durable workflow (idempotency
+    keys, leases, fencing tokens, heartbeats, cancellation) lands with
+    gate 2 in `adr/ADR-0003-durable-run-orchestration.md`; this commit
+    closes the P0 path-escape-by-daemon-thread finding by removing the
+    in-process thread and routing the work through the existing Celery
+    infrastructure.
+    """
+    from ..services.simulation_manager import SimulationManager
+    from ..config import Config
+    task_manager = TaskManager()
+    manager = SimulationManager()
+    effective_task_id = task_id or getattr(self.request, 'id', None)
+
+    logger.info(
+        f"Celery task prepare_simulation_task started: task_id={effective_task_id}, "
+        f"simulation_id={simulation_id}"
+    )
+
+    if effective_task_id:
+        task_manager.update_task(
+            effective_task_id,
+            status=TaskStatus.PROCESSING,
+            progress=0,
+            message="Starting simulation environment preparation..."
+        )
+
+    def progress_callback(stage, progress, message, **kwargs):
+        start, end = _PREPARE_STAGE_WEIGHTS.get(stage, (0, 100))
+        current_progress = int(start + (end - start) * progress / 100)
+
+        stage_index = (
+            list(_PREPARE_STAGE_WEIGHTS).index(stage) + 1
+            if stage in _PREPARE_STAGE_WEIGHTS else 1
+        )
+        total_stages = len(_PREPARE_STAGE_WEIGHTS)
+
+        progress_detail_data = {
+            "current_stage": stage,
+            "current_stage_name": _PREPARE_STAGE_NAMES.get(stage, stage),
+            "stage_index": stage_index,
+            "total_stages": total_stages,
+            "stage_progress": progress,
+            "current_item": kwargs.get("current", 0),
+            "total_items": kwargs.get("total", 0),
+            "item_description": message,
+        }
+
+        stage_name = _PREPARE_STAGE_NAMES.get(stage, stage)
+        total_items = kwargs.get("total", 0)
+        if total_items > 0:
+            current_item = kwargs.get("current", 0)
+            detailed_message = (
+                f"[{stage_index}/{total_stages}] {stage_name}: "
+                f"{current_item}/{total_items} - {message}"
+            )
+        else:
+            detailed_message = f"[{stage_index}/{total_stages}] {stage_name}: {message}"
+
+        # Cross-process progress: Celery result backend.
+        if hasattr(self, 'update_state'):
+            try:
+                self.update_state(
+                    state='PROGRESS',
+                    meta={
+                        'simulation_id': simulation_id,
+                        'progress': current_progress,
+                        'message': detailed_message,
+                        'progress_detail': progress_detail_data,
+                    }
+                )
+            except Exception as meta_exc:
+                logger.debug(f"Celery update_state bypassed: {meta_exc}")
+
+        # Best-effort in-process mirror (the worker process is a
+        # different process from the web; the in-memory dict is
+        # per-process. The web reads from the same Redis snapshot
+        # when available.)
+        if effective_task_id:
+            task_manager.update_task(
+                effective_task_id,
+                progress=current_progress,
+                message=detailed_message,
+                progress_detail=progress_detail_data,
+            )
+
+    try:
+        result_state = manager.prepare_simulation(
+            simulation_id=simulation_id,
+            simulation_requirement="",
+            document_text=document_text,
+            defined_entity_types=list(entity_types) if entity_types else [],
+            use_llm_for_profiles=use_llm_for_profiles,
+            progress_callback=progress_callback,
+            parallel_profile_count=parallel_profile_count,
+            use_archetypes=use_archetypes,
+            archetype_count=archetype_count,
+            expansion_factor=expansion_factor,
+        )
+        if effective_task_id:
+            task_manager.complete_task(
+                effective_task_id,
+                result=result_state.to_simple_dict()
+            )
+        return {
+            "success": True,
+            "simulation_id": simulation_id,
+            "task_id": effective_task_id,
+            "status": "completed",
+        }
+    except Exception as exc:
+        logger.error(
+            f"Celery task prepare_simulation_task failed: {exc}",
+            exc_info=True,
+        )
+        if effective_task_id:
+            task_manager.fail_task(
+                effective_task_id,
+                str(exc),
+                public_error="simulation_prepare_failed",
+            )
+        # Mirror the in-process failure path: mark the simulation
+        # state as FAILED so the GET endpoints can surface it.
+        try:
+            from ..config import Config
+            state = manager.get_simulation(simulation_id)
+            if state:
+                state.status = SimulationManager.SimulationStatus.FAILED
+                state.error = (
+                    str(exc) if Config.DEBUG else "simulation_prepare_failed"
+                )
+                manager._save_simulation_state(state)
+        except Exception:
+            pass
+        raise
+
