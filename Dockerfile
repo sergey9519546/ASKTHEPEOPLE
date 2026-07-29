@@ -50,7 +50,9 @@ ENV FLASK_APP=backend/run.py
 EXPOSE 5001
 
 # Verify the app can be imported at build time — surfaces import errors in CI logs.
-RUN cd /app/backend && python -c "import sys; sys.path.insert(0, '.'); from app import create_app; app = create_app(); print('WSGI app import OK')"
+# SECRET_KEY is set to a dummy value just for the smoke test; the real key is
+# provided at runtime via Railway environment variables.
+RUN cd /app/backend && SECRET_KEY=build-smoke-test python -c "import sys; sys.path.insert(0, '.'); from app import create_app; app = create_app(); print('WSGI app import OK')"
 
 # Run as non-root user for defense-in-depth
 RUN useradd --create-home --shell /bin/false --uid 10001 app \
