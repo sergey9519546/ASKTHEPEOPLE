@@ -32,6 +32,9 @@
           <span class="dot"></span>
           {{ statusText }}
         </span>
+        <span class="px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider border" :class="globalWsStatus === 'ONLINE' ? 'bg-[#1a2e05] border-[#a3e635] text-[#a3e635]' : 'bg-[#451a03] border-[#f59e0b] text-[#f59e0b]'">
+          WS: {{ globalWsStatus }}
+        </span>
       </div>
     </header>
 
@@ -115,6 +118,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { globalWsStatus } from "../api/ws";
 import {
   buildGraph,
   generateOntology,

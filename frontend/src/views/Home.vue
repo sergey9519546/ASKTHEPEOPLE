@@ -120,14 +120,14 @@
                         </div>
 
                         <div v-else class="w-full grid grid-cols-1 gap-2">
-                           <div v-for="(file, i) in files" :key="i" class="flex items-center justify-between bg-white border border-slate-200 rounded-lg p-3 group shadow-sm">
+                           <div v-for="(file, i) in files" :key="i" class="flex items-center justify-between bg-[#121212] border border-[#333333] p-3 group">
                                 <div class="flex items-center gap-3 overflow-hidden">
-                                    <span class="text-rose-500 font-mono font-bold text-[9px] bg-rose-50 px-2 py-0.5 rounded">{{ file.name.split('.').pop().toUpperCase() }}</span>
-                                    <span class="font-medium text-xs text-slate-700 truncate">{{ file.name }}</span>
+                                    <span class="text-[#a3e635] font-mono font-bold text-[9px] bg-[#1a2e05] px-2 py-0.5">{{ file.name.split('.').pop().toUpperCase() }}</span>
+                                    <span class="font-mono text-xs text-[#d4d4d4] truncate">{{ file.name }}</span>
                                 </div>
-                                <button @click.stop="removeFile(i)" class="w-6 h-6 hover:bg-slate-100 rounded-full flex items-center justify-center border-none bg-transparent shadow-none p-0 text-sm">×</button>
+                                <button @click.stop="removeFile(i)" class="w-6 h-6 hover:bg-[#222222] text-[#9ca3af] hover:text-[#f3f4f6] flex items-center justify-center border-none bg-transparent p-0 text-sm">×</button>
                            </div>
-                           <button class="mt-4 text-[10px] font-semibold tracking-wider uppercase text-slate-500 hover:text-rose-500 border-none bg-transparent shadow-none" @click.stop="triggerFileInput">+ Add More Files</button>
+                           <button class="mt-4 text-[10px] font-mono font-semibold tracking-wider uppercase text-[#9ca3af] hover:text-[#a3e635] border-none bg-transparent" @click.stop="triggerFileInput">+ Add More Files</button>
                         </div>
                     </div>
                 </div>
@@ -136,76 +136,76 @@
 
         <!-- SESSIONS / ANALYTICS SECTION -->
         <section id="sessions" class="py-16">
-            <div class="flex flex-col md:flex-row justify-between items-baseline mb-10 border-b border-slate-200 pb-4">
-                <h2 class="text-2xl md:text-3xl font-bold uppercase tracking-tight text-slate-800">Live Sessions</h2>
-                <div class="flex items-center gap-6 font-mono text-[10px] font-bold text-slate-400">
-                    <span class="flex items-center gap-2 text-rose-500">
-                        <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span> Streaming Data
+            <div class="flex flex-col md:flex-row justify-between items-baseline mb-10 border-b border-[#222222] pb-4">
+                <h2 class="text-2xl md:text-3xl font-serif font-bold uppercase tracking-tight text-[#f3f4f6]">Live Telemetry Sessions</h2>
+                <div class="flex items-center gap-6 font-mono text-[10px] text-[#9ca3af]">
+                    <span class="flex items-center gap-2 text-[#a3e635]">
+                        <span class="w-2 h-2 rounded-full bg-[#a3e635] animate-pulse"></span> Streaming Telemetry
                     </span>
-                    <span class="opacity-70">Nodes Connected: 82.4K</span>
+                    <span class="text-[#4b5563]">Nodes Active: 82.4K</span>
                 </div>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-12 gap-6 font-sans">
                 <!-- Large Vote Card (Latest Session) -->
-                <div v-if="simulationHistory.length > 0" class="md:col-span-8 bg-white border border-slate-200 p-0 flex flex-col group relative overflow-hidden rounded-2xl shadow-xl shadow-slate-100/50 cursor-pointer" @click="router.push({ name: 'Process', params: { projectId: simulationHistory[0].project_id } })">
-                    <div class="flex border-b border-slate-100 bg-slate-50/50">
-                        <div class="bg-rose-500 text-white p-5 aspect-square flex items-center justify-center">
-                            <span class="material-symbols-outlined text-2xl">policy</span>
+                <div v-if="simulationHistory.length > 0" class="md:col-span-8 bg-[#0a0a0a] border border-[#222222] p-0 flex flex-col group relative overflow-hidden cursor-pointer hover:border-[#333333] transition-colors" @click="router.push({ name: 'Process', params: { projectId: simulationHistory[0].project_id } })">
+                    <div class="flex border-b border-[#222222] bg-[#121212]">
+                        <div class="bg-[#a3e635] text-[#1a2e05] p-5 aspect-square flex items-center justify-center">
+                            <span class="material-symbols-outlined text-2xl">sensors</span>
                         </div>
                         <div class="flex-grow p-5 flex items-center justify-between">
-                            <span class="text-xs font-semibold tracking-wider text-slate-500 uppercase">Status: {{ simulationHistory[0].status }}</span>
-                            <span class="text-[9px] font-mono font-bold text-slate-400">Ref ID: {{ simulationHistory[0].simulation_id.substring(0, 8) }}</span>
+                            <span class="text-xs font-mono font-semibold tracking-wider text-[#9ca3af] uppercase">Status: {{ simulationHistory[0].status }}</span>
+                            <span class="text-[9px] font-mono font-bold text-[#4b5563]">REF_ID: {{ simulationHistory[0].simulation_id.substring(0, 8) }}</span>
                         </div>
                     </div>
                     <div class="p-8 md:p-10">
-                        <h3 class="text-2xl md:text-3xl font-extrabold leading-snug tracking-tight mb-8 text-slate-800 uppercase line-clamp-2">
+                        <h3 class="text-2xl md:text-3xl font-serif font-extrabold leading-snug tracking-tight mb-8 text-[#f3f4f6] uppercase line-clamp-2">
                             {{ simulationHistory[0].prompt || 'Unnamed Simulation Goal' }}
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
                             <div class="space-y-4 md:col-span-8">
                                 <div class="flex justify-between items-end">
-                                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Nodes Active</span>
-                                    <span class="text-2xl font-bold text-slate-800">{{ simulationHistory[0].entities_count || 0 }}</span>
+                                    <span class="text-xs font-mono font-semibold uppercase tracking-wider text-[#9ca3af]">Active Population Nodes</span>
+                                    <span class="text-2xl font-mono font-bold text-[#f3f4f6]">{{ simulationHistory[0].entities_count || 0 }}</span>
                                 </div>
-                                <div class="h-6 bg-slate-100 rounded-full relative overflow-hidden">
-                                    <div class="absolute inset-y-0 left-0 bg-rose-500 rounded-full" style="width: 100%;"></div>
+                                <div class="h-4 bg-[#121212] border border-[#222222] relative overflow-hidden">
+                                    <div class="absolute inset-y-0 left-0 bg-[#a3e635]" style="width: 100%;"></div>
                                 </div>
                             </div>
-                            <button class="md:col-span-4 bg-slate-900 text-white py-4 rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 border-none shadow-md">
-                                View Data <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                            <button class="md:col-span-4 bg-[#a3e635] text-[#1a2e05] py-4 text-xs font-mono font-bold uppercase tracking-wider hover:bg-[#bef264] transition-colors flex items-center justify-center gap-2 border-none">
+                                Inspect Telemetry <span class="material-symbols-outlined text-sm">arrow_forward</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
                 <!-- Fallback Large Placeholder Vote Card -->
-                <div v-else class="md:col-span-8 bg-white border border-slate-200 p-0 flex flex-col group relative overflow-hidden rounded-2xl shadow-xl shadow-slate-100/50">
-                    <div class="flex border-b border-slate-100 bg-slate-50/50">
-                        <div class="bg-rose-500 text-white p-5 aspect-square flex items-center justify-center">
-                            <span class="material-symbols-outlined text-2xl">policy</span>
+                <div v-else class="md:col-span-8 bg-[#0a0a0a] border border-[#222222] p-0 flex flex-col group relative overflow-hidden">
+                    <div class="flex border-b border-[#222222] bg-[#121212]">
+                        <div class="bg-[#a3e635] text-[#1a2e05] p-5 aspect-square flex items-center justify-center">
+                            <span class="material-symbols-outlined text-2xl">sensors</span>
                         </div>
                         <div class="flex-grow p-5 flex items-center justify-between">
-                            <span class="text-xs font-semibold tracking-wider text-slate-500 uppercase">Sub Module: Sovereign AI</span>
-                            <span class="text-[9px] font-mono font-bold text-slate-400">Ref ID: 9912-X</span>
+                            <span class="text-xs font-mono font-semibold tracking-wider text-[#9ca3af] uppercase">Module: Sovereign Telemetry</span>
+                            <span class="text-[9px] font-mono font-bold text-[#4b5563]">REF_ID: 9912-X</span>
                         </div>
                     </div>
                     <div class="p-8 md:p-10">
-                        <h3 class="text-2xl md:text-3xl font-extrabold leading-snug tracking-tight mb-8 text-slate-800 uppercase">
-                            GRANT LEGAL PERSONHOOD TO SYNTHETIC AGENTS?
+                        <h3 class="text-2xl md:text-3xl font-serif font-extrabold leading-snug tracking-tight mb-8 text-[#f3f4f6] uppercase">
+                            SYNTHETIC POPULATION CONSENSUS SIMULATION
                         </h3>
                         <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
                             <div class="space-y-4 md:col-span-8">
                                 <div class="flex justify-between items-end">
-                                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Affirmative</span>
-                                    <span class="text-2xl font-bold text-slate-800">64.2%</span>
+                                    <span class="text-xs font-mono font-semibold uppercase tracking-wider text-[#9ca3af]">Affirmative Convergence</span>
+                                    <span class="text-2xl font-mono font-bold text-[#a3e635]">64.2%</span>
                                 </div>
-                                <div class="h-6 bg-slate-100 rounded-full relative overflow-hidden">
-                                    <div class="absolute inset-y-0 left-0 bg-rose-500 rounded-full" style="width: 64.2%;"></div>
+                                <div class="h-4 bg-[#121212] border border-[#222222] relative overflow-hidden">
+                                    <div class="absolute inset-y-0 left-0 bg-[#a3e635]" style="width: 64.2%;"></div>
                                 </div>
                             </div>
-                            <button class="md:col-span-4 bg-slate-900 text-white py-4 rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 border-none shadow-md">
-                                Vote Now <span class="material-symbols-outlined text-sm">bolt</span>
+                            <button class="md:col-span-4 bg-[#a3e635] text-[#1a2e05] py-4 text-xs font-mono font-bold uppercase tracking-wider hover:bg-[#bef264] transition-colors flex items-center justify-center gap-2 border-none">
+                                Launch Telemetry <span class="material-symbols-outlined text-sm">bolt</span>
                             </button>
                         </div>
                     </div>
@@ -214,46 +214,46 @@
                 <!-- Small Vote Cards -->
                 <div class="md:col-span-4 flex flex-col gap-4">
                     <template v-if="simulationHistory.length > 1">
-                        <div v-for="sim in simulationHistory.slice(1, 3)" :key="sim.simulation_id" @click="router.push({ name: 'Process', params: { projectId: sim.project_id } })" class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-colors cursor-pointer group shadow-sm">
+                        <div v-for="sim in simulationHistory.slice(1, 3)" :key="sim.simulation_id" @click="router.push({ name: 'Process', params: { projectId: sim.project_id } })" class="flex-grow bg-[#0a0a0a] border border-[#222222] p-6 flex flex-col justify-between hover:border-[#333333] transition-colors cursor-pointer group">
                             <div>
                                 <div class="flex justify-between mb-6">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ new Date(sim.created_at).toLocaleDateString() }}</span>
-                                    <span class="material-symbols-outlined text-slate-400">data_object</span>
+                                    <span class="text-[10px] font-mono uppercase tracking-wider text-[#4b5563]">{{ new Date(sim.created_at).toLocaleDateString() }}</span>
+                                    <span class="material-symbols-outlined text-[#4b5563]">data_object</span>
                                 </div>
-                                <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase line-clamp-2">{{ sim.prompt || 'Unnamed Goal' }}</h3>
+                                <h3 class="text-lg font-serif font-bold leading-snug text-[#f3f4f6] uppercase line-clamp-2">{{ sim.prompt || 'Unnamed Goal' }}</h3>
                             </div>
                             <div class="flex justify-between items-end mt-6">
-                                <div class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Status: {{ sim.status }}</div>
-                                <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                <div class="text-[10px] font-mono font-bold text-[#a3e635] bg-[#1a2e05] px-2 py-0.5 border border-[#a3e635]/30">Status: {{ sim.status }}</div>
+                                <span class="material-symbols-outlined text-[#9ca3af] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                             </div>
                         </div>
                     </template>
                     <template v-else>
                         <!-- Fallback Small Vote Cards -->
-                        <div class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-colors cursor-pointer group shadow-sm">
+                        <div class="flex-grow bg-[#0a0a0a] border border-[#222222] p-6 flex flex-col justify-between hover:border-[#333333] transition-colors cursor-pointer group">
                             <div>
                                 <div class="flex justify-between mb-6">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Urban Systems</span>
-                                    <span class="material-symbols-outlined text-slate-400">domain</span>
+                                    <span class="text-[10px] font-mono uppercase tracking-wider text-[#4b5563]">Urban Dynamics</span>
+                                    <span class="material-symbols-outlined text-[#4b5563]">domain</span>
                                 </div>
-                                <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase">REPLACE PUBLIC TRANSIT WITH AUTONOMOUS PODS?</h3>
+                                <h3 class="text-lg font-serif font-bold leading-snug text-[#f3f4f6] uppercase">AUTONOMOUS URBAN MOBILITY DRIFT</h3>
                             </div>
                             <div class="flex justify-between items-end mt-6">
-                                <div class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Stage: Evaluation</div>
-                                <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                <div class="text-[10px] font-mono font-bold text-[#a3e635] bg-[#1a2e05] px-2 py-0.5 border border-[#a3e635]/30">Stage: Evaluation</div>
+                                <span class="material-symbols-outlined text-[#9ca3af] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                             </div>
                         </div>
-                        <div class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-all cursor-pointer group shadow-sm">
+                        <div class="flex-grow bg-[#0a0a0a] border border-[#222222] p-6 flex flex-col justify-between hover:border-[#333333] transition-all cursor-pointer group">
                             <div>
                                 <div class="flex justify-between mb-6">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data Privacy</span>
-                                    <span class="material-symbols-outlined text-slate-400">encrypted</span>
+                                    <span class="text-[10px] font-mono uppercase tracking-wider text-[#4b5563]">Data Governance</span>
+                                    <span class="material-symbols-outlined text-[#4b5563]">encrypted</span>
                                 </div>
-                                <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase">GLOBAL MANDATORY BIO-ENCRYPTION FOR PAYMENTS?</h3>
+                                <h3 class="text-lg font-serif font-bold leading-snug text-[#f3f4f6] uppercase">BIO-ENCRYPTION CONSENSUS PROTOCOL</h3>
                             </div>
                             <div class="flex justify-between items-end mt-6">
-                                <div class="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">Status: Critical</div>
-                                <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                <div class="text-[10px] font-mono font-bold text-[#f59e0b] bg-[#451a03] px-2 py-0.5 border border-[#f59e0b]/30">Status: Critical</div>
+                                <span class="material-symbols-outlined text-[#9ca3af] group-hover:translate-x-1 transition-transform">arrow_forward</span>
                             </div>
                         </div>
                     </template>
@@ -262,59 +262,59 @@
         </section>
 
         <!-- ARCHIVE SECTION -->
-        <section id="archive" class="py-16 border-t border-slate-200">
-            <div class="flex flex-col md:flex-row justify-between items-baseline mb-10 border-b border-slate-200 pb-4">
-                <h2 class="text-2xl md:text-3xl font-bold uppercase tracking-tight text-slate-800">Archive DB</h2>
-                <div class="text-[10px] font-mono font-bold text-slate-400 uppercase">Accessing Historical Knowledge Nodes...</div>
+        <section id="archive" class="py-16 border-t border-[#222222]">
+            <div class="flex flex-col md:flex-row justify-between items-baseline mb-10 border-b border-[#222222] pb-4">
+                <h2 class="text-2xl md:text-3xl font-serif font-bold uppercase tracking-tight text-[#f3f4f6]">Archive Database</h2>
+                <div class="text-[10px] font-mono font-bold text-[#4b5563] uppercase">Accessing Historical Knowledge Nodes...</div>
             </div>
             
-            <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+            <div class="bg-[#0a0a0a] border border-[#222222] p-6">
                 <HistoryDatabase borderless />
             </div>
         </section>
 
         <!-- METRICS & SYSTEM INFO -->
-        <section class="py-16 border-t border-slate-200">
+        <section class="py-16 border-t border-[#222222]">
             <div class="flex flex-col md:flex-row gap-8">
                 <div class="w-full md:w-1/3">
-                    <div class="bg-slate-900 text-white p-8 rounded-2xl flex flex-col justify-between h-full min-h-[250px] shadow-md">
+                    <div class="bg-[#0a0a0a] border border-[#222222] text-[#f3f4f6] p-8 flex flex-col justify-between h-full min-h-[250px]">
                         <div>
-                            <h4 class="text-[10px] font-mono font-bold tracking-[0.2em] mb-4 opacity-50 uppercase">System Analytics</h4>
-                            <p class="text-2xl font-bold leading-snug uppercase mb-6">The geometry of modern consensus.</p>
+                            <h4 class="text-[10px] font-mono font-bold tracking-[0.2em] mb-4 text-[#a3e635] uppercase">System Telemetry</h4>
+                            <p class="text-2xl font-serif font-bold leading-snug uppercase mb-6 text-[#f3f4f6]">The geometry of modern consensus.</p>
                         </div>
                         <div class="space-y-4">
-                            <div class="text-[9px] font-mono opacity-50 uppercase">Current Processing Cycle: 8.2s</div>
-                            <div class="w-full h-1 bg-white/20 rounded-full">
-                                <div class="w-2/3 h-full bg-rose-500 rounded-full"></div>
+                            <div class="text-[9px] font-mono text-[#9ca3af] uppercase">Current Processing Cycle: 8.2s</div>
+                            <div class="w-full h-1.5 bg-[#121212] border border-[#222222]">
+                                <div class="w-2/3 h-full bg-[#a3e635]"></div>
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="border border-slate-200 rounded-2xl p-6 bg-white flex flex-col justify-center shadow-sm">
-                        <div class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-4">Global Consensus Drift</div>
+                    <div class="border border-[#222222] p-6 bg-[#0a0a0a] flex flex-col justify-center">
+                        <div class="text-[10px] font-mono font-bold uppercase tracking-widest text-[#9ca3af] mb-4">Global Consensus Drift</div>
                         <div class="h-28 flex items-end gap-3 mb-3">
-                            <div class="bg-rose-500 w-full rounded-t-sm" style="height: 40%"></div>
-                            <div class="bg-slate-800 w-full rounded-t-sm" style="height: 70%"></div>
-                            <div class="bg-blue-500 w-full rounded-t-sm" style="height: 55%"></div>
-                            <div class="bg-emerald-500 w-full rounded-t-sm" style="height: 90%"></div>
-                            <div class="bg-slate-400 w-full rounded-t-sm" style="height: 30%"></div>
-                            <div class="bg-rose-400 w-full rounded-t-sm" style="height: 65%"></div>
+                            <div class="bg-[#a3e635] w-full" style="height: 40%"></div>
+                            <div class="bg-[#333333] w-full" style="height: 70%"></div>
+                            <div class="bg-[#3b82f6] w-full" style="height: 55%"></div>
+                            <div class="bg-[#10b981] w-full" style="height: 90%"></div>
+                            <div class="bg-[#4b5563] w-full" style="height: 30%"></div>
+                            <div class="bg-[#a3e635] w-full" style="height: 65%"></div>
                         </div>
-                        <div class="flex justify-between text-[8px] font-mono font-bold text-slate-400">
+                        <div class="flex justify-between text-[8px] font-mono font-bold text-[#4b5563]">
                             <span>P_01</span><span>P_02</span><span>P_03</span><span>P_04</span><span>P_05</span><span>P_06</span>
                         </div>
                     </div>
-                    <div class="border border-slate-200 rounded-2xl p-6 bg-white flex flex-col justify-between shadow-sm">
+                    <div class="border border-[#222222] p-6 bg-[#0a0a0a] flex flex-col justify-between">
                         <div>
-                            <div class="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">System Health</div>
-                            <div class="text-4xl font-extrabold text-slate-800">0.998</div>
+                            <div class="text-[10px] font-mono font-bold uppercase tracking-widest text-[#9ca3af] mb-2">System Health Index</div>
+                            <div class="text-4xl font-mono font-extrabold text-[#a3e635]">0.998</div>
                         </div>
-                        <div class="flex gap-1.5 mt-4">
-                            <span class="w-3 h-3 bg-rose-500 rounded-full"></span>
-                            <span class="w-3 h-3 bg-blue-500 rounded-full"></span>
-                            <span class="w-3 h-3 bg-emerald-500 rounded-full"></span>
-                            <span class="w-3 h-3 bg-slate-900 rounded-full"></span>
+                        <div class="flex gap-2 mt-4">
+                            <span class="w-2.5 h-2.5 bg-[#a3e635]"></span>
+                            <span class="w-2.5 h-2.5 bg-[#3b82f6]"></span>
+                            <span class="w-2.5 h-2.5 bg-[#10b981]"></span>
+                            <span class="w-2.5 h-2.5 bg-[#333333]"></span>
                         </div>
                     </div>
                 </div>
@@ -322,28 +322,25 @@
         </section>
 
         <!-- TEMPLATE GALLERY -->
-        <section class="py-16 border-t border-slate-200 bg-slate-900 text-white rounded-2xl p-8 md:p-16 relative overflow-hidden shadow-xl">
-            <div class="absolute inset-0 opacity-5 pointer-events-none">
-                <div class="w-full h-full" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 24px 24px;"></div>
-            </div>
+        <section class="py-16 border-t border-[#222222] bg-[#0a0a0a] border border-[#222222] text-[#f3f4f6] p-8 md:p-16 relative overflow-hidden">
             <div class="relative z-10 flex flex-col items-center text-center">
-                <span class="font-mono text-[10px] font-semibold tracking-[0.4em] mb-6 border border-white/20 px-3 py-1.5 rounded-full uppercase">Core Seed Templates</span>
-                <h2 class="text-3xl md:text-5xl font-extrabold leading-tight mb-10 tracking-tight uppercase">READY TO INPUT?</h2>
+                <span class="font-mono text-[10px] font-semibold tracking-[0.4em] mb-6 border border-[#333333] bg-[#121212] px-3 py-1.5 uppercase text-[#a3e635]">Core Seed Templates</span>
+                <h2 class="text-3xl md:text-5xl font-serif font-extrabold leading-tight mb-10 tracking-tight uppercase text-[#f3f4f6]">READY TO INITIALIZE?</h2>
                 
                 <div v-if="templates.length" class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-5xl">
                     <button 
                         v-for="tmp in templates" 
                         :key="tmp.id"
                         @click="selectTemplate(tmp)"
-                        class="bg-white/10 hover:bg-white text-white hover:text-slate-900 p-6 rounded-xl transition-all border-none shadow-none text-left flex flex-col justify-between min-h-[160px]"
+                        class="bg-[#121212] hover:bg-[#1c1c1c] text-[#f3f4f6] p-6 border border-[#222222] hover:border-[#a3e635] transition-all text-left flex flex-col justify-between min-h-[160px]"
                     >
                         <div class="flex justify-between w-full mb-4">
-                           <span class="text-xl">{{ tmp.icon }}</span>
-                           <span class="material-symbols-outlined text-sm">add_circle</span>
+                           <span class="text-xl text-[#a3e635]">{{ tmp.icon }}</span>
+                           <span class="material-symbols-outlined text-sm text-[#9ca3af]">add_circle</span>
                         </div>
                         <div>
-                            <div class="font-bold text-sm mb-1">{{ tmp.name }}</div>
-                            <div class="text-[9px] opacity-60 font-normal leading-normal">{{ tmp.description }}</div>
+                            <div class="font-mono font-bold text-sm mb-1 text-[#f3f4f6]">{{ tmp.name }}</div>
+                            <div class="text-[10px] font-mono text-[#9ca3af] leading-normal">{{ tmp.description }}</div>
                         </div>
                     </button>
                 </div>

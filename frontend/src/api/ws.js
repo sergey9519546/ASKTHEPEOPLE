@@ -11,6 +11,10 @@
  *   - If it is empty (unified same-origin container), use window.location.
  */
 
+import { ref } from 'vue'
+
+export const globalWsStatus = ref('OFFLINE')
+
 function wsBaseUrl() {
   const httpBase = import.meta.env.VITE_API_BASE_URL ?? ''
   if (httpBase) {
@@ -40,6 +44,7 @@ class ResilientWebSocket {
   connect() {
     if (this.closedByUser) return;
 
+    globalWsStatus.value = this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING'
     console.log(`[WS] Connecting to: ${this.url}`);
     try {
       this.ws = new WebSocket(this.url);
@@ -49,6 +54,7 @@ class ResilientWebSocket {
     }
 
     this.ws.onopen = () => {
+      globalWsStatus.value = 'ONLINE'
       console.log(`[WS] Connection established: ${this.url}`);
       this.reconnectAttempts = 0;
       this.startWatchdog();
@@ -67,9 +73,11 @@ class ResilientWebSocket {
     this.ws.onclose = (e) => {
       this.stopWatchdog();
       if (this.closedByUser) {
+        globalWsStatus.value = 'OFFLINE';
         console.log(`[WS] Connection closed cleanly by client request.`);
         this.onClose?.(e);
       } else {
+        globalWsStatus.value = 'RECONNECTING';
         console.warn(`[WS] Connection closed unexpectedly. Scheduling reconnect.`);
         this.handleDisconnect(e);
       }
@@ -82,7 +90,11 @@ class ResilientWebSocket {
   }
 
   handleDisconnect(e) {
-    if (this.closedByUser) return;
+    if (this.closedByUser) {
+      globalWsStatus.value = 'OFFLINE';
+      return;
+    }
+    globalWsStatus.value = 'RECONNECTING';
     
     // Clean up current reference
     if (this.ws) {
@@ -110,6 +122,7 @@ class ResilientWebSocket {
     if (this.closedByUser) return;
     this.watchdogTimer = setTimeout(() => {
       console.warn(`[WS] Inactivity threshold exceeded on ${this.url}. Reconnecting...`);
+      globalWsStatus.value = 'RECONNECTING';
       if (this.ws) {
         try { this.ws.close(); } catch (_) {}
       } else {
@@ -127,6 +140,7 @@ class ResilientWebSocket {
 
   close() {
     this.closedByUser = true;
+    globalWsStatus.value = 'OFFLINE';
     this.stopWatchdog();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);

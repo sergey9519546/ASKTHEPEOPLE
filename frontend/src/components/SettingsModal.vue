@@ -1,31 +1,31 @@
 <template>
   <div class="fixed inset-0 z-[100] flex items-center justify-center bg-[#000000]/80 p-4 font-sans">
-    <!-- Modal Window (Modern Minimalist Style) -->
-    <div class="w-full max-w-4xl bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <!-- Modal Window (Command Center Minimalist Style) -->
+    <div class="w-full max-w-4xl bg-[#0a0a0a] border border-[#333333] flex flex-col max-h-[90vh] overflow-hidden shadow-2xl">
       
       <!-- HEADER -->
-      <header class="bg-white border-b border-slate-100 p-5 flex justify-between items-center">
+      <header class="bg-[#121212] border-b border-[#222222] p-5 flex justify-between items-center">
         <div class="flex items-center gap-3">
-          <span class="material-symbols-outlined text-2xl text-rose-500">settings_input_component</span>
-          <h2 class="text-lg font-bold text-slate-800 tracking-tight uppercase">System Configuration</h2>
+          <span class="material-symbols-outlined text-2xl text-[#a3e635]">settings_input_component</span>
+          <h2 class="text-lg font-mono font-bold text-[#f3f4f6] tracking-tight uppercase">System Configuration</h2>
         </div>
         <button 
           @click="$emit('close')" 
-          class="border-none bg-transparent hover:bg-slate-100 text-slate-400 hover:text-slate-600 w-8 h-8 rounded-full flex items-center justify-center p-0 cursor-pointer transition-colors"
+          class="border-none bg-transparent hover:bg-[#222222] text-[#9ca3af] hover:text-[#f3f4f6] w-8 h-8 flex items-center justify-center p-0 cursor-pointer transition-colors"
         >
           <span class="material-symbols-outlined text-lg">close</span>
         </button>
       </header>
 
       <!-- BODY -->
-      <div class="flex-grow p-6 md:p-8 overflow-y-auto space-y-6 scrollbar-thin">
+      <div class="flex-grow p-6 md:p-8 overflow-y-auto space-y-6 scrollbar-thin bg-[#000000]">
         
         <!-- PRESETS PICKER -->
-        <section class="border border-slate-200 rounded-xl p-5 bg-slate-50">
-          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+        <section class="border border-[#222222] p-5 bg-[#0a0a0a]">
+          <h3 class="text-xs font-mono font-bold text-[#a3e635] uppercase tracking-wider mb-1">
             Endpoint Presets
           </h3>
-          <p class="text-[11px] text-slate-500 mb-4">
+          <p class="text-[11px] font-mono text-[#9ca3af] mb-4">
             Select a preset provider to automatically populate endpoints and model configurations:
           </p>
           <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -33,8 +33,8 @@
               v-for="p in presets" 
               :key="p.id" 
               @click="applyPreset(p)"
-              class="w-full py-2 px-3 border border-slate-200 rounded-lg text-xs font-semibold text-center hover:bg-slate-100 transition-all p-0 flex flex-col justify-center items-center gap-0.5"
-              :class="p.id === activePresetId ? 'bg-rose-50 border-rose-400 text-rose-600 font-bold' : 'bg-white text-slate-700'"
+              class="w-full py-2 px-3 border text-xs font-mono font-semibold text-center transition-all p-0 flex flex-col justify-center items-center gap-0.5 cursor-pointer"
+              :class="p.id === activePresetId ? 'bg-[#1a2e05] border-[#a3e635] text-[#a3e635] font-bold' : 'bg-[#121212] border-[#222222] text-[#9ca3af] hover:bg-[#1c1c1c] hover:text-[#f3f4f6]'"
             >
               <span>{{ p.name }}</span>
               <span class="text-[8px] font-normal opacity-60">{{ p.sub }}</span>
@@ -46,24 +46,24 @@
         <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           <!-- PRIMARY MODEL CONFIG -->
-          <div class="border border-slate-200 rounded-xl p-5 bg-white space-y-4">
-            <h3 class="text-xs font-bold text-rose-500 uppercase tracking-wider mb-2">
+          <div class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
+            <h3 class="text-xs font-mono font-bold text-[#a3e635] uppercase tracking-wider mb-2">
               Primary Engine (Simulation & Context)
             </h3>
             
             <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">LLM API Key</label>
-              <div class="relative flex border border-slate-200 rounded-lg overflow-hidden focus-within:border-rose-500 focus-within:ring-1 focus-within:ring-rose-500 transition-all">
+              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">LLM API Key</label>
+              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#a3e635] transition-all">
                 <input 
                   :type="showKeys.primary ? 'text' : 'password'" 
                   v-model="form.LLM_API_KEY"
                   placeholder="nvapi-... or sk-..."
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-white border-none"
+                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
                 />
                 <button 
                   @click="showKeys.primary = !showKeys.primary"
                   type="button"
-                  class="border-l border-slate-200 border-r-0 border-t-0 border-b-0 px-3 py-1 bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-500 p-0 cursor-pointer"
+                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
                 >
                   {{ showKeys.primary ? 'HIDE' : 'SHOW' }}
                 </button>
@@ -71,45 +71,45 @@
             </div>
 
             <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">LLM Base URL</label>
+              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">LLM Base URL</label>
               <input 
                 type="text" 
                 v-model="form.LLM_BASE_URL" 
                 placeholder="https://integrate.api.nvidia.com/v1"
-                class="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono text-xs outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all bg-white"
+                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#a3e635] transition-all"
               />
             </div>
 
             <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">LLM Model Name</label>
+              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">LLM Model Name</label>
               <input 
                 type="text" 
                 v-model="form.LLM_MODEL_NAME" 
                 placeholder="meta/llama-4-maverick-17b-128e-instruct"
-                class="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono text-xs outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-all bg-white"
+                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#a3e635] transition-all"
               />
             </div>
           </div>
 
           <!-- BOOST MODEL CONFIG (OPTIONAL) -->
-          <div class="border border-slate-200 rounded-xl p-5 bg-white space-y-4">
-            <h3 class="text-xs font-bold text-blue-500 uppercase tracking-wider mb-2">
+          <div class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
+            <h3 class="text-xs font-mono font-bold text-[#60a5fa] uppercase tracking-wider mb-2">
               Boost Engine (Reports & Analysis)
             </h3>
 
             <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Boost API Key</label>
-              <div class="relative flex border border-slate-200 rounded-lg overflow-hidden focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 transition-all">
+              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Boost API Key</label>
+              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#60a5fa] transition-all">
                 <input 
                   :type="showKeys.boost ? 'text' : 'password'" 
                   v-model="form.LLM_BOOST_API_KEY"
                   placeholder="Same as Primary if left blank"
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-white border-none"
+                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
                 />
                 <button 
                   @click="showKeys.boost = !showKeys.boost"
                   type="button"
-                  class="border-l border-slate-200 border-r-0 border-t-0 border-b-0 px-3 py-1 bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-500 p-0 cursor-pointer"
+                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
                 >
                   {{ showKeys.boost ? 'HIDE' : 'SHOW' }}
                 </button>
@@ -117,47 +117,47 @@
             </div>
 
             <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Boost Base URL</label>
+              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Boost Base URL</label>
               <input 
                 type="text" 
                 v-model="form.LLM_BOOST_BASE_URL" 
                 placeholder="https://integrate.api.nvidia.com/v1"
-                class="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white"
+                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#60a5fa] transition-all"
               />
             </div>
 
             <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Boost Model Name</label>
+              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Boost Model Name</label>
               <input 
                 type="text" 
                 v-model="form.LLM_BOOST_MODEL_NAME" 
                 placeholder="mistralai/mistral-large-3-675b-instruct-2512"
-                class="w-full px-3 py-2 border border-slate-200 rounded-lg font-mono text-xs outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all bg-white"
+                class="w-full px-3 py-2 border border-[#222222] bg-[#121212] font-mono text-xs text-[#f3f4f6] outline-none focus:border-[#60a5fa] transition-all"
               />
             </div>
           </div>
         </section>
 
         <!-- GRAPH DATABASE & AUX SETTINGS -->
-        <section class="border border-slate-200 rounded-xl p-5 bg-white space-y-4">
-          <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+        <section class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
+          <h3 class="text-xs font-mono font-bold text-[#f3f4f6] uppercase tracking-wider mb-2">
             Zep Graph Memory & Search Configurations
           </h3>
           
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div class="space-y-1">
               <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Zep Graph API Key</label>
-              <div class="relative flex border border-slate-200 rounded-lg overflow-hidden focus-within:border-rose-500 focus-within:ring-1 focus-within:ring-rose-500 transition-all">
+              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#a3e635] transition-all">
                 <input 
                   :type="showKeys.zep ? 'text' : 'password'" 
                   v-model="form.ZEP_API_KEY"
                   placeholder="z_..."
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-white border-none"
+                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
                 />
                 <button 
                   @click="showKeys.zep = !showKeys.zep"
                   type="button"
-                  class="border-l border-slate-200 border-r-0 border-t-0 border-b-0 px-3 py-1 bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-500 p-0 cursor-pointer"
+                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
                 >
                   {{ showKeys.zep ? 'HIDE' : 'SHOW' }}
                 </button>
@@ -165,18 +165,18 @@
             </div>
 
             <div class="space-y-1">
-              <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Brave Search API Key (Optional)</label>
-              <div class="relative flex border border-slate-200 rounded-lg overflow-hidden focus-within:border-rose-500 focus-within:ring-1 focus-within:ring-rose-500 transition-all">
+              <label class="text-[11px] font-mono font-bold text-[#9ca3af] uppercase tracking-wider block">Brave Search API Key (Optional)</label>
+              <div class="relative flex border border-[#222222] bg-[#121212] focus-within:border-[#a3e635] transition-all">
                 <input 
                   :type="showKeys.brave ? 'text' : 'password'" 
                   v-model="form.BRAVE_SEARCH_API_KEY"
                   placeholder="BSA_..."
-                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-white border-none"
+                  class="w-full px-3 py-2 font-mono text-xs outline-none bg-transparent text-[#f3f4f6] border-none"
                 />
                 <button 
                   @click="showKeys.brave = !showKeys.brave"
                   type="button"
-                  class="border-l border-slate-200 border-r-0 border-t-0 border-b-0 px-3 py-1 bg-slate-50 hover:bg-slate-100 text-[10px] font-bold text-slate-500 p-0 cursor-pointer"
+                  class="border-l border-[#222222] border-r-0 border-t-0 border-b-0 px-3 py-1 bg-[#161616] hover:bg-[#222222] text-[10px] font-mono font-bold text-[#9ca3af] p-0 cursor-pointer"
                 >
                   {{ showKeys.brave ? 'HIDE' : 'SHOW' }}
                 </button>
@@ -186,16 +186,16 @@
         </section>
 
         <!-- CONNECTION DIAGNOSTICS -->
-        <section class="border border-slate-200 rounded-xl p-5 bg-white space-y-4">
+        <section class="border border-[#222222] p-5 bg-[#0a0a0a] space-y-4">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Connection Diagnostics</h3>
-              <p class="text-[11px] text-slate-500 mt-1">Verify that your primary engine configurations can authenticate successfully.</p>
+              <h3 class="text-xs font-mono font-bold text-[#f3f4f6] uppercase tracking-wider">Connection Diagnostics</h3>
+              <p class="text-[11px] font-mono text-[#9ca3af] mt-1">Verify that your primary engine configurations can authenticate successfully.</p>
             </div>
             <button 
               @click="runConnectionTest" 
               :disabled="testing"
-              class="w-full md:w-auto bg-slate-900 text-white hover:bg-rose-600 transition-colors px-5 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider"
+              class="w-full md:w-auto bg-[#a3e635] text-[#1a2e05] hover:bg-[#bef264] transition-colors px-5 py-2.5 text-xs font-mono font-bold uppercase tracking-wider border-none cursor-pointer"
             >
               <span v-if="testing">Diagnosing...</span>
               <span v-else>Test Connection</span>
@@ -203,7 +203,7 @@
           </div>
 
           <!-- Connection Test Feedback -->
-          <div v-if="testResult" class="border rounded-lg p-4 text-xs font-mono" :class="testResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'">
+          <div v-if="testResult" class="border p-4 text-xs font-mono" :class="testResult.success ? 'bg-[#1a2e05] border-[#a3e635] text-[#a3e635]' : 'bg-[#451a03] border-[#f59e0b] text-[#f59e0b]'">
             <div class="flex items-center gap-2 font-bold mb-1">
               <span class="material-symbols-outlined text-lg">{{ testResult.success ? 'check_circle' : 'error' }}</span>
               <span>{{ testResult.success ? 'CONNECTION SUCCESSFUL' : 'CONNECTION FAILED' }}</span>
@@ -215,17 +215,17 @@
         </section>
 
         <!-- LOCAL MODEL INSTRUCTIONS -->
-        <section class="border border-dashed border-slate-200 rounded-xl p-5 bg-slate-50 text-xs text-slate-500 space-y-2">
-          <div class="flex items-center gap-2 font-bold uppercase text-slate-700">
+        <section class="border border-dashed border-[#333333] p-5 bg-[#0a0a0a] text-xs text-[#9ca3af] space-y-2 font-mono">
+          <div class="flex items-center gap-2 font-bold uppercase text-[#a3e635]">
             <span class="material-symbols-outlined text-sm">info</span>
             <span>Running Local LLM Models (Ollama / LM Studio)</span>
           </div>
           <ul class="list-disc pl-5 space-y-1.5 leading-relaxed text-[11px]">
             <li>
-              <strong>Ollama</strong>: Set Base URL to <code class="bg-white border border-slate-200 px-1 rounded">http://localhost:11434/v1</code>, set Model Name to your pulled model (e.g. <code class="bg-white border border-slate-200 px-1 rounded">llama3</code>), and enter a dummy key (like <code class="bg-white border border-slate-200 px-1 rounded">ollama</code>).
+              <strong>Ollama</strong>: Set Base URL to <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">http://localhost:11434/v1</code>, set Model Name to your pulled model (e.g. <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">llama3</code>), and enter a dummy key (like <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">ollama</code>).
             </li>
             <li>
-              <strong>LM Studio</strong>: Set Base URL to <code class="bg-white border border-slate-200 px-1 rounded">http://localhost:1234/v1</code>, set Model Name to your active model, and set API Key to any dummy text.
+              <strong>LM Studio</strong>: Set Base URL to <code class="bg-[#121212] border border-[#333333] px-1 text-[#a3e635]">http://localhost:1234/v1</code>, set Model Name to your active model, and set API Key to any dummy text.
             </li>
           </ul>
         </section>
