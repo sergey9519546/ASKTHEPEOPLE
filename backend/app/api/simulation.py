@@ -62,6 +62,15 @@ _RUN_STATE_BASE = os.path.abspath(
 )
 
 
+# P0 path-escape fix (audit §5 P0). The platform identifier is a request-
+# controlled value; it MUST be parsed as a strict enum and resolved to a
+# fixed filename. Do NOT interpolate request text into a filename.
+ALLOWED_PLATFORMS = {
+    "reddit": "reddit_simulation.db",
+    "twitter": "twitter_simulation.db",
+}
+
+
 def _safe_sim_dir(simulation_id: str) -> str:
     """Resolve a validated simulation run-state directory (path-traversal safe).
 
@@ -2642,24 +2651,50 @@ def get_agent_stats(simulation_id: str):
 def get_simulation_posts(simulation_id: str):
     """
     Get posts in the simulation
-    
+
     Query parameters:
         platform: platform type (twitter/reddit)
         limit: return count (default 50)
         offset: offset
-    
+
     Returns post list (read from SQLite database)
     """
     try:
-        platform = request.args.get('platform', 'reddit')
-        limit = request.args.get('limit', 50, type=int)
-        offset = request.args.get('offset', 0, type=int)
-        
+        # P0 path-escape fix (audit §5 P0). Parse the platform as a strict
+        # enum and resolve to a fixed filename. Never interpolate request
+        # text into a path.
+        platform_param = request.args.get('platform', 'reddit')
+        if platform_param not in ALLOWED_PLATFORMS:
+            return jsonify({
+                "success": False,
+                "error": "invalid_platform",
+                "allowed": sorted(ALLOWED_PLATFORMS.keys()),
+            }), 422
+        platform = platform_param
+
+        # P1 input bounding (audit §5 P1). Bounded int parsing via the
+        # request parser + manual clamps as a second line of defense.
+        try:
+            limit = int(request.args.get('limit', 50))
+            offset = int(request.args.get('offset', 0))
+        except (TypeError, ValueError):
+            return jsonify({
+                "success": False,
+                "error": "invalid_limit_or_offset",
+            }), 422
+        if limit < 0 or offset < 0 or limit > 500:
+            return jsonify({
+                "success": False,
+                "error": "limit_out_of_range",
+                "limit_max": 500,
+            }), 422
+
         sim_dir = safe_join(_RUN_STATE_BASE, simulation_id)
 
-        db_file = f"{platform}_simulation.db"
+        # Fixed allowlist, not interpolation.
+        db_file = ALLOWED_PLATFORMS[platform]
         db_path = os.path.join(sim_dir, db_file)
-        
+
         if not os.path.exists(db_path):
             return jsonify({
                 "success": True,
@@ -2671,30 +2706,76 @@ def get_simulation_posts(simulation_id: str):
                 },
                 "disclosure": synthetic_output_disclosure(),
             })
-        
+
         import sqlite3
-        conn = sqlite3.connect(db_path)
+        # Read-only mode, bounded busy timeout. Distinguishes missing
+        # table, locked database, corrupt database, and query timeout
+        # (audit §5 P0 required correction).
+        db_uri = f"file:{db_path}?mode=ro"
+        try:
+            conn = sqlite3.connect(db_uri, uri=True, timeout=5.0)
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            if "unable to open" in msg or "no such file" in msg:
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "platform": platform,
+                        "count": 0,
+                        "posts": [],
+                        "message": "Database does not exist, simulation may not have run yet"
+                    },
+                    "disclosure": synthetic_output_disclosure(),
+                })
+            if "database disk image is malformed" in msg:
+                logger.error("Posts sqlite is corrupt: %s", db_path)
+                return jsonify({"success": False, "error": "database_corrupt"}), 500
+            return jsonify({
+                "success": False,
+                "error": "database_unavailable",
+                "detail": str(exc),
+            }), 500
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         try:
-            cursor.execute("""
-                SELECT * FROM post 
-                ORDER BY created_at DESC 
-                LIMIT ? OFFSET ?
-            """, (limit, offset))
-            
-            posts = [dict(row) for row in cursor.fetchall()]
-            
-            cursor.execute("SELECT COUNT(*) FROM post")
-            total = cursor.fetchone()[0]
-            
-        except sqlite3.OperationalError:
-            posts = []
-            total = 0
-        
-        conn.close()
-        
+            try:
+                cursor.execute("""
+                    SELECT * FROM post
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset))
+
+                posts = [dict(row) for row in cursor.fetchall()]
+
+                cursor.execute("SELECT COUNT(*) FROM post")
+                total = cursor.fetchone()[0]
+            except sqlite3.OperationalError as exc:
+                msg = str(exc).lower()
+                if "no such table" in msg:
+                    # Missing table is not an error; the simulation may
+                    # not have produced any posts yet.
+                    posts = []
+                    total = 0
+                elif "database is locked" in msg:
+                    conn.close()
+                    return jsonify({"success": False, "error": "database_locked"}), 423
+                elif "database disk image is malformed" in msg:
+                    conn.close()
+                    return jsonify({"success": False, "error": "database_corrupt"}), 500
+                else:
+                    conn.close()
+                    return jsonify({
+                        "success": False,
+                        "error": "database_query_failed",
+                        "detail": str(exc),
+                    }), 500
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
         return jsonify({
             "success": True,
             "data": {
@@ -2705,7 +2786,7 @@ def get_simulation_posts(simulation_id: str):
             },
             "disclosure": synthetic_output_disclosure(),
         })
-        
+
     except SafePathError:
         return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
