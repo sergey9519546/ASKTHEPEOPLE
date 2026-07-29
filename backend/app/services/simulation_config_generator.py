@@ -1,7 +1,8 @@
 """
-Simulation Configuration Generator.
-Uses an LLM to automatically generate detailed simulation parameters from requirements, document text, and graph data.
-Fully automated - no manual parameter tuning needed.
+Synthetic Scenario Configuration Generator.
+Uses an LLM to propose fictional run parameters from a brief, supplied text,
+and graph records. Parameters are modelling assumptions, not measurements of
+people, representative behavior, probabilities, or forecasts.
 
 Uses a step-by-step generation strategy to avoid failures from overly long outputs:
 1. Generate time configuration
@@ -20,6 +21,10 @@ from openai import OpenAI
 
 from ..config import Config
 from ..utils.logger import get_logger
+from .claim_boundary import (
+    synthetic_config_disclosure,
+    synthetic_output_disclosure,
+)
 from .role_normalizer import normalize_entity_type
 from .zep_entity_reader import EntityNode, ZepEntityReader
 
@@ -53,7 +58,7 @@ class AgentActivityConfig:
     # Stance on the simulation topic
     stance: str = "neutral"  # supportive, opposing, neutral, observer
     
-    # Influence weight (probability of post being seen by other agents)
+    # Synthetic run weight used by the engine when distributing generated posts
     influence_weight: float = 1.0
 
     # Expanded behavior contract consumed by runtime logic
@@ -64,10 +69,17 @@ class AgentActivityConfig:
     novelty_seeking: float = 0.45
     platform_preference: str = "both"
 
+    # Machine-enforced provenance for every behavioral control.
+    control_assumption_basis: str = "neutral_fictional_default"
+    behavioral_override_applied: bool = False
+    measured_human_behavior: bool = False
+    human_respondents: int = 0
+    causal_evidence: bool = False
+
 
 @dataclass  
 class TimeSimulationConfig:
-    """Time simulation configuration (based on typical daily activity patterns)."""
+    """Fictional run-clock configuration, not an observed activity pattern."""
     # Total simulation duration in simulated hours
     total_simulation_hours: int = 72  # Default: 72 hours (3 days)
     
@@ -78,11 +90,11 @@ class TimeSimulationConfig:
     agents_per_hour_min: int = 5
     agents_per_hour_max: int = 20
     
-    # Peak hours (19-22h - most active period)
+    # Synthetic high-cadence clock bucket
     peak_hours: List[int] = field(default_factory=lambda: [19, 20, 21, 22])
     peak_activity_multiplier: float = 1.5
     
-    # Off-peak hours (0-5h - almost no activity)
+    # Synthetic low-cadence clock bucket
     off_peak_hours: List[int] = field(default_factory=lambda: [0, 1, 2, 3, 4, 5])
     off_peak_activity_multiplier: float = 0.05
     
@@ -107,7 +119,7 @@ class EventConfig:
     # Trending topic keywords
     hot_topics: List[str] = field(default_factory=list)
     
-    # Narrative direction for opinion flow
+    # Compatibility field for one fictional scenario-path progression
     narrative_direction: str = ""
 
 
@@ -124,7 +136,7 @@ class PlatformConfig:
     # Viral spread threshold (interactions needed to trigger diffusion)
     viral_threshold: int = 10
     
-    # Echo chamber effect strength (clustering of similar opinions)
+    # Synthetic clustering strength for generated stances
     echo_chamber_strength: float = 0.5
 
 
@@ -172,6 +184,8 @@ class SimulationParameters:
         """Convert to dictionary"""
         time_dict = asdict(self.time_config)
         return {
+            "truth_status": synthetic_output_disclosure(),
+            "control_metadata": synthetic_config_disclosure(),
             "simulation_id": self.simulation_id,
             "project_id": self.project_id,
             "graph_id": self.graph_id,
@@ -199,10 +213,11 @@ class SimulationParameters:
 
 class SimulationConfigGenerator:
     """
-    Intelligent Simulation Configuration Generator.
+    Synthetic Scenario Configuration Generator.
     
     Uses an LLM to analyse simulation requirements, document content, and entity graph data,
-    then automatically generates optimal simulation parameters.
+    then proposes fictional run parameters. It does not measure or predict human
+    behavior, and role labels must not be treated as behavioral evidence.
     
     Step-by-step generation strategy:
     1. Generate time config and event config (lightweight)
@@ -438,9 +453,11 @@ class SimulationConfigGenerator:
         country = "Unknown"
         region = "global"
         timezone = "UTC"
-        activity_norm = "global_generic"
+        activity_norm = "fictional_cadence_default"
         confidence = 0.45
-        reasoning = "Fallback global context used because locale signals were weak."
+        reasoning = (
+            "No explicit locale signal; UTC is used only as a fictional run clock."
+        )
 
         # Language detection
         if any("\u4e00" <= ch <= "\u9fff" for ch in simulation_requirement + document_text):
@@ -456,43 +473,65 @@ class SimulationConfigGenerator:
             confidence = 0.65
             reasoning = "Detected French-language regional cues in source material."
         else:
-            # Default to English/Global if no strong indicators
+            # Default to English labels without inferring a population or locale.
             language = "en"
             confidence = 0.6
-            reasoning = "Defaulting to English/Global context as primary preference."
+            reasoning = (
+                "English labels and a UTC fictional run clock are used because "
+                "the supplied material contains no stronger locale signal."
+            )
 
-        # Geographic and activity norm detection
-        if "china" in source or "beijing" in source or "shanghai" in source or language == "zh":
+        # Geography changes only the run clock. Language alone never assigns a
+        # country, and locale never implies actual activity habits.
+        if any(token in source for token in ("china", "beijing", "shanghai")):
             country = "China"
             region = "Asia"
             timezone = "Asia/Shanghai"
-            activity_norm = "china_urban"
+            activity_norm = "source_clock_only"
             confidence = max(confidence, 0.8)
-            reasoning = "Detected China-specific geographic references or Chinese language."
+            reasoning = (
+                "Explicit China geographic text selected a scenario clock; "
+                "no population behavior was inferred."
+            )
         elif any(token in source for token in ("united states", "usa", "u.s.", "america", "california", "new york", "washington")):
             country = "United States"
             region = "North America"
-            timezone = "America/Los_Angeles" # Default to a common US timezone, could be more specific
-            activity_norm = "us_general"
+            if any(token in source for token in ("california", "los angeles")):
+                timezone = "America/Los_Angeles"
+            elif "new york" in source:
+                timezone = "America/New_York"
+            activity_norm = "source_clock_only"
             confidence = max(confidence, 0.78)
-            reasoning = "Detected United States geographic references."
+            reasoning = (
+                "Explicit United States geographic text informed the scenario "
+                "clock where specific; no population behavior was inferred."
+            )
         elif any(token in source for token in ("uk", "united kingdom", "london", "britain", "england", "scotland")):
             country = "United Kingdom"
             region = "Europe"
             timezone = "Europe/London"
-            activity_norm = "uk_general"
+            activity_norm = "source_clock_only"
             confidence = max(confidence, 0.74)
-            reasoning = "Detected UK geographic references."
+            reasoning = (
+                "Explicit UK geographic text selected a scenario clock; "
+                "no population behavior was inferred."
+            )
         elif any(token in source for token in ("india", "mumbai", "delhi", "bangalore")):
             country = "India"
             region = "Asia"
             timezone = "Asia/Kolkata"
-            activity_norm = "india_general"
+            activity_norm = "source_clock_only"
             confidence = max(confidence, 0.70)
-            reasoning = "Detected India-specific geographic references."
+            reasoning = (
+                "Explicit India geographic text selected a scenario clock; "
+                "no population behavior was inferred."
+            )
         elif "reddit" in labels and "twitter" not in labels:
             confidence = max(confidence, 0.55)
-            reasoning = "Platform mix suggests discussion-heavy, globally distributed behavior."
+            reasoning = (
+                "A platform label was retained, but it did not determine "
+                "geography or behavior."
+            )
 
         return {
             "language": language,
@@ -502,6 +541,11 @@ class SimulationConfigGenerator:
             "activity_norm": activity_norm,
             "confidence": round(confidence, 2),
             "reasoning": reasoning,
+            "human_respondents": 0,
+            "methodology": (
+                "Source-derived language and run-clock assumption only; not "
+                "participant behavior, public opinion, or a forecast."
+            ),
         }
 
     def _build_network_bootstrap(
@@ -511,19 +555,26 @@ class SimulationConfigGenerator:
         enable_reddit: bool,
     ) -> Dict[str, Any]:
         return {
-            "enable_follow_bootstrap": True,
+            "enable_follow_bootstrap": False,
+            "graph_relationship_behavior_opt_in": False,
+            "neutral_follow_seed": 0.7,
+            "neutral_affinity_score": 0.65,
             "follow_density": round(min(0.65, max(0.15, len(agent_configs) / 120)), 2),
-            "role_bias_rules": {
-                "media": 0.8,
-                "official": 0.55,
-                "student": 0.72,
-                "community": 0.78,
-            },
-            "relationship_affinity_rules": {
-                "supportive": 0.85,
-                "neutral": 0.55,
-                "conflict": 0.35,
-            },
+            # Compatibility key retained. Empty by default because a label is
+            # not evidence of how a real person or organization behaves.
+            "role_bias_rules": {},
+            "relationship_affinity_rules": {},
+            "relationship_behavior_inferred": False,
+            "assumption_basis": "neutral_fictional_default",
+            "record_origin": "graph_record_origin_unverified",
+            "external_validation": False,
+            "causal_evidence": False,
+            "assumption_disclosure": (
+                "Graph-derived relationship behavior is off by default. "
+                "Fictional network controls are neutral; no role-based human "
+                "behavior or population pattern is inferred, and no causal "
+                "evidence is established."
+            ),
             "platforms": {
                 "twitter": enable_twitter,
                 "reddit": enable_reddit,
@@ -545,7 +596,11 @@ class SimulationConfigGenerator:
                     "event_type": "topic_spike",
                     "payload": {"topics": event_config.hot_topics[:5]},
                     "targeting": {"roles": sorted({cfg.normalized_role for cfg in agent_configs})[:4]},
-                    "reasoning": f"Derived from hot topics under {context_profile.get('activity_norm', 'global_generic')} context.",
+                    "reasoning": (
+                        "Fictional trigger derived from supplied topic labels "
+                        f"under the {context_profile.get('activity_norm', 'fictional_cadence_default')} "
+                        "run-clock assumption; not a forecast."
+                    ),
                 }
             )
         if event_config.initial_posts:
@@ -557,7 +612,10 @@ class SimulationConfigGenerator:
                     "event_type": "seed_post",
                     "payload": {"content": first_post.get("content", "")},
                     "targeting": {"poster_agent_id": first_post.get("poster_agent_id")},
-                    "reasoning": "Carry the initial narrative forward with a second-wave reaction trigger.",
+                    "reasoning": (
+                        "Fictional second-wave trigger used to explore another "
+                        "generated path; not a predicted reaction."
+                    ),
                 }
             )
         return schedule
@@ -580,7 +638,38 @@ class SimulationConfigGenerator:
                 "style": "threaded_discussion",
             },
         }
-        import re
+
+    def _summarize_entities(self, entities: List[EntityNode]) -> str:
+        """Generate a structured entity summary grouped by type."""
+        lines = []
+
+        by_type: Dict[str, List[EntityNode]] = {}
+        for entity in entities:
+            entity_type = entity.get_entity_type() or "Unknown"
+            by_type.setdefault(entity_type, []).append(entity)
+
+        for entity_type, type_entities in by_type.items():
+            lines.append(f"\n### {entity_type} ({len(type_entities)} total)")
+            display_count = self.ENTITIES_PER_TYPE_DISPLAY
+            summary_len = self.ENTITY_SUMMARY_LENGTH
+            for entity in type_entities[:display_count]:
+                summary_preview = (
+                    entity.summary[:summary_len] + "..."
+                    if len(entity.summary) > summary_len
+                    else entity.summary
+                )
+                lines.append(f"- {entity.name}: {summary_preview}")
+            if len(type_entities) > display_count:
+                lines.append(
+                    f"  ... {len(type_entities) - display_count} more"
+                )
+
+        return "\n".join(lines)
+
+    def _call_llm_with_retry(
+        self, prompt: str, system_prompt: str
+    ) -> Dict[str, Any]:
+        """Call the LLM with retry logic and malformed-JSON repair."""
         
         max_attempts = 3
         last_error = None
@@ -679,30 +768,28 @@ class SimulationConfigGenerator:
         return None
     
     def _generate_time_config(self, context: str, num_entities: int) -> Dict[str, Any]:
-        """Generate time configuration using an LLM."""
+        """Generate a fictional run-clock configuration using an LLM."""
         context_truncated = context[:self.TIME_CONFIG_CONTEXT_LENGTH]
         
         # Max agents allowed (90% of total)
         max_agents_allowed = max(1, int(num_entities * 0.9))
         
-        prompt = f"""Based on the following simulation requirement, generate a time simulation configuration.
+        prompt = f"""Generate a fictional run-clock configuration for the supplied synthetic scenario.
 
 {context_truncated}
 
 ## Task
-Please generate a time configuration in JSON format.
+Return a run-clock configuration in JSON format.
 
-### General principles (for reference only, please adjust flexibly based on the specific event and participant group):
-- User group is people from China, must conform to Beijing time activity habits.
-- 0-5h (late night): almost no activity (multiplier 0.05)
-- 6-8h (morning): gradually increasing activity (multiplier 0.4)
-- 9-18h (work hours): moderate activity (multiplier 0.7)
-- 19-22h (evening peak): highest activity (multiplier 1.5)
-- 23h+: activity declining (multiplier 0.5)
-- General trend: late night low, morning increasing, work hours moderate, evening peak.
-- **Important**: The following example values are for reference only. You need to adjust the specific time periods according to the nature of the event and the characteristics of the participant group.
-  - Example: student group peak might be 21-23h; media might be active all day; official agencies might only be active during working hours.
-  - Example: breaking news events might cause late-night discussions, so off_peak_hours can be appropriately shortened.
+### Modelling contract
+- Every hour bucket and activation rate is a fictional engine parameter.
+- Do not infer schedules or activity from nationality, language, profession,
+  demographics, or role labels.
+- A timezone in the context is only the clock used to label run hours.
+- Use explicit scheduling constraints from supplied material when present.
+  Otherwise use the neutral example below.
+- The configuration does not measure participants, public opinion, probability,
+  representative behavior, or future outcomes.
 
 ### Return JSON format (no markdown)
 
@@ -716,21 +803,26 @@ Example:
     "off_peak_hours": [0, 1, 2, 3, 4, 5],
     "morning_hours": [6, 7, 8],
     "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-    "reasoning": "Explanation for the time configuration for this event"
+    "reasoning": "Fictional run-clock assumption and any explicit source constraint used"
 }}
 
 Field descriptions:
-- total_simulation_hours (int): Total simulation duration, 24-168 hours. Short for breaking events, long for sustained topics.
-- minutes_per_round (int): Duration per round, 30-120 minutes, 60 minutes recommended.
-- agents_per_hour_min (int): Minimum number of Agents activated per hour (value range: 1-{max_agents_allowed})
-- agents_per_hour_max (int): Maximum number of Agents activated per hour (value range: 1-{max_agents_allowed})
-- peak_hours (int array): Peak hours, adjust according to the event participation group.
-- off_peak_hours (int array): Off-peak hours, usually late night and early morning.
-- morning_hours (int array): Morning hours.
-- work_hours (int array): Work hours.
-- reasoning (string): Brief explanation of why it is configured this way."""
+- total_simulation_hours (int): Fictional run duration, 24-168 hours.
+- minutes_per_round (int): Fictional minutes represented by one engine round, 30-120.
+- agents_per_hour_min (int): Minimum generated profiles activated per run hour (1-{max_agents_allowed}).
+- agents_per_hour_max (int): Maximum generated profiles activated per run hour (1-{max_agents_allowed}).
+- peak_hours (int array): Synthetic high-cadence clock buckets.
+- off_peak_hours (int array): Synthetic low-cadence clock buckets.
+- morning_hours (int array): Compatibility bucket name for run-clock hours.
+- work_hours (int array): Compatibility bucket name for run-clock hours.
+- reasoning (string): State that these are fictional assumptions, not observed behavior."""
 
-        system_prompt = "You are a social media simulation expert. Return in pure JSON format, time configuration should conform to typical activity habits."
+        system_prompt = (
+            "You configure a fictional scenario engine. Return pure JSON. "
+            "Do not infer human habits from locale or role, and do not present "
+            "run-clock parameters as measurements, representative behavior, "
+            "public opinion, probabilities, or forecasts."
+        )
         
         try:
             return self._call_llm_with_retry(prompt, system_prompt)
@@ -739,7 +831,7 @@ Field descriptions:
             return self._get_default_time_config(num_entities)
     
     def _get_default_time_config(self, num_entities: int) -> Dict[str, Any]:
-        """Get default time configuration."""
+        """Get a neutral fictional run-clock configuration."""
         return {
             "total_simulation_hours": 72,
             "minutes_per_round": 60,  # 1 hour per round, faster time flow
@@ -749,7 +841,10 @@ Field descriptions:
             "off_peak_hours": [0, 1, 2, 3, 4, 5],
             "morning_hours": [6, 7, 8],
             "work_hours": [9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
-            "reasoning": "Using default time configuration (1 hour per round)"
+            "reasoning": (
+                "Neutral fictional cadence with one simulated hour per round; "
+                "not derived from observed participant behavior."
+            )
         }
     
     def _parse_time_config(self, result: Dict[str, Any], num_entities: int) -> TimeSimulationConfig:
@@ -779,7 +874,7 @@ Field descriptions:
             agents_per_hour_max=agents_per_hour_max,
             peak_hours=result.get("peak_hours", [19, 20, 21, 22]),
             off_peak_hours=result.get("off_peak_hours", [0, 1, 2, 3, 4, 5]),
-            off_peak_activity_multiplier=0.05,  # Late night, almost no one
+            off_peak_activity_multiplier=0.05,
             morning_hours=result.get("morning_hours", [6, 7, 8]),
             morning_activity_multiplier=0.4,
             work_hours=result.get("work_hours", list(range(9, 19))),
@@ -800,7 +895,7 @@ Field descriptions:
             e.get_entity_type() or "Unknown" for e in entities
         ))
         
-        # List representative entities for each type
+        # List source examples for type-label matching; not population samples.
         type_examples = {}
         for e in entities:
             etype = e.get_entity_type() or "Unknown"
@@ -829,16 +924,18 @@ Simulation Requirement: {simulation_requirement}
 ## Task
 Generate the event configuration JSON:
 - Extract trending topic keywords
-- Describe public opinion narrative direction
+- Describe one internally coherent synthetic narrative direction
 - Design initial posts content, **each post must specify poster_type**
 
-**Important**: poster_type MUST be chosen from the "Available Entity Types" above so the initial posts can be assigned to an appropriate Agent.
-For example: Official statements should be posted by Official/University type, news by MediaOutlet, student opinions by Student.
+**Important**: poster_type MUST be chosen from the "Available Entity Types" above so each fictional seed post can be assigned to a generated profile.
+For example, a fictional institutional statement may use an Official/University
+label and a fictional news-style seed may use a MediaOutlet label. This is
+authorship routing inside the scenario, not evidence of real role behavior.
 
 Return JSON format (no markdown):
 {{
     "hot_topics": ["keyword1", "keyword2", ...],
-    "narrative_direction": "<description of opinion development direction>",
+    "narrative_direction": "<fictional scenario-path progression assumption>",
     "initial_posts": [
         {{"content": "Post content", "poster_type": "Entity type (must match available types)"}},
         ...
@@ -846,7 +943,14 @@ Return JSON format (no markdown):
     "reasoning": "<brief explanation>"
 }}"""
 
-        system_prompt = "You are a public opinion analysis expert. Return pure JSON. Note that poster_type MUST match the available entity types exactly."
+        system_prompt = (
+            "You design synthetic scenario configurations. Return pure JSON. "
+            "All posts and paths are fictional generated scenario material. "
+            "Do not claim to measure people, public opinion, representative "
+            "behavior, probability, or future outcomes. Role labels route "
+            "fictional seed authorship; they do not determine realistic "
+            "behavior. poster_type must match an available entity type exactly."
+        )
         
         try:
             return self._call_llm_with_retry(prompt, system_prompt)
@@ -991,7 +1095,7 @@ Return JSON format (no markdown):
             "timezone": "UTC",
             "activity_norm": "global_generic",
         }
-        prompt = f"""Based on the following information, generate social media activity configurations for each entity.
+        prompt = f"""Generate fictional engine controls for each synthetic scenario profile.
 
 Simulation Requirement: {simulation_requirement}
 
@@ -1003,12 +1107,20 @@ Context Profile: {json.dumps(context_desc, ensure_ascii=False)}
 ```
 
 ## Task
-Generate activity configuration for each entity. Note:
-- Use the context profile to infer realistic local active hours.
-- **Official Agencies** (University/GovernmentAgency): Low activity (0.1-0.3), active during work hours (9-17), slow response (60-240 mins), high influence (2.5-3.0)
-- **Media** (MediaOutlet): Medium activity (0.4-0.6), active all day (8-23), fast response (5-30 mins), high influence (2.0-2.5)
-- **Individuals** (Student/Person/Alumni): High activity (0.6-0.9), mainly active in evening (18-23), fast response (1-15 mins), low influence (0.8-1.2)
-- **Public Figures/Experts**: Medium activity (0.4-0.6), medium-high influence (1.5-2.0)
+Generate an activity configuration for each profile under this contract:
+- Values are fictional run assumptions, not measured or predicted behavior.
+- Do not infer activity, schedule, response speed, sentiment, influence, stance,
+  or platform choice from profession, nationality, demographics, or role labels.
+- A context timezone labels the synthetic clock only; it does not imply habits.
+- In the absence of an explicit supplied scenario constraint, use neutral values:
+  activity_level 0.5, posts_per_hour 0.5, comments_per_hour 1.0,
+  active_hours 9-22, response delay 5-60, sentiment 0, neutral stance,
+  influence 1.0, measured reaction, and both platforms.
+- Vary a control only when the supplied material explicitly defines that
+  fictional scenario assumption. The current runtime will hard-clamp behavioral
+  controls to neutral defaults until source-constraint provenance can be
+  verified mechanically. Never describe the result as realistic,
+  representative, public opinion, probability, or a forecast.
 
 Return JSON format (no markdown):
 {{
@@ -1018,7 +1130,7 @@ Return JSON format (no markdown):
             "activity_level": <0.0-1.0>,
             "posts_per_hour": <posting frequency>,
             "comments_per_hour": <commenting frequency>,
-            "active_hours": [<list of active hours for the inferred locale>],
+            "active_hours": [<fictional active-hour buckets from explicit supplied scheduling constraints, otherwise 9-22>],
             "response_delay_min": <minimum response delay in mins>,
             "response_delay_max": <maximum response delay in mins>,
             "sentiment_bias": <-1.0 to 1.0>,
@@ -1034,7 +1146,12 @@ Return JSON format (no markdown):
     ]
 }}"""
 
-        system_prompt = "You are a social media behavior analysis expert. Return pure JSON and follow the inferred locale rather than a fixed country default."
+        system_prompt = (
+            "You configure fictional scenario-engine controls. Return pure JSON. "
+            "Role and locale labels are routing context, not evidence of human "
+            "behavior. Use neutral defaults unless the supplied material "
+            "explicitly defines a scenario assumption."
+        )
         
         try:
             result = self._call_llm_with_retry(prompt, system_prompt)
@@ -1047,11 +1164,18 @@ Return JSON format (no markdown):
         configs = []
         for i, entity in enumerate(entities):
             agent_id = start_idx + i
-            cfg = llm_configs.get(agent_id, {})
-            
-            # Use rule generation if LLM failed to generate
-            if not cfg:
-                cfg = self._generate_agent_config_by_rule(entity)
+            proposed_cfg = llm_configs.get(agent_id, {})
+
+            # Prompts are not a security or provenance boundary. Until an
+            # explicit supplied-constraint reference can be checked
+            # mechanically, no LLM-proposed behavioral value reaches runtime.
+            cfg = self._generate_agent_config_by_rule(entity)
+            if proposed_cfg:
+                logger.info(
+                    "Ignored unverified behavioral overrides for synthetic "
+                    "profile %s; neutral fictional controls retained",
+                    agent_id,
+                )
             
             config = AgentActivityConfig(
                 agent_id=agent_id,
@@ -1073,105 +1197,37 @@ Return JSON format (no markdown):
                 authority_sensitivity=cfg.get("authority_sensitivity", 0.4),
                 novelty_seeking=cfg.get("novelty_seeking", 0.45),
                 platform_preference=cfg.get("platform_preference", "both"),
+                control_assumption_basis="neutral_fictional_default",
+                behavioral_override_applied=False,
+                measured_human_behavior=False,
+                human_respondents=0,
+                causal_evidence=False,
             )
             configs.append(config)
         
         return configs
     
     def _generate_agent_config_by_rule(self, entity: EntityNode) -> Dict[str, Any]:
-        """Generate a single Agent config based on normalized roles."""
+        """Generate a neutral fictional config without role-based stereotypes."""
         role_info = normalize_entity_type(entity.get_entity_type())
         entity_type = role_info["normalized_role"]
-        
-        if entity_type in ["institution", "government", "organization", "company"]:
-            return {
-                "activity_level": 0.2,
-                "posts_per_hour": 0.1,
-                "comments_per_hour": 0.05,
-                "active_hours": list(range(9, 18)),
-                "response_delay_min": 60,
-                "response_delay_max": 240,
-                "sentiment_bias": 0.0,
-                "stance": "neutral",
-                "influence_weight": 3.0,
-                "normalized_role": entity_type,
-                "reaction_style": "cautious",
-                "conflict_tolerance": 0.18,
-                "authority_sensitivity": 0.88,
-                "novelty_seeking": 0.12,
-                "platform_preference": "twitter",
-            }
-        elif entity_type in ["media", "journalist", "public_figure"]:
-            return {
-                "activity_level": 0.5,
-                "posts_per_hour": 0.8,
-                "comments_per_hour": 0.3,
-                "active_hours": list(range(7, 24)),
-                "response_delay_min": 5,
-                "response_delay_max": 30,
-                "sentiment_bias": 0.0,
-                "stance": "observer",
-                "influence_weight": 2.5,
-                "normalized_role": entity_type,
-                "reaction_style": "amplifying",
-                "conflict_tolerance": 0.58,
-                "authority_sensitivity": 0.35,
-                "novelty_seeking": 0.62,
-                "platform_preference": "twitter",
-            }
-        elif entity_type in ["academic", "expert", "official"]:
-            return {
-                "activity_level": 0.4,
-                "posts_per_hour": 0.3,
-                "comments_per_hour": 0.5,
-                "active_hours": list(range(8, 22)),
-                "response_delay_min": 15,
-                "response_delay_max": 90,
-                "sentiment_bias": 0.0,
-                "stance": "neutral",
-                "influence_weight": 2.0,
-                "normalized_role": entity_type,
-                "reaction_style": "measured",
-                "conflict_tolerance": 0.34,
-                "authority_sensitivity": 0.62,
-                "novelty_seeking": 0.32,
-                "platform_preference": "both",
-            }
-        elif entity_type in ["student", "alumni", "activist", "community", "individual"]:
-            return {
-                "activity_level": 0.8,
-                "posts_per_hour": 0.6,
-                "comments_per_hour": 1.5,
-                "active_hours": [8, 9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],
-                "response_delay_min": 1,
-                "response_delay_max": 15,
-                "sentiment_bias": 0.0,
-                "stance": "neutral",
-                "influence_weight": 0.8,
-                "normalized_role": entity_type,
-                "reaction_style": "reactive",
-                "conflict_tolerance": 0.66,
-                "authority_sensitivity": 0.24,
-                "novelty_seeking": 0.7,
-                "platform_preference": "reddit",
-            }
-        else:
-            return {
-                "activity_level": 0.7,
-                "posts_per_hour": 0.5,
-                "comments_per_hour": 1.2,
-                "active_hours": [9, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23],
-                "response_delay_min": 2,
-                "response_delay_max": 20,
-                "sentiment_bias": 0.0,
-                "stance": "neutral",
-                "influence_weight": 1.0,
-                "normalized_role": entity_type,
-                "reaction_style": "measured",
-                "conflict_tolerance": 0.45,
-                "authority_sensitivity": 0.4,
-                "novelty_seeking": 0.45,
-                "platform_preference": "both",
-            }
+
+        return {
+            "activity_level": 0.5,
+            "posts_per_hour": 0.5,
+            "comments_per_hour": 1.0,
+            "active_hours": list(range(9, 23)),
+            "response_delay_min": 5,
+            "response_delay_max": 60,
+            "sentiment_bias": 0.0,
+            "stance": "neutral",
+            "influence_weight": 1.0,
+            "normalized_role": entity_type,
+            "reaction_style": "measured",
+            "conflict_tolerance": 0.45,
+            "authority_sensitivity": 0.4,
+            "novelty_seeking": 0.45,
+            "platform_preference": "both",
+        }
     
 

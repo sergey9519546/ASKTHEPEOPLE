@@ -1,9 +1,9 @@
 """
 Report Agent Service
-Using LangChain + Zep to implement ReACT-mode simulated report generation
+Using Zep-backed retrieval to implement ReACT-mode synthetic scenario reporting
 
 Features:
-1. Generate reports based on simulation requirements and Zep graph info
+1. Generate scenario reports based on simulation requirements and Zep graph info
 2. Plan directory structure first, then generate segment by segment
 3. Each segment uses ReACT multi-round thinking and reflection
 4. Support chat with users, autonomously calling retrieval tools during chat
@@ -21,7 +21,14 @@ from enum import Enum
 from ..config import Config
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
+from ..utils.safe_path import safe_join
+from .report_generation_coordinator import (
+    ReportGenerationCancelled,
+    ReportGenerationLease,
+)
 from .report_evidence import build_report_evidence
+from .claim_boundary import synthetic_output_disclosure
+from .simulation_observation_store import search_observations
 from .zep_tools import (
     ZepToolsService, 
     SearchResult, 
@@ -32,6 +39,26 @@ from .zep_tools import (
 
 logger = get_logger('askthepeople.report_agent')
 
+SYNTHETIC_REPORT_DISCLOSURE = (
+    "**Human respondents: 0. Evidence type: synthetic.** "
+    "This report describes possible paths generated inside a model-driven "
+    "scenario. It is not a survey, measure of public opinion, forecast, "
+    "prediction, causal estimate, or calibrated statement of likelihood. "
+    "Validate consequential assumptions with real people and fit-for-purpose "
+    "external evidence."
+)
+GRAPH_RETRIEVAL_PROVENANCE_NOTICE = (
+    "[PROVENANCE: GRAPH_RECORD_ORIGIN_UNVERIFIED] These records came from the "
+    "project graph. Record-level source versus generated origin is not "
+    "verified; do not cite them as supplied-source facts without an independent "
+    "source trace.\n\n"
+)
+OBSERVATION_RETRIEVAL_PROVENANCE_NOTICE = (
+    "[PROVENANCE: SYNTHETIC_OBSERVATION] These records were generated inside "
+    "this simulation run. Human respondents: 0. They are not source evidence "
+    "or observed behavior.\n\n"
+)
+
 
 class ReportLogger:
     """
@@ -41,7 +68,11 @@ class ReportLogger:
     Each line is a complete JSON object including timestamp, action type, details, etc.
     """
     
-    def __init__(self, report_id: str):
+    def __init__(
+        self,
+        report_id: str,
+        generation_lease: ReportGenerationLease | None = None,
+    ):
         """
         Initialize logger
 
@@ -55,6 +86,7 @@ class ReportLogger:
         report_folder = safe_join(reports_root, report_id)
         self.log_file_path = os.path.join(report_folder, 'agent_log.jsonl')
         self.start_time = datetime.now()
+        self.generation_lease = generation_lease
         self._ensure_log_file()
     
     def _ensure_log_file(self):
@@ -95,9 +127,15 @@ class ReportLogger:
             "details": details
         }
         
-        # Append to JSONL file
-        with open(self.log_file_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+        def append_entry():
+            with open(self.log_file_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry, ensure_ascii=False) + '\n')
+
+        if self.generation_lease is None:
+            append_entry()
+        else:
+            with self.generation_lease.write_guard():
+                append_entry()
     
     def log_start(self, simulation_id: str, graph_id: str, simulation_requirement: str):
         """Record report generation start"""
@@ -107,7 +145,7 @@ class ReportLogger:
             details={
                 "simulation_id": simulation_id,
                 "graph_id": graph_id,
-                "simulation_requirement": simulation_requirement,
+                "requirement_characters": len(simulation_requirement),
                 "message": "Report generation task started"
             }
         )
@@ -127,7 +165,7 @@ class ReportLogger:
             stage="planning",
             details={
                 "message": "Retrieved simulation context info",
-                "context": context
+                "context_fields": sorted(str(key) for key in context.keys()),
             }
         )
     
@@ -153,7 +191,7 @@ class ReportLogger:
         )
     
     def log_react_thought(self, section_title: str, section_index: int, iteration: int, thought: str):
-        """Record ReACT thinking process"""
+        """Record progress metadata without retaining model chain-of-thought."""
         self.log(
             action="react_thought",
             stage="generating",
@@ -161,7 +199,7 @@ class ReportLogger:
             section_index=section_index,
             details={
                 "iteration": iteration,
-                "thought": thought,
+                "thought_characters": len(thought),
                 "message": f"ReACT round {iteration} thinking"
             }
         )
@@ -174,7 +212,7 @@ class ReportLogger:
         parameters: Dict[str, Any],
         iteration: int
     ):
-        """Record tool call"""
+        """Record a tool event without retaining user/source-derived values."""
         self.log(
             action="tool_call",
             stage="generating",
@@ -183,7 +221,7 @@ class ReportLogger:
             details={
                 "iteration": iteration,
                 "tool_name": tool_name,
-                "parameters": parameters,
+                "parameter_names": sorted(str(key) for key in parameters.keys()),
                 "message": f"Calling tool: {tool_name}"
             }
         )
@@ -196,7 +234,7 @@ class ReportLogger:
         result: str,
         iteration: int
     ):
-        """Record tool call result (full content, not truncated)"""
+        """Record tool completion metadata without duplicating retrieved data."""
         self.log(
             action="tool_result",
             stage="generating",
@@ -205,7 +243,6 @@ class ReportLogger:
             details={
                 "iteration": iteration,
                 "tool_name": tool_name,
-                "result": result,  # Full result, not truncated
                 "result_length": len(result),
                 "message": f"Tool {tool_name} returned results"
             }
@@ -220,7 +257,7 @@ class ReportLogger:
         has_tool_calls: bool,
         has_final_answer: bool
     ):
-        """Record LLM response (full content, not truncated)"""
+        """Record response metadata; final report text is stored separately."""
         self.log(
             action="llm_response",
             stage="generating",
@@ -228,7 +265,6 @@ class ReportLogger:
             section_index=section_index,
             details={
                 "iteration": iteration,
-                "response": response,  # Full response, not truncated
                 "response_length": len(response),
                 "has_tool_calls": has_tool_calls,
                 "has_final_answer": has_final_answer,
@@ -293,15 +329,16 @@ class ReportLogger:
         )
     
     def log_error(self, error_message: str, stage: str, section_title: str = None):
-        """Record error"""
+        """Record a safe error event without provider/private response text."""
         self.log(
             action="error",
             stage=stage,
             section_title=section_title,
             section_index=None,
             details={
-                "error": error_message,
-                "message": f"An error occurred: {error_message}"
+                "error_type": "report_generation_error",
+                "error_characters": len(error_message),
+                "message": "Report generation failed; private details omitted"
             }
         )
 
@@ -406,7 +443,8 @@ class ReportSection:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "title": self.title,
-            "content": self.content
+            "content": self.content,
+            "truth_status": synthetic_output_disclosure(),
         }
 
     def to_markdown(self, level: int = 2) -> str:
@@ -428,13 +466,15 @@ class ReportOutline:
         return {
             "title": self.title,
             "summary": self.summary,
-            "sections": [s.to_dict() for s in self.sections]
+            "sections": [s.to_dict() for s in self.sections],
+            "truth_status": synthetic_output_disclosure(),
         }
     
     def to_markdown(self) -> str:
         """Convert to Markdown format"""
         md = f"# {self.title}\n\n"
         md += f"> {self.summary}\n\n"
+        md += f"> {SYNTHETIC_REPORT_DISCLOSURE}\n\n"
         for section in self.sections:
             md += section.to_markdown()
         return md
@@ -465,7 +505,8 @@ class Report:
             "markdown_content": self.markdown_content,
             "created_at": self.created_at,
             "completed_at": self.completed_at,
-            "error": self.error
+            "error": self.error,
+            "truth_status": synthetic_output_disclosure(),
         }
 
 
@@ -479,7 +520,7 @@ TOOL_DESC_INSIGHT_FORGE = """\
 [Deep Insight Search - Powerful Retrieval Tool]
 This is our most powerful retrieval function, designed for in-depth analysis. It will:
 1. Automatically decompose your query into multiple sub-queries.
-2. Retrieve information from the simulation graph across multiple dimensions.
+2. Retrieve information from the project graph across multiple dimensions.
 3. Integrate results from semantic search, entity analysis, and relationship chain tracking.
 4. Return the most comprehensive and in-depth retrieval content.
 
@@ -489,26 +530,36 @@ This is our most powerful retrieval function, designed for in-depth analysis. It
 - Need to acquire rich material to support report sections.
 
 [Returned Content]
-- Relevant original facts (can be cited directly).
+- Graph records that may be source-derived, inferred, or generated.
 - Core entity insights.
-- Relationship chain analysis."""
+- Relationship chain analysis.
+
+[Interpretation Boundary]
+- Call something a source fact only when its provenance identifies the supplied source.
+- Label generated or simulation-updated records as synthetic observations.
+- If provenance is unclear, say so; retrieval does not verify real-world truth."""
 
 TOOL_DESC_PANORAMA_SEARCH = """\
 [Panorama Search - Get the Full Picture]
-This tool is used to acquire a complete overview of the simulation results, especially for understanding the evolution of events. It will:
+This tool provides a broad view of records currently held in the project graph. It will:
 1. Retrieve all relevant nodes and relationships.
 2. Distinguish between currently active facts and historical/expired facts.
-3. Help you understand how public opinion has evolved.
+3. Show graph structure without asserting record-level provenance.
 
 [Usage Scenarios]
-- Need to understand the complete development sequence of an event.
-- Need to compare changes in public opinion across different stages.
+- Need to understand graph relationships around an event.
+- Need to compare active and expired graph records.
 - Need to acquire comprehensive entity and relationship information.
 
 [Returned Content]
-- Currently active facts (latest simulation results).
-- Historical/expired facts (evolutionary records).
-- All involved entities."""
+- Currently active graph records.
+- Historical/expired graph records.
+- Involved graph entities.
+
+[Interpretation Boundary]
+Record-level origin is unverified. Do not treat these as supplied-source facts,
+simulation observations, public-opinion data, or human responses without a
+separate provenance trace."""
 
 TOOL_DESC_QUICK_SEARCH = """\
 [Quick Search - Fast Retrieval]
@@ -516,74 +567,113 @@ A lightweight fast retrieval tool, suitable for simple and direct information qu
 
 [Usage Scenarios]
 - Need to quickly find a specific piece of information.
-- Need to verify a single fact.
+- Need to locate a specific graph record.
 - Simple information retrieval.
 
 [Returned Content]
-- A list of facts most relevant to the query."""
+- A list of graph records most relevant to the query.
 
-TOOL_DESC_INTERVIEW_AGENTS = """\
-[Deep Interview - Real Agent Interview (Dual Platform)]
-Calls the interview API of the OASIS simulation environment to conduct a real interview with a running simulation Agent!
-This is not an LLM simulation; it is a call to a real interview interface to get the original responses from the simulation Agents.
-By default, it interviews on both Twitter and Reddit platforms simultaneously to get a more comprehensive perspective.
+[Interpretation Boundary]
+Retrieval can confirm that a record exists in the project graph. It cannot
+independently verify that the record is true in the real world."""
 
-Functional Flow:
-1. Automatically reads persona files to understand all simulation Agents.
-2. Intelligently selects Agents most relevant to the interview topic (e.g., students, media, officials, etc.).
-3. Automatically generates interview questions.
-4. Calls the /api/simulation/interview/batch interface for real interviews on both platforms.
-5. Integrates all interview results to provide multi-perspective analysis.
+TOOL_DESC_SIMULATION_OBSERVATIONS = """\
+[Synthetic Observation Search]
+Searches the per-run observation store for generated action records.
 
 [Usage Scenarios]
-- Need to understand event perspectives from different roles (What do students think? What does the media say? What is the official stance?).
-- Need to collect opinions and positions from multiple parties.
-- Need to get real answers from simulation Agents (from the OASIS simulation environment).
-- Want to make the report more vivid, including "Interview Records."
+- Inspect what generated actors said or did within this run.
+- Compare generated activity across platforms or rounds.
+- Locate a keyword-related generated excerpt for run inspection; never label it
+  a citation or independent support for a report statement.
+
+[Interpretation Boundary]
+Every returned record is a synthetic observation or configuration assumption.
+Human respondents: 0. These records are not supplied-source facts, observed
+behavior, public opinion, validation, or forecasts."""
+
+TOOL_DESC_INTERVIEW_AGENTS = """\
+[Fictional Generated-Profile Follow-up]
+Asks fictional profiles in the OASIS environment a follow-up question. Every
+answer is another model output. No person is recruited, sampled, observed, or
+interviewed. By default, the same question is asked in both fictional channel
+contexts; this does not make the answer more representative or reliable.
+
+Functional Flow:
+1. Reads generated profile assumptions for the configured run.
+2. Selects profile records using run labels and the requested topic.
+3. Generates follow-up questions.
+4. Calls the /api/simulation/generated-response/batch compatibility interface.
+5. Collects the fictional responses without converting them into human evidence.
+
+[Usage Scenarios]
+- Explore how generated roles respond under the configured assumptions.
+- Generate possible viewpoints to test later with real people.
+- Inspect model behavior inside the OASIS environment.
 
 [Returned Content]
-- Identity information of the interviewed Agents.
-- Each Agent's interview responses on Twitter and Reddit.
-- Key quotes (can be cited directly).
-- Interview summary and viewpoint comparison.
+- Synthetic persona information.
+- Generated responses on Twitter-like and Reddit-like environments.
+- Generated excerpts, which must be labeled as such.
+- A comparison of generated viewpoints.
 
-[IMPORTANT] Requires the OASIS simulation environment to be running to use this feature!"""
+[IMPORTANT]
+Requires the OASIS simulation environment to be running. These results must
+never be described as human interviews, respondents, testimony, public opinion,
+or validation."""
 
 # -- Outline Planning Prompt --
 
 PLAN_SYSTEM_PROMPT = """\
-You are an expert at writing "Future Prediction Reports," with a "God's View" of the simulated world - you can insightfully observe the behavior, speech, and interactions of every Agent in the simulation.
+You write synthetic scenario-exploration reports. You can inspect the generated
+behavior, speech, and interactions of every synthetic Agent in one configured
+simulation run.
 
-[Core Philosophy]
-We have built a simulated world and injected specific "simulation requirements" as variables. The evolution of the simulated world predicts what might happen in the future. You are not observing "experimental data," but a "preview of the future."
+[Non-Negotiable Truth Boundary]
+- Human respondents: 0.
+- Agents, posts, comments, actions, and interviews are generated, not observed people.
+- The run is not a survey, focus group, measure of public opinion, forecast,
+  prediction, causal estimate, digital twin, or calibrated likelihood model.
+- A large synthetic population is not a representative sample.
+- Generated consistency, frequency, or metrics do not establish real-world
+  probability, prevalence, confidence, or evidence strength.
+- Refer to "possible paths," "generated actors," and "within this run."
+- Never write that people, the public, or a demographic group will believe or do
+  something. Instead write that a generated persona did something and turn it
+  into a hypothesis to validate with real people.
+
+[Evidence Classes]
+Keep these separate:
+1. Source facts: statements traceable to supplied source material. Their factual
+   status may still require independent verification.
+2. Configuration assumptions: injected events, prompts, personas, and platform rules.
+3. Synthetic observations: generated actions and statements inside this run.
+4. Internal metrics: descriptions of generated activity only.
+5. Model interpretations: narrative synthesis of the above.
+6. External human or behavioral evidence: none unless separately supplied and
+   documented; do not invent it.
+If provenance is unclear, state "origin unclear" rather than upgrading a record
+to a source fact.
 
 [Your Task]
-Write a "Future Prediction Report" that answers:
-1. What happened in the future under the conditions we set?
-2. How did various types of Agents (populations) react and act?
-3. What noteworthy future trends and risks does this simulation reveal?
+Create a concise scenario report that:
+1. Restates the decision, source basis, and important assumptions.
+2. Maps multiple possible paths without ranking them by likelihood.
+3. Describes what emerged inside this run, including platform differences.
+4. Makes uncertainty, missing stakeholders, weak support, and contradictions visible.
+5. Converts paths into questions and evidence needs for real-human validation.
 
-[Report Positioning]
-- [YES] This is a simulation-based future prediction report, revealing "if this happens, what will the future be like."
-- [YES] Focused on prediction results: event progression, group reactions, emergent phenomena, potential risks.
-- [YES] The words and deeds of Agents in the simulated world are predictions of future human behavior.
-- [NO] Not an analysis of the current state of the real world.
-- [NO] Not a general summary of public opinion.
-
-[Section Quantity Limits]
-- Minimum 2 sections, maximum 5 sections.
-- No sub-sections needed; each section is written in full.
-- Content must be concise, focusing on core prediction findings.
-- Section structure is designed independently by you based on prediction results.
-- The report must explicitly cover these three types of analysis:
-  1. Seed vs Emergence
-  2. Platform Divergence
-  3. Uncertainty / Weak Evidence
+[Required Sections]
+- Decision, Sources, and Assumptions
+- Possible Scenario Paths
+- Platform Divergence
+- Uncertainty and Missing Evidence
+- Validate with People
 
 Please output the report outline in JSON format as follows:
 {
-    "title": "Report Title",
-    "summary": "Report Summary (one-sentence overview of core prediction findings)",
+    "title": "Synthetic Scenario Exploration: [Decision]",
+    "summary": "One sentence naming possible paths and emphasizing that this is one synthetic run, not a forecast.",
     "sections": [
         {
             "title": "Section Title",
@@ -592,83 +682,88 @@ Please output the report outline in JSON format as follows:
     ]
 }
 
-Note: the sections array must have 1-5 elements!"""
+Return exactly the five required sections. Do not use prediction, forecast,
+confidence, likelihood, public-opinion, or human-response language."""
 
 PLAN_USER_PROMPT_TEMPLATE = """\
-[Prediction Scenario Setting]
-Variables injected into the simulated world (simulation requirements):{simulation_requirement}
+[Scenario Question and Injected Conditions]
+{simulation_requirement}
 
-[Simulated World Scale]
-- Number of entities participating in the simulation: {total_nodes}
-- Number of relationships generated between entities: {total_edges}
+[Generated Run Scale - Not a Human Sample]
+- Graph entities used by the scenario: {total_nodes}
+- Graph relationships used by the scenario: {total_edges}
 - Entity type distribution: {entity_types}
-- Number of active Agents: {total_entities}
+- Generated active Agents: {total_entities}
+- Human respondents: 0
 
-[Sample Future Facts Predicted by Simulation]
+[Retrieved Graph Records - Record-Level Origin Unverified]
+Do not classify a record as a supplied-source fact unless a separate source
+trace proves that origin. Older graphs may contain mixed records.
 {related_facts_json}
 
-Please examine this future preview with a "God's View":
-1. What state does the future present under our defined conditions?
-2. How do various types of people (Agents) react and act?
-3. What noteworthy future trends does this simulation reveal?
-
-Design the most appropriate report section structure based on the prediction results.
-
-[Reminder]Number of report sections: minimum 2, maximum 5; content must be concise and focused on core prediction findings."""
+Plan a report about possible paths produced within this synthetic run. Do not
+infer prevalence, probability, representation, causality, or future human
+behavior. Return exactly the five required sections."""
 
 # -- Section Generation Prompt --
 
 SECTION_SYSTEM_PROMPT_TEMPLATE = """\
-You are an expert at writing "Future Prediction Reports," currently writing a section of a report.
+You are writing one section of a synthetic scenario-exploration report.
 
 Report Title: {report_title}
 Report Summary: {report_summary}
-Prediction Scenario (Simulation Requirement): {simulation_requirement}
+Scenario Question and Injected Conditions: {simulation_requirement}
 
 Current Section to write: {section_title}
 
 ===============================================================
-[Core Philosophy]
+[Truth Boundary]
 ===============================================================
 
-The simulated world is a preview of the future. We injected specific conditions (simulation requirements) into the simulated world,
-The behaviors and interactions of Agents in the simulation are predictions of future human behavior.
-
-Your task is:
-- Reveal what happened in the future under the set conditions
-- Predict how various populations (Agents) react and act
-- Discover noteworthy future trends, risks, and opportunities
-
-[NO] Do not write as an analysis of the current state of the real world
-[YES] Focus on "what the future will be like"-the simulation results are the predicted future
+- Human respondents: 0.
+- Every Agent statement and action is generated inside a configured run.
+- The report is not a forecast, prediction, survey, public-opinion analysis,
+  causal estimate, or statement of likelihood.
+- Do not call synthetic Agents people, populations, participants, respondents,
+  interviewees, the public, consumers, voters, residents, or other real groups.
+- Do not turn generated counts into prevalence or probability.
+- Use conditional language: "within this run," "one possible path," and "a
+  hypothesis to validate."
+- Do not contradict or dilute the disclosure inserted into the report header.
 
 ===============================================================
 [Most Important Rules - Must Follow]
 ===============================================================
 
-1. [Must Use Tools to Observe the Simulated World]
-   - You are observing a preview of the future with a "God's View"
-   - All content must come from events and Agent actions/speech occurring in the simulated world
+1. [Use Tools to Inspect the Synthetic Run]
+   - All run-specific claims must come from retrieved records.
    - Forbidden to use your own knowledge to write report content
-   - Call tools at least 3 times per section (maximum 5) to observe the simulated world; it represents the future
+   - Call tools at least 3 times per section (maximum 5).
 
-2. [Must Cite Agents' Original Words and Deeds]
-   - Agents' speech and behavior are predictions of future human behavior
-   - Display these predictions in citation format in the report, for example:
-     > "A certain group will state: original content..."
-   - These citations are core evidence of the simulation's predictions
+2. [Label Generated Excerpts]
+   - Agent speech and behavior are synthetic observations.
+   - Display excerpts as labeled generated records, for example:
+     > Generated Agent 12: "generated content..."
+   - Never attribute generated words to a real group or named person.
 
-3. [Language Consistency - Citations Must Be Translated to Report Language]
+3. [Language Consistency - Labeled Excerpts Use the Report Language]
    - Content returned by tools may include English or mixed Chinese-English expressions.
    - Even if simulation requirements and original materials are in Chinese, the report must be written entirely in English for this localized version.
-   - Ensure all citations are in clear English. If the original source is Chinese, translate it to English.
+   - Ensure all labeled excerpts are in clear English. If a record is Chinese, translate it to English.
    - Maintain original meaning during translation, ensuring natural flow.
-   - This rule applies to both the main text and blockquote citations (">" format).
+   - This rule applies to both the main text and labeled blockquotes (">" format).
 
-4. [Faithfully Present Prediction Results]
-   - Report content must reflect simulation results from the simulated world that represent the future
+4. [Separate Evidence Classes]
+   - Clearly distinguish source facts, configuration assumptions, synthetic
+     observations, internal metrics, and model interpretation.
+   - A graph record is not automatically a verified source fact.
    - Do not add information that does not exist in the simulation
-   - If information is lacking in certain aspects, state so truthfully
+   - If provenance or support is lacking, state so truthfully.
+
+5. [Write for Validation]
+   - Describe multiple possible paths without ranking likelihood.
+   - Name missing stakeholders and alternate explanations.
+   - End with questions or external evidence needed from real people.
 
 ===============================================================
 [[WARN] Formatting Specification - Extremely Important!]
@@ -683,20 +778,19 @@ Your task is:
 
 [Correct Example]
 ```
-This section analyzes the public opinion dissemination status of the event. Through in-depth analysis of simulation data, we found...
+Within this run, generated activity followed one path worth testing. This is not
+a claim about how real people will respond.
 
-**Initial Trigger Phase**
+**Generated trigger**
 
-X (Twitter) as the primary site for public opinion, fulfilled the core function of initial information release:
+The Twitter-like environment carried the first generated post:
 
-> "A certain group will state: original content..."
+> Generated Agent 12: "generated content..."
 
-**Emotion Amplification Phase**
+**Validation need**
 
-TikTok further amplified the event's impact:
-
-- Strong visual impact
-- High emotional resonance
+Interview affected people about whether this concern exists and what conditions
+would change it.
 ```
 
 [Error Example]
@@ -715,10 +809,11 @@ This section analyzes...
 {tools_description}
 
 [Tool Usage Suggestions - Please use a mix of different tools, do not rely on just one]
-- insight_forge: Deep insight analysis; automatically decomposes questions and retrieves facts and relationships across multiple dimensions
-- panorama_search: Wide-angle panorama search; understand the full picture, timeline, and evolution of events
-- quick_search: Quickly verify a specific information point
-- interview_agents: Interview simulation Agents; obtain first-person perspectives and real reactions from different roles
+- insight_forge: Retrieve graph records and relationships across multiple dimensions.
+- panorama_search: Inspect project-graph structure with unverified record-level provenance.
+- quick_search: Locate a specific project-graph record.
+- simulation_observations: Inspect generated run activity from the separate observation store.
+- interview_agents: Generate responses from synthetic Agents; never human interviews.
 
 ===============================================================
 [Workflow]
@@ -745,15 +840,15 @@ When you have gathered enough information via tools, output the section content 
 [Section Content Requirements]
 ===============================================================
 
-1. Content must be based on simulation data retrieved via tools
-2. Cite original texts extensively to demonstrate simulation effects
+1. Run-specific content must be based on records retrieved via tools.
+2. Use generated excerpts only when clearly labeled as generated; they are not citations.
 3. Use Markdown format (but forbid using headers):
    - Use **bold text** to mark key points (instead of sub-headers)
    - Use lists (- or 1.2.3.) to organize points
    - Use blank lines to separate different paragraphs
    - [NO] Forbidden to use any header syntax like #, ##, ###, ####, etc.
-4. [Citation Format Specification - Must Be a Separate Paragraph]
-   Citations must be standalone paragraphs with an empty line before and after; do not mix them into text paragraphs:
+4. [Labeled Excerpt Format - Must Be a Separate Paragraph]
+   Labeled excerpts must be standalone paragraphs with an empty line before and after; do not mix them into text paragraphs:
 
    [YES] Correct Format:
    ```
@@ -761,7 +856,7 @@ When you have gathered enough information via tools, output the section content 
 
    > "The university's response model appeared rigid and slow in the rapidly changing social media environment."
 
-   This assessment reflected widespread public dissatisfaction.
+   This generated excerpt suggests a concern to test with affected people.
    ```
 
    [NO] Error Format:
@@ -807,7 +902,10 @@ Observation (retrieval results):
 
 ===============================================================
 Used tool {tool_calls_count}/{max_tool_calls} times (Used: {used_tools_str}) {unused_hint}
-- If info is sufficient: Start with "Final Answer:" and output section content (must cite original text above)
+- If info is sufficient: Start with "Final Answer:" and output section content.
+  Use an excerpt only when its provenance is explicit. Label synthetic excerpts
+  as generated and graph text as origin-unverified; never present either as a
+  supplied-source citation.
 - If more info is needed: Call a tool to continue retrieval
 ==============================================================="""
 
@@ -833,19 +931,22 @@ REACT_FORCE_FINAL_MSG = "Tool call limit reached; please output Final Answer: an
 # -- Chat prompt --
 
 CHAT_SYSTEM_PROMPT_TEMPLATE = """\
-You are a concise and efficient simulation prediction assistant.
+You are a concise synthetic scenario-exploration assistant.
 
 [Background]
-Prediction Scenario: {simulation_requirement}
+Scenario Question and Injected Conditions: {simulation_requirement}
 
 [Generated Analysis Report]
 {report_content}
 
 [Rules]
-1. Prioritize answering based on the above report content
-2. Answer directly, avoiding lengthy reasoning or discourse
-3. Call tools to retrieve more data only if report content is insufficient
-4. Answers should be concise, clear, and organized
+1. Human respondents: 0; all Agent behavior and interviews are generated.
+2. Never present the report as a survey, public opinion, forecast, prediction,
+   probability, causal estimate, or real-human response.
+3. Distinguish source facts, assumptions, synthetic observations, internal
+   metrics, and model interpretations.
+4. Use "within this run" and "possible path"; identify what needs validation with real people.
+5. Prioritize the report, call tools only when needed, and answer directly.
 
 [Available Tools] (Only use as needed, maximum 1-2 calls)
 {tools_description}
@@ -887,9 +988,11 @@ class ReportAgent:
     # Max tool calls in chat
     MAX_TOOL_CALLS_PER_CHAT = 2
     REQUIRED_SECTION_TITLES = [
-        "Seed vs Emergence",
+        "Decision, Sources, and Assumptions",
+        "Possible Scenario Paths",
         "Platform Divergence",
-        "Uncertainty / Weak Evidence",
+        "Uncertainty and Missing Evidence",
+        "Validate with People",
     ]
     
     def __init__(
@@ -924,6 +1027,7 @@ class ReportAgent:
         self.report_logger: Optional[ReportLogger] = None
         # Console Logger (initialized in generate_report)
         self.console_logger: Optional[ReportConsoleLogger] = None
+        self._generation_lease: ReportGenerationLease | None = None
 
         # Load pre-computed simulation metrics (may be None if not yet computed)
         try:
@@ -933,6 +1037,17 @@ class ReportAgent:
             self._simulation_metrics = None
 
         logger.info(f"ReportAgent initialized: graph_id={graph_id}, simulation_id={simulation_id}")
+
+    def _generation_checkpoint(self) -> None:
+        if self._generation_lease is not None:
+            self._generation_lease.checkpoint()
+
+    def _generation_write_guard(self):
+        if self._generation_lease is not None:
+            return self._generation_lease.write_guard()
+        from contextlib import nullcontext
+
+        return nullcontext()
     
     def _define_tools(self) -> Dict[str, Dict[str, Any]]:
         """Define available tools"""
@@ -961,6 +1076,16 @@ class ReportAgent:
                     "limit": "Number of results to return (optional, default 10)"
                 }
             },
+            "simulation_observations": {
+                "name": "simulation_observations",
+                "description": TOOL_DESC_SIMULATION_OBSERVATIONS,
+                "parameters": {
+                    "query": "Text to find in generated action records",
+                    "platform": "Optional twitter or reddit filter",
+                    "agent_id": "Optional generated Agent ID",
+                    "limit": "Number of results to return (optional, default 20, max 50)",
+                },
+            },
             "interview_agents": {
                 "name": "interview_agents",
                 "description": TOOL_DESC_INTERVIEW_AGENTS,
@@ -983,7 +1108,11 @@ class ReportAgent:
         Returns:
             Tool execution result (text format)
         """
-        logger.info(f"Executing tool: {tool_name}, params: {parameters}")
+        logger.info(
+            "Executing report tool: %s (parameter_names=%s)",
+            tool_name,
+            sorted(str(key) for key in parameters),
+        )
         
         try:
             if tool_name == "insight_forge":
@@ -995,7 +1124,8 @@ class ReportAgent:
                     simulation_requirement=self.simulation_requirement,
                     report_context=ctx
                 )
-                return result.to_text()
+                self._generation_checkpoint()
+                return GRAPH_RETRIEVAL_PROVENANCE_NOTICE + result.to_text()
             
             elif tool_name == "panorama_search":
                 # Broad search - get full picture
@@ -1008,7 +1138,8 @@ class ReportAgent:
                     query=query,
                     include_expired=include_expired
                 )
-                return result.to_text()
+                self._generation_checkpoint()
+                return GRAPH_RETRIEVAL_PROVENANCE_NOTICE + result.to_text()
             
             elif tool_name == "quick_search":
                 # Simple search - quick retrieval
@@ -1021,7 +1152,42 @@ class ReportAgent:
                     query=query,
                     limit=limit
                 )
-                return result.to_text()
+                self._generation_checkpoint()
+                return GRAPH_RETRIEVAL_PROVENANCE_NOTICE + result.to_text()
+
+            elif tool_name == "simulation_observations":
+                limit = parameters.get("limit", 20)
+                try:
+                    limit = int(limit)
+                except (TypeError, ValueError):
+                    limit = 20
+                agent_id = parameters.get("agent_id")
+                if agent_id not in (None, ""):
+                    try:
+                        agent_id = int(agent_id)
+                    except (TypeError, ValueError):
+                        raise ValueError("agent_id must be an integer")
+                else:
+                    agent_id = None
+                result = search_observations(
+                    safe_join(
+                        Config.OASIS_SIMULATION_DATA_DIR,
+                        self.simulation_id,
+                    ),
+                    query=parameters.get("query", ""),
+                    platform=parameters.get("platform") or None,
+                    agent_id=agent_id,
+                    limit=limit,
+                )
+                for record in result.get("results", []):
+                    record["evidence_class"] = "synthetic_observation"
+                    record["human_respondents"] = 0
+                    record["external_validation"] = False
+                self._generation_checkpoint()
+                return (
+                    OBSERVATION_RETRIEVAL_PROVENANCE_NOTICE
+                    + json.dumps(result, ensure_ascii=False, indent=2)
+                )
             
             elif tool_name == "interview_agents":
                 # Deep interview - call real OASIS interview API to get simulated Agent answers (dual platform)
@@ -1036,7 +1202,8 @@ class ReportAgent:
                     simulation_requirement=self.simulation_requirement,
                     max_agents=max_agents
                 )
-                return result.to_text()
+                self._generation_checkpoint()
+                return OBSERVATION_RETRIEVAL_PROVENANCE_NOTICE + result.to_text()
             
             # ========== Backward compatible old tools (internally redirected to new tools) ==========
             
@@ -1047,7 +1214,11 @@ class ReportAgent:
             
             elif tool_name == "get_graph_statistics":
                 result = self.zep_tools.get_graph_statistics(self.graph_id)
-                return json.dumps(result, ensure_ascii=False, indent=2)
+                self._generation_checkpoint()
+                return (
+                    GRAPH_RETRIEVAL_PROVENANCE_NOTICE
+                    + json.dumps(result, ensure_ascii=False, indent=2)
+                )
             
             elif tool_name == "get_entity_summary":
                 entity_name = parameters.get("entity_name", "")
@@ -1055,7 +1226,11 @@ class ReportAgent:
                     graph_id=self.graph_id,
                     entity_name=entity_name
                 )
-                return json.dumps(result, ensure_ascii=False, indent=2)
+                self._generation_checkpoint()
+                return (
+                    GRAPH_RETRIEVAL_PROVENANCE_NOTICE
+                    + json.dumps(result, ensure_ascii=False, indent=2)
+                )
             
             elif tool_name == "get_simulation_context":
                 # Redirect to insight_forge as it's more powerful
@@ -1070,17 +1245,33 @@ class ReportAgent:
                     entity_type=entity_type
                 )
                 result = [n.to_dict() for n in nodes]
-                return json.dumps(result, ensure_ascii=False, indent=2)
+                self._generation_checkpoint()
+                return (
+                    GRAPH_RETRIEVAL_PROVENANCE_NOTICE
+                    + json.dumps(result, ensure_ascii=False, indent=2)
+                )
             
             else:
-                return f"Unknown tool: {tool_name}. Please use one of the following: insight_forge, panorama_search, quick_search"
+                return (
+                    f"Unknown tool: {tool_name}. Please use one of the following: "
+                    "insight_forge, panorama_search, quick_search, "
+                    "simulation_observations, interview_agents"
+                )
                 
+        except ReportGenerationCancelled:
+            raise
         except Exception as e:
             logger.error(f"Tool execution failed: {tool_name}, error: {str(e)}")
             return f"Tool execution failed: {str(e)}"
     
     # Valid tool names set, used for validation during bare JSON parsing
-    VALID_TOOL_NAMES = {"insight_forge", "panorama_search", "quick_search", "interview_agents"}
+    VALID_TOOL_NAMES = {
+        "insight_forge",
+        "panorama_search",
+        "quick_search",
+        "simulation_observations",
+        "interview_agents",
+    }
 
     def _parse_tool_calls(self, response: str) -> List[Dict[str, Any]]:
         """
@@ -1156,45 +1347,17 @@ class ReportAgent:
         return re.sub(r"[^a-z0-9]+", "", (title or "").lower())
 
     def _ensure_required_outline_sections(self, outline: ReportOutline) -> ReportOutline:
-        normalized_required = {
-            self._normalize_section_title(title): title
-            for title in self.REQUIRED_SECTION_TITLES
-        }
-        existing = {
+        existing_by_title = {
             self._normalize_section_title(section.title): section
             for section in outline.sections
         }
-
-        merged_sections: List[ReportSection] = list(outline.sections)
-        for key, title in normalized_required.items():
-            if key not in existing:
-                merged_sections.append(ReportSection(title=title))
-
-        if len(merged_sections) > 5:
-            required_keys = set(normalized_required.keys())
-            preserved_non_required: List[ReportSection] = []
-            required_sections: List[ReportSection] = []
-
-            for section in merged_sections:
-                normalized = self._normalize_section_title(section.title)
-                if normalized in required_keys:
-                    required_sections.append(section)
-                elif len(preserved_non_required) < max(0, 5 - len(required_sections)):
-                    preserved_non_required.append(section)
-
-            merged_sections = preserved_non_required + required_sections
-
-        if len(merged_sections) < 2:
-            for title in self.REQUIRED_SECTION_TITLES:
-                if len(merged_sections) >= 2:
-                    break
-                if self._normalize_section_title(title) not in {
-                    self._normalize_section_title(section.title)
-                    for section in merged_sections
-                }:
-                    merged_sections.append(ReportSection(title=title))
-
-        outline.sections = merged_sections[:5]
+        outline.sections = [
+            existing_by_title.get(
+                self._normalize_section_title(title),
+                ReportSection(title=title),
+            )
+            for title in self.REQUIRED_SECTION_TITLES
+        ]
         return outline
     
     def plan_outline(
@@ -1222,6 +1385,7 @@ class ReportAgent:
             graph_id=self.graph_id,
             simulation_requirement=self.simulation_requirement
         )
+        self._generation_checkpoint()
         
         if progress_callback:
             progress_callback("planning", 30, "Generating Report outline...")
@@ -1239,15 +1403,17 @@ class ReportAgent:
         if self._simulation_metrics:
             m = self._simulation_metrics
             user_prompt = user_prompt + (
-                "\n\n## Quantitative Simulation Metrics (use as factual anchors)\n"
-                f"- Polarization Index (modularity Q): {m.get('polarization_index', 0):.3f} "
-                "(0=homogeneous, 1=fully polarized)\n"
-                f"- Engagement Gini Coefficient: {m.get('engagement_gini', 0):.3f} "
-                "(0=equal, 1=dominated by few agents)\n"
-                f"- Echo Chamber Score: {m.get('echo_chamber_score', 0):.3f} "
-                "(0=open discourse, 1=fully siloed)\n"
-                f"- Communities Detected: {m.get('community_count', 'N/A')}\n"
-                f"- Total Actions: {m.get('total_actions', 0)}\n"
+                "\n\n## Within-Run Generated Interaction Metrics\n"
+                "These are descriptive calculations over synthetic actions, not "
+                "measurements of people, external validation, or calibrated evidence.\n"
+                f"- Network modularity Q (implementation labels this polarization): "
+                f"{m.get('polarization_index', 0):.3f}\n"
+                f"- Gini of generated action counts: "
+                f"{m.get('engagement_gini', 0):.3f}\n"
+                f"- Within-community share of generated interaction edges: "
+                f"{m.get('echo_chamber_score', 0):.3f}\n"
+                f"- Generated communities detected: {m.get('community_count', 'N/A')}\n"
+                f"- Generated actions counted: {m.get('total_actions', 0)}\n"
             )
 
         try:
@@ -1258,6 +1424,7 @@ class ReportAgent:
                 ],
                 temperature=0.3
             )
+            self._generation_checkpoint()
             
             if progress_callback:
                 progress_callback("planning", 80, "Parsing outline structure...")
@@ -1283,17 +1450,18 @@ class ReportAgent:
             logger.info(f"Outline planning complete: {len(outline.sections)} sections")
             return outline
             
+        except ReportGenerationCancelled:
+            raise
         except Exception as e:
             logger.error(f"Outline planning failed: {str(e)}")
-            # Return default outline (3 sections, as fallback)
+            # Return a truth-preserving default outline.
             return self._ensure_required_outline_sections(ReportOutline(
-                title="Future Prediction Report",
-                summary="Future trends and risk analysis based on simulation prediction",
-                sections=[
-                    ReportSection(title="Prediction Scenarios and Core Findings"),
-                    ReportSection(title="Population Behavior Prediction Analysis"),
-                    ReportSection(title="Trend Outlook and Risk Warnings")
-                ]
+                title="Synthetic Scenario Exploration Report",
+                summary=(
+                    "Possible paths from one synthetic run; 0 human respondents "
+                    "and not a forecast."
+                ),
+                sections=[],
             ))
     
     def _generate_section_react(
@@ -1324,7 +1492,7 @@ class ReportAgent:
         Returns:
             Section content (Markdown format)
         """
-        logger.info(f"ReACT generating section: {section.title}")
+        logger.info("Generating report section %s", section_index)
         
         # Record section start log
         if self.report_logger:
@@ -1365,7 +1533,13 @@ class ReportAgent:
         min_tool_calls = 3  # Min tool calls required
         conflict_retries = 0  # Sequential conflicts between tool call and Final Answer
         used_tools = set()  # Record called tool names
-        all_tools = {"insight_forge", "panorama_search", "quick_search", "interview_agents"}
+        all_tools = {
+            "insight_forge",
+            "panorama_search",
+            "quick_search",
+            "simulation_observations",
+            "interview_agents",
+        }
 
         # Report context for InsightForge sub-query generation
         report_context = f"Section Title: {section.title}\nSimulation requirement: {self.simulation_requirement}"
@@ -1384,6 +1558,7 @@ class ReportAgent:
                 temperature=0.5,
                 max_tokens=4096
             )
+            self._generation_checkpoint()
 
             # Check if LLM response is None (API exception or empty content)
             if response is None:
@@ -1469,7 +1644,11 @@ class ReportAgent:
 
                 # Normal finish
                 final_answer = response.split("Final Answer:")[-1].strip()
-                logger.info(f"Section {section.title} generation complete ({tool_calls_count} tool calls)")
+                logger.info(
+                    "Report section %s generation complete (tool_calls=%s)",
+                    section_index,
+                    tool_calls_count,
+                )
 
                 if self.report_logger:
                     self.report_logger.log_section_content(
@@ -1513,6 +1692,7 @@ class ReportAgent:
                     call.get("parameters", {}),
                     report_context=report_context
                 )
+                self._generation_checkpoint()
 
                 if self.report_logger:
                     self.report_logger.log_tool_result(
@@ -1566,7 +1746,12 @@ class ReportAgent:
 
             # Sufficient tool calls, LLM output content but without "Final Answer:" prefix
             # Directly adopt this content as final answer, stop spinning
-            logger.info(f"Section {section.title} 'Final Answer:' prefix not detected; adopting output as final content ({tool_calls_count} tool calls)")
+            logger.info(
+                "Report section %s completed without the expected final-answer "
+                "prefix (tool_calls=%s)",
+                section_index,
+                tool_calls_count,
+            )
             final_answer = response.strip()
 
             if self.report_logger:
@@ -1587,6 +1772,7 @@ class ReportAgent:
             temperature=0.5,
             max_tokens=4096
         )
+        self._generation_checkpoint()
 
         # Check if LLM returned None during forced closure
         if response is None:
@@ -1611,7 +1797,8 @@ class ReportAgent:
     def generate_report(
         self, 
         progress_callback: Optional[Callable[[str, int, str], None]] = None,
-        report_id: Optional[str] = None
+        report_id: Optional[str] = None,
+        generation_lease: ReportGenerationLease | None = None,
     ) -> Report:
         """
         Generate full report (chapter by chapter real-time output)
@@ -1639,6 +1826,8 @@ class ReportAgent:
         # If no report_id provided, generate automatically
         if not report_id:
             report_id = f"report_{uuid.uuid4().hex[:12]}"
+        self._generation_lease = generation_lease
+        self._generation_checkpoint()
         start_time = datetime.now()
         
         report = Report(
@@ -1655,31 +1844,40 @@ class ReportAgent:
         
         try:
             # Initialization: Create report folder and save initial state
-            ReportManager._ensure_report_folder(report_id)
+            with self._generation_write_guard():
+                ReportManager._ensure_report_folder(report_id)
             
             # Initialize logger (structured log agent_log.jsonl)
-            self.report_logger = ReportLogger(report_id)
+            with self._generation_write_guard():
+                self.report_logger = ReportLogger(
+                    report_id,
+                    generation_lease=generation_lease,
+                )
             self.report_logger.log_start(
                 simulation_id=self.simulation_id,
                 graph_id=self.graph_id,
                 simulation_requirement=self.simulation_requirement
             )
             
-            # Initialize console logger (console_log.txt)
-            self.console_logger = ReportConsoleLogger(report_id)
+            # Detailed production traces remain structured and privacy-safe.
+            # The duplicate plain-text console file is local-debug-only.
+            if Config.DEBUG and generation_lease is None:
+                self.console_logger = ReportConsoleLogger(report_id)
             
-            ReportManager.update_progress(
-                report_id, "pending", 0, "Initializing report...",
-                completed_sections=[]
-            )
-            ReportManager.save_report(report)
+            with self._generation_write_guard():
+                ReportManager.update_progress(
+                    report_id, "pending", 0, "Initializing report...",
+                    completed_sections=[]
+                )
+                ReportManager.save_report(report)
             
             # Phase 1: Plan outline
             report.status = ReportStatus.PLANNING
-            ReportManager.update_progress(
-                report_id, "planning", 5, "Starting report outline planning...",
-                completed_sections=[]
-            )
+            with self._generation_write_guard():
+                ReportManager.update_progress(
+                    report_id, "planning", 5, "Starting report outline planning...",
+                    completed_sections=[]
+                )
             
             # Log planning start
             self.report_logger.log_planning_start()
@@ -1691,18 +1889,20 @@ class ReportAgent:
                 progress_callback=lambda stage, prog, msg: 
                     progress_callback(stage, prog // 5, msg) if progress_callback else None
             )
+            self._generation_checkpoint()
             report.outline = outline
             
             # Log Planning complete
             self.report_logger.log_planning_complete(outline.to_dict())
             
             # Save outline to file
-            ReportManager.save_outline(report_id, outline)
-            ReportManager.update_progress(
-                report_id, "planning", 15, f"Outline planning complete, {len(outline.sections)} sections",
-                completed_sections=[]
-            )
-            ReportManager.save_report(report)
+            with self._generation_write_guard():
+                ReportManager.save_outline(report_id, outline)
+                ReportManager.update_progress(
+                    report_id, "planning", 15, f"Outline planning complete, {len(outline.sections)} sections",
+                    completed_sections=[]
+                )
+                ReportManager.save_report(report)
             
             logger.info(f"Outline saved to file: {report_id}/outline.json")
             
@@ -1713,16 +1913,18 @@ class ReportAgent:
             generated_sections = []  # Save content for context
             
             for i, section in enumerate(outline.sections):
+                self._generation_checkpoint()
                 section_num = i + 1
                 base_progress = 20 + int((i / total_sections) * 70)
                 
                 # Update progress
-                ReportManager.update_progress(
-                    report_id, "generating", base_progress,
-                    f"Generating section: {section.title} ({section_num}/{total_sections})",
-                    current_section=section.title,
-                    completed_sections=completed_section_titles
-                )
+                with self._generation_write_guard():
+                    ReportManager.update_progress(
+                        report_id, "generating", base_progress,
+                        f"Generating section: {section.title} ({section_num}/{total_sections})",
+                        current_section=section.title,
+                        completed_sections=completed_section_titles
+                    )
                 
                 if progress_callback:
                     progress_callback(
@@ -1744,12 +1946,14 @@ class ReportAgent:
                         ) if progress_callback else None,
                     section_index=section_num
                 )
+                self._generation_checkpoint()
                 
                 section.content = section_content
                 generated_sections.append(f"## {section.title}\n\n{section_content}")
 
                 # Save section
-                ReportManager.save_section(report_id, section_num, section)
+                with self._generation_write_guard():
+                    ReportManager.save_section(report_id, section_num, section)
                 completed_section_titles.append(section.title)
 
                 # Log section complete
@@ -1765,37 +1969,45 @@ class ReportAgent:
                 logger.info(f"Section saved: {report_id}/section_{section_num:02d}.md")
                 
                 # Update progress
-                ReportManager.update_progress(
-                    report_id, "generating", 
-                    base_progress + int(70 / total_sections),
-                    f"Section {section.title} completed",
-                    current_section=None,
-                    completed_sections=completed_section_titles
-                )
+                with self._generation_write_guard():
+                    ReportManager.update_progress(
+                        report_id, "generating",
+                        base_progress + int(70 / total_sections),
+                        f"Section {section.title} completed",
+                        current_section=None,
+                        completed_sections=completed_section_titles
+                    )
             
             # Phase 3: Assemble Full report
+            self._generation_checkpoint()
             if progress_callback:
                 progress_callback("generating", 95, "Assembling Full report...")
             
-            ReportManager.update_progress(
-                report_id, "generating", 95, "Assembling Full report...",
-                completed_sections=completed_section_titles
-            )
+            with self._generation_write_guard():
+                ReportManager.update_progress(
+                    report_id, "generating", 95, "Assembling Full report...",
+                    completed_sections=completed_section_titles
+                )
             
             # Use ReportManager to assemble Full report
-            report.markdown_content = ReportManager.assemble_full_report(report_id, outline)
+            with self._generation_write_guard():
+                report.markdown_content = ReportManager.assemble_full_report(
+                    report_id,
+                    outline,
+                )
             report.status = ReportStatus.COMPLETED
             report.completed_at = datetime.now().isoformat()
 
             simulation_dir = os.path.join(Config.UPLOAD_FOLDER, "simulations", self.simulation_id)
             report_dir = ReportManager._get_report_folder(report_id)
             if os.path.isdir(simulation_dir):
-                build_report_evidence(
-                    report_id=report_id,
-                    report_dir=report_dir,
-                    simulation_dir=simulation_dir,
-                    outline=outline,
-                )
+                with self._generation_write_guard():
+                    build_report_evidence(
+                        report_id=report_id,
+                        report_dir=report_dir,
+                        simulation_dir=simulation_dir,
+                        outline=outline,
+                    )
             else:
                 logger.warning(f"Skipping report evidence generation, simulation directory does not exist: {simulation_dir}")
             
@@ -1810,11 +2022,12 @@ class ReportAgent:
                 )
             
             # Save final report
-            ReportManager.save_report(report)
-            ReportManager.update_progress(
-                report_id, "completed", 100, "Report generation complete",
-                completed_sections=completed_section_titles
-            )
+            with self._generation_write_guard():
+                ReportManager.save_report(report)
+                ReportManager.update_progress(
+                    report_id, "completed", 100, "Report generation complete",
+                    completed_sections=completed_section_titles
+                )
             
             if progress_callback:
                 progress_callback("completed", 100, "Report generation complete")
@@ -1828,10 +2041,15 @@ class ReportAgent:
             
             return report
             
+        except ReportGenerationCancelled:
+            if self.console_logger:
+                self.console_logger.close()
+                self.console_logger = None
+            raise
         except Exception as e:
             logger.error(f"Report generation failed: {str(e)}")
             report.status = ReportStatus.FAILED
-            report.error = str(e)
+            report.error = str(e) if Config.DEBUG else "Report generation failed"
             
             # Record error log
             if self.report_logger:
@@ -1839,11 +2057,19 @@ class ReportAgent:
             
             # Save failed status
             try:
-                ReportManager.save_report(report)
-                ReportManager.update_progress(
-                    report_id, "failed", -1, f"Report generation failed: {str(e)}",
-                    completed_sections=completed_section_titles
-                )
+                with self._generation_write_guard():
+                    ReportManager.save_report(report)
+                    ReportManager.update_progress(
+                        report_id,
+                        "failed",
+                        -1,
+                        (
+                            f"Report generation failed: {str(e)}"
+                            if Config.DEBUG
+                            else "Report generation failed"
+                        ),
+                        completed_sections=completed_section_titles
+                    )
             except Exception:
                 pass  # Ignore errors during saving failure status
             
@@ -1872,10 +2098,10 @@ class ReportAgent:
             {
                 "response": "Agent response",
                 "tool_calls": [list of called tools],
-                "sources": [information sources]
+                "retrieval_queries": [graph or run-record search queries]
             }
         """
-        logger.info(f"Report Agent chat: {message[:50]}...")
+        logger.info("Report Agent chat request received (characters=%s)", len(message))
         
         chat_history = chat_history or []
         
@@ -1889,7 +2115,10 @@ class ReportAgent:
                 if len(report.markdown_content) > 15000:
                     report_content += "\n\n... [Report content truncated] ..."
         except Exception as e:
-            logger.warning(f"Failed to get report content: {e}")
+            logger.warning(
+                "Failed to get report content (%s)",
+                type(e).__name__,
+            )
         
         system_prompt = CHAT_SYSTEM_PROMPT_TEMPLATE.format(
             simulation_requirement=self.simulation_requirement,
@@ -1928,10 +2157,14 @@ class ReportAgent:
                 clean_response = re.sub(r'<tool_call>.*?</tool_call>', '', response, flags=re.DOTALL)
                 clean_response = re.sub(r'\[TOOL_CALL\].*?\)', '', clean_response)
                 
+                retrieval_queries = [
+                    tc.get("parameters", {}).get("query", "")
+                    for tc in tool_calls_made
+                ]
                 return {
                     "response": clean_response.strip(),
                     "tool_calls": tool_calls_made,
-                    "sources": [tc.get("parameters", {}).get("query", "") for tc in tool_calls_made]
+                    "retrieval_queries": retrieval_queries,
                 }
             
             # Execute tool calls (limited quantity)
@@ -1964,10 +2197,14 @@ class ReportAgent:
         clean_response = re.sub(r'<tool_call>.*?</tool_call>', '', final_response, flags=re.DOTALL)
         clean_response = re.sub(r'\[TOOL_CALL\].*?\)', '', clean_response)
         
+        retrieval_queries = [
+            tc.get("parameters", {}).get("query", "")
+            for tc in tool_calls_made
+        ]
         return {
             "response": clean_response.strip(),
             "tool_calls": tool_calls_made,
-            "sources": [tc.get("parameters", {}).get("query", "") for tc in tool_calls_made]
+            "retrieval_queries": retrieval_queries,
         }
 
 
@@ -2370,6 +2607,7 @@ class ReportManager:
         # Build report header
         md_content = f"# {outline.title}\n\n"
         md_content += f"> {outline.summary}\n\n"
+        md_content += f"> {SYNTHETIC_REPORT_DISCLOSURE}\n\n"
         md_content += f"---\n\n"
         
         # Read all section files in order

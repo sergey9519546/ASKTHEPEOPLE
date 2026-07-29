@@ -1,17 +1,15 @@
 """
-OASIS Agent Profile Generator.
-Converts entities from the Zep knowledge graph into Agent Profile format required by the OASIS simulation platform.
+OASIS synthetic-profile generator.
 
-Key improvements:
-1. Uses Zep retrieval to enrich node information with additional context
-2. Optimised prompts for generating highly detailed personas
-3. Distinguishes individual entities from abstract group/institutional entities
+Converts graph records into explicitly fictional operating profiles required by
+the OASIS simulation platform. A generated profile is a scenario input, not a
+biography, representative sample, digital twin, or prediction of a named actor.
 """
 
 import json
 import random
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -145,7 +143,7 @@ class OasisProfileGenerator:
         "expert", "faculty", "official", "journalist", "activist"
     ]
     
-    # Group / institutional entity types (generate representative account personas)
+    # Group / institutional entity types (generate fictional account profiles)
     GROUP_ENTITY_TYPES = [
         "university", "governmentagency", "organization", "ngo", 
         "mediaoutlet", "company", "institution", "group", "community"
@@ -370,12 +368,19 @@ class OasisProfileGenerator:
             # Build combined context
             context_parts = []
             if results["facts"]:
-                context_parts.append("Facts:\n" + "\n".join(f"- {f}" for f in results["facts"][:20]))
+                context_parts.append(
+                    "Graph records (provenance unverified):\n"
+                    + "\n".join(f"- {f}" for f in results["facts"][:20])
+                )
             if results["node_summaries"]:
                 context_parts.append("Related entities:\n" + "\n".join(f"- {s}" for s in results["node_summaries"][:10]))
             results["context"] = "\n\n".join(context_parts)
             
-            logger.info(f"Zep hybrid retrieval complete: {entity_name}, {len(results['facts'])} facts, {len(results['node_summaries'])} related nodes")
+            logger.info(
+                "Zep profile retrieval complete: facts=%s, related_nodes=%s",
+                len(results["facts"]),
+                len(results["node_summaries"]),
+            )
             
         except concurrent.futures.TimeoutError:
             logger.warning(f"Zep retrieval timed out ({entity_name})")
@@ -388,7 +393,7 @@ class OasisProfileGenerator:
         """
         Build the complete context for an entity, including:
         1. Entity attribute information
-        2. Related edge information (facts)
+        2. Related edge records
         3. Additional information retrieved via Zep hybrid search
         """
         context_parts = []
@@ -402,7 +407,7 @@ class OasisProfileGenerator:
             if attrs:
                 context_parts.append("### Entity Attributes\n" + "\n".join(attrs))
         
-        # 2. Related edge info (facts / relationships)
+        # 2. Related edge records. These are context, not verified facts.
         existing_facts = set()
         if entity.related_edges:
             relationships = []
@@ -421,7 +426,10 @@ class OasisProfileGenerator:
                         relationships.append(f"- (related entity) --[{edge_name}]--> {entity.name}")
             
             if relationships:
-                context_parts.append("### Related Facts and Relationships\n" + "\n".join(relationships))
+                context_parts.append(
+                    "### Related Graph Records (Provenance Unverified)\n"
+                    + "\n".join(relationships)
+                )
         
         # 3. Related node details
         if entity.related_nodes:
@@ -450,7 +458,10 @@ class OasisProfileGenerator:
             # De-duplicate: exclude facts already captured above
             new_facts = [f for f in zep_results["facts"] if f not in existing_facts]
             if new_facts:
-                context_parts.append("### Additional Facts from Zep\n" + "\n".join(f"- {f}" for f in new_facts[:15]))
+                context_parts.append(
+                    "### Additional Graph Records (Provenance Unverified)\n"
+                    + "\n".join(f"- {f}" for f in new_facts[:15])
+                )
         
         if zep_results.get("node_summaries"):
             context_parts.append("### Related Nodes from Zep\n" + "\n".join(f"- {s}" for s in zep_results["node_summaries"][:10]))
@@ -474,11 +485,11 @@ class OasisProfileGenerator:
         context: str
     ) -> Dict[str, Any]:
         """
-        Use the LLM to generate a highly detailed persona.
+        Use the LLM to generate an explicitly fictional scenario profile.
         
         Dispatches by entity type:
-        - Individual entity: generates a specific personal persona
-        - Group / institutional entity: generates a representative account persona
+        - Individual entity: generates a fictional personal operating profile
+        - Group / institutional entity: generates a fictional account profile
         """
         
         is_individual = self._is_individual_entity(entity_type)
@@ -638,7 +649,20 @@ class OasisProfileGenerator:
     
     def _get_system_prompt(self, is_individual: bool) -> str:
         """Return the system prompt for persona generation."""
-        base_prompt = "You are an expert social media user persona designer. Generate detailed, realistic personas for opinion simulation that closely reflect known real-world facts. You MUST return valid JSON. All string values must not contain unescaped newline characters. Write all text in English."
+        base_prompt = (
+            "Create an explicitly fictional operating profile for a synthetic "
+            "scenario. The profile is a model-generated assumption. It is not a "
+            "biography or a representative person. It is not a digital twin or "
+            "public-opinion evidence. It is not a prediction of how a named "
+            "actor will behave. Treat "
+            "all supplied graph records as potentially incomplete and "
+            "provenance-unverified. Repeat a personal detail only when it is "
+            "explicitly supplied; never invent sensitive traits, private "
+            "history, political beliefs, or real-world actions. Use neutral "
+            "engine placeholders for required fields when source material is "
+            "silent. You MUST return valid JSON. All string values must not "
+            "contain unescaped newline characters. Write all text in English."
+        )
         return base_prompt
     
     def _build_individual_persona_prompt(
@@ -654,7 +678,13 @@ class OasisProfileGenerator:
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "None"
         context_str = context[:3000] if context else "No additional context"
         
-        return f"""Generate a detailed social media user persona for the following entity, staying as close as possible to known real-world facts.
+        return f"""Create a fictional social-media operating profile for the following scenario entity.
+
+This profile is an explicit simulation assumption. It must not claim to
+represent, impersonate, diagnose, or predict the named entity. Use only details
+that appear in the supplied fields or context. When a required demographic or
+personality field is missing, use the neutral engine placeholders listed below
+instead of guessing.
 
 Entity name: {entity_name}
 Entity type: {entity_type}
@@ -666,18 +696,15 @@ Context:
 
 Return a JSON object with these fields:
 
-1. bio: Social media bio (~200 words)
-2. persona: Detailed persona description (~2000 words, plain text), covering:
-   - Background (age, occupation, education, location)
-   - Personal history (key experiences, connection to the event, social relationships)
-   - Personality (MBTI type, core traits, emotional expression)
-   - Social media behaviour (posting frequency, content preferences, interaction style, language)
-   - Stance and opinions (attitude toward the topic, what provokes or moves them)
-   - Unique traits (catchphrases, special experiences, hobbies)
-   - Personal memory (individual's known actions and reactions regarding this event)
-3. age: Integer
-4. gender: English string, exactly "male" or "female"
-5. mbti: MBTI type (e.g. INTJ, ENFP)
+1. bio: Concise fictional scenario-account bio (~60 words)
+2. persona: Fictional operating assumptions (~350 words, plain text), covering:
+   - Source-supported role or background
+   - Assumed communication style and posting behavior
+   - Scenario-relevant interests or concerns to explore
+   - Explicit limits where the source is silent
+3. age: Source-supported integer; otherwise the neutral engine placeholder 30
+4. gender: Source-supported "male", "female", or "other"; otherwise "other"
+5. mbti: Source-supported type; otherwise the neutral engine placeholder "ISTJ"
 6. country: Country name in English
 7. profession: Occupation
 8. interested_topics: Array of topic strings
@@ -685,9 +712,12 @@ Return a JSON object with these fields:
 IMPORTANT:
 - All field values must be strings or numbers - no newline characters in values
 - persona must be a single block of coherent text
-- Write everything in English (gender must be "male" or "female")
+- Write everything in English
 - Content must be consistent with the entity information provided
-- age must be a valid integer
+- Do not invent personal history, protected or sensitive traits, beliefs,
+  relationships, catchphrases, or real-world actions
+- Say within the persona that it is a fictional scenario profile
+- age must be a valid integer and gender must be "male", "female", or "other"
 """
 
     def _build_group_persona_prompt(
@@ -703,7 +733,12 @@ IMPORTANT:
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "None"
         context_str = context[:3000] if context else "No additional context"
         
-        return f"""Generate a detailed social media account profile for the following institutional or group entity, staying as close as possible to known real-world facts.
+        return f"""Create a fictional social-media operating profile for the following institutional or group scenario entity.
+
+This is a scenario assumption, not an official account, authorized statement,
+representative sample, or prediction of how the named organization will act.
+Use only supplied details as context and clearly mark assumed communication
+behavior as fictional.
 
 Entity name: {entity_name}
 Entity type: {entity_type}
@@ -715,15 +750,13 @@ Context:
 
 Return a JSON object with these fields:
 
-1. bio: Official account bio (~200 words, professional tone)
-2. persona: Detailed account profile (~2000 words, plain text), covering:
-   - Institutional background (official name, nature, founding context, key functions)
-   - Account positioning (account type, target audience, core purpose)
-   - Communication style (language features, common expressions, sensitive topics to avoid)
-   - Content characteristics (content types, posting frequency, active time slots)
-   - Official stance (position on key topics, how controversies are handled)
-   - Special notes (the community this account represents, operational habits)
-   - Institutional memory (known actions and reactions of this institution regarding this event)
+1. bio: Concise fictional scenario-account bio (~60 words)
+2. persona: Fictional operating assumptions (~350 words, plain text), covering:
+   - Source-supported institutional role
+   - Assumed account purpose and audience
+   - Assumed communication and posting style
+   - Scenario-relevant concerns to explore
+   - Explicit limits where the source is silent
 3. age: Always 30 (virtual age for institutional accounts)
 4. gender: Always "other" (institutional accounts use "other")
 5. mbti: MBTI type describing account style (e.g. ISTJ = formal and conservative)
@@ -736,7 +769,10 @@ IMPORTANT:
 - persona must be a single block of coherent text
 - Write everything in English (gender must be the string "other")
 - age must be the integer 30, gender must be the string "other"
-- Communications must match the institution's identity and positioning"""
+- Do not invent official positions, internal policy, sensitive matters, or
+  real-world actions
+- Say within the persona that it is a fictional scenario profile
+- Communications must not be presented as authorized by the institution"""
     
     def _generate_profile_rule_based(
         self,
@@ -751,32 +787,32 @@ IMPORTANT:
         
         if entity_type_lower in ["student", "alumni"]:
             return {
-                "bio": f"{entity_type} with interests in academics and social issues.",
-                "persona": f"{entity_name} is a {entity_type.lower()} who is actively engaged in academic and social discussions. They enjoy sharing perspectives and connecting with peers.",
-                "age": random.randint(18, 30),
-                "gender": random.choice(["male", "female"]),
-                "mbti": random.choice(self.MBTI_TYPES),
-                "country": random.choice(self.COUNTRIES),
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Communication style, interests, and behavior are assumptions to explore, not claims about a real person.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
                 "profession": "Student",
                 "interested_topics": ["Education", "Social Issues", "Technology"],
             }
         
         elif entity_type_lower in ["publicfigure", "expert", "faculty"]:
             return {
-                "bio": f"Expert and thought leader in their field.",
-                "persona": f"{entity_name} is a recognized {entity_type.lower()} who shares insights and opinions on important matters. They are known for their expertise and influence in public discourse.",
-                "age": random.randint(35, 60),
-                "gender": random.choice(["male", "female"]),
-                "mbti": random.choice(["ENTJ", "INTJ", "ENTP", "INTP"]),
-                "country": random.choice(self.COUNTRIES),
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
                 "profession": entity_attributes.get("occupation", "Expert"),
                 "interested_topics": ["Politics", "Economics", "Culture & Society"],
             }
         
         elif entity_type_lower in ["mediaoutlet", "socialmediaplatform"]:
             return {
-                "bio": f"Official account for {entity_name}. News and updates.",
-                "persona": f"{entity_name} is a media entity that reports news and facilitates public discourse. The account shares timely updates and engages with the audience on current events.",
+                "bio": f"Fictional scenario account seeded from {entity_name}.",
+                "persona": f"{entity_name} is a fictional scenario profile for a media-role account. Its posts and behavior are generated assumptions, not authorized statements or predicted real-world actions.",
                 "age": 30,  # Institutional virtual age
                 "gender": "other",  # Institutions use 'other'
                 "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
@@ -787,8 +823,8 @@ IMPORTANT:
         
         elif entity_type_lower in ["university", "governmentagency", "ngo", "organization"]:
             return {
-                "bio": f"Official account of {entity_name}.",
-                "persona": f"{entity_name} is an institutional entity that communicates official positions, announcements, and engages with stakeholders on relevant matters.",
+                "bio": f"Fictional scenario account seeded from {entity_name}.",
+                "persona": f"{entity_name} is a fictional institutional scenario profile. Its posts and behavior are generated assumptions, not official positions, authorized statements, or predicted actions.",
                 "age": 30,  # Institutional virtual age
                 "gender": "other",  # Institutions use 'other'
                 "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
@@ -797,14 +833,15 @@ IMPORTANT:
                 "interested_topics": ["Public Policy", "Community", "Official Announcements"],
             }
 
-        # Default persona
+        else:
+            # Default persona
             return {
-                "bio": entity_summary[:150] if entity_summary else f"{entity_type}: {entity_name}",
-                "persona": entity_summary or f"{entity_name} is a {entity_type.lower()} participating in social discussions.",
-                "age": random.randint(25, 50),
-                "gender": random.choice(["male", "female"]),
-                "mbti": random.choice(self.MBTI_TYPES),
-                "country": random.choice(self.COUNTRIES),
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Any generated communication or behavior is an assumption within this run, not a claim about a real actor.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
                 "profession": entity_type,
                 "interested_topics": ["General", "Social Issues"],
             }
@@ -1021,7 +1058,11 @@ IMPORTANT:
                     if error:
                         logger.warning(f"[{current}/{total}] {entity.name} using fallback persona: {error}")
                     else:
-                        logger.info(f"[{current}/{total}] Successfully generated persona: {entity.name} ({entity_type})")
+                        logger.info(
+                            "Generated synthetic profile %s/%s",
+                            current,
+                            total,
+                        )
                         
                 except Exception as e:
                     logger.error(f"Exception processing entity {entity.name}: {str(e)}")
@@ -1129,6 +1170,13 @@ IMPORTANT:
 
     def _print_generated_profile(self, entity_name: str, entity_type: str, profile: OasisAgentProfile):
         """Print generated persona to console (full content, NOT truncated)"""
+        if not Config.DEBUG:
+            logger.debug(
+                "Generated profile console preview suppressed in production "
+                "(entity_type=%s)",
+                entity_type,
+            )
+            return
         separator = "-" * 70
         
         # Build full output content
@@ -1212,7 +1260,10 @@ IMPORTANT:
                 ]
                 writer.writerow(row)
         
-        logger.info(f"Saved {len(profiles)} Twitter profiles to {file_path} (OASIS CSV format)")
+        logger.info(
+            "Saved %s short-post profiles (OASIS CSV format)",
+            len(profiles),
+        )
     
     def _normalize_gender(self, gender: Optional[str]) -> str:
         """
@@ -1261,7 +1312,10 @@ IMPORTANT:
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
  
-        logger.info(f"Saved {len(profiles)} Reddit profiles to {file_path} (JSON format)")
+        logger.info(
+            "Saved %s topic-community profiles (JSON format)",
+            len(profiles),
+        )
     
     # Keep old method name as alias for backward compatibility
     def save_profiles_to_json(

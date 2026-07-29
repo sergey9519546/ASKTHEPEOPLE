@@ -9,6 +9,7 @@ import os
 import sqlite3
 from typing import Any, Dict, Iterable, List, Optional
 
+from .claim_boundary import synthetic_activity_disclosure
 from .simulation_artifacts import (
     bootstrap_actions_path,
     canonical_agents_path,
@@ -16,6 +17,15 @@ from .simulation_artifacts import (
     read_json,
     scheduled_events_path,
 )
+
+_MAX_OBSERVATION_RECORDS = 100_000
+_MAX_OBSERVATION_LINE_CHARS = 1_000_000
+_MAX_OBSERVATION_FILE_CHARS = 256_000_000
+_MAX_OBSERVATION_SEARCH_RESULTS = 200
+_MAX_OBSERVATION_QUERY_CHARS = 500
+_MAX_AGENT_RECORDS = 20_000
+_MAX_OBSERVATION_TEXT_CHARS = 65_536
+_MAX_AGENT_FILE_BYTES = 50 * 1024 * 1024
 
 
 def _connect(path: str) -> sqlite3.Connection:
@@ -127,20 +137,40 @@ def ensure_observation_store(simulation_dir: str) -> str:
     return db_path
 
 
-def _iter_jsonl(path: str) -> Iterable[Dict[str, Any]]:
+def _iter_jsonl(
+    path: str,
+    max_records: int = _MAX_OBSERVATION_RECORDS,
+) -> Iterable[Dict[str, Any]]:
+    """Yield a bounded number of bounded-size JSONL records."""
     if not os.path.exists(path):
-        return []
-    rows = []
+        return
+    yielded = 0
+    chars_read = 0
     with open(path, "r", encoding="utf-8") as handle:
-        for line in handle:
+        while yielded < max_records and chars_read < _MAX_OBSERVATION_FILE_CHARS:
+            line = handle.readline(_MAX_OBSERVATION_LINE_CHARS + 1)
+            if not line:
+                break
+            chars_read += len(line)
+            if len(line) > _MAX_OBSERVATION_LINE_CHARS:
+                # Drain the remainder of this oversized record in bounded
+                # pieces so it can never be parsed or retained.
+                while line and not line.endswith("\n"):
+                    line = handle.readline(_MAX_OBSERVATION_LINE_CHARS + 1)
+                    chars_read += len(line)
+                    if chars_read >= _MAX_OBSERVATION_FILE_CHARS:
+                        break
+                continue
             line = line.strip()
             if not line:
                 continue
             try:
-                rows.append(json.loads(line))
+                row = json.loads(line)
             except json.JSONDecodeError:
                 continue
-    return rows
+            if isinstance(row, dict):
+                yielded += 1
+                yield row
 
 
 def _table_exists(cursor: sqlite3.Cursor, table_name: str) -> bool:
@@ -171,8 +201,16 @@ def _ingest_sqlite_platform(
     user_lookup: Dict[Any, Dict[str, Any]] = {}
     if _table_exists(db_cursor, "user"):
         try:
-            db_cursor.execute("SELECT user_id, agent_id, name, user_name FROM user")
-            for row in db_cursor.fetchall():
+            db_cursor.execute(
+                """
+                SELECT user_id, agent_id,
+                       substr(name, 1, ?) AS name,
+                       substr(user_name, 1, ?) AS user_name
+                FROM user LIMIT ?
+                """,
+                (512, 512, _MAX_AGENT_RECORDS),
+            )
+            for row in db_cursor:
                 user_lookup[row["user_id"]] = {
                     "agent_id": row["agent_id"],
                     "agent_name": row["name"] or row["user_name"] or f"Agent_{row['user_id']}",
@@ -182,8 +220,17 @@ def _ingest_sqlite_platform(
 
     if ingest_actions and _table_exists(db_cursor, "trace"):
         try:
-            db_cursor.execute("SELECT rowid, user_id, action, info, created_at FROM trace ORDER BY rowid ASC")
-            for row in db_cursor.fetchall():
+            db_cursor.execute(
+                """
+                SELECT rowid, user_id,
+                       substr(action, 1, 256) AS action,
+                       substr(info, 1, ?) AS info,
+                       created_at
+                FROM trace ORDER BY rowid ASC LIMIT ?
+                """,
+                (_MAX_OBSERVATION_TEXT_CHARS, _MAX_OBSERVATION_RECORDS),
+            )
+            for row in db_cursor:
                 try:
                     info = json.loads(row["info"]) if row["info"] else {}
                 except json.JSONDecodeError:
@@ -236,8 +283,14 @@ def _ingest_sqlite_platform(
 
     if _table_exists(db_cursor, "post"):
         try:
-            db_cursor.execute("SELECT rowid, * FROM post ORDER BY created_at ASC")
-            for row in db_cursor.fetchall():
+            db_cursor.execute(
+                """
+                SELECT rowid, user_id, substr(content, 1, ?) AS content, created_at
+                FROM post ORDER BY created_at ASC LIMIT ?
+                """,
+                (_MAX_OBSERVATION_TEXT_CHARS, _MAX_OBSERVATION_RECORDS),
+            )
+            for row in db_cursor:
                 actor = user_lookup.get(row["user_id"], {})
                 cursor.execute(
                     """
@@ -259,8 +312,14 @@ def _ingest_sqlite_platform(
 
     if _table_exists(db_cursor, "comment"):
         try:
-            db_cursor.execute("SELECT rowid, * FROM comment ORDER BY created_at ASC")
-            for row in db_cursor.fetchall():
+            db_cursor.execute(
+                """
+                SELECT rowid, user_id, substr(content, 1, ?) AS content, created_at
+                FROM comment ORDER BY created_at ASC LIMIT ?
+                """,
+                (_MAX_OBSERVATION_TEXT_CHARS, _MAX_OBSERVATION_RECORDS),
+            )
+            for row in db_cursor:
                 actor = user_lookup.get(row["user_id"], {})
                 cursor.execute(
                     """
@@ -298,7 +357,13 @@ def sync_observation_store(simulation_dir: str, run_state: Optional[Dict[str, An
     cursor.execute("DELETE FROM scheduled_events")
     cursor.execute("DELETE FROM round_summaries")
 
-    for agent in read_json(canonical_agents_path(simulation_dir), default=[]):
+    agent_path = canonical_agents_path(simulation_dir)
+    agents = (
+        read_json(agent_path, default=[])
+        if os.path.exists(agent_path) and os.path.getsize(agent_path) <= _MAX_AGENT_FILE_BYTES
+        else []
+    )
+    for agent in agents[:_MAX_AGENT_RECORDS] if isinstance(agents, list) else []:
         cursor.execute(
             """
             INSERT INTO agent_index(agent_id, agent_name, entity_uuid, normalized_role, platform_preference)
@@ -454,7 +519,7 @@ def sync_observation_store(simulation_dir: str, run_state: Optional[Dict[str, An
         )
 
     if run_state:
-        for summary in run_state.get("rounds", []):
+        for summary in run_state.get("rounds", [])[:10_000]:
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO round_summaries(round_num, payload_json)
@@ -475,6 +540,15 @@ def search_observations(
     agent_id: Optional[int] = None,
     limit: int = 50,
 ) -> Dict[str, Any]:
+    query = str(query or "")[:_MAX_OBSERVATION_QUERY_CHARS]
+    if platform not in {None, "", "twitter", "reddit"}:
+        raise ValueError("platform must be twitter or reddit")
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 50
+    limit = max(1, min(limit, _MAX_OBSERVATION_SEARCH_RESULTS))
+
     db_path = sync_observation_store(simulation_dir)
     conn = _connect(db_path)
     cursor = conn.cursor()
@@ -493,14 +567,24 @@ def search_observations(
         sql += " AND agent_id = ?"
         params.append(agent_id)
     if query:
-        sql += " AND (action_args_json LIKE ? OR agent_name LIKE ? OR action_type LIKE ?)"
-        pattern = f"%{query}%"
+        sql += (
+            " AND (action_args_json LIKE ? ESCAPE '\\'"
+            " OR agent_name LIKE ? ESCAPE '\\'"
+            " OR action_type LIKE ? ESCAPE '\\')"
+        )
+        escaped_query = (
+            query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        pattern = f"%{escaped_query}%"
         params.extend([pattern, pattern, pattern])
 
     sql += " ORDER BY timestamp DESC LIMIT ?"
     params.append(limit)
 
     cursor.execute(sql, params)
-    rows = [dict(row) for row in cursor.fetchall()]
+    rows = [
+        {**dict(row), **synthetic_activity_disclosure()}
+        for row in cursor.fetchall()
+    ]
     conn.close()
     return {"query": query, "count": len(rows), "results": rows}

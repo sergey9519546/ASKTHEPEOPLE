@@ -9,6 +9,7 @@ import json
 import os
 from typing import Any, Dict, Sequence
 
+from .claim_boundary import graph_record_disclosure
 from .oasis_profile_generator import OasisAgentProfile
 from .role_normalizer import build_entity_type_registry, normalize_entity_type
 from .zep_entity_reader import EntityNode
@@ -18,6 +19,7 @@ CANONICAL_AGENTS_FILENAME = "agent_profiles.canonical.json"
 ENTITY_TYPE_REGISTRY_FILENAME = "entity_type_registry.json"
 RELATIONSHIP_BOOTSTRAP_FILENAME = "agent_relationship_bootstrap.json"
 PREFLIGHT_FILENAME = "preflight.json"
+RUN_MANIFEST_FILENAME = "run_manifest.json"
 BOOTSTRAP_ACTIONS_FILENAME = "bootstrap_actions.jsonl"
 SCHEDULED_EVENTS_FILENAME = "scheduled_events_applied.jsonl"
 OBSERVATION_DB_FILENAME = "simulation_observations.db"
@@ -70,6 +72,10 @@ def preflight_path(simulation_dir: str) -> str:
     return os.path.join(simulation_dir, PREFLIGHT_FILENAME)
 
 
+def run_manifest_path(simulation_dir: str) -> str:
+    return os.path.join(simulation_dir, RUN_MANIFEST_FILENAME)
+
+
 def bootstrap_actions_path(simulation_dir: str) -> str:
     return os.path.join(simulation_dir, BOOTSTRAP_ACTIONS_FILENAME)
 
@@ -98,78 +104,60 @@ def _normalize_gender(value: str | None) -> str:
 
 
 def _build_platform_overrides(role_info: Dict[str, Any]) -> Dict[str, Any]:
-    normalized_role = role_info["normalized_role"]
+    """Return neutral fictional controls; role metadata is structural only."""
     twitter = {
         "repost_bias": 0.35,
         "quote_bias": 0.25,
         "post_brevity": "medium",
         "follow_bias": 0.45,
+        "assumption_basis": "neutral_fictional_default",
     }
     reddit = {
         "comment_depth_bias": 0.55,
         "threading_bias": 0.55,
         "search_bias": 0.4,
         "vote_bias": 0.5,
+        "assumption_basis": "neutral_fictional_default",
     }
 
-    if normalized_role in {"media", "journalist", "public_figure"}:
-        twitter.update({"repost_bias": 0.62, "quote_bias": 0.58, "post_brevity": "high", "follow_bias": 0.55})
-        reddit.update({"comment_depth_bias": 0.32, "threading_bias": 0.35, "search_bias": 0.3, "vote_bias": 0.45})
-    elif normalized_role in {"student", "alumni", "activist", "community"}:
-        twitter.update({"repost_bias": 0.42, "quote_bias": 0.38, "post_brevity": "medium", "follow_bias": 0.48})
-        reddit.update({"comment_depth_bias": 0.75, "threading_bias": 0.72, "search_bias": 0.6, "vote_bias": 0.78})
-    elif role_info.get("is_official"):
-        twitter.update({"repost_bias": 0.18, "quote_bias": 0.12, "post_brevity": "formal", "follow_bias": 0.15})
-        reddit.update({"comment_depth_bias": 0.2, "threading_bias": 0.18, "search_bias": 0.15, "vote_bias": 0.1})
-
-    return {"twitter": twitter, "reddit": reddit}
+    return {
+        "twitter": twitter,
+        "reddit": reddit,
+        "methodology": {
+            "human_respondents": 0,
+            "role_behavior_inferred": False,
+            "disclosure": (
+                "Neutral fictional platform controls; no role-based behavior, "
+                "platform preference, public opinion, or forecast is inferred."
+            ),
+        },
+    }
 
 
 def _build_activity_seed(role_info: Dict[str, Any]) -> Dict[str, Any]:
-    normalized_role = role_info["normalized_role"]
-    seed = {
+    """Return a neutral fictional activity seed for every structural role."""
+    return {
         "base_activity_level": 0.55,
         "reaction_style": "measured",
         "conflict_tolerance": 0.45,
         "authority_sensitivity": 0.4,
         "novelty_seeking": 0.45,
         "platform_preference": "both",
+        "assumption_basis": "neutral_fictional_default",
+        "human_respondents": 0,
+        "role_behavior_inferred": False,
+        "disclosure": (
+            "Neutral fictional activity controls; role labels do not supply "
+            "behavioral evidence or representative patterns."
+        ),
     }
-    if normalized_role in {"student", "alumni", "activist"}:
-        seed.update({
-            "base_activity_level": 0.72,
-            "reaction_style": "reactive",
-            "conflict_tolerance": 0.62,
-            "authority_sensitivity": 0.25,
-            "novelty_seeking": 0.68,
-            "platform_preference": "reddit",
-        })
-    elif normalized_role in {"media", "journalist", "public_figure"}:
-        seed.update({
-            "base_activity_level": 0.74,
-            "reaction_style": "amplifying",
-            "conflict_tolerance": 0.58,
-            "authority_sensitivity": 0.35,
-            "novelty_seeking": 0.61,
-            "platform_preference": "twitter",
-        })
-    elif role_info.get("is_official"):
-        seed.update({
-            "base_activity_level": 0.3,
-            "reaction_style": "cautious",
-            "conflict_tolerance": 0.18,
-            "authority_sensitivity": 0.9,
-            "novelty_seeking": 0.15,
-            "platform_preference": "twitter",
-        })
-    return seed
 
 
-def _build_source_facts(entity: EntityNode) -> list[Dict[str, Any]]:
+def _build_graph_records(entity: EntityNode) -> list[Dict[str, Any]]:
     results: list[Dict[str, Any]] = []
     seen = set()
 
-    def add_fact(kind: str, text: str, ref: str) -> None:
+    def add_record(kind: str, text: str, ref: str) -> None:
         normalized = (text or "").strip()
         if not normalized:
             return
@@ -177,14 +165,34 @@ def _build_source_facts(entity: EntityNode) -> list[Dict[str, Any]]:
         if key in seen:
             return
         seen.add(key)
-        results.append({"kind": kind, "text": normalized, "ref": ref})
+        results.append(
+            {
+                "kind": kind,
+                "text": normalized,
+                "ref": ref,
+                **graph_record_disclosure(normalized),
+            }
+        )
 
-    add_fact("summary", entity.summary, f"entity:{entity.uuid}")
+    add_record("summary", entity.summary, f"entity:{entity.uuid}")
     for index, edge in enumerate(entity.related_edges[:18]):
-        add_fact("edge_fact", edge.get("fact") or edge.get("edge_name") or "", f"edge:{entity.uuid}:{index}")
+        add_record(
+            "edge_record",
+            edge.get("fact") or edge.get("edge_name") or "",
+            f"edge:{entity.uuid}:{index}",
+        )
     for related in entity.related_nodes[:10]:
-        add_fact("related_entity", related.get("summary") or related.get("name") or "", f"node:{related.get('uuid', '')}")
+        add_record(
+            "related_entity_record",
+            related.get("summary") or related.get("name") or "",
+            f"node:{related.get('uuid', '')}",
+        )
     return results
+
+
+def _build_source_facts(entity: EntityNode) -> list[Dict[str, Any]]:
+    """Deprecated compatibility alias for disclosed graph records."""
+    return _build_graph_records(entity)
 
 
 def build_canonical_agents_from_profiles(
@@ -193,8 +201,8 @@ def build_canonical_agents_from_profiles(
     """Build canonical agents from profiles alone (no EntityNode required).
 
     Used for archetype-expanded variant agents that have no backing EntityNode.
-    Output shape is identical to build_canonical_agents() but with empty source_facts
-    and neutral role defaults.
+    Output shape is identical to build_canonical_agents() but with empty graph
+    records and neutral role defaults.
     """
     neutral_role_info = normalize_entity_type("entity")
     canonical: list[Dict[str, Any]] = []
@@ -219,7 +227,10 @@ def build_canonical_agents_from_profiles(
                 "stance_seed": "neutral",
                 "activity_seed": _build_activity_seed(role_info),
                 "platform_overrides": _build_platform_overrides(role_info),
+                "graph_records": [],
+                # Deprecated compatibility alias; records remain fully disclosed.
                 "source_facts": [],
+                "source_facts_deprecated": True,
             }
         )
     return canonical
@@ -232,6 +243,7 @@ def build_canonical_agents(
     canonical: list[Dict[str, Any]] = []
     for agent_id, (entity, profile) in enumerate(zip(entities, profiles)):
         role_info = normalize_entity_type(entity.get_entity_type())
+        graph_records = _build_graph_records(entity)
         canonical.append(
             {
                 "agent_id": agent_id,
@@ -251,7 +263,10 @@ def build_canonical_agents(
                 "stance_seed": "neutral",
                 "activity_seed": _build_activity_seed(role_info),
                 "platform_overrides": _build_platform_overrides(role_info),
-                "source_facts": _build_source_facts(entity),
+                "graph_records": graph_records,
+                # Deprecated compatibility alias; records remain fully disclosed.
+                "source_facts": graph_records,
+                "source_facts_deprecated": True,
             }
         )
     return canonical
@@ -278,15 +293,11 @@ def build_relationship_bootstrap(
             if dedupe_key in seen:
                 continue
             seen.add(dedupe_key)
-            relation_text = relation_type.lower()
+            record_text = edge.get("fact") or edge.get("edge_name") or ""
+            # Neutral values are fictional run controls. Relation wording must
+            # never be converted into behavioral propensity or causal weight.
             follow_seed = 0.7
             interaction_bias = 0.65
-            if "critic" in relation_text or "oppos" in relation_text or "protest" in relation_text:
-                follow_seed = 0.35
-                interaction_bias = 0.82
-            elif "support" in relation_text or "member" in relation_text or "ally" in relation_text:
-                follow_seed = 0.88
-                interaction_bias = 0.78
             relationships.append(
                 {
                     "source_agent_id": source_agent_id,
@@ -296,7 +307,16 @@ def build_relationship_bootstrap(
                     "platforms": ["twitter", "reddit"],
                     "follow_seed": round(follow_seed, 2),
                     "interaction_bias": round(interaction_bias, 2),
-                    "source_edge_refs": [edge.get("fact") or edge.get("edge_name") or ""],
+                    "assumption_basis": "neutral_fictional_default",
+                    "relationship_behavior_inferred": False,
+                    **graph_record_disclosure(record_text),
+                    "source_graph_records": [
+                        graph_record_disclosure(record_text)
+                    ],
+                    # Deprecated compatibility alias. The adjacent metadata
+                    # prevents this string from being treated as a verified fact.
+                    "source_edge_refs": [record_text],
+                    "source_edge_refs_deprecated": True,
                 }
             )
     return relationships

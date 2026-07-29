@@ -45,6 +45,14 @@ htmlcov/
 .cursor/
 .claude/
 
+# Agent / IDE tooling state
+.agents/
+
+# Playwright CLI run artifacts
+.playwright-cli/
+**/.playwright-cli/
+output/
+
 # 文档与测试程序
 mydoc/
 mytest/

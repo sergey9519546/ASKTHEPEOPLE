@@ -6,6 +6,7 @@ Runs simulations in the background, records Agent actions, and supports real-tim
 import os
 import sys
 import json
+import math
 import time
 import asyncio
 import threading
@@ -20,6 +21,7 @@ from queue import Queue
 
 from ..config import Config
 from ..utils.logger import get_logger
+from ..utils.input_policy import SIMULATION_ROUNDS_MAX
 from .zep_graph_memory_updater import ZepGraphMemoryManager
 from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
 from .simulation_observation_store import sync_observation_store
@@ -32,6 +34,39 @@ _cleanup_registered = False
 
 # Platform detection
 IS_WINDOWS = sys.platform == 'win32'
+
+
+def resolve_total_rounds(
+    time_config: Dict[str, Any],
+    requested_max: int | None = None,
+) -> int:
+    """Resolve a positive run length under the global computational ceiling."""
+    try:
+        total_hours = float(time_config.get("total_simulation_hours", 72))
+        minutes_per_round = float(time_config.get("minutes_per_round", 30))
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "total_simulation_hours and minutes_per_round must be numbers"
+        ) from exc
+    if not math.isfinite(total_hours) or total_hours <= 0:
+        raise ValueError("total_simulation_hours must be a positive finite number")
+    if not math.isfinite(minutes_per_round) or minutes_per_round <= 0:
+        raise ValueError("minutes_per_round must be a positive finite number")
+
+    effective_limit = SIMULATION_ROUNDS_MAX
+    if requested_max is not None:
+        if isinstance(requested_max, bool):
+            raise ValueError("requested max rounds must be an integer")
+        try:
+            req_int = int(requested_max)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("requested max rounds must be an integer") from exc
+        if req_int <= 0:
+            raise ValueError("requested max rounds must be positive")
+        effective_limit = min(effective_limit, req_int)
+
+    calc_rounds = math.ceil((total_hours * 60.0) / minutes_per_round)
+    return max(1, min(calc_rounds, effective_limit))
 
 
 class RunnerStatus(str, Enum):
@@ -246,6 +281,37 @@ class SimulationRunner:
     _follower_agents: Dict[str, List] = {}   # simulation_id -> List[FollowerAgent]
 
     @classmethod
+    def _release_runtime_resources(cls, simulation_id: str) -> None:
+        """Release process-local resources after a run reaches a terminal state."""
+        if cls._graph_memory_enabled.pop(simulation_id, False):
+            try:
+                ZepGraphMemoryManager.stop_updater(simulation_id)
+                logger.info(
+                    "Graph memory update stopped: simulation_id=%s",
+                    simulation_id,
+                )
+            except Exception as exc:
+                logger.error("Failed to stop graph memory updater: %s", exc)
+
+        cls._follower_engines.pop(simulation_id, None)
+        cls._follower_agents.pop(simulation_id, None)
+        cls._processes.pop(simulation_id, None)
+        cls._monitor_threads.pop(simulation_id, None)
+        cls._action_queues.pop(simulation_id, None)
+
+        for handles in (cls._stdout_files, cls._stderr_files):
+            handle = handles.pop(simulation_id, None)
+            if handle:
+                try:
+                    handle.close()
+                except Exception as exc:
+                    logger.error(
+                        "Failed to close a runtime file handle for %s: %s",
+                        simulation_id,
+                        exc,
+                    )
+
+    @classmethod
     def _mark_interrupted(cls, simulation_id: str, state: SimulationRunState, reason: str) -> None:
         """Mark simulation as interrupted"""
         state.runner_status = RunnerStatus.INTERRUPTED
@@ -254,19 +320,18 @@ class SimulationRunner:
         state.completed_at = datetime.now().isoformat()
         state.error = reason
         cls._save_run_state(state)
-    
+
     @classmethod
     def get_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
-        """Get simulation run state"""
+        """Get simulation run state from the intentional single-worker runtime."""
         if simulation_id in cls._run_states:
             return cls._run_states[simulation_id]
-        
-        # Try loading from file
+
         state = cls._load_run_state(simulation_id)
         if state:
             cls._run_states[simulation_id] = state
         return state
-    
+
     @classmethod
     def _load_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
         """Load run state from file"""
@@ -351,6 +416,7 @@ class SimulationRunner:
         max_rounds: int = None,  # Maximum rounds (optional)
         enable_graph_memory_update: bool = False,  # Dynamically update Agent activities to Zep graph
         graph_id: str = None,  # Zep Graph ID (required if update enabled)
+        source_graph_id: Optional[str] = None,
         enable_followers: bool = False,
         follower_count: int = 100,
         follower_distribution: Optional[Dict[str, float]] = None,
@@ -368,6 +434,12 @@ class SimulationRunner:
         Returns:
             SimulationRunState
         """
+        if enable_graph_memory_update:
+            raise ValueError(
+                "Synthetic graph writes are unsupported; generated activity "
+                "remains in the simulation observation store."
+            )
+
         # Check if already running
         existing = cls.get_run_state(simulation_id)
         if existing and existing.runner_status in [RunnerStatus.RUNNING, RunnerStatus.STARTING]:
@@ -613,9 +685,12 @@ class SimulationRunner:
             # Process ended
             exit_code = process.returncode
             
-            if exit_code == 0:
+            if state.runner_status in (RunnerStatus.STOPPING, RunnerStatus.STOPPED):
+                state.runner_status = RunnerStatus.STOPPED
+                state.error = None
+                logger.info("Simulation stopped: %s", simulation_id)
+            elif exit_code == 0:
                 state.runner_status = RunnerStatus.COMPLETED
-                state.completed_at = datetime.now().isoformat()
                 logger.info(f"Simulation completed: {simulation_id}")
             else:
                 state.runner_status = RunnerStatus.FAILED
@@ -631,85 +706,51 @@ class SimulationRunner:
                 state.error = f"Exit code: {exit_code}, error: {error_info}"
                 logger.error(f"Simulation failed: {simulation_id}, error={state.error}")
             
+        except Exception as exc:
+            if state.runner_status in (RunnerStatus.STOPPING, RunnerStatus.STOPPED):
+                state.runner_status = RunnerStatus.STOPPED
+                state.error = None
+                logger.info(
+                    "Simulation monitor exited during an intentional stop: %s",
+                    simulation_id,
+                )
+            else:
+                logger.error(
+                    "Monitor thread error: %s, error=%s",
+                    simulation_id,
+                    exc,
+                )
+                state.runner_status = RunnerStatus.FAILED
+                state.error = str(exc)
+        finally:
             state.twitter_running = False
             state.reddit_running = False
-            cls._save_run_state(state)
-            sync_observation_store(sim_dir, run_state=state.to_detail_dict())
-            
-        except Exception as e:
-            logger.error(f"Monitor thread error: {simulation_id}, error={str(e)}")
-            state.runner_status = RunnerStatus.FAILED
-            state.error = str(e)
-            cls._save_run_state(state)
-            sync_observation_store(sim_dir, run_state=state.to_detail_dict())
-            raise ValueError(f"Simulation not running: {simulation_id}, status={state.runner_status}")
-        
-        # Only set status to STOPPING/STOPPED if not already in terminal status (COMPLETED/FAILED)
-        is_terminal = state.runner_status in [RunnerStatus.COMPLETED, RunnerStatus.FAILED]
-        
-        if not is_terminal:
-            state.runner_status = RunnerStatus.STOPPING
-            cls._save_run_state(state)
-        
-        # Terminate process if still running
-        process = cls._processes.get(simulation_id)
-        if process and process.poll() is None:
+            if state.runner_status in (
+                RunnerStatus.STOPPED,
+                RunnerStatus.COMPLETED,
+                RunnerStatus.INTERRUPTED,
+                RunnerStatus.FAILED,
+            ):
+                state.completed_at = state.completed_at or datetime.now().isoformat()
             try:
-                cls._terminate_process(process, simulation_id)
-            except ProcessLookupError:
-                # Process already gone
-                pass
-            except Exception as e:
-                logger.error(f"Failed to terminate process group: {simulation_id}, error={e}")
-                # Fallback to direct process termination
-                try:
-                    process.terminate()
-                    process.wait(timeout=5)
-                except Exception:
-                    process.kill()
-        
-        if not is_terminal:
-            state.runner_status = RunnerStatus.STOPPED
-            state.twitter_running = False
-            state.reddit_running = False
-            state.completed_at = datetime.now().isoformat()
-            cls._save_run_state(state)
-            
-        sync_observation_store(cls._get_run_state_dir(simulation_id), run_state=state.to_detail_dict())
-        
-        # Stop graph memory updater
-        if cls._graph_memory_enabled.get(simulation_id, False):
-            try:
-                ZepGraphMemoryManager.stop_updater(simulation_id)
-                logger.info(f"Graph memory update stopped: simulation_id={simulation_id}")
-            except Exception as e:
-                logger.error(f"Failed to stop graph memory updater: {e}")
-            cls._graph_memory_enabled.pop(simulation_id, None)
+                cls._save_run_state(state)
+                sync_observation_store(
+                    sim_dir,
+                    run_state=state.to_detail_dict(),
+                )
+            except Exception as exc:
+                logger.error(
+                    "Failed to persist terminal run state for %s: %s",
+                    simulation_id,
+                    exc,
+                )
+            cls._release_runtime_resources(simulation_id)
 
-        # Clean up follower state
-        cls._follower_engines.pop(simulation_id, None)
-        cls._follower_agents.pop(simulation_id, None)
-
-        # Clean up process, thread, queue, and file handles to prevent resource and memory leaks
-        cls._processes.pop(simulation_id, None)
-        cls._monitor_threads.pop(simulation_id, None)
-        cls._action_queues.pop(simulation_id, None)
-        
-        stdout_file = cls._stdout_files.pop(simulation_id, None)
-        if stdout_file:
-            try:
-                stdout_file.close()
-            except Exception as e:
-                logger.error(f"Failed to close stdout file handle for simulation {simulation_id}: {e}")
-                
-        stderr_file = cls._stderr_files.pop(simulation_id, None)
-        if stderr_file:
-            try:
-                stderr_file.close()
-            except Exception as e:
-                logger.error(f"Failed to close stderr file handle for simulation {simulation_id}: {e}")
-
-        logger.info(f"Simulation monitor thread finished for {simulation_id}. Terminal state: {state.runner_status}")
+        logger.info(
+            "Simulation monitor thread finished for %s. Terminal state: %s",
+            simulation_id,
+            state.runner_status,
+        )
         return state
     
     @classmethod
@@ -1892,3 +1933,101 @@ class SimulationRunner:
             results = results[:limit]
         
         return results
+
+    @classmethod
+    def stop_simulation(cls, simulation_id: str) -> SimulationRunState:
+        """Stop a live run without allowing the monitor to relabel it failed."""
+        state = cls.get_run_state(simulation_id)
+        if state is None:
+            raise ValueError(f"Simulation run does not exist: {simulation_id}")
+
+        terminal_statuses = {
+            RunnerStatus.STOPPED,
+            RunnerStatus.COMPLETED,
+            RunnerStatus.INTERRUPTED,
+            RunnerStatus.FAILED,
+        }
+        if state.runner_status in terminal_statuses:
+            return state
+        if state.runner_status not in {
+            RunnerStatus.STARTING,
+            RunnerStatus.RUNNING,
+            RunnerStatus.PAUSED,
+            RunnerStatus.STOPPING,
+        }:
+            raise ValueError(
+                f"Simulation is not running: {simulation_id}, "
+                f"status={state.runner_status.value}"
+            )
+
+        state.runner_status = RunnerStatus.STOPPING
+        cls._save_run_state(state)
+
+        process = cls._processes.get(simulation_id)
+        if process and process.poll() is None:
+            try:
+                cls._terminate_process(process, simulation_id)
+            except (ProcessLookupError, OSError):
+                # The process exited between poll() and termination.
+                pass
+            except Exception as exc:
+                logger.error(
+                    "Failed to terminate process group for %s: %s",
+                    simulation_id,
+                    exc,
+                )
+                try:
+                    process.terminate()
+                    process.wait(timeout=5)
+                except Exception as fallback_exc:
+                    try:
+                        process.kill()
+                        process.wait(timeout=5)
+                    except Exception as kill_exc:
+                        state.runner_status = RunnerStatus.FAILED
+                        state.error = "runtime process could not be stopped"
+                        state.completed_at = datetime.now().isoformat()
+                        cls._save_run_state(state)
+                        sync_observation_store(
+                            cls._get_run_state_dir(simulation_id),
+                            run_state=state.to_detail_dict(),
+                        )
+                        raise RuntimeError(
+                            f"Failed to stop simulation runtime: {simulation_id}"
+                        ) from kill_exc
+                    logger.warning(
+                        "Graceful fallback stop failed for %s: %s",
+                        simulation_id,
+                        fallback_exc,
+                    )
+
+        monitor = cls._monitor_threads.get(simulation_id)
+        if (
+            monitor
+            and monitor is not threading.current_thread()
+            and monitor.is_alive()
+        ):
+            monitor.join(timeout=3)
+
+        state = cls._run_states.get(simulation_id, state)
+        if state.runner_status not in {
+            RunnerStatus.COMPLETED,
+            RunnerStatus.INTERRUPTED,
+            RunnerStatus.FAILED,
+        }:
+            state.runner_status = RunnerStatus.STOPPED
+            state.error = None
+            state.twitter_running = False
+            state.reddit_running = False
+            state.completed_at = state.completed_at or datetime.now().isoformat()
+            cls._save_run_state(state)
+            sync_observation_store(
+                cls._get_run_state_dir(simulation_id),
+                run_state=state.to_detail_dict(),
+            )
+
+        if not monitor or not monitor.is_alive():
+            cls._release_runtime_resources(simulation_id)
+
+        return state
+

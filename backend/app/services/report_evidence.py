@@ -1,5 +1,9 @@
 """
-Grounded report evidence generation from simulation observations.
+Post-hoc trace examples selected from synthetic simulation observations.
+
+The selector uses keyword overlap after a report section has been generated.
+The resulting records can help someone inspect the run, but they do not prove,
+support, cite, or establish which artifact caused a report statement.
 """
 
 from __future__ import annotations
@@ -9,8 +13,59 @@ import os
 import sqlite3
 from typing import Any, Dict, List
 
+from .claim_boundary import (
+    synthetic_activity_disclosure,
+    synthetic_config_disclosure,
+)
 from .simulation_artifacts import report_evidence_path
 from .simulation_observation_store import sync_observation_store
+
+
+def _evidence_metadata(source_type: str) -> Dict[str, Any]:
+    """Return the non-probabilistic interpretation contract for a trace."""
+    if source_type in {"scheduled_event", "bootstrap_event"}:
+        metadata = synthetic_config_disclosure()
+        evidence_class = "configuration_assumption"
+        record_type = "configuration_assumption"
+        interpretation = (
+            "Injected scenario condition; not an observed event or human response."
+        )
+    else:
+        metadata = synthetic_activity_disclosure()
+        evidence_class = "synthetic_observation"
+        record_type = {
+            "action": "generated_action",
+            "post": "generated_post",
+            "comment": "generated_comment",
+            "interview": "generated_profile_response",
+            "round_summary": "generated_round_summary",
+        }.get(source_type, "generated_run_record")
+        interpretation = (
+            "Generated within this simulation run; not observed human behavior."
+        )
+
+    metadata.update(
+        {
+            "record_type": record_type,
+            "evidence_class": evidence_class,
+            "human_respondents": 0,
+            "external_validation": False,
+            "causal_evidence": False,
+            "calibration": "not_calibrated",
+            "interpretation": interpretation,
+        }
+    )
+    if source_type == "interview":
+        metadata.update(
+            {
+                "legacy_source_type_deprecated": True,
+                "source_type_interpretation": (
+                    "The legacy 'interview' value denotes a model-generated "
+                    "profile response, not a human interview."
+                ),
+            }
+        )
+    return metadata
 
 
 def _connect(path: str) -> sqlite3.Connection:
@@ -55,7 +110,7 @@ def build_report_evidence(
                 section_content = handle.read()
 
         seeds = _section_query_seed(section.title, section_content)
-        claim_counter = 1
+        trace_counter = 1
         for seed in seeds[:3]:
             cursor.execute(
                 """
@@ -71,17 +126,17 @@ def build_report_evidence(
                 evidence.append(
                     {
                         "section_index": section_index,
-                        "claim_id": f"section_{section_index}_claim_{claim_counter}",
+                        "trace_id": f"section_{section_index}_trace_{trace_counter}",
                         "source_type": "action",
                         "platform": row["platform"],
                         "agent_id": row["agent_id"],
                         "round_num": row["round_num"],
                         "trace_ref": row["trace_ref"],
                         "excerpt": row["action_args_json"][:500],
-                        "confidence": 0.72,
+                        **_evidence_metadata("action"),
                     }
                 )
-                claim_counter += 1
+                trace_counter += 1
 
             cursor.execute(
                 """
@@ -97,17 +152,17 @@ def build_report_evidence(
                 evidence.append(
                     {
                         "section_index": section_index,
-                        "claim_id": f"section_{section_index}_claim_{claim_counter}",
+                        "trace_id": f"section_{section_index}_trace_{trace_counter}",
                         "source_type": "post",
                         "platform": row["platform"],
                         "agent_id": row["agent_id"],
                         "round_num": row["round_num"],
                         "trace_ref": row["trace_ref"],
                         "excerpt": row["content"][:500],
-                        "confidence": 0.78,
+                        **_evidence_metadata("post"),
                     }
                 )
-                claim_counter += 1
+                trace_counter += 1
 
             cursor.execute(
                 """
@@ -123,17 +178,17 @@ def build_report_evidence(
                 evidence.append(
                     {
                         "section_index": section_index,
-                        "claim_id": f"section_{section_index}_claim_{claim_counter}",
+                        "trace_id": f"section_{section_index}_trace_{trace_counter}",
                         "source_type": "comment",
                         "platform": row["platform"],
                         "agent_id": row["agent_id"],
                         "round_num": row["round_num"],
                         "trace_ref": row["trace_ref"],
                         "excerpt": row["content"][:500],
-                        "confidence": 0.74,
+                        **_evidence_metadata("comment"),
                     }
                 )
-                claim_counter += 1
+                trace_counter += 1
 
             cursor.execute(
                 """
@@ -149,17 +204,17 @@ def build_report_evidence(
                 evidence.append(
                     {
                         "section_index": section_index,
-                        "claim_id": f"section_{section_index}_claim_{claim_counter}",
+                        "trace_id": f"section_{section_index}_trace_{trace_counter}",
                         "source_type": "interview",
                         "platform": row["platform"],
                         "agent_id": row["agent_id"],
                         "round_num": row["round_num"],
                         "trace_ref": row["trace_ref"],
                         "excerpt": row["response"][:500],
-                        "confidence": 0.68,
+                        **_evidence_metadata("interview"),
                     }
                 )
-                claim_counter += 1
+                trace_counter += 1
 
         cursor.execute(
             """
@@ -174,16 +229,17 @@ def build_report_evidence(
             evidence.append(
                 {
                     "section_index": section_index,
-                    "claim_id": f"section_{section_index}_claim_{claim_counter}",
+                    "trace_id": f"section_{section_index}_trace_{trace_counter}",
                     "source_type": "round_summary",
                     "platform": "mixed",
                     "agent_id": None,
                     "round_num": summary_row["round_num"],
                     "trace_ref": f"round_summary:{summary_row['round_num']}",
                     "excerpt": summary_row["payload_json"][:500],
-                    "confidence": 0.6,
+                    **_evidence_metadata("round_summary"),
                 }
             )
+            trace_counter += 1
 
         cursor.execute(
             """
@@ -198,17 +254,17 @@ def build_report_evidence(
             evidence.append(
                 {
                     "section_index": section_index,
-                    "claim_id": f"section_{section_index}_claim_{claim_counter}",
+                    "trace_id": f"section_{section_index}_trace_{trace_counter}",
                     "source_type": "scheduled_event",
                     "platform": scheduled_row["platform"],
                     "agent_id": None,
                     "round_num": scheduled_row["round_num"],
                     "trace_ref": f"scheduled:{scheduled_row['event_type']}:{scheduled_row['round_num']}",
                     "excerpt": scheduled_row["payload_json"][:500],
-                    "confidence": 0.58,
+                    **_evidence_metadata("scheduled_event"),
                 }
             )
-            claim_counter += 1
+            trace_counter += 1
 
         cursor.execute(
             """
@@ -223,16 +279,17 @@ def build_report_evidence(
             evidence.append(
                 {
                     "section_index": section_index,
-                    "claim_id": f"section_{section_index}_claim_{claim_counter}",
+                    "trace_id": f"section_{section_index}_trace_{trace_counter}",
                     "source_type": "bootstrap_event",
                     "platform": bootstrap_row["platform"],
                     "agent_id": None,
                     "round_num": bootstrap_row["round_num"],
                     "trace_ref": f"bootstrap:{bootstrap_row['event_type']}:{bootstrap_row['round_num']}",
                     "excerpt": bootstrap_row["payload_json"][:500],
-                    "confidence": 0.58,
+                    **_evidence_metadata("bootstrap_event"),
                 }
             )
+            trace_counter += 1
 
     conn.close()
 
@@ -246,4 +303,32 @@ def load_report_evidence(report_dir: str) -> List[Dict[str, Any]]:
     if not os.path.exists(path):
         return []
     with open(path, "r", encoding="utf-8") as handle:
-        return json.load(handle)
+        records = json.load(handle)
+
+    normalized: List[Dict[str, Any]] = []
+    for index, record in enumerate(records if isinstance(records, list) else []):
+        if not isinstance(record, dict):
+            continue
+        item = dict(record)
+        deprecated_fields = []
+        if "claim_id" in item:
+            deprecated_fields.append("claim_id")
+        legacy_id = str(item.pop("claim_id", "") or "")
+        if "confidence" in item:
+            deprecated_fields.append("confidence")
+            item.pop("confidence", None)
+        trace_id = str(item.get("trace_id", "") or "")
+        if not trace_id:
+            trace_id = legacy_id.replace("_claim_", "_trace_")
+        item["trace_id"] = trace_id or f"legacy_trace_{index + 1}"
+        item.update(_evidence_metadata(str(item.get("source_type", "") or "")))
+        if deprecated_fields:
+            item["legacy_schema_normalization"] = {
+                "deprecated_fields_removed": deprecated_fields,
+                "score_interpretation": (
+                    "No probability, likelihood, or evidence-strength score "
+                    "is provided."
+                ),
+            }
+        normalized.append(item)
+    return normalized

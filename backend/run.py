@@ -21,21 +21,23 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app import create_app
 from app.config import Config
 
-# Module-level app for Gunicorn: gunicorn backend.run:app
-app = create_app()
+
+def _create_validated_app():
+    """Validate every module-level server entry point before serving traffic."""
+    errors = Config.validate()
+    if errors:
+        raise RuntimeError(
+            "Invalid application configuration: " + "; ".join(errors)
+        )
+    return create_app()
+
+
+# Module-level app for Gunicorn: gunicorn --chdir backend run:app
+app = _create_validated_app()
 
 
 def main():
     """Main function"""
-    # Validate configuration
-    errors = Config.validate()
-    if errors:
-        print("Configuration error:")
-        for err in errors:
-            print(f"  - {err}")
-        print("\nPlease check the configuration in the .env file")
-        sys.exit(1)
-
     # Get runtime configuration
     host = os.environ.get('FLASK_HOST', '0.0.0.0')
     port = int(os.environ.get('FLASK_PORT', 5001))

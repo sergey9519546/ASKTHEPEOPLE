@@ -268,7 +268,8 @@ class ParallelIPCHandler:
         if not os.path.exists(self.commands_dir):
             return None
         
-        # Get command files (sorted by time)        command_files = []
+        # Get command files (sorted by time)
+        command_files = []
         for filename in os.listdir(self.commands_dir):
             if filename.endswith('.json'):
                 filepath = os.path.join(self.commands_dir, filename)
@@ -299,7 +300,10 @@ class ParallelIPCHandler:
         with open(response_file, 'w', encoding='utf-8') as f:
             json.dump(response, f, ensure_ascii=False, indent=2)
         
-        # Delete command file        command_file = os.path.join(self.commands_dir, f"{command_id}.json")
+        # Delete command file
+        command_file = os.path.join(
+            self.commands_dir, f"{command_id}.json"
+        )
         try:
             os.remove(command_file)
         except OSError:

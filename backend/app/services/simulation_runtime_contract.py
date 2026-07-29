@@ -10,6 +10,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 import random
 
 from .camel_model_factory import create_camel_model, load_model_resolution
+from .claim_boundary import graph_record_disclosure
 from .simulation_artifacts import (
     append_jsonl,
     bootstrap_actions_path,
@@ -256,13 +257,22 @@ def select_active_agent_ids(
     return selected
 
 
+def _graph_relationship_behavior_opted_in(config: Dict[str, Any]) -> bool:
+    """Require explicit opt-in before graph records can seed follow behavior."""
+    network_bootstrap = config.get("network_bootstrap", {})
+    return (
+        network_bootstrap.get("enable_follow_bootstrap") is True
+        and network_bootstrap.get("graph_relationship_behavior_opt_in") is True
+    )
+
+
 def _bootstrap_follow_specs(
     simulation_dir: str,
     config: Dict[str, Any],
     platform: str,
 ) -> List[Dict[str, Any]]:
     network_bootstrap = config.get("network_bootstrap", {})
-    if not network_bootstrap.get("enable_follow_bootstrap", False):
+    if not _graph_relationship_behavior_opted_in(config):
         return []
     if not network_bootstrap.get("platforms", {}).get(platform, True):
         return []
@@ -270,10 +280,10 @@ def _bootstrap_follow_specs(
     relationship_bootstrap = read_json(relationship_bootstrap_path(simulation_dir), default=[])
     config_by_agent = _agent_config_map(config)
     follow_density = float(network_bootstrap.get("follow_density", 0.35))
-    role_bias_rules = {
-        str(key).strip().lower(): float(value)
-        for key, value in (network_bootstrap.get("role_bias_rules") or {}).items()
-    }
+    neutral_follow_seed = float(network_bootstrap.get("neutral_follow_seed", 0.7))
+    neutral_affinity_score = float(
+        network_bootstrap.get("neutral_affinity_score", 0.65)
+    )
     threshold = max(0.25, 1.0 - follow_density)
 
     specs: List[Dict[str, Any]] = []
@@ -291,12 +301,17 @@ def _bootstrap_follow_specs(
         if not _platform_matches(target_cfg.get("platform_preference", "both"), platform):
             continue
 
-        role_key = str(source_cfg.get("normalized_role", source_cfg.get("entity_type", ""))).lower()
-        role_bias = role_bias_rules.get(role_key, 0.6)
-        effective_score = (float(relation.get("follow_seed", 0.0)) * 0.7) + (float(relation.get("affinity_score", 0.0)) * 0.3)
-        effective_score *= 0.6 + (role_bias * 0.4)
+        effective_score = (
+            (neutral_follow_seed * 0.7)
+            + (neutral_affinity_score * 0.3)
+        )
         if effective_score < threshold:
             continue
+        record_text = str(
+            relation.get("record_text")
+            or relation.get("relation_type")
+            or ""
+        )
 
         specs.append(
             {
@@ -308,8 +323,13 @@ def _bootstrap_follow_specs(
                 "metadata": {
                     "target_agent_id": target_agent_id,
                     "relation_type": relation.get("relation_type"),
-                    "follow_seed": relation.get("follow_seed"),
-                    "affinity_score": relation.get("affinity_score"),
+                    "follow_seed": neutral_follow_seed,
+                    "affinity_score": neutral_affinity_score,
+                    "assumption_basis": (
+                        "explicit_graph_relationship_bootstrap_opt_in"
+                    ),
+                    "relationship_behavior_inferred": False,
+                    **graph_record_disclosure(record_text),
                 },
             }
         )
@@ -408,6 +428,8 @@ def _scheduled_event_specs(
             continue
 
         if event_type in FOLLOW_EVENT_TYPES:
+            if not _graph_relationship_behavior_opted_in(config):
+                continue
             relationship_bootstrap = read_json(relationship_bootstrap_path(simulation_dir), default=[])
             source_roles = {
                 str(role).strip().lower()
@@ -443,6 +465,17 @@ def _scheduled_event_specs(
                             "targeting": targeting,
                             "reasoning": reasoning,
                             "target_agent_id": relation.get("target_agent_id"),
+                            "assumption_basis": (
+                                "explicit_graph_relationship_bootstrap_opt_in"
+                            ),
+                            "relationship_behavior_inferred": False,
+                            **graph_record_disclosure(
+                                str(
+                                    relation.get("record_text")
+                                    or relation.get("relation_type")
+                                    or ""
+                                )
+                            ),
                         },
                     }
                 )

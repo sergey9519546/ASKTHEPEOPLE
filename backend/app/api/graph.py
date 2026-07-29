@@ -13,14 +13,55 @@ from . import limiter
 from ..config import Config
 from ..services.ontology_generator import OntologyGenerator
 from ..services.graph_builder import GraphBuilderService
+from ..services.claim_boundary import (
+    graph_record_disclosure,
+    model_proposed_schema_disclosure,
+    synthetic_output_disclosure,
+)
 from ..services.text_processor import TextProcessor
-from ..utils.file_parser import FileParser
+from ..utils.file_parser import FileParser, FileParserLimitError
 from ..utils.logger import get_logger
+from ..utils.input_policy import (
+    ADDITIONAL_CONTEXT_MAX,
+    EXTRACTED_TEXT_CHARACTERS_MAX,
+    PROJECT_NAME_MAX,
+    SCENARIO_QUESTION_MAX,
+    UPLOAD_FILE_COUNT_MAX,
+    InputPolicyError,
+    bounded_text,
+    validate_exploratory_use,
+    validate_item_count,
+)
 from ..models.task import TaskManager, TaskStatus
 from ..models.project import ProjectManager, ProjectStatus
 
 # Get Logger
 logger = get_logger('askthepeople.api')
+
+
+def _attach_model_schema_status(payload: dict) -> dict:
+    """Label model-proposed ontology data without relabeling uploaded sources."""
+    disclosed = dict(payload)
+    if disclosed.get("ontology") is not None:
+        disclosed["ontology_status"] = model_proposed_schema_disclosure()
+    nested_result = disclosed.get("result")
+    if isinstance(nested_result, dict):
+        disclosed["result"] = _attach_model_schema_status(nested_result)
+    return disclosed
+
+
+def _attach_graph_record_provenance(graph_data: dict) -> dict:
+    """Add conservative, compatibility-safe provenance to graph payloads."""
+    disclosed = dict(graph_data)
+    disclosed.update(graph_record_disclosure())
+    disclosed["edges"] = [
+        {
+            **edge,
+            **graph_record_disclosure(edge.get("fact", "")),
+        }
+        for edge in graph_data.get("edges", [])
+    ]
+    return disclosed
 
 
 def allowed_file(filename: str) -> bool:
@@ -48,7 +89,7 @@ def get_project(project_id: str):
     
     return jsonify({
         "success": True,
-        "data": project.to_dict()
+        "data": _attach_model_schema_status(project.to_dict())
     })
 
 
@@ -62,7 +103,10 @@ def list_projects():
     
     return jsonify({
         "success": True,
-        "data": [p.to_dict() for p in projects],
+        "data": [
+            _attach_model_schema_status(project.to_dict())
+            for project in projects
+        ],
         "count": len(projects)
     })
 
@@ -113,7 +157,7 @@ def reset_project(project_id: str):
     return jsonify({
         "success": True,
         "message": f"Project reset: {project_id}",
-        "data": project.to_dict()
+        "data": _attach_model_schema_status(project.to_dict())
     })
 
 
@@ -164,22 +208,52 @@ def generate_ontology():
             return jsonify({"success": False, "error": "LLM_API_KEY is not configured"}), 500
 
         # Get parameters
-        simulation_requirement = request.form.get('simulation_requirement', '')
-        project_name = request.form.get('project_name', 'Unnamed Project')
-        additional_context = request.form.get('additional_context', '')
+        try:
+            simulation_requirement = bounded_text(
+                request.form.get('simulation_requirement'),
+                field="simulation_requirement",
+                max_length=SCENARIO_QUESTION_MAX,
+                required=True,
+            )
+            project_name = bounded_text(
+                request.form.get('project_name', 'Unnamed Project'),
+                field="project_name",
+                max_length=PROJECT_NAME_MAX,
+                required=True,
+            )
+            additional_context = bounded_text(
+                request.form.get('additional_context', ''),
+                field="additional_context",
+                max_length=ADDITIONAL_CONTEXT_MAX,
+            )
+            validate_exploratory_use(
+                intended_use=request.form.get('intended_use'),
+                acknowledged=request.form.get('use_policy_acknowledged'),
+            )
+        except InputPolicyError as exc:
+            return jsonify({
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+            }), 400
 
         logger.debug(f"Project name: {project_name}")
         if simulation_requirement:
             logger.debug(f"Simulation requirements: {simulation_requirement[:100]}...")
 
-        if not simulation_requirement:
+        # Get uploaded files
+        try:
+            uploaded_files = validate_item_count(
+                request.files.getlist('files'),
+                field="files",
+                maximum=UPLOAD_FILE_COUNT_MAX,
+            )
+        except InputPolicyError as exc:
             return jsonify({
                 "success": False,
-                "error": "Please provide simulation requirement description (simulation_requirement)"
+                "error": exc.code,
+                "message": exc.message,
             }), 400
-
-        # Get uploaded files
-        uploaded_files = request.files.getlist('files')
         if not uploaded_files or all(not f.filename for f in uploaded_files):
             return jsonify({
                 "success": False,
@@ -206,10 +280,55 @@ def generate_ontology():
                     "filename": file_info["original_filename"],
                     "size": file_info["size"]
                 })
-                text = FileParser.extract_text(file_info["path"])
+                text_header = f"\n\n=== {file_info['original_filename']} ===\n"
+                remaining_characters = (
+                    EXTRACTED_TEXT_CHARACTERS_MAX
+                    - len(all_text)
+                    - len(text_header)
+                )
+                if remaining_characters < 1:
+                    ProjectManager.delete_project(project.project_id)
+                    return jsonify({
+                        "success": False,
+                        "error": "extracted_text_too_large",
+                        "message": (
+                            "The extracted document text exceeds the "
+                            f"{EXTRACTED_TEXT_CHARACTERS_MAX}-character limit."
+                        ),
+                    }), 413
+                try:
+                    text = FileParser.extract_text(
+                        file_info["path"],
+                        max_characters=remaining_characters,
+                    )
+                except FileParserLimitError:
+                    ProjectManager.delete_project(project.project_id)
+                    return jsonify({
+                        "success": False,
+                        "error": "extracted_text_too_large",
+                        "message": (
+                            "The uploaded documents exceed the PDF page or "
+                            f"{EXTRACTED_TEXT_CHARACTERS_MAX}-character "
+                            "extraction limit."
+                        ),
+                    }), 413
                 text = TextProcessor.preprocess_text(text)
+                text_fragment = f"{text_header}{text}"
+                if (
+                    len(all_text) + len(text_fragment)
+                    > EXTRACTED_TEXT_CHARACTERS_MAX
+                ):
+                    ProjectManager.delete_project(project.project_id)
+                    return jsonify({
+                        "success": False,
+                        "error": "extracted_text_too_large",
+                        "message": (
+                            "The extracted document text exceeds the "
+                            f"{EXTRACTED_TEXT_CHARACTERS_MAX}-character limit."
+                        ),
+                    }), 413
                 document_texts.append(text)
-                all_text += f"\n\n=== {file_info['original_filename']} ===\n{text}"
+                all_text += text_fragment
 
         if not document_texts:
             ProjectManager.delete_project(project.project_id)
@@ -276,6 +395,7 @@ def generate_ontology():
                         "project_id": _project.project_id,
                         "project_name": _project.name,
                         "ontology": _project.ontology,
+                        "ontology_status": model_proposed_schema_disclosure(),
                         "analysis_summary": _project.analysis_summary,
                         "files": _project.files,
                         "total_text_length": _project.total_text_length
@@ -288,14 +408,15 @@ def generate_ontology():
                 gen_logger.debug(traceback.format_exc())
 
                 _project.status = ProjectStatus.FAILED
-                _project.error = str(e)
+                _project.error = "ontology_generation_failed"
                 ProjectManager.save_project(_project)
 
                 task_manager.update_task(
                     task_id,
                     status=TaskStatus.FAILED,
-                    message=f"Ontology generation failed: {str(e)}",
-                    error=traceback.format_exc()
+                    message="Ontology generation failed",
+                    error="ontology_generation_failed",
+                    public_error="ontology_generation_failed",
                 )
 
         thread = threading.Thread(target=ontology_task, daemon=True)
@@ -558,14 +679,15 @@ def build_graph():
                 build_logger.debug(traceback.format_exc())
                 
                 project.status = ProjectStatus.FAILED
-                project.error = str(e)
+                project.error = "graph_build_failed"
                 ProjectManager.save_project(project)
                 
                 task_manager.update_task(
                     task_id,
                     status=TaskStatus.FAILED,
-                    message=f"Build failed: {str(e)}",
-                    error=traceback.format_exc()
+                    message="Graph build failed",
+                    error="graph_build_failed",
+                    public_error="graph_build_failed",
                 )
         
         # Start background thread
@@ -606,7 +728,7 @@ def get_task(task_id: str):
     
     return jsonify({
         "success": True,
-        "data": task.to_dict()
+        "data": _attach_model_schema_status(task.to_public_dict())
     })
 
 
@@ -619,7 +741,10 @@ def list_tasks():
     
     return jsonify({
         "success": True,
-        "data": [t.to_dict() for t in tasks],
+        "data": [
+            _attach_model_schema_status(task)
+            for task in tasks
+        ],
         "count": len(tasks)
     })
 
@@ -639,11 +764,14 @@ def get_graph_data(graph_id: str):
             }), 500
         
         builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
-        graph_data = builder.get_graph_data(graph_id)
+        graph_data = _attach_graph_record_provenance(
+            builder.get_graph_data(graph_id)
+        )
         
         return jsonify({
             "success": True,
-            "data": graph_data
+            "data": graph_data,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:

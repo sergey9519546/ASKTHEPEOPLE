@@ -13,6 +13,16 @@ from datetime import datetime
 from enum import Enum
 
 from ..config import Config
+from ..utils.input_policy import (
+    ARCHETYPE_COUNT_MAX,
+    ARCHETYPE_EXPANSION_MAX,
+    ENTITY_TYPE_FILTER_MAX,
+    PARALLEL_PROFILE_WORKERS_MAX,
+    PREPARE_ENTITY_MAX,
+    PREPARED_PROFILE_MAX,
+    bounded_integer,
+    validate_item_count,
+)
 from ..utils.logger import get_logger
 from .zep_entity_reader import ZepEntityReader, FilteredEntities
 from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
@@ -272,6 +282,37 @@ class SimulationManager:
         state = self._load_simulation_state(simulation_id)
         if not state:
             raise ValueError(f"Simulation does not exist: {simulation_id}")
+
+        parallel_profile_count = bounded_integer(
+            parallel_profile_count,
+            field="parallel_profile_count",
+            minimum=1,
+            maximum=PARALLEL_PROFILE_WORKERS_MAX,
+        )
+        if defined_entity_types is not None:
+            defined_entity_types = validate_item_count(
+                defined_entity_types,
+                field="defined_entity_types",
+                maximum=ENTITY_TYPE_FILTER_MAX,
+            )
+        if use_archetypes:
+            archetype_count = bounded_integer(
+                archetype_count or Config.ARCHETYPE_DEFAULT_COUNT,
+                field="archetype_count",
+                minimum=1,
+                maximum=ARCHETYPE_COUNT_MAX,
+            )
+            expansion_factor = bounded_integer(
+                expansion_factor or Config.ARCHETYPE_DEFAULT_EXPANSION_FACTOR,
+                field="expansion_factor",
+                minimum=1,
+                maximum=ARCHETYPE_EXPANSION_MAX,
+            )
+            if archetype_count * expansion_factor > PREPARED_PROFILE_MAX:
+                raise ValueError(
+                    "Requested archetype expansion exceeds the prepared "
+                    f"profile limit of {PREPARED_PROFILE_MAX}."
+                )
         
         try:
             state.status = SimulationStatus.PREPARING
@@ -293,6 +334,12 @@ class SimulationManager:
                 defined_entity_types=defined_entity_types,
                 enrich_with_edges=True
             )
+            if filtered.filtered_count > PREPARE_ENTITY_MAX:
+                raise ValueError(
+                    "Selected graph contains "
+                    f"{filtered.filtered_count} profile entities; the maximum "
+                    f"is {PREPARE_ENTITY_MAX}."
+                )
             
             state.entities_count = filtered.filtered_count
             state.entity_types = list(filtered.entity_types)
@@ -362,6 +409,12 @@ class SimulationManager:
                     progress_callback=profile_progress,
                     graph_id=state.graph_id,
                 )
+                if len(profiles) > PREPARED_PROFILE_MAX:
+                    raise ValueError(
+                        "Archetype generation produced "
+                        f"{len(profiles)} profiles; the maximum is "
+                        f"{PREPARED_PROFILE_MAX}."
+                    )
                 write_json(os.path.join(sim_dir, "archetypes.json"), [a.to_dict() for a in archetypes])
 
                 state.profiles_count = len(profiles)
@@ -380,6 +433,12 @@ class SimulationManager:
                     realtime_output_path=realtime_output_path,
                     output_platform=realtime_platform,
                 )
+                if len(profiles) > PREPARED_PROFILE_MAX:
+                    raise ValueError(
+                        "Profile generation produced "
+                        f"{len(profiles)} profiles; the maximum is "
+                        f"{PREPARED_PROFILE_MAX}."
+                    )
                 state.profiles_count = len(profiles)
 
                 artifacts = save_prepare_artifacts(
@@ -556,6 +615,7 @@ class SimulationManager:
             "relationship_bootstrap": read_json(os.path.join(sim_dir, "agent_relationship_bootstrap.json"), default=[]),
             "model_resolution": read_json(os.path.join(sim_dir, "model_resolution.json"), default={}),
             "preflight": read_json(os.path.join(sim_dir, "preflight.json"), default=None),
+            "run_manifest": read_json(os.path.join(sim_dir, "run_manifest.json"), default=None),
         }
     
     def get_run_instructions(self, simulation_id: str) -> Dict[str, str]:

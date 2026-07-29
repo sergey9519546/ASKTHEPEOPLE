@@ -18,6 +18,7 @@ If the Phase 1 timeout wrap has not been merged on the branch under test, this
 test is marked xfail so CI stays green — it is NOT made to pass by editing source.
 """
 
+import threading
 import time
 from types import SimpleNamespace
 
@@ -27,6 +28,9 @@ from app import create_app
 from app.api import report as report_module
 from app.config import Config
 from app.models.task import TaskManager, TaskStatus
+from app.services.report_generation_coordinator import (
+    report_generation_coordinator,
+)
 
 
 def _wait_for(predicate, timeout=15.0, interval=0.1):
@@ -68,7 +72,6 @@ def _install_timeout_stubs(monkeypatch, blocking_seconds, timeout_seconds):
         graph_id="graph_timeout_test",
         simulation_requirement="a requirement",
     )
-
     monkeypatch.setattr(
         report_module.SimulationManager,
         "get_simulation",
@@ -85,16 +88,28 @@ def _install_timeout_stubs(monkeypatch, blocking_seconds, timeout_seconds):
         lambda sid: None,
     )
 
+    worker_exited = threading.Event()
+
     # ReportAgent.generate_report blocks longer than the configured timeout.
     class _BlockingAgent:
         def __init__(self, *args, **kwargs):
             pass
 
-        def generate_report(self, progress_callback=None, report_id=None):
-            time.sleep(blocking_seconds)
-            raise AssertionError("generate_report should have been timed out first")
+        def generate_report(
+            self,
+            progress_callback=None,
+            report_id=None,
+            generation_lease=None,
+        ):
+            try:
+                time.sleep(blocking_seconds)
+                generation_lease.checkpoint()
+                raise AssertionError("cancelled generation resumed unexpectedly")
+            finally:
+                worker_exited.set()
 
     monkeypatch.setattr(report_module, "ReportAgent", _BlockingAgent)
+    return worker_exited
 
 
 def test_run_generate_marks_task_failed_on_timeout(monkeypatch, client):
@@ -112,7 +127,7 @@ def test_run_generate_marks_task_failed_on_timeout(monkeypatch, client):
             "generate_report() with future.result(timeout=...)"
         )
 
-    _install_timeout_stubs(
+    worker_exited = _install_timeout_stubs(
         monkeypatch,
         blocking_seconds=3.0,   # agent blocks well past the timeout
         timeout_seconds=1,      # 1s wall-clock limit
@@ -128,7 +143,9 @@ def test_run_generate_marks_task_failed_on_timeout(monkeypatch, client):
     task_id = body["data"]["task_id"]
     assert task_id, "expected a task_id from /api/report/generate"
 
-    # The background thread should hit the timeout and fail the task.
+    # The background task should hit the timeout and fail promptly rather than
+    # waiting for ThreadPoolExecutor.__exit__ to join the blocked worker.
+    started_at = time.monotonic()
     task_manager = TaskManager()
     task = _wait_for(lambda: _is_terminal(task_manager, task_id))
     assert task is not None, (
@@ -142,6 +159,25 @@ def test_run_generate_marks_task_failed_on_timeout(monkeypatch, client):
     assert task.error and "time limit" in task.error.lower(), (
         f"expected a timeout message mentioning the time limit, got: {task.error!r}"
     )
+    assert time.monotonic() - started_at < 2.5, (
+        "timeout state was delayed until the blocked generation call returned"
+    )
+
+    retry = client.post(
+        "/api/report/generate",
+        json={"simulation_id": "sim_timeout_test", "force_regenerate": True},
+    )
+    assert retry.status_code == 409
+    assert retry.get_json()["error"] == "report_generation_in_progress"
+
+    assert worker_exited.wait(5)
+    assert _wait_for(
+        lambda: report_generation_coordinator.get("sim_timeout_test") is None,
+        timeout=2,
+    )
+    terminal_task = task_manager.get_task(task_id)
+    assert terminal_task.status == TaskStatus.FAILED
+    assert "time limit" in terminal_task.error.lower()
 
 
 def _is_terminal(task_manager, task_id):

@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from app.services.simulation_artifacts import write_json
 from app.services.simulation_runtime_contract import (
@@ -92,6 +93,9 @@ def _config():
         },
         "network_bootstrap": {
             "enable_follow_bootstrap": True,
+            "graph_relationship_behavior_opt_in": False,
+            "neutral_follow_seed": 0.7,
+            "neutral_affinity_score": 0.65,
             "follow_density": 0.7,
             "role_bias_rules": {"student": 0.8, "media": 0.75},
             "platforms": {"twitter": True, "reddit": True},
@@ -147,7 +151,7 @@ def test_select_active_agents_respects_platform_preference(monkeypatch):
     assert 1 not in selected
 
 
-def test_bootstrap_actions_persist_and_apply(tmp_path):
+def test_bootstrap_actions_require_explicit_graph_behavior_opt_in(tmp_path):
     config = _config()
     write_json(
         tmp_path / "agent_relationship_bootstrap.json",
@@ -178,11 +182,62 @@ def test_bootstrap_actions_persist_and_apply(tmp_path):
         )
     )
 
-    assert applied == 2
+    assert applied == 1
     assert len(env.steps) == 1
     rows = (tmp_path / "bootstrap_actions.jsonl").read_text(encoding="utf-8").strip().splitlines()
-    assert len(rows) == 2
-    assert bootstrap_boost_agent_ids(str(tmp_path), config, "twitter") == [0, 2]
+    assert len(rows) == 1
+    assert all(json.loads(row)["action_type"] != "FOLLOW" for row in rows)
+    assert bootstrap_boost_agent_ids(str(tmp_path), config, "twitter") == [0]
+
+
+def test_explicit_graph_behavior_opt_in_uses_neutral_noncausal_controls(tmp_path):
+    config = _config()
+    config["network_bootstrap"]["graph_relationship_behavior_opt_in"] = True
+    write_json(
+        tmp_path / "agent_relationship_bootstrap.json",
+        [
+            {
+                "source_agent_id": 0,
+                "target_agent_id": 2,
+                "relation_type": "opposes",
+                "record_text": "A model-extracted opposition record.",
+                "affinity_score": 0.99,
+                "follow_seed": 0.01,
+                "platforms": ["twitter"],
+            }
+        ],
+    )
+
+    env = FakeEnv()
+    applied = asyncio.run(
+        apply_bootstrap_actions(
+            env=env,
+            simulation_dir=str(tmp_path),
+            config=config,
+            platform="twitter",
+            agent_names={0: "Alice", 2: "Carol"},
+            manual_action_cls=FakeManualAction,
+            action_type_cls=FakeActionType,
+        )
+    )
+
+    assert applied == 2
+    rows = [
+        json.loads(row)
+        for row in (tmp_path / "bootstrap_actions.jsonl")
+        .read_text(encoding="utf-8")
+        .strip()
+        .splitlines()
+    ]
+    follow = next(row for row in rows if row["action_type"] == "FOLLOW")
+    assert follow["follow_seed"] == 0.7
+    assert follow["affinity_score"] == 0.65
+    assert follow["assumption_basis"] == (
+        "explicit_graph_relationship_bootstrap_opt_in"
+    )
+    assert follow["relationship_behavior_inferred"] is False
+    assert follow["record_origin"] == "graph_record_origin_unverified"
+    assert follow["causal_evidence"] is False
 
 
 def test_scheduled_events_apply_and_boost_ids(tmp_path):
@@ -209,3 +264,48 @@ def test_scheduled_events_apply_and_boost_ids(tmp_path):
     assert len(rows) == applied
     boosted = scheduled_event_boost_agent_ids(str(tmp_path), config, "twitter", 2)
     assert 0 in boosted or 2 in boosted
+
+
+def test_scheduled_follow_wave_cannot_use_graph_without_explicit_opt_in(
+    tmp_path,
+):
+    config = _config()
+    config["bootstrap_posts"] = []
+    config["event_schedule"] = [
+        {
+            "trigger_round": 2,
+            "platforms": ["twitter"],
+            "event_type": "follow_wave",
+            "payload": {},
+            "targeting": {},
+            "reasoning": "Fictional event assumption.",
+        }
+    ]
+    write_json(
+        tmp_path / "agent_relationship_bootstrap.json",
+        [
+            {
+                "source_agent_id": 0,
+                "target_agent_id": 2,
+                "relation_type": "supports",
+                "platforms": ["twitter"],
+            }
+        ],
+    )
+    env = FakeEnv()
+
+    applied = asyncio.run(
+        apply_scheduled_events(
+            env=env,
+            simulation_dir=str(tmp_path),
+            config=config,
+            platform="twitter",
+            current_round=2,
+            agent_names={0: "Alice", 2: "Carol"},
+            manual_action_cls=FakeManualAction,
+            action_type_cls=FakeActionType,
+        )
+    )
+
+    assert applied == 0
+    assert env.steps == []

@@ -5,6 +5,7 @@ Handles PDF and CSV generation for simulation reports and data.
 
 import os
 import io
+import html
 import pandas as pd
 from datetime import datetime
 from fpdf import FPDF
@@ -12,9 +13,38 @@ from typing import List, Dict, Any, Optional
 
 from ..config import Config
 from ..utils.logger import get_logger
+from .claim_boundary import (
+    GRAPH_RECORD_INTERPRETATION,
+    SYNTHETIC_OUTPUT_DISCLOSURE_TEXT,
+    synthetic_output_disclosure,
+)
 from .zep_tools import ZepToolsService
 
 logger = get_logger('askthepeople.export_service')
+
+# Compatibility name retained for callers; content comes from the shared
+# product-truth contract.
+SYNTHETIC_DISCLOSURE = SYNTHETIC_OUTPUT_DISCLOSURE_TEXT
+UNVERIFIED_GRAPH_ORIGIN = "GRAPH_RECORD_ORIGIN_UNVERIFIED"
+UNVERIFIED_GRAPH_INTERPRETATION = GRAPH_RECORD_INTERPRETATION
+
+
+def _spreadsheet_safe(value: Any) -> Any:
+    """Neutralize strings spreadsheet programs may execute as formulas."""
+    if not isinstance(value, str):
+        return value
+    visible = value.lstrip()
+    if visible.startswith(("=", "+", "-", "@", "\t", "\r", "\n")):
+        return "'" + value
+    return value
+
+
+def _safe_csv_records(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        {key: _spreadsheet_safe(value) for key, value in record.items()}
+        for record in records
+    ]
+
 
 class BauhausPDF(FPDF):
     """Bauhaus-themed PDF generator using FPDF2"""
@@ -83,6 +113,14 @@ class PDFGenerator:
         self.pdf.set_line_width(2)
         self.pdf.line(20, self.pdf.get_y(), 100, self.pdf.get_y())
         self.pdf.ln(15)
+
+        # Truth status travels with the exported file.
+        self.pdf.set_fill_color(229, 194, 29)
+        self.pdf.set_text_color(17, 21, 19)
+        self.pdf.set_font("Helvetica", "B", 9)
+        self.pdf.multi_cell(0, 7, SYNTHETIC_DISCLOSURE, fill=True)
+        self.pdf.set_text_color(0, 0, 0)
+        self.pdf.ln(8)
         
         # 2. Summary Block
         if summary:
@@ -161,7 +199,7 @@ class PDFGenerator:
                 self.pdf.multi_cell(0, 6, line)
 
 class CSVExporter:
-    """Exports simulation graph data to CSV"""
+    """Export graph records without upgrading unknown provenance to evidence."""
     
     def __init__(self, zep_service: ZepToolsService):
         self.zep = zep_service
@@ -183,8 +221,7 @@ class CSVExporter:
         # 2. Fetch edges
         edges = self.zep.get_all_edges(graph_id)
         
-        # 3. Build unified data structure
-        # We'll create a "Facts" list which is the most valuable part of the simulation
+        # 3. Build a unified set of provenance-unverified graph records.
         data = []
         
         for edge in edges:
@@ -193,9 +230,14 @@ class CSVExporter:
                 "Source": edge.source_node_name or edge.source_node_uuid,
                 "Target": edge.target_node_name or edge.target_node_uuid,
                 "Action": edge.name,
-                "Fact": edge.fact,
+                "Graph_Record": edge.fact,
                 "Time": edge.valid_at or edge.created_at,
-                "Status": "EXPIRED" if edge.is_expired else "ACTIVE"
+                "Status": "EXPIRED" if edge.is_expired else "ACTIVE",
+                "Record_Origin": UNVERIFIED_GRAPH_ORIGIN,
+                "Permitted_Interpretation": UNVERIFIED_GRAPH_INTERPRETATION,
+                "Human_Respondents": 0,
+                "Causal_Evidence": False,
+                "Calibration": "NOT_CALIBRATED",
             })
             
         for node in nodes:
@@ -205,12 +247,17 @@ class CSVExporter:
                 "Source": node.name,
                 "Target": "",
                 "Action": "SUMMARY",
-                "Fact": node.summary,
+                "Graph_Record": node.summary,
                 "Time": "",
-                "Status": "ACTIVE"
+                "Status": "ACTIVE",
+                "Record_Origin": UNVERIFIED_GRAPH_ORIGIN,
+                "Permitted_Interpretation": UNVERIFIED_GRAPH_INTERPRETATION,
+                "Human_Respondents": 0,
+                "Causal_Evidence": False,
+                "Calibration": "NOT_CALIBRATED",
             })
             
-        df = pd.DataFrame(data)
+        df = pd.DataFrame(_safe_csv_records(data))
         
         # Generate CSV string
         output = io.StringIO()
@@ -219,7 +266,10 @@ class CSVExporter:
 
     def export_survey_results(self, results: List[Dict[str, Any]]) -> str:
         """
-        Convert batch interview (survey) results into a CSV string.
+        Convert model-generated profile responses into a disclosed CSV string.
+
+        The method name is retained for API compatibility; the returned records
+        are not responses from human participants.
         
         Args:
             results: List of dicts, each containing agent_name, profession, and answer.
@@ -228,9 +278,28 @@ class CSVExporter:
             CSV formatted string.
         """
         if not results:
-            return "agent_name,profession,answer\n"
-            
-        df = pd.DataFrame(results)
+            return (
+                "agent_name,profession,answer,response_origin,"
+                "human_respondents,population_represented,"
+                "public_opinion_status,forecast_status,causal_evidence,"
+                "calibration\n"
+            )
+
+        disclosure = synthetic_output_disclosure()
+        disclosed_results = [
+            {
+                **result,
+                "response_origin": "MODEL_GENERATED",
+                "human_respondents": disclosure["human_respondents"],
+                "population_represented": disclosure["population_represented"],
+                "public_opinion_status": disclosure["public_opinion_status"],
+                "forecast_status": disclosure["forecast_status"],
+                "causal_evidence": False,
+                "calibration": "NOT_CALIBRATED",
+            }
+            for result in results
+        ]
+        df = pd.DataFrame(_safe_csv_records(disclosed_results))
         output = io.StringIO()
         df.to_csv(output, index=False)
         return output.getvalue()
@@ -240,32 +309,38 @@ class ExecutiveExporter:
     """Generates an executive presentation slide deck (HTML format) with metrics visualization."""
 
     def generate_html_deck(self, report_data: Dict[str, Any], metrics_data: Optional[Dict[str, Any]] = None) -> str:
-        title = report_data.get("title", "Executive Simulation Brief")
-        summary = report_data.get("summary", "No executive summary provided.")
+        title = html.escape(str(report_data.get("title", "Executive Simulation Brief")), quote=True)
+        summary = html.escape(
+            str(report_data.get("summary", "No executive summary provided.")),
+            quote=True,
+        )
         sections = report_data.get("sections", [])
         
-        pol_q = metrics_data.get("polarization_index", "N/A") if metrics_data else "N/A"
-        echo_score = metrics_data.get("echo_chamber_score", "N/A") if metrics_data else "N/A"
-        gini = metrics_data.get("engagement_gini", "N/A") if metrics_data else "N/A"
+        pol_q = html.escape(str(metrics_data.get("polarization_index", "N/A") if metrics_data else "N/A"), quote=True)
+        echo_score = html.escape(str(metrics_data.get("echo_chamber_score", "N/A") if metrics_data else "N/A"), quote=True)
+        gini = html.escape(str(metrics_data.get("engagement_gini", "N/A") if metrics_data else "N/A"), quote=True)
 
         slides_html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
     <title>{title} — Executive Presentation</title>
     <style>
-        body {{ font-family: 'Outfit', -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 40px; }}
-        .slide {{ background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }}
-        .slide-title {{ font-size: 24px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px; }}
+        body {{ font-family: Arial, sans-serif; background: #111513; color: #f1eee6; margin: 0; padding: 40px; }}
+        .disclosure {{ background: #e5c21d; color: #111513; border: 2px solid #111513; padding: 14px 18px; margin-bottom: 24px; font-size: 12px; font-weight: 900; letter-spacing: 0.08em; text-transform: uppercase; }}
+        .slide {{ background: #1a1f1d; border: 1px solid #59605c; border-radius: 0; padding: 40px; margin-bottom: 30px; }}
+        .slide-title {{ font-size: 24px; font-weight: 900; color: #e5c21d; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 20px; }}
         .metrics-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0; }}
-        .metric-card {{ background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; }}
-        .metric-val {{ font-size: 32px; font-weight: 800; color: #f43f5e; font-family: monospace; }}
-        .metric-lbl {{ font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-top: 6px; }}
-        .summary-box {{ background: rgba(56, 189, 248, 0.1); border-left: 4px solid #38bdf8; padding: 20px; border-radius: 8px; font-size: 14px; line-height: 1.6; color: #e2e8f0; }}
-        .section-body {{ font-size: 13px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap; }}
+        .metric-card {{ background: #111513; border: 1px solid #59605c; border-radius: 0; padding: 20px; text-align: center; }}
+        .metric-val {{ font-size: 32px; font-weight: 900; color: #f1eee6; font-family: monospace; }}
+        .metric-lbl {{ font-size: 11px; font-weight: 700; color: #bcb8ad; text-transform: uppercase; margin-top: 6px; }}
+        .summary-box {{ background: #f1eee6; border-left: 6px solid #e5c21d; padding: 20px; border-radius: 0; font-size: 14px; line-height: 1.6; color: #111513; }}
+        .section-body {{ font-size: 13px; line-height: 1.6; color: #d8d3c8; white-space: pre-wrap; }}
     </style>
 </head>
 <body>
+    <div class="disclosure">{SYNTHETIC_DISCLOSURE}</div>
     <div class="slide">
         <div class="slide-title">{title}</div>
         <div class="summary-box">
@@ -275,23 +350,23 @@ class ExecutiveExporter:
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-val">{pol_q}</div>
-                <div class="metric-lbl">Polarization Index (Q)</div>
+                <div class="metric-lbl">Network Modularity (Q)</div>
             </div>
             <div class="metric-card">
                 <div class="metric-val">{echo_score}</div>
-                <div class="metric-lbl">Echo Chamber Score</div>
+                <div class="metric-lbl">Synthetic Echo Score</div>
             </div>
             <div class="metric-card">
                 <div class="metric-val">{gini}</div>
-                <div class="metric-lbl">Engagement Gini</div>
+                <div class="metric-lbl">Synthetic Engagement Gini</div>
             </div>
         </div>
     </div>
 """
 
         for sec in sections:
-            sec_title = sec.get("title", "Section")
-            sec_content = sec.get("content", "")
+            sec_title = html.escape(str(sec.get("title", "Section")), quote=True)
+            sec_content = html.escape(str(sec.get("content", "")), quote=True)
             slides_html += f"""
     <div class="slide">
         <div class="slide-title">{sec_title}</div>

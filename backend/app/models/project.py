@@ -12,6 +12,7 @@ from typing import Dict, Any, List, Optional
 from enum import Enum
 from dataclasses import dataclass, field, asdict
 from ..config import Config
+from ..utils.safe_path import safe_join, SafePathError
 
 
 class ProjectStatus(str, Enum):
@@ -112,7 +113,7 @@ class ProjectManager:
     @classmethod
     def _get_project_dir(cls, project_id: str) -> str:
         """Get project directory path"""
-        return os.path.join(cls.PROJECTS_DIR, project_id)
+        return safe_join(cls.PROJECTS_DIR, project_id)
     
     @classmethod
     def _get_project_meta_path(cls, project_id: str) -> str:
@@ -209,7 +210,12 @@ class ProjectManager:
         
         projects = []
         for project_id in os.listdir(cls.PROJECTS_DIR):
-            project = cls.get_project(project_id)
+            try:
+                project = cls.get_project(project_id)
+            except SafePathError:
+                # Ignore malformed entries/symlinks placed in the storage root
+                # rather than letting one entry break the entire listing.
+                continue
             if project:
                 projects.append(project)
         

@@ -1,6 +1,9 @@
-"""
-Zep Graph Memory Update Service
-Dynamically updates Agent activities from the simulation into the Zep graph
+"""Experimental synthetic-graph update service.
+
+Normal runs persist generated activity in the simulation observation store and
+never mutate the graph built from supplied source material.  This module
+requires an explicit capability from the guarded runner and labels every
+episode as synthetic when an operator uses a separate experimental graph.
 """
 
 import os
@@ -34,10 +37,10 @@ class AgentActivity:
     
     def to_episode_text(self) -> str:
         """
-        Convert activity to a text description that can be sent to Zep
+        Convert activity to an explicitly synthetic Zep episode.
         
         Uses a natural language description format so Zep can extract entities and relationships
-        Does not add simulation-related prefixes to avoid misleading graph updates
+        without allowing the generated record to masquerade as source evidence.
         """
         # Generate different descriptions based on different action types
         action_descriptions = {
@@ -59,8 +62,11 @@ class AgentActivity:
         describe_func = action_descriptions.get(self.action_type, self._describe_generic)
         description = describe_func()
         
-        # Directly return 'agent name: activity description' format, do not add simulation prefix
-        return f"{self.agent_name}: {description}"
+        return (
+            "[SYNTHETIC_SIMULATION_OBSERVATION; HUMAN_RESPONDENTS=0; "
+            f"PLATFORM={self.platform}; ROUND={self.round_num}] "
+            f"{self.agent_name}: {description}"
+        )
     
     def _describe_create_post(self) -> str:
         content = self.action_args.get("content", "")
@@ -246,15 +252,30 @@ class ZepGraphMemoryUpdater:
     MAX_RETRIES = 3
     RETRY_DELAY = 2  # seconds
     
-    def __init__(self, graph_id: str, simulation_id: Optional[str] = None, api_key: Optional[str] = None):
+    def __init__(
+        self,
+        graph_id: str,
+        simulation_id: Optional[str] = None,
+        api_key: Optional[str] = None,
+        *,
+        source_graph_id: Optional[str] = None,
+        allow_graph_mutation: bool = False,
+    ):
         """
         Initialize updater
         
         Args:
             graph_id: Zep Graph ID
             simulation_id: Simulation ID (optional, for saving opinion data)
-            api_key: Zep API Key (optional, defauts to config)
+            api_key: Zep API Key (optional, defaults to config)
+            source_graph_id: Graph built from supplied source material
+            allow_graph_mutation: Explicit capability supplied only by the
+                guarded simulation runner.
         """
+        raise PermissionError(
+            "Synthetic graph mutation is unsupported. Generated activity must "
+            "remain in the per-run observation store."
+        )
         self.graph_id = graph_id
         self.simulation_id = simulation_id
         self.api_key = api_key or Config.ZEP_API_KEY
@@ -438,7 +459,10 @@ class ZepGraphMemoryUpdater:
                 self._total_items_sent += len(activities)
                 display_name = self._get_platform_display_name(platform)
                 logger.info(f"Successfully batch sent {len(activities)} {display_name}activities to graph {self.graph_id}")
-                logger.debug(f"Batch content preview: {combined_text[:200]}...")
+                logger.debug(
+                    "Prepared graph-memory batch (characters=%s)",
+                    len(combined_text),
+                )
                 
                 # After successful batch send, score opinions in background
                 # (We do it here to ensure we only score actions that were successfully processed)
@@ -549,28 +573,49 @@ class ZepGraphMemoryManager:
     _lock = threading.Lock()
     
     @classmethod
-    def create_updater(cls, simulation_id: str, graph_id: str) -> ZepGraphMemoryUpdater:
+    def create_updater(
+        cls,
+        simulation_id: str,
+        graph_id: str,
+        *,
+        source_graph_id: Optional[str] = None,
+        allow_graph_mutation: bool = False,
+    ) -> ZepGraphMemoryUpdater:
         """
         Create graph memory updater for simulation
         
         Args:
             simulation_id: Simulation ID
-            graph_id: Zep Graph ID
+            graph_id: Separate synthetic Zep Graph ID
+            source_graph_id: Graph built from supplied source material
+            allow_graph_mutation: Explicit capability supplied by the runner
             
         Returns:
             ZepGraphMemoryUpdater instance
         """
-        with cls._lock:
-            # If exists, stop the old one first
-            if simulation_id in cls._updaters:
-                cls._updaters[simulation_id].stop()
-            
-            updater = ZepGraphMemoryUpdater(graph_id, simulation_id=simulation_id)
-            updater.start()
-            cls._updaters[simulation_id] = updater
-            
-            logger.info(f"Created graph memory updater: simulation_id={simulation_id}, graph_id={graph_id}")
-            return updater
+        raise PermissionError(
+            "Synthetic graph mutation is unsupported. Generated activity must "
+            "remain in the per-run observation store."
+        )
+
+    @classmethod
+    def update_memory(cls, simulation_id: str, action: Any) -> bool:
+        """Queue one generated action for an already-authorized updater."""
+        updater = cls.get_updater(simulation_id)
+        if updater is None:
+            return False
+        updater.add_activity(
+            AgentActivity(
+                platform=action.platform,
+                agent_id=action.agent_id,
+                agent_name=action.agent_name,
+                action_type=action.action_type,
+                action_args=action.action_args,
+                round_num=action.round_num,
+                timestamp=action.timestamp,
+            )
+        )
+        return True
     
     @classmethod
     def get_updater(cls, simulation_id: str) -> Optional[ZepGraphMemoryUpdater]:

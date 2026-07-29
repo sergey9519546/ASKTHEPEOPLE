@@ -11,8 +11,16 @@ from flask import request, jsonify, send_file
 
 from . import report_bp, limiter
 from ..config import Config
-from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
+from ..services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
+from ..services.report_generation_coordinator import (
+    ReportGenerationCancelled,
+    report_generation_coordinator,
+)
 from ..services.report_evidence import load_report_evidence
+from ..services.claim_boundary import (
+    graph_record_disclosure,
+    synthetic_output_disclosure,
+)
 from ..services.simulation_manager import SimulationManager
 from ..services.export_service import PDFGenerator, CSVExporter, ExecutiveExporter
 from ..services.zep_tools import ZepToolsService
@@ -20,6 +28,14 @@ from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
 from ..utils.logger import get_logger
 from ..utils.safe_path import SafePathError
+from ..utils.input_policy import (
+    CHAT_MESSAGE_MAX,
+    GRAPH_QUERY_MAX,
+    InputPolicyError,
+    bounded_integer,
+    bounded_text,
+    validate_chat_history,
+)
 
 logger = get_logger('askthepeople.api.report')
 
@@ -67,6 +83,8 @@ def generate_report():
             }
         }
     """
+    lease = None
+    generation_thread_started = False
     try:
         data = request.get_json() or {}
         
@@ -129,6 +147,35 @@ def generate_report():
         # Pre-generate report_id to return to the frontend immediately
         import uuid
         report_id = f"report_{uuid.uuid4().hex[:12]}"
+
+        lease, active_lease = report_generation_coordinator.acquire(
+            simulation_id,
+            report_id,
+        )
+        if lease is None:
+            return jsonify({
+                "success": False,
+                "error": "report_generation_in_progress",
+                "data": active_lease.to_public_dict(),
+            }), 409
+
+        # Close the completed-result check/acquire race. Force regeneration may
+        # bypass reuse, but it never bypasses an active generation lease.
+        if not force_regenerate:
+            existing_report = ReportManager.get_report_by_simulation(simulation_id)
+            if existing_report and existing_report.status == ReportStatus.COMPLETED:
+                report_generation_coordinator.release(lease)
+                lease = None
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "simulation_id": simulation_id,
+                        "report_id": existing_report.report_id,
+                        "status": "completed",
+                        "message": "Report already exists",
+                        "already_generated": True,
+                    },
+                })
         
         # Create asynchronous task
         task_manager = TaskManager()
@@ -140,9 +187,12 @@ def generate_report():
                 "report_id": report_id
             }
         )
+        lease.task_id = task_id
         
         # Define background task
         def run_generate():
+            executor = None
+            future = None
             try:
                 task_manager.update_task(
                     task_id,
@@ -160,31 +210,69 @@ def generate_report():
                 
                 # Progress callback
                 def progress_callback(stage, progress, message):
-                    task_manager.update_task(
-                        task_id,
-                        progress=progress,
-                        message=f"[{stage}] {message}"
-                    )
+                    try:
+                        with lease.write_guard():
+                            task_manager.update_task(
+                                task_id,
+                                progress=progress,
+                                message=f"[{stage}] {message}"
+                            )
+                    except ReportGenerationCancelled:
+                        return
                 
                 # Generate report (passing pre-generated report_id) with a wall-clock timeout
                 timeout_secs = Config.REPORT_GENERATION_TIMEOUT
-                with ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(
-                        agent.generate_report,
-                        progress_callback=progress_callback,
-                        report_id=report_id
+                executor = ThreadPoolExecutor(max_workers=1)
+                future = executor.submit(
+                    agent.generate_report,
+                    progress_callback=progress_callback,
+                    report_id=report_id,
+                    generation_lease=lease,
+                )
+                future.add_done_callback(
+                    lambda _completed: report_generation_coordinator.release(lease)
+                )
+                try:
+                    report = future.result(timeout=timeout_secs)
+                except FuturesTimeoutError:
+                    lease.cancel()
+                    future.cancel()
+                    # A running Python thread cannot be force-killed safely.
+                    # The lease fences subsequent writes/retries while the
+                    # current provider call reaches its own timeout.
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    timeout_message = (
+                        f"Report generation exceeded the {timeout_secs}s time "
+                        "limit; cancellation is in progress"
                     )
-                    try:
-                        report = future.result(timeout=timeout_secs)
-                    except FuturesTimeoutError:
+                    with lease.write_guard(allow_cancelled=True):
+                        timed_out_report = ReportManager.get_report(report_id)
+                        if timed_out_report is None:
+                            timed_out_report = Report(
+                                report_id=report_id,
+                                simulation_id=simulation_id,
+                                graph_id=graph_id,
+                                simulation_requirement=simulation_requirement,
+                                status=ReportStatus.FAILED,
+                            )
+                        timed_out_report.status = ReportStatus.FAILED
+                        timed_out_report.error = "report_generation_time_limit_exceeded"
+                        ReportManager.save_report(timed_out_report)
+                        ReportManager.update_progress(
+                            report_id,
+                            "failed",
+                            -1,
+                            timeout_message,
+                            completed_sections=[],
+                        )
                         task_manager.fail_task(
                             task_id,
-                            f"Report generation exceeded the {timeout_secs}s time limit"
+                            timeout_message,
+                            public_error="report_generation_time_limit_exceeded",
                         )
-                        return
-
-                # Save report
-                ReportManager.save_report(report)
+                    return
+                else:
+                    executor.shutdown(wait=True)
                 
                 if report.status == ReportStatus.COMPLETED:
                     task_manager.complete_task(
@@ -196,15 +284,32 @@ def generate_report():
                         }
                     )
                 else:
-                    task_manager.fail_task(task_id, report.error or "Report generation failed")
+                    task_manager.fail_task(
+                        task_id,
+                        (
+                            report.error
+                            if Config.DEBUG and report.error
+                            else "Report generation failed"
+                        ),
+                        public_error="report_generation_failed",
+                    )
                 
             except Exception as e:
                 logger.error(f"Report generation failed: {str(e)}")
-                task_manager.fail_task(task_id, str(e))
+                task_manager.fail_task(
+                    task_id,
+                    str(e) if Config.DEBUG else "Report generation failed",
+                    public_error="report_generation_failed",
+                )
+                if future is None:
+                    report_generation_coordinator.release(lease)
+                if executor is not None:
+                    executor.shutdown(wait=False, cancel_futures=True)
         
         # Start background thread
         thread = threading.Thread(target=run_generate, daemon=True)
         thread.start()
+        generation_thread_started = True
         
         return jsonify({
             "success": True,
@@ -219,6 +324,8 @@ def generate_report():
         })
         
     except Exception as e:
+        if lease is not None and not generation_thread_started:
+            report_generation_coordinator.release(lease)
         logger.error(f"Failed to start report generation task: {str(e)}")
         return jsonify({
             "success": False,
@@ -316,7 +423,7 @@ def get_generate_status():
         
         return jsonify({
             "success": True,
-            "data": task.to_dict()
+            "data": task.to_public_dict()
         })
         
     except Exception as e:
@@ -329,9 +436,10 @@ def get_generate_status():
 
 # ============== Report Retrieval Interfaces ==============
 
+@report_bp.route('/<report_id>/related-records', methods=['GET'])
 @report_bp.route('/<report_id>/evidence', methods=['GET'])
 def get_report_evidence(report_id: str):
-    """Get report section evidence mapping"""
+    """Get post-hoc keyword-related run records, never citations or evidence."""
     try:
         report = ReportManager.get_report(report_id)
 
@@ -349,8 +457,11 @@ def get_report_evidence(report_id: str):
             "data": {
                 "report_id": report_id,
                 "count": len(evidence),
+                "selection_method": "post_hoc_keyword_overlap",
+                "relationship": "related_example_not_citation",
                 "evidence": evidence
-            }
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -394,7 +505,8 @@ def get_report(report_id: str):
         
         return jsonify({
             "success": True,
-            "data": report.to_dict()
+            "data": report.to_dict(),
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -436,7 +548,8 @@ def get_report_by_simulation(simulation_id: str):
         return jsonify({
             "success": True,
             "data": report.to_dict(),
-            "has_report": True
+            "has_report": True,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -476,7 +589,8 @@ def list_reports():
         return jsonify({
             "success": True,
             "data": [r.to_dict() for r in reports],
-            "count": len(reports)
+            "count": len(reports),
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -672,7 +786,7 @@ def chat_with_report_agent():
     Request (JSON):
         {
             "simulation_id": "sim_xxxx",        // Required, simulation ID
-            "message": "Please explain the public opinion trend",    // Required, user message
+            "message": "Please explain the synthetic scenario pattern", // Required, user message
             "chat_history": [                   // Optional, chat history
                 {"role": "user", "content": "..."},
                 {"role": "assistant", "content": "..."}
@@ -685,7 +799,7 @@ def chat_with_report_agent():
             "data": {
                 "response": "Agent reply...",
                 "tool_calls": [List of called tools],
-                "sources": [Information sources]
+                "retrieval_queries": [graph or run-record search queries]
             }
         }
     """
@@ -693,19 +807,25 @@ def chat_with_report_agent():
         data = request.get_json() or {}
         
         simulation_id = data.get('simulation_id')
-        message = data.get('message')
-        chat_history = data.get('chat_history', [])
+        try:
+            message = bounded_text(
+                data.get('message'),
+                field="message",
+                max_length=CHAT_MESSAGE_MAX,
+                required=True,
+            )
+            chat_history = validate_chat_history(data.get('chat_history', []))
+        except InputPolicyError as exc:
+            return jsonify({
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+            }), 400
         
         if not simulation_id:
             return jsonify({
                 "success": False,
                 "error": "Please provide simulation_id"
-            }), 400
-        
-        if not message:
-            return jsonify({
-                "success": False,
-                "error": "Please provide message"
             }), 400
         
         # Get simulation and project info
@@ -745,7 +865,8 @@ def chat_with_report_agent():
         
         return jsonify({
             "success": True,
-            "data": result
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -842,7 +963,8 @@ def get_report_sections(report_id: str):
                 "sections": sections,
                 "total_sections": len(sections),
                 "is_complete": is_complete
-            }
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -889,7 +1011,8 @@ def get_single_section(report_id: str, section_index: int):
                 "filename": f"section_{section_index:02d}.md",
                 "section_index": section_index,
                 "content": content
-            }
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -911,7 +1034,7 @@ def check_report_status(simulation_id: str):
     """
     Check if simulation has a report and its status
     
-    Used for frontend to determine whether to unlock Interview function
+    Used by the frontend to unlock fictional generated-response tools.
     
     Returns:
         {
@@ -921,6 +1044,7 @@ def check_report_status(simulation_id: str):
                 "has_report": true,
                 "report_status": "completed",
                 "report_id": "report_xxxx",
+                "generated_response_tools_unlocked": true,
                 "interview_unlocked": true
             }
         }
@@ -932,8 +1056,10 @@ def check_report_status(simulation_id: str):
         report_status = report.status.value if report else None
         report_id = report.report_id if report else None
         
-        # Unlock interview only after report is completed
-        interview_unlocked = has_report and report.status == ReportStatus.COMPLETED
+        # Generated follow-ups are available only after the report is completed.
+        generated_response_tools_unlocked = (
+            has_report and report.status == ReportStatus.COMPLETED
+        )
         
         return jsonify({
             "success": True,
@@ -942,8 +1068,11 @@ def check_report_status(simulation_id: str):
                 "has_report": has_report,
                 "report_status": report_status,
                 "report_id": report_id,
-                "interview_unlocked": interview_unlocked
-            }
+                "generated_response_tools_unlocked": generated_response_tools_unlocked,
+                # Deprecated compatibility alias; remove after legacy clients migrate.
+                "interview_unlocked": generated_response_tools_unlocked,
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -1004,7 +1133,8 @@ def get_agent_log(report_id: str):
         
         return jsonify({
             "success": True,
-            "data": log_data
+            "data": log_data,
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -1041,7 +1171,8 @@ def stream_agent_log(report_id: str):
             "data": {
                 "logs": logs,
                 "count": len(logs)
-            }
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -1092,7 +1223,8 @@ def get_console_log(report_id: str):
 
         return jsonify({
             "success": True,
-            "data": log_data
+            "data": log_data,
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -1129,7 +1261,8 @@ def stream_console_log(report_id: str):
             "data": {
                 "logs": logs,
                 "count": len(logs)
-            }
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except SafePathError:
@@ -1147,6 +1280,7 @@ def stream_console_log(report_id: str):
 # ============== Tool Call Interfaces (for debugging) ==============
 
 @report_bp.route('/tools/search', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
 def search_graph_tool():
     """
     Graph search tool interface (for debugging)
@@ -1162,16 +1296,31 @@ def search_graph_tool():
         data = request.get_json() or {}
         
         graph_id = data.get('graph_id')
-        query = data.get('query')
-        limit = data.get('limit', 10)
-        
-        if not graph_id or not query:
+        try:
+            query = bounded_text(
+                data.get('query'),
+                field="query",
+                max_length=GRAPH_QUERY_MAX,
+                required=True,
+            )
+            limit = bounded_integer(
+                data.get('limit', 10),
+                field="limit",
+                minimum=1,
+                maximum=50,
+            )
+        except InputPolicyError as exc:
             return jsonify({
                 "success": False,
-                "error": "Please provide graph_id and query"
+                "error": exc.code,
+                "message": exc.message,
             }), 400
         
-        from ..services.zep_tools import ZepToolsService
+        if not graph_id:
+            return jsonify({
+                "success": False,
+                "error": "Please provide graph_id"
+            }), 400
         
         tools = ZepToolsService()
         result = tools.search_graph(
@@ -1179,10 +1328,25 @@ def search_graph_tool():
             query=query,
             limit=limit
         )
-        
+        search_payload = result.to_dict()
+        search_payload["records"] = [
+            graph_record_disclosure(record)
+            for record in search_payload.get("facts", [])
+        ]
+        search_payload["edges"] = [
+            {
+                **edge,
+                **graph_record_disclosure(edge.get("fact", "")),
+            }
+            for edge in search_payload.get("edges", [])
+        ]
+        search_payload["facts_deprecated"] = True
+        search_payload.update(graph_record_disclosure())
+
         return jsonify({
             "success": True,
-            "data": result.to_dict()
+            "data": search_payload,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -1215,14 +1379,13 @@ def get_graph_statistics_tool():
                 "error": "Please provide graph_id"
             }), 400
         
-        from ..services.zep_tools import ZepToolsService
-        
         tools = ZepToolsService()
         result = tools.get_graph_statistics(graph_id)
         
         return jsonify({
             "success": True,
-            "data": result
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:

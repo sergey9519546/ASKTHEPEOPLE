@@ -15,8 +15,11 @@ from zep_cloud import EpisodeData, EntityEdgeSourceTarget
 
 from ..config import Config
 from ..models.task import TaskManager, TaskStatus
+from ..utils.logger import get_logger
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 from .text_processor import TextProcessor
+
+logger = get_logger("askthepeople.graph_builder")
 
 
 @dataclass
@@ -180,9 +183,12 @@ class GraphBuilderService:
             })
             
         except Exception as e:
-            import traceback
-            error_msg = f"{str(e)}\n{traceback.format_exc()}"
-            self.task_manager.fail_task(task_id, error_msg)
+            logger.error("Graph build task failed: %s", e)
+            self.task_manager.fail_task(
+                task_id,
+                "graph_build_failed",
+                public_error="graph_build_failed",
+            )
     
     def create_graph(self, name: str) -> str:
         """Create Zep graph (public method)"""
@@ -386,7 +392,8 @@ class GraphBuilderService:
                 except Exception as e:
                     # Ignore single query error and continue
                     pass
-            
+
+            elapsed = int(time.time() - start_time)
             if progress_callback:
                 progress_callback(
                     f"Zep processing... {completed_count}/{total_episodes} Complete, {len(pending_episodes)} pending ({elapsed}s)",

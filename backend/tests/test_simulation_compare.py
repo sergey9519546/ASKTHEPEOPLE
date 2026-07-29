@@ -50,4 +50,6 @@ def test_compare_simulations_delta_matrix():
     assert deltas["delta_engagement_gini"] == -0.15
     assert deltas["delta_echo_chamber_score"] == -0.2
     assert deltas["action_count_difference"] == 10
-    assert "reduced polarization" in result["strategic_assessment"]
+    assert "lower synthetic network modularity" in result["descriptive_assessment"]
+    assert result["interpretation"]["human_respondents"] == 0
+    assert result["interpretation"]["calibration"] == "not_calibrated"

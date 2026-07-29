@@ -1,64 +1,58 @@
 from flask import jsonify
 from . import graph_bp
 
-# Predefined templates for social simulation domains
+# Predefined question frames for ordinary, reversible decision pretesting.
+# High-risk political persuasion, financial-market, regulatory-compliance, and
+# crisis-manipulation starters are deliberately excluded.
 TEMPLATES = [
     {
-        "id": "political",
-        "name": "Political Discourse",
-        "description": "Simulate how policy proposals or political events spread through different social strata and interest groups.",
-        "icon": "⚖️",
-        "prompt_base": "Analyze the following documents to identify key political actors, interest groups, and media influencers. The goal is to simulate the shift in public opinion regarding a specific political event or policy.",
-        "suggested_ontology_goal": "Identify government officials, opposition leaders, grassroots activists, and media outlets. Focus on mapping ideological stances and influence paths."
+        "id": "service_change",
+        "name": "Public service change",
+        "description": "Explore how different groups could experience a proposed change to schedules, access, or delivery.",
+        "prompt_base": "What plausible paths could follow if this public service change is introduced? Treat every path as a synthetic possibility to test, not a prediction.",
+        "suggested_ontology_goal": "Map affected groups, access constraints, operational dependencies, and the assumptions that most need real-world validation.",
+        "human_validation_required": True,
     },
     {
-        "id": "brand",
-        "name": "Brand Crisis Management",
-        "description": "Predict consumer sentiment shifts and test the effectiveness of PR responses during a brand scandal or product failure.",
-        "icon": "🛡️",
-        "prompt_base": "Identify brand representatives, consumer advocates, legal experts, and viral influencers involved in a brand event. Simulate the spread of sentiment and the impact of corporate communications.",
-        "suggested_ontology_goal": "Identify key consumer segments, corporate spokespeople, industry analysts, and regulatory bodies. Focus on trust metrics and sentiment propagation."
+        "id": "product_decision",
+        "name": "Product decision",
+        "description": "Surface adoption barriers, misunderstandings, and second-order effects before a product change ships.",
+        "prompt_base": "What different paths could follow if this product decision is made? Explore plausible reactions without claiming to measure customers or forecast adoption.",
+        "suggested_ontology_goal": "Map user contexts, jobs to be done, switching costs, support needs, and assumptions to validate with customers.",
+        "human_validation_required": True,
     },
     {
-        "id": "creative",
-        "name": "Narrative Worldbuilding",
-        "description": "Explore power dynamics, faction conflicts, and social structures within a fictional world or complex narrative scenario.",
-        "icon": "✍️",
-        "prompt_base": "Extract the social hierarchy, faction leaders, and historical tensions from the narrative documents. Simulate how a disruptive event affects the existing social order.",
-        "suggested_ontology_goal": "Map factions, their leaders, and the conflicting ideologies. Focus on social hierarchy and faction loyalty/rivalry."
+        "id": "operations_rollout",
+        "name": "Operations rollout",
+        "description": "Stress-test a process, staffing, or logistics change against several plausible operating conditions.",
+        "prompt_base": "What could happen under different operating conditions if this process change is introduced? Explore failure paths and recovery options.",
+        "suggested_ontology_goal": "Map roles, handoffs, resource constraints, dependencies, and observable signals for a limited pilot.",
+        "human_validation_required": True,
     },
     {
-        "id": "crisis_pr",
-        "name": "Crisis PR & Counter-Narrative",
-        "description": "Test real-time counter-narratives, press releases, and executive statements against viral public backlash.",
-        "icon": "🚨",
-        "prompt_base": "Identify corporate executives, investigative journalists, vocal critics, and industry observers. Simulate how live statement injections alter public perception and hashtag virality.",
-        "suggested_ontology_goal": "Map corporate spokespeople, media outlets, boycotters, and industry regulators. Focus on trust degradation and recovery vectors."
+        "id": "community_program",
+        "name": "Community program",
+        "description": "Explore participation barriers and unintended effects before piloting a voluntary local program.",
+        "prompt_base": "What plausible participation and access paths could follow from this community program? Do not infer public opinion from the generated scenarios.",
+        "suggested_ontology_goal": "Map participant contexts, trusted intermediaries, accessibility constraints, opt-out needs, and questions for community interviews.",
+        "human_validation_required": True,
     },
     {
-        "id": "market_panic",
-        "name": "Financial Market & Rumor Panic",
-        "description": "Simulate bank runs, speculative asset dumps, or liquidity panics triggered by social media rumor cascades.",
-        "icon": "📉",
-        "prompt_base": "Identify institutional investors, retail day traders, short sellers, and financial news outlets. Model how unverified rumors propagate across trader communities.",
-        "suggested_ontology_goal": "Map market whales, retail trader hubs, financial analysts, and regulatory agencies. Focus on panic contagion and liquidity sentiment."
+        "id": "message_clarity",
+        "name": "Message clarity",
+        "description": "Find ways an informational message could be misread before testing it with its intended audience.",
+        "prompt_base": "How could different contexts change the way this informational message is interpreted? Generate ambiguity paths, not persuasion targets.",
+        "suggested_ontology_goal": "Map prerequisite knowledge, ambiguous terms, accessibility needs, information channels, and comprehension questions for real participants.",
+        "human_validation_required": True,
     },
     {
-        "id": "product_launch",
-        "name": "Product Launch & Viral Adoption",
-        "description": "Simulate consumer tech launches, early adopter reviews, feature feedback loops, and word-of-mouth growth.",
-        "icon": "🚀",
-        "prompt_base": "Identify tech reviewers, early adopters, skeptical power users, and competitor advocates. Model post-launch feature reaction and organic community referral networks.",
-        "suggested_ontology_goal": "Map tech influencers, power users, casual consumers, and rival brand loyalists. Focus on feature sentiment and viral reach."
+        "id": "fictional_world",
+        "name": "Fictional world",
+        "description": "Explore faction dynamics and consequences inside an explicitly fictional narrative.",
+        "prompt_base": "Within this fictional setting, what different paths could follow from the inciting event?",
+        "suggested_ontology_goal": "Map fictional factions, relationships, resources, tensions, and the narrative assumptions that drive each branch.",
+        "human_validation_required": False,
     },
-    {
-        "id": "policy_shift",
-        "name": "Regulatory & Policy Shift",
-        "description": "Evaluate stakeholder compliance, lobbying resistance, and public adoption of new regulatory frameworks.",
-        "icon": "🏛️",
-        "prompt_base": "Identify regulatory bodies, corporate compliance officers, consumer advocacy groups, and trade unions. Model public adaptation to new legislation.",
-        "suggested_ontology_goal": "Map government agencies, industry lobbies, consumer groups, and legal experts. Focus on compliance likelihood and institutional friction."
-    }
 ]
 
 @graph_bp.route('/templates', methods=['GET'])
@@ -68,5 +62,8 @@ def list_templates():
     """
     return jsonify({
         "success": True,
-        "data": TEMPLATES
+        "data": TEMPLATES,
+        "human_respondents": 0,
+        "calibration": "not_calibrated",
+        "disclosure": "Question frames generate synthetic scenarios, not forecasts or public opinion.",
     })

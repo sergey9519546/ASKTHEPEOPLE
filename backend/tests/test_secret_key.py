@@ -55,9 +55,9 @@ def test_secret_key_from_env(monkeypatch):
     the monkeypatched value (load_dotenv is called with override=True).
     """
     monkeypatch.setattr(dotenv, 'load_dotenv', lambda *a, **k: None)
-    monkeypatch.setenv('SECRET_KEY', 'my-test-secret-1234567890')
+    monkeypatch.setenv('SECRET_KEY', 'my-test-secret-1234567890-at-least-32-chars')
     cfg = _reload_config()
-    assert cfg.Config.SECRET_KEY == 'my-test-secret-1234567890'
+    assert cfg.Config.SECRET_KEY == 'my-test-secret-1234567890-at-least-32-chars'
 
 
 def test_secret_key_dev_random_when_debug(monkeypatch):
@@ -94,9 +94,9 @@ def test_secret_key_fails_fast_in_production(monkeypatch):
 
 
 def test_app_token_optional_and_passthrough(monkeypatch):
-    """APP_TOKEN is None when unset (open API) and reflected when set."""
+    """APP_TOKEN may be unset only when local-development auth is disabled."""
     monkeypatch.setattr(dotenv, 'load_dotenv', lambda *a, **k: None)
-    monkeypatch.setenv('SECRET_KEY', 'stable-secret-for-this-test')
+    monkeypatch.setenv('SECRET_KEY', 'stable-secret-for-this-test-32chars')
     monkeypatch.delenv('APP_TOKEN', raising=False)
     cfg = _reload_config()
     assert cfg.Config.APP_TOKEN is None
@@ -104,3 +104,15 @@ def test_app_token_optional_and_passthrough(monkeypatch):
     monkeypatch.setenv('APP_TOKEN', 'some-bearer-token')
     cfg = _reload_config()
     assert cfg.Config.APP_TOKEN == 'some-bearer-token'
+
+
+def test_github_cli_placeholder_is_not_treated_as_model_credential(monkeypatch):
+    """A placeholder must not trigger silent reuse of a broad gh CLI token."""
+    monkeypatch.setattr(dotenv, 'load_dotenv', lambda *a, **k: None)
+    monkeypatch.setenv('SECRET_KEY', 'stable-secret-for-this-test-32chars')
+    monkeypatch.setenv('LLM_API_KEY', 'gho_GITHUB_MODELS_TOKEN_PLACEHOLDER')
+    monkeypatch.setenv('LLM_BOOST_API_KEY', 'gho_GITHUB_MODELS_TOKEN_PLACEHOLDER')
+    cfg = _reload_config()
+    assert cfg.Config.LLM_API_KEY is None
+    assert 'LLM_API_KEY' not in cfg.os.environ
+    assert 'LLM_BOOST_API_KEY' not in cfg.os.environ

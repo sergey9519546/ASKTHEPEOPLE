@@ -15,7 +15,8 @@ import os
 import pytest
 
 from app import config as config_module
-from app.config import Config
+from app import create_app
+from app.config import Config, _trusted_hosts
 
 
 def test_report_generation_timeout_is_int_and_defaults_to_900():
@@ -59,4 +60,73 @@ def test_ratelimit_keys_exist_and_are_strings(attr):
     value = getattr(Config, attr)
     assert isinstance(value, str) and value.strip(), (
         f"Config.{attr} must be a non-empty string, got {value!r}"
+    )
+
+
+def test_production_auth_requirement_is_validated(monkeypatch):
+    monkeypatch.setattr(Config, "REQUIRE_APP_AUTH", True)
+    monkeypatch.setattr(Config, "APP_TOKEN", None)
+
+    assert any("APP_TOKEN" in error for error in Config.validate())
+
+    monkeypatch.setattr(
+        Config,
+        "APP_TOKEN",
+        "private-access-key-7b9f3d2c8a6e4f10",
+    )
+    assert not any("APP_TOKEN" in error for error in Config.validate())
+
+    monkeypatch.setattr(Config, "APP_TOKEN", "weak")
+    assert any("APP_TOKEN" in error for error in Config.validate())
+
+
+def test_application_factory_refuses_required_auth_without_token():
+    class MissingRequiredAuthConfig(Config):
+        REQUIRE_APP_AUTH = True
+        APP_TOKEN = None
+
+    with pytest.raises(RuntimeError, match="APP_TOKEN"):
+        create_app(MissingRequiredAuthConfig)
+
+
+def test_application_factory_refuses_weak_production_credentials():
+    class WeakCredentialConfig(Config):
+        DEBUG = False
+        REQUIRE_APP_AUTH = True
+        SECRET_KEY = "strong-secret-key-7b9f3d2c8a6e4f10"
+        APP_TOKEN = "weak"
+        CORS_ORIGINS = "https://app.example.test"
+        TRUSTED_HOSTS = ["app.example.test", "localhost"]
+
+    with pytest.raises(RuntimeError, match="APP_TOKEN"):
+        create_app(WeakCredentialConfig)
+
+
+def test_railway_healthcheck_host_is_exactly_allowed(monkeypatch):
+    """Railway readiness must work without weakening the normal host policy."""
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "test-railway-environment")
+    monkeypatch.setenv("TRUSTED_HOSTS", "app.example.test")
+
+    trusted_hosts = _trusted_hosts(debug=False)
+    assert "healthcheck.railway.app" in trusted_hosts
+    assert "*.railway.app" not in trusted_hosts
+
+    class RailwayHealthConfig(Config):
+        TESTING = True
+        DEBUG = False
+        SECRET_KEY = "strong-secret-key-7b9f3d2c8a6e4f10"
+        REQUIRE_APP_AUTH = True
+        APP_TOKEN = "private-access-key-7b9f3d2c8a6e4f10"
+        CORS_ORIGINS = "https://app.example.test"
+        TRUSTED_HOSTS = trusted_hosts
+
+    client = create_app(RailwayHealthConfig).test_client()
+
+    assert (
+        client.get("/health", headers={"Host": "healthcheck.railway.app"}).status_code
+        == 200
+    )
+    assert (
+        client.get("/health", headers={"Host": "untrusted.example.test"}).status_code
+        == 400
     )

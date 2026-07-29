@@ -1,7 +1,9 @@
 import json
+import hashlib
 
 from app.services import simulation_preflight as preflight_module
 from app.services.simulation_artifacts import write_exports_from_canonical, write_json
+from app.utils.input_policy import PREPARED_PROFILE_MAX
 
 
 def _canonical_agents():
@@ -80,6 +82,23 @@ def test_preflight_passes_when_contracts_are_valid(tmp_path, monkeypatch):
         persisted = json.load(handle)
     assert persisted["status"] == "passed"
 
+    with open(tmp_path / "run_manifest.json", "r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    assert manifest["truth_status"] == {
+        "human_respondents": 0,
+        "external_validation": False,
+        "calibration": "not_calibrated",
+        "interpretation": "synthetic_scenario_exploration",
+    }
+    assert manifest["reproducibility"]["deterministic"] is False
+    expected_hash = hashlib.sha256(
+        (tmp_path / "simulation_config.json").read_bytes()
+    ).hexdigest()
+    assert (
+        manifest["artifacts"]["simulation_config.json"]["sha256"]
+        == expected_hash
+    )
+
 
 def test_preflight_rejects_invalid_bootstrap_publisher(tmp_path, monkeypatch):
     canonical_agents = _canonical_agents()
@@ -101,3 +120,50 @@ def test_preflight_rejects_invalid_bootstrap_publisher(tmp_path, monkeypatch):
     result = preflight_module.run_preflight(str(tmp_path))
     assert result["status"] == "failed"
     assert "poster_assignment" in result["failed_checks"]
+
+
+def test_preflight_rejects_profile_artifacts_above_runtime_capacity(
+    tmp_path,
+    monkeypatch,
+):
+    canonical_agents = []
+    agent_configs = []
+    for index in range(PREPARED_PROFILE_MAX + 1):
+        canonical = dict(_canonical_agents()[0])
+        canonical["agent_id"] = index
+        canonical["source_entity_uuid"] = f"u{index}"
+        canonical_agents.append(canonical)
+
+        agent = dict(_config()["agent_configs"][0])
+        agent["agent_id"] = index
+        agent["entity_uuid"] = f"u{index}"
+        agent_configs.append(agent)
+
+    write_json(tmp_path / "agent_profiles.canonical.json", canonical_agents)
+    write_exports_from_canonical(str(tmp_path), canonical_agents)
+    config = _config()
+    config["agent_configs"] = agent_configs
+    config["bootstrap_posts"] = []
+    write_json(tmp_path / "simulation_config.json", config)
+
+    monkeypatch.setattr(
+        preflight_module,
+        "write_model_resolution",
+        lambda simulation_dir, **kwargs: {"actor": {"ok": True}},
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "validate_required_model_env",
+        lambda role, **kwargs: [],
+    )
+    monkeypatch.setattr(
+        preflight_module,
+        "validate_camel_runtime_imports",
+        lambda: [],
+    )
+    monkeypatch.setattr(preflight_module.Config, "validate", lambda: [])
+
+    result = preflight_module.run_preflight(str(tmp_path))
+
+    assert result["status"] == "failed"
+    assert "profile_capacity" in result["failed_checks"]

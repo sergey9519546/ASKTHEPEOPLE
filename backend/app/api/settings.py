@@ -1,190 +1,361 @@
 """
-Settings API Routes
-Allows reading, saving, and testing LLM and Zep configurations dynamically
+Privileged provider-settings control plane.
+
+Reading configuration never returns credential fragments. Runtime mutation and
+connection testing are disabled unless an operator explicitly enables them
+with ALLOW_RUNTIME_SETTINGS=true. In production the existing APP_TOKEN must
+also be configured.
 """
 
+from __future__ import annotations
+
+import ipaddress
 import os
-import traceback
-from flask import Blueprint, request, jsonify
+import socket
+import tempfile
+from urllib.parse import urlsplit, urlunsplit
+
+from flask import current_app, jsonify, request
+
 from ..config import Config
 from ..utils.llm_client import LLMClient
-
+from ..utils.logger import get_logger
 from . import settings_bp
 
-def _mask_secret(val: str) -> str:
-    if not val:
-        return ""
-    val_str = str(val).strip()
-    if len(val_str) <= 8:
-        return "********"
-    return f"{val_str[:4]}...{val_str[-4:]}"
+logger = get_logger("askthepeople.settings")
 
-@settings_bp.route('', methods=['GET'])
-def get_settings():
-    """Get current configuration settings"""
+_SECRET_KEYS = (
+    "LLM_API_KEY",
+    "ZEP_API_KEY",
+    "BRAVE_SEARCH_API_KEY",
+    "LLM_BOOST_API_KEY",
+)
+_TEXT_KEYS = (
+    "LLM_MODEL_NAME",
+    "LLM_BOOST_MODEL_NAME",
+)
+_URL_KEYS = (
+    "LLM_BASE_URL",
+    "LLM_BOOST_BASE_URL",
+)
+_ALL_MUTABLE_KEYS = _SECRET_KEYS + _TEXT_KEYS + _URL_KEYS
+_MAX_SECRET_LENGTH = 8192
+_MAX_TEXT_LENGTH = 256
+_MAX_URL_LENGTH = 2048
+
+
+class SettingsValidationError(ValueError):
+    """Raised for rejected settings-control-plane input."""
+
+
+def _runtime_settings_enabled() -> bool:
+    if not current_app.config.get("ALLOW_RUNTIME_SETTINGS", False):
+        return False
+    # An explicitly enabled local debug instance may remain header-free.
+    # Production mutation/testing must also pass the global bearer guard.
+    if not current_app.config.get("DEBUG", False) and not current_app.config.get("APP_TOKEN"):
+        return False
+    return True
+
+
+def _configuration_metadata() -> dict:
+    """Return useful status without returning any credential material."""
+    runtime_enabled = _runtime_settings_enabled()
+    return {
+        # Keep empty credential fields for compatibility with the settings
+        # form, but never reveal prefixes, suffixes, lengths, or placeholders.
+        **{key: "" for key in _SECRET_KEYS},
+        "LLM_API_KEY_CONFIGURED": bool(Config.LLM_API_KEY),
+        "ZEP_API_KEY_CONFIGURED": bool(Config.ZEP_API_KEY),
+        "BRAVE_SEARCH_API_KEY_CONFIGURED": bool(os.environ.get("BRAVE_SEARCH_API_KEY")),
+        "LLM_BOOST_API_KEY_CONFIGURED": bool(os.environ.get("LLM_BOOST_API_KEY")),
+        # Provider topology/model details are only needed by the explicitly
+        # enabled control plane. A public read-only status endpoint gets
+        # presence booleans, not internal endpoint metadata.
+        "LLM_BASE_URL": Config.LLM_BASE_URL if runtime_enabled else "",
+        "LLM_MODEL_NAME": Config.LLM_MODEL_NAME if runtime_enabled else "",
+        "LLM_BOOST_BASE_URL": (
+            os.environ.get("LLM_BOOST_BASE_URL", "") if runtime_enabled else ""
+        ),
+        "LLM_BOOST_MODEL_NAME": (
+            os.environ.get("LLM_BOOST_MODEL_NAME", "") if runtime_enabled else ""
+        ),
+        "runtime_settings_enabled": runtime_enabled,
+        "allowed_llm_base_urls": (
+            sorted(_allowed_base_urls()) if runtime_enabled else []
+        ),
+        "allow_private_llm_endpoints": (
+            bool(current_app.config.get("ALLOW_PRIVATE_LLM_ENDPOINTS", False))
+            if runtime_enabled
+            else False
+        ),
+    }
+
+
+def _clean_value(key: str, value: object) -> str:
+    if not isinstance(value, str):
+        raise SettingsValidationError(f"{key} must be a string")
+    if any(char in value for char in ("\r", "\n", "\x00")):
+        raise SettingsValidationError(f"{key} contains invalid control characters")
+    cleaned = value.strip()
+    max_length = (
+        _MAX_SECRET_LENGTH if key in _SECRET_KEYS
+        else _MAX_URL_LENGTH if key in _URL_KEYS
+        else _MAX_TEXT_LENGTH
+    )
+    if len(cleaned) > max_length:
+        raise SettingsValidationError(f"{key} is too long")
+    return cleaned
+
+
+def _normalize_base_url(value: str) -> str:
     try:
-        data = {
-            "LLM_API_KEY": _mask_secret(Config.LLM_API_KEY),
-            "LLM_BASE_URL": Config.LLM_BASE_URL,
-            "LLM_MODEL_NAME": Config.LLM_MODEL_NAME,
-            "ZEP_API_KEY": _mask_secret(Config.ZEP_API_KEY),
-            "BRAVE_SEARCH_API_KEY": _mask_secret(os.environ.get('BRAVE_SEARCH_API_KEY', '')),
-            "LLM_BOOST_API_KEY": _mask_secret(os.environ.get('LLM_BOOST_API_KEY', '')),
-            "LLM_BOOST_BASE_URL": os.environ.get('LLM_BOOST_BASE_URL', ''),
-            "LLM_BOOST_MODEL_NAME": os.environ.get('LLM_BOOST_MODEL_NAME', '')
-        }
-        return jsonify({
-            "success": True,
-            "data": data
-        })
-    except Exception as e:
+        parsed = urlsplit(value)
+        # Accessing .port also validates the numeric range.
+        _ = parsed.port
+    except ValueError as exc:
+        raise SettingsValidationError("Invalid LLM base URL") from exc
+
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise SettingsValidationError("LLM base URL must be an absolute HTTP(S) URL")
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise SettingsValidationError(
+            "LLM base URL cannot contain credentials, a query, or a fragment"
+        )
+
+    host = parsed.hostname.lower()
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    path = parsed.path.rstrip("/")
+    return urlunsplit((parsed.scheme.lower(), f"{host}{port}", path, "", ""))
+
+
+def _allowed_base_urls() -> set[str]:
+    raw = current_app.config.get("LLM_ALLOWED_BASE_URLS", "")
+    allowed: set[str] = set()
+    for entry in str(raw).split(","):
+        entry = entry.strip()
+        if entry:
+            allowed.add(_normalize_base_url(entry))
+    return allowed
+
+
+def _validate_base_url(value: str) -> str:
+    normalized = _normalize_base_url(value)
+    if normalized not in _allowed_base_urls():
+        raise SettingsValidationError(
+            "LLM base URL is not in the operator allowlist"
+        )
+
+    parsed = urlsplit(normalized)
+    allow_private = current_app.config.get("ALLOW_PRIVATE_LLM_ENDPOINTS", False)
+    if parsed.scheme != "https" and not allow_private:
+        raise SettingsValidationError("LLM base URL must use HTTPS")
+
+    try:
+        addresses = socket.getaddrinfo(
+            parsed.hostname,
+            parsed.port or (443 if parsed.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
+    except OSError as exc:
+        raise SettingsValidationError("LLM base URL host could not be resolved") from exc
+
+    if not addresses:
+        raise SettingsValidationError("LLM base URL host could not be resolved")
+    if not allow_private:
+        for address in addresses:
+            ip = ipaddress.ip_address(address[4][0])
+            if not ip.is_global:
+                raise SettingsValidationError(
+                    "LLM base URL resolves to a private or reserved address"
+                )
+    return normalized
+
+
+def _persist_settings(settings: dict[str, str]) -> None:
+    env_path = os.path.abspath(
+        current_app.config.get("RUNTIME_SETTINGS_ENV_PATH", Config.RUNTIME_SETTINGS_ENV_PATH)
+    )
+    env_dir = os.path.dirname(env_path)
+    os.makedirs(env_dir, exist_ok=True)
+
+    lines: list[str] = []
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as handle:
+            lines = handle.readlines()
+
+    updated: set[str] = set()
+    output: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            key = stripped.split("=", 1)[0].strip()
+            if key in settings:
+                output.append(f"{key}={settings[key]}\n")
+                updated.add(key)
+                continue
+        output.append(line)
+
+    for key, value in settings.items():
+        if key not in updated:
+            if output and not output[-1].endswith("\n"):
+                output[-1] += "\n"
+            output.append(f"{key}={value}\n")
+
+    fd, temp_path = tempfile.mkstemp(prefix=".settings-", dir=env_dir, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.writelines(output)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.chmod(temp_path, 0o600)
+        except OSError:
+            pass
+        os.replace(temp_path, env_path)
+    finally:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+def _apply_in_memory(settings: dict[str, str]) -> None:
+    for key, value in settings.items():
+        os.environ[key] = value
+    if "LLM_API_KEY" in settings:
+        Config.LLM_API_KEY = settings["LLM_API_KEY"]
+    if "LLM_BASE_URL" in settings:
+        Config.LLM_BASE_URL = settings["LLM_BASE_URL"]
+    if "LLM_MODEL_NAME" in settings:
+        Config.LLM_MODEL_NAME = settings["LLM_MODEL_NAME"]
+    if "ZEP_API_KEY" in settings:
+        Config.ZEP_API_KEY = settings["ZEP_API_KEY"]
+
+
+@settings_bp.route("", methods=["GET"])
+def get_settings():
+    """Return non-secret provider metadata and control-plane availability."""
+    return jsonify({"success": True, "data": _configuration_metadata()})
+
+
+@settings_bp.route("", methods=["POST"])
+def update_settings():
+    """Update allowlisted provider settings when explicitly enabled."""
+    if not _runtime_settings_enabled():
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "runtime_settings_disabled",
+        }), 403
 
-@settings_bp.route('', methods=['POST'])
-def update_settings():
-    """Update configuration settings in memory and persist in .env"""
     try:
-        data = request.get_json() or {}
-        
-        def _sanitize_val(val):
-            return str(val).replace('\r', '').replace('\n', '').strip()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise SettingsValidationError("JSON object required")
 
-        # Validations (make sure values are string and control chars are stripped)
-        settings_dict = {}
-        for key in [
-            "LLM_API_KEY", "LLM_BASE_URL", "LLM_MODEL_NAME", 
-            "ZEP_API_KEY", "BRAVE_SEARCH_API_KEY", 
-            "LLM_BOOST_API_KEY", "LLM_BOOST_BASE_URL", "LLM_BOOST_MODEL_NAME"
-        ]:
-            if key in data:
-                val = _sanitize_val(data[key])
-                # Do not overwrite with masked values
-                if val and '***' not in val and '...' not in val:
-                    settings_dict[key] = val
-        
-        # Write to .env
-        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../.env'))
-        lines = []
-        if os.path.exists(env_path):
-            with open(env_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-        
-        updated_keys = set()
-        new_lines = []
-        
-        for line in lines:
-            stripped = line.strip()
-            if stripped and not stripped.startswith('#') and '=' in line:
-                parts = stripped.split('=', 1)
-                k = parts[0].strip()
-                if k in settings_dict:
-                    new_lines.append(f"{k}={settings_dict[k]}\n")
-                    updated_keys.add(k)
-                    continue
-            new_lines.append(line)
-            
-        for k, v in settings_dict.items():
-            if k not in updated_keys:
-                # Add a newline if needed
-                if new_lines and not new_lines[-1].endswith('\n'):
-                    new_lines[-1] = new_lines[-1] + '\n'
-                new_lines.append(f"{k}={v}\n")
-                
-        with open(env_path, 'w', encoding='utf-8') as f:
-            f.writelines(new_lines)
-            
-        # Update in-memory os.environ
-        for k, v in settings_dict.items():
-            os.environ[k] = v
-            
-        # Update in-memory Config class
-        if 'LLM_API_KEY' in settings_dict:
-            Config.LLM_API_KEY = settings_dict['LLM_API_KEY']
-        if 'LLM_BASE_URL' in settings_dict:
-            Config.LLM_BASE_URL = settings_dict['LLM_BASE_URL']
-        if 'LLM_MODEL_NAME' in settings_dict:
-            Config.LLM_MODEL_NAME = settings_dict['LLM_MODEL_NAME']
-        if 'ZEP_API_KEY' in settings_dict:
-            Config.ZEP_API_KEY = settings_dict['ZEP_API_KEY']
-        if 'BRAVE_SEARCH_API_KEY' in settings_dict:
-            os.environ['BRAVE_SEARCH_API_KEY'] = settings_dict['BRAVE_SEARCH_API_KEY']
-        if 'LLM_BOOST_API_KEY' in settings_dict:
-            os.environ['LLM_BOOST_API_KEY'] = settings_dict['LLM_BOOST_API_KEY']
-        if 'LLM_BOOST_BASE_URL' in settings_dict:
-            os.environ['LLM_BOOST_BASE_URL'] = settings_dict['LLM_BOOST_BASE_URL']
-        if 'LLM_BOOST_MODEL_NAME' in settings_dict:
-            os.environ['LLM_BOOST_MODEL_NAME'] = settings_dict['LLM_BOOST_MODEL_NAME']
-            
+        settings: dict[str, str] = {}
+        for key in _ALL_MUTABLE_KEYS:
+            if key not in data:
+                continue
+            value = _clean_value(key, data[key])
+            if value:
+                settings[key] = value
+
+        if not settings:
+            raise SettingsValidationError("No settings were provided")
+
+        if "LLM_BASE_URL" in settings:
+            settings["LLM_BASE_URL"] = _validate_base_url(settings["LLM_BASE_URL"])
+            if (
+                settings["LLM_BASE_URL"] != _normalize_base_url(Config.LLM_BASE_URL)
+                and "LLM_API_KEY" not in settings
+            ):
+                raise SettingsValidationError(
+                    "A new API key is required when changing the LLM base URL"
+                )
+
+        current_boost_url = os.environ.get("LLM_BOOST_BASE_URL", "")
+        if "LLM_BOOST_BASE_URL" in settings:
+            settings["LLM_BOOST_BASE_URL"] = _validate_base_url(
+                settings["LLM_BOOST_BASE_URL"]
+            )
+            if (
+                settings["LLM_BOOST_BASE_URL"]
+                != (_normalize_base_url(current_boost_url) if current_boost_url else "")
+                and "LLM_BOOST_API_KEY" not in settings
+            ):
+                raise SettingsValidationError(
+                    "A new boost API key is required when changing the boost base URL"
+                )
+
+        _persist_settings(settings)
+        _apply_in_memory(settings)
         return jsonify({
             "success": True,
             "message": "Settings saved successfully",
-            "data": {
-                "LLM_API_KEY": _mask_secret(Config.LLM_API_KEY),
-                "LLM_BASE_URL": Config.LLM_BASE_URL,
-                "LLM_MODEL_NAME": Config.LLM_MODEL_NAME,
-                "ZEP_API_KEY": _mask_secret(Config.ZEP_API_KEY),
-                "BRAVE_SEARCH_API_KEY": _mask_secret(os.environ.get('BRAVE_SEARCH_API_KEY', '')),
-                "LLM_BOOST_API_KEY": _mask_secret(os.environ.get('LLM_BOOST_API_KEY', '')),
-                "LLM_BOOST_BASE_URL": os.environ.get('LLM_BOOST_BASE_URL', ''),
-                "LLM_BOOST_MODEL_NAME": os.environ.get('LLM_BOOST_MODEL_NAME', '')
-            }
+            "data": _configuration_metadata(),
         })
-    except Exception as e:
+    except SettingsValidationError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        logger.warning(
+            "Failed to update runtime settings (%s)",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
+            "error": "configuration_update_failed",
         }), 500
 
-@settings_bp.route('/test', methods=['POST'])
+
+@settings_bp.route("/test", methods=["POST"])
 def test_settings():
-    """Test connection with provided LLM settings without saving them"""
+    """Test an operator-allowlisted endpoint using only caller-supplied credentials."""
+    if not _runtime_settings_enabled():
+        return jsonify({
+            "success": False,
+            "error": "runtime_settings_disabled",
+        }), 403
+
     try:
-        data = request.get_json() or {}
-        
-        api_key = data.get('LLM_API_KEY')
-        base_url = data.get('LLM_BASE_URL')
-        model = data.get('LLM_MODEL_NAME')
-        
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise SettingsValidationError("JSON object required")
+
+        api_key = _clean_value("LLM_API_KEY", data.get("LLM_API_KEY", ""))
+        base_url = _clean_value("LLM_BASE_URL", data.get("LLM_BASE_URL", ""))
+        model = _clean_value("LLM_MODEL_NAME", data.get("LLM_MODEL_NAME", ""))
         if not api_key:
-            return jsonify({
-                "success": False,
-                "error": "API Key is required to run test"
-            }), 400
+            raise SettingsValidationError("API Key is required to run test")
         if not base_url:
-            return jsonify({
-                "success": False,
-                "error": "Base URL is required to run test"
-            }), 400
+            raise SettingsValidationError("Base URL is required to run test")
         if not model:
-            return jsonify({
-                "success": False,
-                "error": "Model Name is required to run test"
-            }), 400
-            
-        # Create client with temporary params (timeout = 10s to fail fast)
+            raise SettingsValidationError("Model Name is required to run test")
+        base_url = _validate_base_url(base_url)
+
         client = LLMClient(
             api_key=api_key,
             base_url=base_url,
             model=model,
-            timeout=15.0
+            timeout=15.0,
         )
-        
-        test_messages = [{"role": "user", "content": "Respond with only one word: Connected"}]
-        response = client.chat(messages=test_messages, max_tokens=10)
-        
+        response = client.chat(
+            messages=[{"role": "user", "content": "Respond with only one word: Connected"}],
+            max_tokens=10,
+        )
         return jsonify({
             "success": True,
             "message": "Connection test succeeded",
-            "response": response
+            "response": response,
         })
-    except Exception as e:
+    except SettingsValidationError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception as exc:
+        logger.warning(
+            "Provider connection test failed (%s)",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 200  # Return 200 with success: false to handle cleanly in the UI
+            "error": "connection_test_failed",
+        }), 502

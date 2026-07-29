@@ -7,6 +7,12 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
+from .input_policy import EXTRACTED_TEXT_CHARACTERS_MAX, PDF_PAGE_MAX
+
+
+class FileParserLimitError(ValueError):
+    """Raised when extraction exceeds a declared resource ceiling."""
+
 
 def _read_text_with_fallback(file_path: str) -> str:
     """
@@ -64,7 +70,13 @@ class FileParser:
     SUPPORTED_EXTENSIONS = {'.pdf', '.md', '.markdown', '.txt'}
     
     @classmethod
-    def extract_text(cls, file_path: str) -> str:
+    def extract_text(
+        cls,
+        file_path: str,
+        *,
+        max_characters: int = EXTRACTED_TEXT_CHARACTERS_MAX,
+        max_pdf_pages: int = PDF_PAGE_MAX,
+    ) -> str:
         """
         Extract text from file
         
@@ -85,27 +97,61 @@ class FileParser:
             raise ValueError(f"Unsupported file format: {suffix}")
         
         if suffix == '.pdf':
-            return cls._extract_from_pdf(file_path)
+            return cls._extract_from_pdf(
+                file_path,
+                max_characters=max_characters,
+                max_pages=max_pdf_pages,
+            )
         elif suffix in {'.md', '.markdown'}:
-            return cls._extract_from_md(file_path)
+            text = cls._extract_from_md(file_path)
         elif suffix == '.txt':
-            return cls._extract_from_txt(file_path)
-        
-        raise ValueError(f"Cannot process file format: {suffix}")
+            text = cls._extract_from_txt(file_path)
+        else:
+            raise ValueError(f"Cannot process file format: {suffix}")
+
+        if len(text) > max_characters:
+            raise FileParserLimitError(
+                "Extracted text exceeds the character limit."
+            )
+        return text
     
     @staticmethod
-    def _extract_from_pdf(file_path: str) -> str:
+    def _extract_from_pdf(
+        file_path: str,
+        *,
+        max_characters: int = EXTRACTED_TEXT_CHARACTERS_MAX,
+        max_pages: int = PDF_PAGE_MAX,
+    ) -> str:
         """Extract text from PDF"""
+        if max_characters < 1:
+            raise FileParserLimitError(
+                "PDF extraction character limit must be positive."
+            )
+        if max_pages < 1:
+            raise FileParserLimitError(
+                "PDF extraction page limit must be positive."
+            )
         try:
             import fitz  # PyMuPDF
         except ImportError:
             raise ImportError("PyMuPDF required: pip install PyMuPDF")
         
         text_parts = []
+        extracted_characters = 0
         with fitz.open(file_path) as doc:
+            if len(doc) > max_pages:
+                raise FileParserLimitError(
+                    f"PDF exceeds the {max_pages}-page limit."
+                )
             for page in doc:
                 text = page.get_text()
                 if text.strip():
+                    separator_characters = 2 if text_parts else 0
+                    extracted_characters += len(text) + separator_characters
+                    if extracted_characters > max_characters:
+                        raise FileParserLimitError(
+                            "PDF extracted text exceeds the character limit."
+                        )
                     text_parts.append(text)
         
         return "\n\n".join(text_parts)
@@ -160,6 +206,25 @@ def split_text_into_chunks(
     Returns:
         List of text chunks
     """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if not isinstance(chunk_size, int) or isinstance(chunk_size, bool):
+        raise ValueError("chunk_size must be an integer")
+    if not isinstance(overlap, int) or isinstance(overlap, bool):
+        raise ValueError("overlap must be an integer")
+    if not 1 <= chunk_size <= 100_000:
+        raise ValueError("chunk_size must be between 1 and 100000")
+    if not 0 <= overlap < chunk_size:
+        # overlap >= chunk_size makes `start = end - overlap` stop advancing,
+        # which previously allowed one request to spin forever.
+        raise ValueError("overlap must be non-negative and smaller than chunk_size")
+    estimated_chunks = (
+        1 if len(text) <= chunk_size
+        else (len(text) + (chunk_size - overlap) - 1) // (chunk_size - overlap)
+    )
+    if estimated_chunks > 10_000:
+        raise ValueError("text would produce more than 10000 chunks")
+
     if len(text) <= chunk_size:
         return [text] if text.strip() else []
     

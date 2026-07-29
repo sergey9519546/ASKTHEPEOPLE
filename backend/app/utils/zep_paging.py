@@ -20,6 +20,7 @@ logger = get_logger('askthepeople.zep_paging')
 
 _DEFAULT_PAGE_SIZE = 100
 _MAX_NODES = 2000
+_MAX_EDGES = 10000
 _DEFAULT_MAX_RETRIES = 3
 _DEFAULT_RETRY_DELAY = 2.0  # seconds, doubles each retry
 
@@ -66,8 +67,13 @@ def fetch_all_nodes(
     retry_delay: float = _DEFAULT_RETRY_DELAY,
 ) -> list[Any]:
     """Paginated retrieval of graph nodes, returning at most max_items (default 2000). Each page request includes retries."""
+    if not 1 <= page_size <= 500:
+        raise ValueError("page_size must be between 1 and 500")
+    if not 1 <= max_items <= _MAX_NODES:
+        raise ValueError(f"max_items must be between 1 and {_MAX_NODES}")
     all_nodes: list[Any] = []
     cursor: str | None = None
+    seen_cursors: set[str] = set()
     page_num = 0
 
     while True:
@@ -99,6 +105,10 @@ def fetch_all_nodes(
         if cursor is None:
             logger.warning(f"Node missing uuid field, stopping pagination at {len(all_nodes)} nodes")
             break
+        if cursor in seen_cursors:
+            logger.warning(f"Repeated node cursor, stopping pagination at {len(all_nodes)} nodes")
+            break
+        seen_cursors.add(cursor)
 
     return all_nodes
 
@@ -107,12 +117,18 @@ def fetch_all_edges(
     client: Zep,
     graph_id: str,
     page_size: int = _DEFAULT_PAGE_SIZE,
+    max_items: int = _MAX_EDGES,
     max_retries: int = _DEFAULT_MAX_RETRIES,
     retry_delay: float = _DEFAULT_RETRY_DELAY,
 ) -> list[Any]:
-    """Paginated retrieval of all graph edges, returning the full list. Each page request includes retries."""
+    """Paginated retrieval of graph edges, returning at most max_items."""
+    if not 1 <= page_size <= 500:
+        raise ValueError("page_size must be between 1 and 500")
+    if not 1 <= max_items <= _MAX_EDGES:
+        raise ValueError(f"max_items must be between 1 and {_MAX_EDGES}")
     all_edges: list[Any] = []
     cursor: str | None = None
+    seen_cursors: set[str] = set()
     page_num = 0
 
     while True:
@@ -133,6 +149,10 @@ def fetch_all_edges(
             break
 
         all_edges.extend(batch)
+        if len(all_edges) >= max_items:
+            all_edges = all_edges[:max_items]
+            logger.warning(f"Edge count reached limit ({max_items}), stopping pagination for graph {graph_id}")
+            break
         if len(batch) < page_size:
             break
 
@@ -140,5 +160,9 @@ def fetch_all_edges(
         if cursor is None:
             logger.warning(f"Edge missing uuid field, stopping pagination at {len(all_edges)} edges")
             break
+        if cursor in seen_cursors:
+            logger.warning(f"Repeated edge cursor, stopping pagination at {len(all_edges)} edges")
+            break
+        seen_cursors.add(cursor)
 
     return all_edges

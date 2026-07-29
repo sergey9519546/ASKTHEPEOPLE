@@ -1,6 +1,8 @@
 """
-Ontology Generation Service
-Step 1: Analyze document text and generate entity/relationship type definitions for social simulation.
+Ontology generation for synthetic scenario exploration.
+
+The generated schema organizes source-mentioned actors and relationships. It
+does not establish facts, authorize impersonation, or predict actor behavior.
 """
 
 import json
@@ -9,18 +11,22 @@ from ..utils.llm_client import LLMClient
 
 
 # System prompt for ontology generation
-ONTOLOGY_SYSTEM_PROMPT = """You are an expert knowledge graph ontology designer. Your task is to analyze the provided text and simulation requirements to design entity types and relationship types suitable for **social media opinion simulation**.
+ONTOLOGY_SYSTEM_PROMPT = """You are a knowledge-graph ontology designer for a synthetic scenario-exploration tool. Analyze the supplied material and design entity and relationship types that can organize actor records for a fictional social-media-like run.
 
 **IMPORTANT: You must output valid JSON only. Do not output anything else.**
 
 ## Core Task Context
 
-We are building a **social media opinion simulation system**. In this system:
-- Every entity is an "account" or "actor" that can post, interact, and spread information on social media
-- Entities influence each other through reposts, comments, and responses
-- We need to simulate each party's reaction and the path information spreads during an opinion event
+We are building a **synthetic scenario system**. In this system:
+- Each entity type describes a source-mentioned actor or an explicit fictional account role
+- Generated accounts may post and interact inside one configured run
+- The schema should support exploring possible activity paths without claiming to reproduce, represent, or predict any real actor
 
-Therefore, **entities must be real-world actors that can speak and interact on social media**:
+The resulting graph is a model-generated interpretation of supplied material,
+not an independently verified factual record. A relationship type is a schema
+category, not evidence of a relationship or causal influence.
+
+Therefore, **entity types must describe actors or account roles capable of interaction**:
 
 **Allowed**:
 - Specific individuals (public figures, key persons, opinion leaders, experts, ordinary people)
@@ -29,7 +35,7 @@ Therefore, **entities must be real-world actors that can speak and interact on s
 - Government departments and regulatory agencies
 - Media outlets (newspapers, TV stations, online media, websites)
 - Social media platforms themselves
-- Representative groups (alumni associations, fan groups, advocacy groups, etc.)
+- Named groups or fictional group-account archetypes (alumni associations, fan groups, advocacy groups, etc.)
 
 **Not allowed**:
 - Abstract concepts (e.g., "public opinion", "emotions", "trends")
@@ -102,8 +108,9 @@ B. **Specific types (8, designed based on document content)**:
 ### 2. Relationship Type Design
 
 - Count: 6-10 types
-- Relationships should reflect real connections in social media interactions
+- Relationships should describe possible source-record or in-run connections
 - Ensure `source_targets` covers the entity types you defined
+- Do not describe an edge type as proof of causality, influence, endorsement, or future behavior
 
 ### 3. Attribute Design
 
@@ -214,14 +221,16 @@ class OntologyGenerator:
 """
 
         message += """
-Based on the above, design entity types and relationship types suitable for social opinion simulation.
+Based on the above, design entity types and relationship types suitable for a
+synthetic social scenario.
 
 **Rules you must follow**:
 1. Output exactly 10 entity types
 2. The last 2 must be the fallback types: Person (individual fallback) and Organization (organization fallback)
 3. The first 8 are specific types designed based on the document content
-4. All entity types must be real-world actors that can speak/post - no abstract concepts
+4. All entity types must be actor or account roles that can speak/post - no abstract concepts
 5. Attribute names must NOT use reserved words: name, uuid, group_id - use full_name, org_name, etc.
+6. Do not claim that the schema represents a population or predicts how any actor will respond
 """
 
         return message

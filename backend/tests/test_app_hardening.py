@@ -2,8 +2,8 @@
 Tests for the security hardening of `backend/app/__init__.py`.
 
 Covers (without overlapping the dedicated config/rate-limiting suites):
-  1. Opt-in bearer-token auth guard (`require_auth` before_request hook):
-       - disabled (default) -> routes are open
+  1. Bearer-token auth guard (`require_auth` before_request hook):
+       - explicitly disabled for local development -> routes are open
        - enabled -> missing / wrong token -> 401; correct Bearer -> through
        - health check stays open even when auth is on
   2. `RateLimitExceeded` is handled with a 429 (not swallowed into 500) and
@@ -27,7 +27,7 @@ from flask import jsonify
 
 @pytest.fixture
 def app():
-    """A fresh app instance per test, no APP_TOKEN (auth disabled by default)."""
+    """A fresh local-development app instance with auth explicitly disabled."""
     app = create_app()
     app.config.update({"TESTING": True})
     yield app
@@ -81,11 +81,11 @@ def test_auth_enabled_accepts_correct_bearer(app):
 
 
 def test_auth_enabled_token_query_param(app):
-    """The `?token=` fallback (WebSocket handshake) is accepted."""
+    """Query tokens are never accepted on normal API routes."""
     app.config['APP_TOKEN'] = 'secret'
     client = app.test_client()
     resp = client.get('/api/settings?token=secret')
-    assert resp.status_code != 401
+    assert resp.status_code == 401
 
 
 def test_health_check_open_even_when_auth_enabled(app):
@@ -94,7 +94,26 @@ def test_health_check_open_even_when_auth_enabled(app):
     client = app.test_client()
     resp = client.get('/health')
     assert resp.status_code == 200
-    assert resp.get_json()['status'] == 'ok'
+    payload = resp.get_json()
+    assert payload['status'] == 'ok'
+    assert payload['revision']
+    assert payload['storage_writable'] is True
+
+
+def test_health_fails_when_artifact_storage_is_not_writable(app, monkeypatch):
+    monkeypatch.setattr("app.os.access", lambda *_args, **_kwargs: False)
+    response = app.test_client().get("/health")
+    payload = response.get_json()
+
+    assert response.status_code == 503
+    assert payload["status"] == "degraded"
+    assert payload["storage_writable"] is False
+
+
+def test_health_is_exempt_from_default_rate_limit(app):
+    client = app.test_client()
+    statuses = [client.get("/health").status_code for _ in range(60)]
+    assert set(statuses) == {200}
 
 
 # --------------------------------------------------------------------------- #
@@ -150,6 +169,23 @@ def test_rate_limited_request_returns_429_not_500(client):
         "a rate-limited request was swallowed into a 500 by the catch-all "
         "Exception handler instead of returning 429"
     )
+
+
+def test_rate_limit_uses_trusted_railway_client_ip(app):
+    app.config["TRUST_X_REAL_IP"] = True
+    client = app.test_client()
+    first_client = {"X-Real-IP": "198.51.100.101"}
+    second_client = {"X-Real-IP": "198.51.100.102"}
+
+    statuses = [
+        client.get("/api/settings", headers=first_client).status_code
+        for _ in range(51)
+    ]
+    assert statuses[-1] == 429
+    assert client.get(
+        "/api/settings",
+        headers=second_client,
+    ).status_code != 429
 
 
 # --------------------------------------------------------------------------- #
@@ -254,4 +290,61 @@ def test_route_4xx_error_preserved_in_production(app):
     data = resp.get_json()
     assert data['error'] == 'bad_request: missing field', (
         f"4xx error message should be preserved in production, got: {data!r}"
+    )
+
+
+def test_unknown_api_route_is_json_404_not_spa_html(app):
+    response = app.test_client().get('/api/definitely-not-a-route')
+    assert response.status_code == 404
+    assert response.is_json
+    assert response.get_json() == {"success": False, "error": "not_found"}
+
+
+def test_http_exception_status_is_preserved(app):
+    from flask import abort
+
+    @app.route('/api/_forbidden')
+    def _forbidden():
+        abort(403)
+
+    response = app.test_client().get('/api/_forbidden')
+    assert response.status_code == 403
+    assert response.get_json()["error"] == "forbidden"
+
+
+def test_request_logging_does_not_include_json_body(app, monkeypatch):
+    import app as app_module
+
+    calls = []
+
+    class SpyLogger:
+        def debug(self, *args, **kwargs):
+            calls.append((args, kwargs))
+
+    monkeypatch.setattr(app_module, "get_logger", lambda _name: SpyLogger())
+    app.test_client().post(
+        '/api/definitely-not-a-route',
+        json={"LLM_API_KEY": "never-log-this-secret"},
+    )
+    assert "never-log-this-secret" not in repr(calls)
+
+
+def test_production_security_and_cache_headers(app):
+    app.config["DEBUG"] = False
+    client = app.test_client()
+
+    response = client.get(
+        "/health",
+        headers={"X-Forwarded-Proto": "https"},
+    )
+
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    assert "frame-ancestors 'none'" in response.headers[
+        "Content-Security-Policy"
+    ]
+    assert response.headers["Strict-Transport-Security"].startswith(
+        "max-age=31536000"
     )

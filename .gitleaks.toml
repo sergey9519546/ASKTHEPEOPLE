@@ -1,0 +1,43 @@
+title = "ASKTHEPEOPLE secret detection"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+    [[rules.allowlists]]
+    description = "Ignore the explicit SECRET_KEY fixture in its focused unit test."
+    condition = "AND"
+    regexTarget = "line"
+    regexes = ['''my-test-secret-1234567890''']
+    paths = ['''^backend/tests/test_secret_key\.py$''']
+
+    [[rules.allowlists]]
+    description = "Ignore the explicit strong-credential fixture in hardening tests."
+    condition = "AND"
+    regexTarget = "line"
+    regexes = ['''strong-secret-key-7b9f3d2c8a6e4f10''']
+    paths = ['''^backend/tests/test_hardening_config\.py$''']
+
+    [[rules.allowlists]]
+    description = "Ignore a known generic-key false positive in removed vendored minified JavaScript."
+    paths = ['''^txt2graph/lib/vis-9\.1\.2/vis-network\.min\.js$''']
+
+[[rules]]
+id = "zep-api-key-assignment"
+description = "Detected a Zep API key assigned to application configuration."
+regex = '''(?i)\bZEP_API_KEY[\t ]*[=:][\t ]*["']?(z_[A-Za-z0-9._=-]{32,})'''
+secretGroup = 1
+
+[[rules]]
+id = "brave-search-api-key-assignment"
+description = "Detected a Brave Search API key assigned to application configuration."
+regex = '''(?i)\bBRAVE_SEARCH_API_KEY[\t ]*[=:][\t ]*["']?(BSA_[A-Za-z0-9_-]{20,})'''
+secretGroup = 1
+
+[[rules]]
+id = "openai-compatible-api-key-assignment"
+description = "Detected an OpenAI-compatible API key assigned to application configuration."
+regex = '''(?i)\bLLM_API_KEY[\t ]*[=:][\t ]*["']?(sk-[A-Za-z0-9_-]{40,})'''
+secretGroup = 1

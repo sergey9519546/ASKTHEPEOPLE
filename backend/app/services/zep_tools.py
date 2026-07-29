@@ -24,6 +24,26 @@ from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 
 logger = get_logger('askthepeople.zep_tools')
 
+SYNTHETIC_RECORD_DISCLOSURE = (
+    "Fictional generated scenario record. 0 human respondents. "
+    "Not testimony. Not public opinion. Not representative behavior. "
+    "Not a forecast."
+)
+SYNTHETIC_PROBE_PROMPT_PREFIX = (
+    "Produce a fictional generated scenario record from the supplied "
+    "synthetic profile state. Treat persona, memory, and prior actions "
+    "only as generated run inputs. Do not claim to be a real person or "
+    "respondent, and do not present the output as testimony, public "
+    "opinion, representative behavior, or a forecast.\n"
+    "Response Requirements:\n"
+    "1. Answer in natural language, do NOT call any tools.\n"
+    "2. Do NOT return JSON or tool-call formatted text.\n"
+    "3. Do NOT use Markdown headers (e.g., #, ##, ###).\n"
+    "4. Address each probe in order, starting with 'Probe X:'.\n"
+    "5. Separate each generated response with a blank line.\n"
+    "6. Keep all claims inside the fictional scenario frame.\n\n"
+)
+
 
 @dataclass
 class SearchResult:
@@ -48,7 +68,7 @@ class SearchResult:
         text_parts = [f"Search Query: {self.query}", f"Found {self.total_count} pieces of relevant information"]
         
         if self.facts:
-            text_parts.append("\n### Relevant Facts:")
+            text_parts.append("\n### Relevant Graph Records (Origin Unverified):")
             for i, fact in enumerate(self.facts, 1):
                 text_parts.append(f"{i}. {fact}")
         
@@ -114,7 +134,10 @@ class EdgeInfo:
         """Convert to text format"""
         source = self.source_node_name or self.source_node_uuid[:8]
         target = self.target_node_name or self.target_node_uuid[:8]
-        base_text = f"Relation: {source} --[{self.name}]--> {target}\nFact: {self.fact}"
+        base_text = (
+            f"Graph relation: {source} --[{self.name}]--> {target}\n"
+            f"Record: {self.fact}"
+        )
         
         if include_temporal:
             valid_at = self.valid_at or "Unknown"
@@ -172,11 +195,11 @@ class InsightForgeResult:
     def to_text(self) -> str:
         """Convert to detailed text format for LLM understanding"""
         text_parts = [
-            f"## Deep Analysis of Future Predictions",
+            f"## Trace Material for Synthetic Scenario Paths",
             f"Analysis Question: {self.query}",
-            f"Prediction Scenario: {self.simulation_requirement}",
-            f"\n### Prediction Data Statistics",
-            f"- Relevant Predicted Facts: {self.total_facts}",
+            f"Scenario Requirement: {self.simulation_requirement}",
+            f"\n### Retrieved Material Statistics",
+            f"- Retrieved Graph Records (Origin Unverified): {self.total_facts}",
             f"- Entities Involved: {self.total_entities}",
             f"- Relationship Chains: {self.total_relationships}"
         ]
@@ -189,7 +212,10 @@ class InsightForgeResult:
         
         # Semantic search results
         if self.semantic_facts:
-            text_parts.append(f"\n### [Key Facts] (Please cite these original texts in the report)")
+            text_parts.append(
+                "\n### [Graph Records] (Do not call these supplied-source "
+                "facts without a separate source trace)"
+            )
             for i, fact in enumerate(self.semantic_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
@@ -201,7 +227,10 @@ class InsightForgeResult:
                 if entity.get('summary'):
                     text_parts.append(f"  Summary: \"{entity.get('summary')}\"")
                 if entity.get('related_facts'):
-                    text_parts.append(f"  Relevant Facts: {len(entity.get('related_facts', []))}")
+                    text_parts.append(
+                        "  Related Graph Records: "
+                        f"{len(entity.get('related_facts', []))}"
+                    )
         
         # Relationship chains
         if self.relationship_chains:
@@ -251,24 +280,32 @@ class PanoramaResult:
     def to_text(self) -> str:
         """Convert to text format (full version, no truncation)"""
         text_parts = [
-            f"## Wide Search Results (Future Panorama)",
+            "## Wide Graph Record Search",
             f"Query: {self.query}",
+            (
+                "Scope: retrieved graph material only; origin is unverified and "
+                "no future claim is implied."
+            ),
             f"\n### Statistical information",
             f"- Total Nodes: {self.total_nodes}",
             f"- Total Edges: {self.total_edges}",
-            f"- Currently Active Facts: {self.active_count}",
-            f"- Historical/Expired Facts: {self.historical_count}"
+            f"- Currently Active Graph Records: {self.active_count}",
+            f"- Historical/Expired Graph Records: {self.historical_count}"
         ]
         
         # Currently active facts (full output, no truncation)
         if self.active_facts:
-            text_parts.append(f"\n### [Currently Active Facts] (Simulation Result Originals)")
+            text_parts.append(
+                "\n### [Currently Active Graph Records] (Origin Unverified)"
+            )
             for i, fact in enumerate(self.active_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
         # Historical/Expired facts (full output, no truncation)
         if self.historical_facts:
-            text_parts.append(f"\n### [Historical/Expired Facts] (Evolutionary Record)")
+            text_parts.append(
+                "\n### [Historical/Expired Graph Records] (Origin Unverified)"
+            )
             for i, fact in enumerate(self.historical_facts, 1):
                 text_parts.append(f"{i}. \"{fact}\"")
         
@@ -284,32 +321,42 @@ class PanoramaResult:
 
 @dataclass
 class AgentInterview:
-    """Individual Agent interview results"""
+    """Compatibility model for one fictional generated perspective record."""
     agent_name: str
-    agent_role: str  # Role type (e.g., Student, Teacher, Media, etc.)
-    agent_bio: str  # Bio
-    question: str  # Interview question
-    response: str  # Interview response
-    key_quotes: List[str] = field(default_factory=list)  # Key quotes
+    agent_role: str
+    agent_bio: str
+    question: str
+    response: str
+    # Compatibility field name; values are generated excerpts, never quotations.
+    key_quotes: List[str] = field(default_factory=list)
     
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "record_type": "fictional_generated_scenario_record",
+            "fictional": True,
+            "human_respondents": 0,
+            "is_testimony": False,
+            "is_public_opinion": False,
+            "is_forecast": False,
+            "disclosure": SYNTHETIC_RECORD_DISCLOSURE,
             "agent_name": self.agent_name,
             "agent_role": self.agent_role,
             "agent_bio": self.agent_bio,
             "question": self.question,
             "response": self.response,
-            "key_quotes": self.key_quotes
+            # Retained for consumers of the legacy schema.
+            "key_quotes": self.key_quotes,
+            "generated_excerpts": self.key_quotes,
         }
     
     def to_text(self) -> str:
-        text = f"**{self.agent_name}** ({self.agent_role})\n"
-        # Show full agent_bio, no truncation
-        text += f"_Bio: {self.agent_bio}_\n\n"
-        text += f"**Q:** {self.question}\n\n"
-        text += f"**A:** {self.response}\n"
+        text = f"**Generated profile: {self.agent_name}** ({self.agent_role})\n"
+        text += f"{SYNTHETIC_RECORD_DISCLOSURE}\n"
+        text += f"_Fictional profile seed: {self.agent_bio}_\n\n"
+        text += f"**Scenario probe:** {self.question}\n\n"
+        text += f"**Generated response record:** {self.response}\n"
         if self.key_quotes:
-            text += "\n**Key Quotes:**\n"
+            text += "\n**Selected generated excerpts (not quotations):**\n"
             for quote in self.key_quotes:
                 # Clean various quotation marks
                 clean_quote = quote.replace('\u201c', '').replace('\u201d', '').replace('"', '')
@@ -334,35 +381,49 @@ class AgentInterview:
                     else:
                         clean_quote = clean_quote[:147] + "..."
                 if clean_quote and len(clean_quote) >= 10:
-                    text += f'> "{clean_quote}"\n'
+                    text += f"- {clean_quote}\n"
         return text
 
 
 @dataclass
 class InterviewResult:
     """
-    Interview Results (Interview)
-    Includes interview responses from multiple simulated Agents
+    Compatibility model for a synthetic perspective probe.
+
+    Historical field names are retained for callers, but every rendered and
+    serialized record is explicitly fictional and respondent-free.
     """
-    interview_topic: str  # Interview topic
-    interview_questions: List[str]  # List of interview questions
+    interview_topic: str
+    interview_questions: List[str]
     
-    # Agents selected for interview
+    # Generated profiles selected for the probe.
     selected_agents: List[Dict[str, Any]] = field(default_factory=list)
-    # Interview responses for each Agent
+    # Fictional response records (legacy field name retained).
     interviews: List[AgentInterview] = field(default_factory=list)
     
-    # Reasons for selecting Agents
+    # Scenario-coverage rationale for selected generated profiles.
     selection_reasoning: str = ""
-    # Consolidated interview summary
+    # Pattern summary across generated records, never a consensus estimate.
     summary: str = ""
     
-    # Statistics
+    # Generated-profile counts, not respondent counts.
     total_agents: int = 0
     interviewed_count: int = 0
     
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "record_type": "synthetic_perspective_probe",
+            "fictional": True,
+            "human_respondents": 0,
+            "is_testimony": False,
+            "is_public_opinion": False,
+            "is_representative": False,
+            "is_forecast": False,
+            "disclosure": SYNTHETIC_RECORD_DISCLOSURE,
+            "scenario_topic": self.interview_topic,
+            "probe_prompts": self.interview_questions,
+            "generated_record_count": self.interviewed_count,
+            # Compatibility keys retained for existing report-tool consumers.
             "interview_topic": self.interview_topic,
             "interview_questions": self.interview_questions,
             "selected_agents": self.selected_agents,
@@ -376,25 +437,34 @@ class InterviewResult:
     def to_text(self) -> str:
         """Convert to detailed text format for LLM understanding and report citation"""
         text_parts = [
-            "## Deep Interview Report",
-            f"**Interview Topic:** {self.interview_topic}",
-            f"**Number of Interviewees:** {self.interviewed_count} / {self.total_agents} simulated Agents",
-            "\n### Selection Reasoning",
-            self.selection_reasoning or "(Automatically selected)",
+            "## Synthetic Perspective Probe",
+            SYNTHETIC_RECORD_DISCLOSURE,
+            f"**Scenario topic:** {self.interview_topic}",
+            (
+                "**Generated profiles processed:** "
+                f"{self.interviewed_count} / {self.total_agents}"
+            ),
+            "\n### Profile Selection Assumption",
+            self.selection_reasoning or "(Automatic fictional profile selection)",
             "\n---",
-            "\n### Interview Transcripts",
+            "\n### Generated Scenario Records",
         ]
 
         if self.interviews:
             for i, interview in enumerate(self.interviews, 1):
-                text_parts.append(f"\n#### Interview #{i}: {interview.agent_name}")
+                text_parts.append(
+                    f"\n#### Generated record {i}: {interview.agent_name}"
+                )
                 text_parts.append(interview.to_text())
                 text_parts.append("\n---")
         else:
-            text_parts.append("(No interview records)\n\n---")
+            text_parts.append("(No generated scenario records)\n\n---")
 
-        text_parts.append("\n### Interview Summary and Core Perspectives")
-        text_parts.append(self.summary or "(No summary available)")
+        text_parts.append("\n### Pattern Summary Across Generated Records")
+        text_parts.append(
+            self.summary
+            or "(No generated-record pattern summary available)"
+        )
 
         return "\n".join(text_parts)
 
@@ -407,7 +477,7 @@ class ZepToolsService:
     1. insight_forge - Deep insight retrieval (Most powerful, auto-generates sub-queries, multi-dimensional retrieval)
     2. panorama_search - Wide search (Get full picture, including historical/expired content)
     3. quick_search - Simple search (Fast, direct retrieval)
-    4. interview_agents - Deep interview (Interview simulated Agents to obtain multi-perspective views)
+    4. interview_agents - Compatibility entry point for a fictional perspective probe
     
     [Basic Tools]
     - search_graph - Graph semantic search
@@ -491,7 +561,11 @@ class ZepToolsService:
         Returns:
             SearchResult: Search result
         """
-        logger.info(f"Graph search: graph_id={graph_id}, query={query[:50]}...")
+        logger.info(
+            "Graph search requested: graph_id=%s, query_characters=%s",
+            graph_id,
+            len(query),
+        )
         
         # Attempt to use Zep Cloud Search API
         try:
@@ -572,7 +646,7 @@ class ZepToolsService:
         Returns:
             SearchResult: Search result
         """
-        logger.info(f"Using local search: query={query[:30]}...")
+        logger.info("Using local search (query_characters=%s)", len(query))
         
         facts = []
         edges_result = []
@@ -880,7 +954,10 @@ class ZepToolsService:
         Returns:
             Entity summary information
         """
-        logger.info(f"Retrieving relationship summary for entity {entity_name}...")
+        logger.info(
+            "Retrieving relationship summary (entity_name_characters=%s)",
+            len(entity_name),
+        )
         
         # First search for info related to the entity
         search_result = self.search_graph(
@@ -964,7 +1041,10 @@ class ZepToolsService:
         Returns:
             Simulation context information
         """
-        logger.info(f"Retrieving simulation context: {simulation_requirement[:50]}...")
+        logger.info(
+            "Retrieving simulation context (requirement_characters=%s)",
+            len(simulation_requirement),
+        )
         
         # Search for information related to simulation requirements
         search_result = self.search_graph(
@@ -1028,7 +1108,10 @@ class ZepToolsService:
         Returns:
             InsightForgeResult: Deep insight retrieval results
         """
-        logger.info(f"InsightForge Deep Insight Retrieval: {query[:50]}...")
+        logger.info(
+            "InsightForge retrieval requested (query_characters=%s)",
+            len(query),
+        )
         
         result = InsightForgeResult(
             query=query,
@@ -1159,13 +1242,15 @@ class ZepToolsService:
         
         Decompose complex questions into multiple sub-queries that can be independently retrieved
         """
-        system_prompt = """You are a professional query analysis expert. Your task is to decompose a complex problem into multiple sub-queries that can be independently observed or researched within a simulation environment.
+        system_prompt = """Decompose a question into conservative retrieval queries over supplied graph material and generated within-run records.
 
 Requirements:
-1. Each sub-query should be specific enough to find related Agent behaviors or events in the simulation.
-2. Sub-queries should cover different dimensions of the original problem (e.g., Who, What, Why, How, When, Where).
-3. Sub-queries must be relevant to the simulation context.
-4. Return in JSON format: {"sub_queries": ["sub-query 1", "sub-query 2", ...]}"""
+1. Ask about source actors or fictional profile labels without calling them participants.
+2. Ask about supplied conditions and generated records without asserting causes or impacts.
+3. Ask about the recorded within-run sequence and alternative explanations.
+4. Do not frame retrieved material as public opinion, representative behavior, or a forecast.
+5. Sub-queries must remain relevant to the supplied scenario context.
+6. Return in JSON format: {"sub_queries": ["sub-query 1", "sub-query 2", ...]}"""
 
         user_prompt = f"""Simulation Requirement Context:
 {simulation_requirement}
@@ -1195,9 +1280,9 @@ Return the list of sub-queries in JSON format."""
             # Fallback: return variants based on the original query
             return [
                 query,
-                f"Main participants of {query}",
-                f"Causes and impacts of {query}",
-                f"Development process of {query}"
+                f"Source actors or fictional profile labels associated with {query}",
+                f"Supplied conditions and generated records associated with {query}",
+                f"Recorded within-run sequence and alternative explanations for {query}",
             ][:max_queries]
     
     def panorama_search(
@@ -1226,7 +1311,10 @@ Return the list of sub-queries in JSON format."""
         Returns:
             PanoramaResult: Wide search result
         """
-        logger.info(f"PanoramaSearch Wide Search: {query[:50]}...")
+        logger.info(
+            "PanoramaSearch requested (query_characters=%s)",
+            len(query),
+        )
         
         result = PanoramaResult(query=query)
         
@@ -1314,7 +1402,10 @@ Return the list of sub-queries in JSON format."""
         Returns:
             SearchResult: Search results
         """
-        logger.info(f"QuickSearch Simple Search: {query[:50]}...")
+        logger.info(
+            "QuickSearch requested (query_characters=%s)",
+            len(query),
+        )
         
         # Directly call search_graph method
         result = self.search_graph(
@@ -1336,35 +1427,36 @@ Return the list of sub-queries in JSON format."""
         custom_questions: List[str] = None
     ) -> InterviewResult:
         """
-        [InterviewAgents - Deep Interview]
-        
-        Call real OASIS interview API to interview currently running simulated Agents:
-        1. Automatically load persona files to understand all simulated Agents
-        2. Use LLM to analyze interview requirements and intelligently select relevant Agents
-        3. Use LLM to generate interview questions
-        4. Call /api/simulation/interview/batch interface for real interviews (dual-platform)
-        5. Integrate all interview results into a report
-        
-        [Important] This function requires the simulation environment to be active (OASIS environment not closed).
-        
-        [Scenarios]
-        - Understand perspectives from different role viewpoints
-        - Collect multi-party opinions and viewpoints
-        - Obtain real answers from simulated Agents (not LLM simulations)
+        Run a fictional perspective probe against generated simulation profiles.
+
+        The method and result field names are retained for compatibility with
+        the simulation engine. The returned text is generated scenario material:
+        it contains zero human respondents and is not testimony, public opinion,
+        representative behavior, or a forecast.
+
+        The active simulation environment supplies generated profile state. The
+        process selects profiles for scenario coverage, creates probe prompts,
+        asks the engine for fictional records on both platform models, and
+        summarizes patterns only within those generated records.
         
         Args:
-            simulation_id: Simulation ID (for locating persona files and calling interview API)
-            interview_requirement: Interview requirement description (unstructured, e.g., "how students see the event")
-            simulation_requirement: Simulation requirement background (optional)
-            max_agents: Maximum number of Agents to interview
-            custom_questions: Custom interview questions (optional, auto-generated if not provided)
+            simulation_id: Simulation ID used to locate generated profile files
+            interview_requirement: Scenario-probe brief (legacy argument name)
+            simulation_requirement: Synthetic scenario background (optional)
+            max_agents: Maximum number of generated profiles to probe
+            custom_questions: Custom probe prompts (optional)
             
         Returns:
-            InterviewResult: Interview results
+            InterviewResult: Fictional generated scenario records
         """
         from .simulation_runner import SimulationRunner
         
-        logger.info(f"InterviewAgents Deep Interview (Real API): {interview_requirement[:50]}...")
+        logger.info(
+            "Synthetic perspective probe requested "
+            "(requirement_characters=%s, max_agents=%s)",
+            len(interview_requirement),
+            max_agents,
+        )
         
         result = InterviewResult(
             interview_topic=interview_requirement,
@@ -1376,13 +1468,13 @@ Return the list of sub-queries in JSON format."""
         
         if not profiles:
             logger.warning(f"Persona files for simulation {simulation_id} not found")
-            result.summary = "No interviewable Agent persona files found"
+            result.summary = "No generated scenario profile files were available."
             return result
         
         result.total_agents = len(profiles)
         logger.info(f"Loaded {len(profiles)} Agent personas")
         
-        # Step 2: Use LLM to select Agents for interview (returns agent_id list)
+        # Step 2: Select generated profiles for scenario coverage.
         selected_agents, selected_indices, selection_reasoning = self._select_agents_for_interview(
             profiles=profiles,
             interview_requirement=interview_requirement,
@@ -1392,65 +1484,70 @@ Return the list of sub-queries in JSON format."""
         
         result.selected_agents = selected_agents
         result.selection_reasoning = selection_reasoning
-        logger.info(f"Selected {len(selected_agents)} Agents for interview: {selected_indices}")
+        logger.info(
+            "Selected %s generated profiles for scenario probe: %s",
+            len(selected_agents),
+            selected_indices,
+        )
         
-        # Step 3: Generate interview questions (if not provided)
+        # Step 3: Generate scenario-probe prompts if none were supplied.
         if not result.interview_questions:
             result.interview_questions = self._generate_interview_questions(
                 interview_requirement=interview_requirement,
                 simulation_requirement=simulation_requirement,
                 selected_agents=selected_agents
             )
-            logger.info(f"Generated {len(result.interview_questions)} interview questions")
+            logger.info(
+                "Generated %s synthetic probe prompts",
+                len(result.interview_questions),
+            )
         
-        # Combine questions into one interview prompt
+        # Combine compatibility-field questions into one synthetic probe prompt.
         combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(result.interview_questions)])
         
-        # Optimized prefix to constrain Agent reply format
-        INTERVIEW_PROMPT_PREFIX = (
-            "You are participating in an interview. Please combine your persona, all past memories, and actions "
-            "to answer the following questions directly in plain text.\n"
-            "Response Requirements:\n"
-            "1. Answer in natural language, do NOT call any tools.\n"
-            "2. Do NOT return JSON or tool-call formatted text.\n"
-            "3. Do NOT use Markdown headers (e.g., #, ##, ###).\n"
-            "4. Answer questions one by one according to the number, starting each with 'Question X:' (X is the number).\n"
-            "5. Separate answers to each question with a blank line.\n"
-            "6. Provide substantial content; each answer must be at least 2-3 sentences.\n\n"
-        )
-        optimized_prompt = f"{INTERVIEW_PROMPT_PREFIX}{combined_prompt}"
+        # Constrain engine output to an explicitly fictional record.
+        optimized_prompt = f"{SYNTHETIC_PROBE_PROMPT_PREFIX}{combined_prompt}"
         
-        # Step 4: Call real interview API (no platform specified, dual-platform by default)
+        # Step 4: Ask both platform models for synthetic response records.
         try:
-            # Build batch interview list (dual-platform)
+            # The request key is part of the simulation-runner compatibility API.
             interviews_request = []
             for agent_idx in selected_indices:
                 interviews_request.append({
                     "agent_id": agent_idx,
-                    "prompt": optimized_prompt  # Use optimized prompt
-                    # No platform specified, API will interview on both Twitter and Reddit
+                    "prompt": optimized_prompt
                 })
             
-            logger.info(f"Calling batch interview API (Dual-platform): {len(interviews_request)} Agents")
+            logger.info(
+                "Calling batch synthetic perspective probe: %s generated profiles",
+                len(interviews_request),
+            )
             
-            # Call SimulationRunner batch interview method (Dual-platform)
+            # Compatibility method name is owned by the simulation runner.
             api_result = SimulationRunner.interview_agents_batch(
                 simulation_id=simulation_id,
                 interviews=interviews_request,
-                platform=None,  # No platform specified, dual-platform interview
-                timeout=180.0   # Dual-platform requires longer timeout
+                platform=None,
+                timeout=180.0
             )
             
-            logger.info(f"Interview API returned: {api_result.get('interviews_count', 0)} results, success={api_result.get('success')}")
+            logger.info(
+                "Synthetic perspective probe returned: records=%s, success=%s",
+                api_result.get("interviews_count", 0),
+                api_result.get("success"),
+            )
             
             # Check if API call was successful
             if not api_result.get("success", False):
                 error_msg = api_result.get("error", "Unknown error")
-                logger.warning(f"Interview API failed: {error_msg}")
-                result.summary = f"Interview API failed: {error_msg}. Please check the status of the OASIS simulation environment."
+                logger.warning(f"Synthetic perspective probe failed: {error_msg}")
+                result.summary = (
+                    f"Synthetic perspective probe failed: {error_msg}. "
+                    "Check the OASIS simulation environment."
+                )
                 return result
             
-            # Step 5: Parse API results, build AgentInterview objects
+            # Step 5: Parse generated platform records.
             # Dual-platform format: {"twitter_0": {...}, "reddit_0": {...}, "twitter_1": {...}, ...}
             api_data = api_result.get("result", {})
             results_dict = api_data.get("results", {}) if isinstance(api_data, dict) else {}
@@ -1461,7 +1558,7 @@ Return the list of sub-queries in JSON format."""
                 agent_role = agent.get("profession", "Unknown")
                 agent_bio = agent.get("bio", "")
                 
-                # Get interview results for the Agent on both platforms
+                # Get generated records for the profile on both platform models.
                 twitter_result = results_dict.get(f"twitter_{agent_idx}", {})
                 reddit_result = results_dict.get(f"reddit_{agent_idx}", {})
                 
@@ -1472,12 +1569,25 @@ Return the list of sub-queries in JSON format."""
                 twitter_response = self._clean_tool_call_response(twitter_response)
                 reddit_response = self._clean_tool_call_response(reddit_response)
 
-                # Always output dual-platform tags
-                twitter_text = twitter_response if twitter_response else "(No response from this platform)"
-                reddit_text = reddit_response if reddit_response else "(No response from this platform)"
-                response_text = f"[Twitter Response]\n{twitter_text}\n\n[Reddit Response]\n{reddit_text}"
+                # Always label both outputs as generated records.
+                twitter_text = (
+                    twitter_response
+                    if twitter_response
+                    else "(No generated short-post record)"
+                )
+                reddit_text = (
+                    reddit_response
+                    if reddit_response
+                    else "(No generated topic-community record)"
+                )
+                response_text = (
+                    "[Generated short-post record]\n"
+                    f"{twitter_text}\n\n"
+                    "[Generated topic-community record]\n"
+                    f"{reddit_text}"
+                )
 
-                # Extract key quotes (from both platforms' answers)
+                # Extract compatibility-field excerpts from generated text.
                 import re
                 combined_responses = f"{twitter_response} {reddit_response}"
 
@@ -1499,7 +1609,7 @@ Return the list of sub-queries in JSON format."""
                 meaningful.sort(key=len, reverse=True)
                 key_quotes = [s + "." for s in meaningful[:3]]
 
-                # Strategy 2 (Fallback): Text inside quotes
+                # Fallback: text delimited by quotation marks in model output.
                 if not key_quotes:
                     paired = re.findall(r'"([^"]{15,100})"', clean_text)
                     key_quotes = [q for q in paired if not re.match(r'^[ ,;:]', q)][:3]
@@ -1518,24 +1628,32 @@ Return the list of sub-queries in JSON format."""
             
         except ValueError as e:
             # Simulation environment not running
-            logger.warning(f"Interview API call failed (environment not running?): {e}")
-            result.summary = f"Interview failed: {str(e)}. The simulation environment may be closed, please ensure the OASIS environment is running."
+            logger.warning(f"Synthetic perspective probe unavailable: {e}")
+            result.summary = (
+                f"Synthetic perspective probe failed: {str(e)}. "
+                "The OASIS simulation environment may be closed."
+            )
             return result
         except Exception as e:
-            logger.error(f"Interview API call Exception: {e}")
+            logger.error(f"Synthetic perspective probe exception: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            result.summary = f"Error occurred during interview process: {str(e)}"
+            result.summary = (
+                f"Synthetic perspective probe error: {str(e)}"
+            )
             return result
         
-        # Step 6: Generate interview summary
+        # Step 6: Summarize patterns within generated records.
         if result.interviews:
             result.summary = self._generate_interview_summary(
                 interviews=result.interviews,
                 interview_requirement=interview_requirement
             )
         
-        logger.info(f"InterviewAgents completed: Interviewed {result.interviewed_count} Agents (Dual-platform)")
+        logger.info(
+            "Synthetic perspective probe completed: %s generated profile records",
+            result.interviewed_count,
+        )
         return result
     
     @staticmethod
@@ -1613,7 +1731,7 @@ Return the list of sub-queries in JSON format."""
         max_agents: int
     ) -> tuple:
         """
-        Use LLM to select Agents for interview
+        Select generated profiles that cover relevant scenario assumptions.
         
         Returns:
             tuple: (selected_agents, selected_indices, reasoning)
@@ -1634,30 +1752,35 @@ Return the list of sub-queries in JSON format."""
             }
             agent_summaries.append(summary)
         
-        system_prompt = """You are a professional interview planning expert. Your task is to select the most suitable candidates for an interview from the list of simulation Agents.
+        system_prompt = """You select fictional generated profiles for a synthetic scenario probe.
 
-Selection Criteria:
-1. The Agent's identity/profession is highly relevant to the interview topic.
-2. The Agent is likely to hold unique or valuable perspectives.
-3. Choose a diverse set of viewpoints (e.g., supporter, opponent, neutral, professional experts, etc.).
-4. Prioritize characters directly involved in the events.
+These profiles are modelling devices, not human respondents or population
+samples. Selection must not imply testimony, public opinion, representative
+behavior, probability, or a forecast.
+
+Selection criteria:
+1. Cover scenario assumptions relevant to the probe brief.
+2. Exercise materially different generated profile states when available.
+3. Do not infer real-world views from profession, identity, or demographics.
+4. Describe the result as scenario coverage, never sample representativeness.
 
 Return in JSON format:
 {
     "selected_indices": [list of selected Agent indices],
-    "reasoning": "explanation for the selection"
+    "reasoning": "scenario-coverage assumption for the selection"
 }"""
 
-        user_prompt = f"""Interview Requirement:
+        user_prompt = f"""Synthetic Probe Brief:
 {interview_requirement}
 
-Simulation Context:
+Synthetic Scenario Context:
 {simulation_requirement if simulation_requirement else "Not provided"}
 
-Available Agents ({len(agent_summaries)} total):
+Available Generated Profiles ({len(agent_summaries)} total):
 {json.dumps(agent_summaries, ensure_ascii=False, indent=2)}
 
-Please select up to {max_agents} Agents most suitable for the interview and provide your reasoning."""
+Select up to {max_agents} generated profiles for scenario coverage and state
+the fictional modelling assumption behind the selection."""
 
         try:
             response = self.llm.chat_json(
@@ -1669,7 +1792,10 @@ Please select up to {max_agents} Agents most suitable for the interview and prov
             )
             
             selected_indices = response.get("selected_indices", [])[:max_agents]
-            reasoning = response.get("reasoning", "Automatically selected based on relevance")
+            reasoning = response.get(
+                "reasoning",
+                "Automatic fictional profile selection for scenario coverage.",
+            )
             
             # Get full info for selected Agents
             selected_agents = []
@@ -1686,7 +1812,11 @@ Please select up to {max_agents} Agents most suitable for the interview and prov
             # Fallback: select the first N
             selected = profiles[:max_agents]
             indices = list(range(min(max_agents, len(profiles))))
-            return selected, indices, "Automatic selection based on default strategy"
+            return (
+                selected,
+                indices,
+                "Automatic fictional profile selection; not a representative sample.",
+            )
     
     def _generate_interview_questions(
         self,
@@ -1694,29 +1824,31 @@ Please select up to {max_agents} Agents most suitable for the interview and prov
         simulation_requirement: str,
         selected_agents: List[Dict[str, Any]]
     ) -> List[str]:
-        """Use LLM to generate interview questions"""
+        """Generate prompts for a fictional perspective probe."""
         
         agent_roles = [a.get("profession", "Unknown") for a in selected_agents]
         
-        system_prompt = """You are a professional journalist/interviewer. Generate 3-5 in-depth interview questions based on the requirement.
+        system_prompt = """Design 3-5 prompts for fictional generated scenario profiles.
 
-Question Requirements:
-1. Open-ended questions to encourage detailed answers.
-2. Questions may elicit different answers from different roles.
-3. Cover various dimensions: facts, opinions, feelings, etc.
-4. Use natural language, as in a real interview.
-5. Each question should be concise (under 50 words).
-6. Ask the questions directly, without background explanations or prefixes.
+The outputs will be synthetic records with zero human respondents. They are not
+testimony, public opinion, representative behavior, or forecasts.
+
+Prompt requirements:
+1. Ask what the fictional profile might do or surface inside this one scenario.
+2. Exercise different stated scenario assumptions without treating roles as real behavior.
+3. Do not ask for personal facts, lived experience, feelings, or group representation.
+4. Keep each prompt concise (under 50 words).
+5. Use conditional language and never request prediction probabilities.
 
 Return in JSON format: {"questions": ["Question 1", "Question 2", ...]}"""
 
-        user_prompt = f"""Interview Requirement: {interview_requirement}
+        user_prompt = f"""Synthetic Probe Brief: {interview_requirement}
 
-Simulation Background: {simulation_requirement if simulation_requirement else "Not provided"}
+Synthetic Scenario Background: {simulation_requirement if simulation_requirement else "Not provided"}
 
-Target Agent Roles: {', '.join(agent_roles)}
+Generated Profile Labels: {', '.join(agent_roles)}
 
-Please generate 3-5 interview questions."""
+Generate 3-5 conditional scenario-probe prompts."""
 
         try:
             response = self.llm.chat_json(
@@ -1727,14 +1859,23 @@ Please generate 3-5 interview questions."""
                 temperature=0.5
             )
             
-            return response.get("questions", [f"What are your thoughts on {interview_requirement}?"])
+            return response.get(
+                "questions",
+                [
+                    "Within this fictional scenario, what response path does "
+                    f"the profile generate for {interview_requirement}?"
+                ],
+            )
             
         except Exception as e:
             logger.warning(f"Failed to generate questions: {e}")
             return [
-                f"What is your perspective on {interview_requirement}?",
-                "How does this event affect you or the group you represent?",
-                "How do you think this issue should be addressed or improved?"
+                (
+                    "Within this fictional scenario, what response path does "
+                    f"this profile generate for {interview_requirement}?"
+                ),
+                "Which supplied scenario assumption most affects this generated response?",
+                "What alternative generated response appears if that assumption changes?",
             ]
     
     def _generate_interview_summary(
@@ -1742,38 +1883,42 @@ Please generate 3-5 interview questions."""
         interviews: List[AgentInterview],
         interview_requirement: str
     ) -> str:
-        """Generate interview summary"""
+        """Summarize patterns across fictional generated records."""
         
         if not interviews:
-            return "No interviews completed"
+            return "No generated scenario records were produced."
         
-        # Collect all interview content
+        # Collect generated record content.
         interview_texts = []
         for interview in interviews:
             interview_texts.append(f"[{interview.agent_name} ({interview.agent_role})]\n{interview.response[:500]}")
         
-        system_prompt = """You are a professional news editor. Please generate an interview summary based on the responses from multiple interviewees.
+        system_prompt = """Summarize patterns across fictional generated scenario records.
 
-Summary Requirements:
-1. Synthesize the main perspectives from all parties.
-2. Identify areas of consensus and disagreement.
-3. Highlight valuable quotes.
-4. Maintain an objective and neutral stance.
+The records contain zero human respondents. They are not testimony, public
+opinion, representative behavior, evidence of consensus, or forecasts.
+
+Summary requirements:
+1. Describe only patterns present in the generated records.
+2. Call similarities and differences generated-record patterns, never consensus.
+3. Do not use direct quotations or attribute lived experience.
+4. State material scenario assumptions and limitations.
 5. Keep it under 1000 words.
 
 Formatting Constraints (Strictly Follow):
 - Use plain text paragraphs, separating different sections with blank lines.
 - Do NOT use Markdown headers (e.g., #, ##, ###).
 - Do NOT use horizontal rules (e.g., ---, ***).
-- Use standard double quotes " " for direct quotes.
 - You may use **bold** to highlight keywords, but do NOT use other Markdown syntax."""
 
-        user_prompt = f"""Interview Topic: {interview_requirement}
+        user_prompt = f"""Synthetic Scenario Topic: {interview_requirement}
 
-Interview Content:
+Generated Scenario Records:
 {"".join(interview_texts)}
 
-Please generate an interview summary."""
+Summarize only generated-record patterns and begin with this exact disclosure:
+"Fictional generated scenario records; 0 human respondents; not public opinion
+or a forecast." """
 
         try:
             summary = self.llm.chat(
@@ -1788,5 +1933,9 @@ Please generate an interview summary."""
             
         except Exception as e:
             logger.warning(f"Failed to generate summary: {e}")
-            # Fallback: simple join
-            return f"Interviewed {len(interviews)} people, including: " + ", ".join([i.agent_name for i in interviews])
+            names = ", ".join(i.agent_name for i in interviews)
+            return (
+                "Fictional generated scenario records; 0 human respondents; "
+                "not public opinion or a forecast. "
+                f"Generated {len(interviews)} profile records: {names}"
+            )

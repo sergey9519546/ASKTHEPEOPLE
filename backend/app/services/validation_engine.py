@@ -1,8 +1,9 @@
 """
 Validation Engine — Post-simulation networkx analysis.
 
-Computes polarization, Gini, echo-chamber score, cascade stats, and per-round
-summaries. Results are cached to metrics.json and exposed via GET /<id>/metrics.
+Computes within-run network modularity, action-count concentration, synthetic
+interaction clustering, cascade stats, and per-round summaries. These are
+descriptive diagnostics of generated activity, not measurements of people.
 """
 
 from __future__ import annotations
@@ -21,9 +22,9 @@ logger = logging.getLogger("askthepeople.validation_engine")
 
 @dataclass
 class SimulationMetrics:
-    polarization_index: float          # modularity Q in [0,1]
+    polarization_index: float          # legacy field name: network modularity Q
     engagement_gini: float             # Gini in [0,1]
-    echo_chamber_score: float          # intra-community edges / total in [0,1]
+    echo_chamber_score: float          # weighted intra-community share in [0,1]
     cascade_stats: List[Dict[str, Any]]   # top 20 posts by reactions
     action_type_distribution: Dict[str, int]
     top_agents: List[Dict[str, Any]]      # top 10 by action count
@@ -170,7 +171,7 @@ class ValidationEngine:
         return G, post_to_creator
 
     def _compute_polarization(self, G: Any, nx: Any) -> Tuple[float, List]:
-        """Compute modularity-based polarization index."""
+        """Compute network modularity Q for the synthetic interaction graph."""
         try:
             from networkx.algorithms.community import greedy_modularity_communities
 
@@ -182,7 +183,7 @@ class ValidationEngine:
             Q = nx.community.modularity(G_ud, communities, weight="weight")
             return max(0.0, float(Q)), communities
         except Exception as e:
-            logger.warning(f"Polarization computation failed: {e}")
+            logger.warning(f"Network modularity computation failed: {e}")
             return 0.0, []
 
     def _compute_engagement_gini(self, actions: List[Any]) -> float:
@@ -195,7 +196,7 @@ class ValidationEngine:
         return sum((2 * (i + 1) - n - 1) * v for i, v in enumerate(counts)) / (n * total)
 
     def _compute_echo_chamber_score(self, G: Any, communities: List) -> float:
-        """Compute fraction of edges that are intra-community."""
+        """Compute the weighted share of interactions inside communities."""
         if not communities or G.number_of_edges() == 0:
             return 0.0
 
@@ -204,13 +205,18 @@ class ValidationEngine:
             for node in comm:
                 agent_to_community[node] = comm_id
 
-        intra = sum(
-            1
-            for u, v in G.edges()
-            if agent_to_community.get(u) is not None
-            and agent_to_community.get(u) == agent_to_community.get(v)
-        )
-        return intra / G.number_of_edges()
+        intra_weight = 0.0
+        total_weight = 0.0
+        for source, target, data in G.edges(data=True):
+            weight = max(0.0, float(data.get("weight", 1) or 0))
+            total_weight += weight
+            if (
+                agent_to_community.get(source) is not None
+                and agent_to_community.get(source)
+                == agent_to_community.get(target)
+            ):
+                intra_weight += weight
+        return intra_weight / total_weight if total_weight else 0.0
 
     def _compute_cascade_stats(self, actions: List[Any], post_to_creator: Dict) -> List[Dict]:
         """Compute top 20 posts by total reactions."""
@@ -292,11 +298,20 @@ class ValidationEngine:
         delta_echo = round(metrics_b.echo_chamber_score - metrics_a.echo_chamber_score, 4)
 
         if delta_polarization < -0.05:
-            assessment = f"Variant B ({sim_b_id}) significantly reduced polarization (Q reduced by {abs(delta_polarization):.2f})."
+            assessment = (
+                f"Variant B ({sim_b_id}) produced lower synthetic network "
+                f"modularity (Q changed by -{abs(delta_polarization):.2f})."
+            )
         elif delta_polarization > 0.05:
-            assessment = f"Variant A ({sim_a_id}) was less polarized (Variant B increased Q by {delta_polarization:.2f})."
+            assessment = (
+                f"Variant B ({sim_b_id}) produced higher synthetic network "
+                f"modularity (Q changed by +{delta_polarization:.2f})."
+            )
         else:
-            assessment = "Both scenario variants produced comparable social polarization and community echo levels."
+            assessment = (
+                "Both synthetic variants produced comparable network "
+                "modularity and within-community interaction shares."
+            )
 
         return {
             "simulation_a": {
@@ -313,5 +328,13 @@ class ValidationEngine:
                 "delta_echo_chamber_score": delta_echo,
                 "action_count_difference": metrics_b.total_actions - metrics_a.total_actions,
             },
-            "strategic_assessment": assessment
+            "descriptive_assessment": assessment,
+            # Kept for compatibility; this is a generated-run diagnostic, not
+            # a strategic recommendation or real-world effect estimate.
+            "strategic_assessment": assessment,
+            "interpretation": {
+                "human_respondents": 0,
+                "calibration": "not_calibrated",
+                "scope": "within_run_synthetic_diagnostics",
+            },
         }

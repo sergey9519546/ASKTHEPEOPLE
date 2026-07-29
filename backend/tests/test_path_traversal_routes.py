@@ -16,6 +16,7 @@ import pytest
 from app import create_app
 from app.services.report_agent import ReportManager
 from app.services.simulation_manager import SimulationManager
+from app.models.project import ProjectManager
 from app.utils.safe_path import SafePathError
 
 
@@ -60,6 +61,13 @@ def test_simulation_runner_get_run_state_dir_rejects_traversal():
     from app.services.simulation_runner import SimulationRunner
     with pytest.raises(SafePathError):
         SimulationRunner._get_run_state_dir("../evil")
+
+
+def test_project_manager_rejects_traversal_before_read_or_delete():
+    with pytest.raises(SafePathError):
+        ProjectManager.get_project("../outside")
+    with pytest.raises(SafePathError):
+        ProjectManager.delete_project("../outside")
 
 
 # ----------------------------- route-level ---------------------------------

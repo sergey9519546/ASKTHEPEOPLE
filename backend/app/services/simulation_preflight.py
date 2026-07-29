@@ -5,12 +5,14 @@ Simulation preflight validation.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from ..config import Config
+from ..utils.input_policy import PREPARED_PROFILE_MAX
 from .camel_model_factory import (
     validate_camel_runtime_imports,
     validate_required_model_env,
@@ -20,8 +22,10 @@ from .simulation_artifacts import (
     canonical_agents_path,
     preflight_path,
     read_json,
+    run_manifest_path,
     validate_reddit_profiles,
     validate_twitter_rows,
+    write_json,
 )
 
 
@@ -69,6 +73,73 @@ def _validate_config_schema(config: Dict[str, Any]) -> List[str]:
     return errors
 
 
+def _artifact_digest(path: str) -> Dict[str, Any] | None:
+    if not os.path.isfile(path):
+        return None
+    digest = hashlib.sha256()
+    size = 0
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            size += len(chunk)
+            digest.update(chunk)
+    return {"sha256": digest.hexdigest(), "bytes": size}
+
+
+def _write_run_manifest(
+    simulation_dir: str,
+    config: Dict[str, Any],
+    model_matrix: Dict[str, Any],
+    preflight: Dict[str, Any],
+) -> Dict[str, Any]:
+    artifact_names = (
+        "agent_profiles.canonical.json",
+        "twitter_profiles.csv",
+        "reddit_profiles.json",
+        "simulation_config.json",
+        "model_resolution.json",
+        "preflight.json",
+    )
+    artifacts = {
+        name: digest
+        for name in artifact_names
+        if (digest := _artifact_digest(os.path.join(simulation_dir, name))) is not None
+    }
+    payload = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "code_revision": (
+            os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+            or os.environ.get("BUILD_REVISION")
+            or "unknown"
+        ),
+        "simulation": {
+            "simulation_id": config.get("simulation_id"),
+            "project_id": config.get("project_id"),
+            "graph_id": config.get("graph_id"),
+        },
+        "truth_status": {
+            "human_respondents": 0,
+            "external_validation": False,
+            "calibration": "not_calibrated",
+            "interpretation": "synthetic_scenario_exploration",
+        },
+        "reproducibility": {
+            "deterministic": False,
+            "random_seed_controlled": False,
+            "replicate_count": 1,
+            "limitation": (
+                "Model sampling, provider behavior, and runtime scheduling can "
+                "change outcomes; compare multiple runs before drawing conclusions."
+            ),
+        },
+        "model_resolution": model_matrix,
+        "preflight_status": preflight.get("status"),
+        "artifacts": artifacts,
+    }
+    write_json(run_manifest_path(simulation_dir), payload)
+    return payload
+
+
 def run_preflight(simulation_dir: str) -> Dict[str, Any]:
     checks: List[Dict[str, Any]] = []
 
@@ -101,6 +172,31 @@ def run_preflight(simulation_dir: str) -> Dict[str, Any]:
     config_errors = _validate_config_schema(config) if config else ["simulation_config.json missing"]
     add_check("config_schema", not config_errors, config_errors or {"agents": len(config.get("agent_configs", []))})
 
+    profile_counts = {
+        "canonical_agents": len(canonical_agents),
+        "twitter_profiles": len(twitter_rows),
+        "reddit_profiles": len(reddit_profiles),
+        "agent_configs": len(config.get("agent_configs", [])),
+    }
+    over_capacity = {
+        name: count
+        for name, count in profile_counts.items()
+        if count > PREPARED_PROFILE_MAX
+    }
+    add_check(
+        "profile_capacity",
+        not over_capacity,
+        (
+            {
+                "maximum": PREPARED_PROFILE_MAX,
+                "counts": profile_counts,
+                "over_capacity": over_capacity,
+            }
+            if over_capacity
+            else {"maximum": PREPARED_PROFILE_MAX, "counts": profile_counts}
+        ),
+    )
+
     poster_errors = []
     valid_agent_ids = set(expected_ids)
     for index, post in enumerate(config.get("bootstrap_posts", [])):
@@ -132,10 +228,11 @@ def run_preflight(simulation_dir: str) -> Dict[str, Any]:
     failed_checks = [check["name"] for check in checks if check["status"] != "passed"]
     payload = {
         "status": "passed" if not failed_checks else "failed",
-        "generated_at": datetime.now().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "checks": checks,
         "failed_checks": failed_checks,
     }
     with open(preflight_path(simulation_dir), "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
+    _write_run_manifest(simulation_dir, config, model_matrix, payload)
     return payload

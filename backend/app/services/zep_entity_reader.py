@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from zep_cloud.client import Zep
 
 from ..config import Config
+from .claim_boundary import graph_record_disclosure
 from ..utils.logger import get_logger
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 
@@ -17,6 +18,14 @@ logger = get_logger('askthepeople.zep_entity_reader')
 
 # For generic return types
 T = TypeVar('T')
+
+
+def _disclose_related_edge(edge: Dict[str, Any]) -> Dict[str, Any]:
+    """Keep the legacy fact key while adding its conservative record contract."""
+    return {
+        **edge,
+        **graph_record_disclosure(str(edge.get("fact", ""))),
+    }
 
 
 @dataclass
@@ -39,7 +48,9 @@ class EntityNode:
             "labels": self.labels,
             "summary": self.summary,
             "attributes": self.attributes,
-            "related_edges": self.related_edges,
+            "related_edges": [
+                _disclose_related_edge(edge) for edge in self.related_edges
+            ],
             "related_nodes": self.related_nodes,
         }
     
@@ -167,14 +178,14 @@ class ZepEntityReader:
 
         edges_data = []
         for edge in edges:
-            edges_data.append({
+            edges_data.append(_disclose_related_edge({
                 "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
                 "name": edge.name or "",
                 "fact": edge.fact or "",
                 "source_node_uuid": edge.source_node_uuid,
                 "target_node_uuid": edge.target_node_uuid,
                 "attributes": edge.attributes or {},
-            })
+            }))
 
         logger.info(f"Retrieved {len(edges_data)} edges in total")
         return edges_data
@@ -198,14 +209,14 @@ class ZepEntityReader:
             
             edges_data = []
             for edge in edges:
-                edges_data.append({
+                edges_data.append(_disclose_related_edge({
                     "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
                     "name": edge.name or "",
                     "fact": edge.fact or "",
                     "source_node_uuid": edge.source_node_uuid,
                     "target_node_uuid": edge.target_node_uuid,
                     "attributes": edge.attributes or {},
-                })
+                }))
             
             return edges_data
         except Exception as e:

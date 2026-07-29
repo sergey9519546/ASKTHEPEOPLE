@@ -6,6 +6,7 @@ Provides unified logging management, outputting to both console and file
 import os
 import sys
 import logging
+import re
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
@@ -27,7 +28,60 @@ def _ensure_utf8_stdout():
 LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'logs')
 
 
-def setup_logger(name: str = 'askthepeople', level: int = logging.DEBUG) -> logging.Logger:
+class _ProductionPrivacyFilter(logging.Filter):
+    """Keep private prompts, provider payloads, and credentials out of logs."""
+
+    _REDACTIONS = (
+        (re.compile(r"(?i)(authorization:\s*bearer\s+)\S+"), r"\1[REDACTED]"),
+        (re.compile(r"(?i)\b(sk-[A-Za-z0-9_-]{8,})\b"), "[REDACTED]"),
+        (
+            re.compile(r"(?i)(api[_-]?key\s*[=:]\s*)\S+"),
+            r"\1[REDACTED]",
+        ),
+        (
+            re.compile(r"(?i)(://[^:/\s]+:)[^@\s]+@"),
+            r"\1[REDACTED]@",
+        ),
+    )
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if os.environ.get("FLASK_DEBUG", "False").lower() == "true":
+            return True
+
+        if record.levelno >= logging.WARNING and not getattr(
+            record,
+            "privacy_safe",
+            False,
+        ):
+            record.msg = (
+                f"{record.name}.{record.funcName}: event details suppressed "
+                "by production logging policy"
+            )
+            record.args = ()
+            record.exc_info = None
+            record.exc_text = None
+            return True
+
+        message = record.getMessage()
+        for pattern, replacement in self._REDACTIONS:
+            message = pattern.sub(replacement, message)
+        record.msg = message
+        record.args = ()
+        return True
+
+
+def _configured_level() -> int:
+    """Return an operator-controlled level with safe production defaults."""
+    debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
+    default_name = 'DEBUG' if debug_mode else 'INFO'
+    level_name = os.environ.get('LOG_LEVEL', default_name).strip().upper()
+    level = getattr(logging, level_name, logging.INFO)
+    # Production must not retain DEBUG records even if a stale deployment
+    # variable asks for them.
+    return level if debug_mode or level >= logging.INFO else logging.INFO
+
+
+def setup_logger(name: str = 'askthepeople', level: int | None = None) -> logging.Logger:
     """
     Setup logger
     
@@ -38,12 +92,20 @@ def setup_logger(name: str = 'askthepeople', level: int = logging.DEBUG) -> logg
     Returns:
         Configured logger
     """
+    if level is None:
+        level = _configured_level()
+
     # Ensure log directory exists
     os.makedirs(LOG_DIR, exist_ok=True)
     
     # Create logger
     logger = logging.getLogger(name)
     logger.setLevel(level)
+    if not any(
+        isinstance(existing, _ProductionPrivacyFilter)
+        for existing in logger.filters
+    ):
+        logger.addFilter(_ProductionPrivacyFilter())
     
     # Prevent logs from propagating to root logger to avoid duplicate output
     logger.propagate = False
@@ -71,7 +133,10 @@ def setup_logger(name: str = 'askthepeople', level: int = logging.DEBUG) -> logg
         backupCount=5,
         encoding='utf-8'
     )
-    file_handler.setLevel(logging.DEBUG)
+    # Never retain DEBUG records by default in production.  Callers may opt
+    # into another level through LOG_LEVEL, but the default follows
+    # FLASK_DEBUG instead of silently writing verbose files in every mode.
+    file_handler.setLevel(level)
     file_handler.setFormatter(detailed_formatter)
     
     # 2. Console handler - Simple logs (INFO and above)

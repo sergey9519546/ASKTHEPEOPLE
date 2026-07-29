@@ -1,0 +1,8 @@
+misconfigurations:
+  - id: AVD-DS-0002
+    paths:
+      - "Dockerfile"
+    statement: >-
+      The entrypoint needs root only to normalize the exact writable mount,
+      then permanently execs Gunicorn through gosu as UID/GID 10001. Compose
+      drops all unrelated capabilities and keeps no-new-privileges enabled.

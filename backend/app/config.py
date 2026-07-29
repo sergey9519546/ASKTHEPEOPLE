@@ -4,7 +4,8 @@ Uniformly loads configuration from the .env file in the project root directory
 """
 
 import os
-import subprocess
+from urllib.parse import urlsplit
+
 from dotenv import load_dotenv
 
 # Load the .env file from the project root directory
@@ -12,47 +13,89 @@ from dotenv import load_dotenv
 project_root_env = os.path.join(os.path.dirname(__file__), '../../.env')
 
 if os.path.exists(project_root_env):
-    load_dotenv(project_root_env, override=True)
+    # Platform-managed process variables must win over any mounted/stale file.
+    load_dotenv(project_root_env, override=False)
 else:
     # If there is no .env in the root directory, try loading environment variables (for production environment)
-    load_dotenv(override=True)
+    load_dotenv(override=False)
 
 
-def _resolve_github_models_token() -> None:
-    """
-    Auto-resolve a GitHub Models LLM token so the app works with zero manual setup.
+_PLACEHOLDER_CREDENTIALS = {"gho_GITHUB_MODELS_TOKEN_PLACEHOLDER"}
+for _credential_name in ("LLM_API_KEY", "LLM_BOOST_API_KEY"):
+    if os.environ.get(_credential_name) in _PLACEHOLDER_CREDENTIALS:
+        # Never silently repurpose the developer's `gh auth token` as a model
+        # credential. It may carry materially broader GitHub permissions and
+        # must not be sent to a provider endpoint without an explicit choice.
+        os.environ.pop(_credential_name, None)
 
-    GitHub Models (https://docs.github.com/github-models) provides free,
-    OpenAI-compatible LLM inference authenticated with any GitHub token that
-    has `models:read`. If `.env` carries the placeholder credential, we try to
-    pull a live token from the local `gh` CLI (the user is already authed).
-    On servers without `gh`, set a real LLM_API_KEY in `.env` instead.
 
-    Mutates os.environ in place. Failures are silent — the placeholder remains
-    and the LLMClient will raise a clear error at call time if still unresolved.
-    """
-    placeholder = "gho_GITHUB_MODELS_TOKEN_PLACEHOLDER"
-    needs_primary = os.environ.get("LLM_API_KEY", "") == placeholder
-    needs_boost = os.environ.get("LLM_BOOST_API_KEY", "") == placeholder
-    if not (needs_primary or needs_boost):
-        return
-    try:
-        result = subprocess.run(
-            ["gh", "auth", "token"],
-            capture_output=True, text=True, timeout=5,
+_MIN_PRIVATE_CREDENTIAL_LENGTH = 32
+_INSECURE_CREDENTIAL_MARKERS = (
+    "build-smoke",
+    "changeme",
+    "change-me",
+    "example",
+    "placeholder",
+    "test-only",
+)
+
+
+def credential_validation_error(name: str, value: str | None) -> str | None:
+    """Return a safe validation error for a private application credential."""
+    if not value:
+        return f"{name} is required"
+    normalized = value.strip()
+    if len(normalized) < _MIN_PRIVATE_CREDENTIAL_LENGTH:
+        return (
+            f"{name} must be at least {_MIN_PRIVATE_CREDENTIAL_LENGTH} "
+            "characters"
         )
-        token = result.stdout.strip() if result.returncode == 0 else ""
-    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-        token = ""
-    if not token:
-        return  # leave placeholder; LLMClient will surface a clear error later
-    if needs_primary:
-        os.environ["LLM_API_KEY"] = token
-    if needs_boost:
-        os.environ["LLM_BOOST_API_KEY"] = token
+    lowered = normalized.lower()
+    if any(marker in lowered for marker in _INSECURE_CREDENTIAL_MARKERS):
+        return f"{name} must not use a documented placeholder"
+    if len(set(normalized)) < 8:
+        return f"{name} does not contain enough variation"
+    return None
 
 
-_resolve_github_models_token()
+def _trusted_hosts(debug: bool) -> list[str] | None:
+    """Build Flask's exact Host allowlist from explicit deployment settings."""
+    configured = os.environ.get("TRUSTED_HOSTS", "")
+    railway_runtime = bool(os.environ.get("RAILWAY_ENVIRONMENT_ID"))
+    candidates = [
+        item.strip()
+        for item in configured.split(",")
+        if item.strip()
+    ]
+
+    if not candidates and (not debug or railway_runtime):
+        for origin in os.environ.get("CORS_ORIGINS", "").split(","):
+            parsed = urlsplit(origin.strip())
+            if parsed.hostname:
+                candidates.append(parsed.hostname)
+        for variable in (
+            "RAILWAY_PUBLIC_DOMAIN",
+            "RAILWAY_PRIVATE_DOMAIN",
+            "RAILWAY_STATIC_URL",
+        ):
+            value = os.environ.get(variable, "").strip()
+            if not value:
+                continue
+            parsed = urlsplit(value if "://" in value else f"https://{value}")
+            if parsed.hostname:
+                candidates.append(parsed.hostname)
+
+    if debug and not configured and not railway_runtime:
+        return None
+
+    # Railway readiness probes deliberately use this Host value rather than
+    # the service's public domain. Keep the exception exact and platform-bound;
+    # a wildcard would weaken Host-header validation for normal traffic.
+    if railway_runtime:
+        candidates.append("healthcheck.railway.app")
+
+    candidates.extend(["localhost", "127.0.0.1", "::1"])
+    return list(dict.fromkeys(candidates))
 
 
 class Config:
@@ -60,9 +103,14 @@ class Config:
 
     # Flask Configuration
     # SECRET_KEY: fail-fast in production; allow random-per-restart only in dev.
+    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     if os.environ.get('SECRET_KEY'):
         SECRET_KEY = os.environ.get('SECRET_KEY')
-    elif os.environ.get('FLASK_DEBUG', 'False').lower() == 'true':
+        if not DEBUG:
+            _secret_error = credential_validation_error("SECRET_KEY", SECRET_KEY)
+            if _secret_error:
+                raise RuntimeError(_secret_error)
+    elif DEBUG:
         # Dev: random per-restart is fine (no persistent sessions to protect)
         SECRET_KEY = os.urandom(24).hex()
     else:
@@ -71,13 +119,36 @@ class Config:
             "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(32))\" "
             "and add it to your .env file."
         )
-    DEBUG = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
     CORS_ORIGINS = os.environ.get('CORS_ORIGINS', '*')
+    TRUSTED_HOSTS = _trusted_hosts(DEBUG)
+    # Railway injects this identifier only inside its private service runtime;
+    # there X-Real-IP is set by the edge proxy. Other deployments must opt in.
+    TRUST_X_REAL_IP = (
+        bool(os.environ.get("RAILWAY_ENVIRONMENT_ID"))
+        or os.environ.get("TRUST_X_REAL_IP", "False").lower() == "true"
+    )
 
     # Optional bearer-token auth for all /api/* routes.
     # If set, requests must include: Authorization: Bearer <APP_TOKEN>.
     # If unset (default), the API is open (local dev only).
     APP_TOKEN = os.environ.get('APP_TOKEN')
+    REQUIRE_APP_AUTH = os.environ.get(
+        'REQUIRE_APP_AUTH',
+        'False' if DEBUG else 'True',
+    ).lower() == 'true'
+
+    # Runtime provider settings are a privileged local-development control
+    # plane, not a general application feature.  They are disabled unless an
+    # operator opts in explicitly.  In production APP_TOKEN must also be set,
+    # which keeps the mutation/test routes behind the existing single-user
+    # bearer-token guard.
+    ALLOW_RUNTIME_SETTINGS = os.environ.get(
+        'ALLOW_RUNTIME_SETTINGS', 'False'
+    ).lower() == 'true'
+    ALLOW_PRIVATE_LLM_ENDPOINTS = os.environ.get(
+        'ALLOW_PRIVATE_LLM_ENDPOINTS', 'False'
+    ).lower() == 'true'
+    RUNTIME_SETTINGS_ENV_PATH = os.path.abspath(project_root_env)
     
     # JSON Configuration - Disable ASCII escaping to display characters directly (instead of \uXXXX format)
     JSON_AS_ASCII = False
@@ -87,6 +158,17 @@ class Config:
     LLM_BASE_URL = os.environ.get('LLM_BASE_URL', 'https://api.openai.com/v1')
     LLM_MODEL_NAME = os.environ.get('LLM_MODEL_NAME', 'gpt-4o-mini')
     LLM_TIMEOUT = float(os.environ.get('LLM_TIMEOUT', '120'))
+    _configured_llm_urls = [
+        url for url in (
+            LLM_BASE_URL,
+            os.environ.get('LLM_BOOST_BASE_URL', ''),
+        )
+        if url
+    ]
+    LLM_ALLOWED_BASE_URLS = os.environ.get(
+        'LLM_ALLOWED_BASE_URLS',
+        ','.join(_configured_llm_urls),
+    )
     
     # Zep Configuration
     ZEP_API_KEY = os.environ.get('ZEP_API_KEY')
@@ -103,7 +185,6 @@ class Config:
     # OASIS Simulation Configuration
     OASIS_DEFAULT_MAX_ROUNDS = int(os.environ.get('OASIS_DEFAULT_MAX_ROUNDS', '10'))
     OASIS_SIMULATION_DATA_DIR = os.path.join(os.path.dirname(__file__), '../uploads/simulations')
-    
     # OASIS Platform Available Actions Configuration
     OASIS_TWITTER_ACTIONS = [
         'CREATE_POST', 'LIKE_POST', 'REPOST', 'FOLLOW', 'DO_NOTHING', 'QUOTE_POST'
@@ -141,6 +222,20 @@ class Config:
             errors.append("LLM_API_KEY is not configured")
         if not cls.ZEP_API_KEY:
             errors.append("ZEP_API_KEY is not configured")
+        if cls.REQUIRE_APP_AUTH and not cls.APP_TOKEN:
+            errors.append(
+                "APP_TOKEN is required when REQUIRE_APP_AUTH=true. "
+                "Generate a private access key and provide it at runtime; "
+                "never compile it into the frontend bundle."
+            )
+        elif cls.REQUIRE_APP_AUTH:
+            token_error = credential_validation_error("APP_TOKEN", cls.APP_TOKEN)
+            if token_error:
+                errors.append(token_error)
+        if not cls.DEBUG:
+            secret_error = credential_validation_error("SECRET_KEY", cls.SECRET_KEY)
+            if secret_error:
+                errors.append(secret_error)
         # H3: reject wildcard CORS in production — exposes the API to any origin.
         # Tests/local dev set FLASK_DEBUG=true; production deploys must list
         # explicit origins (comma-separated) in CORS_ORIGINS.
@@ -151,4 +246,3 @@ class Config:
                 "CORS_ORIGINS=https://your-app.vercel.app"
             )
         return errors
-

@@ -8,7 +8,7 @@ import io
 import json
 import traceback
 from datetime import datetime
-from flask import request, jsonify, send_file
+from flask import request, jsonify, send_file, make_response
 from werkzeug.utils import secure_filename
 
 from . import simulation_bp
@@ -20,9 +20,33 @@ from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_observation_store import search_observations
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
 from ..services.export_service import CSVExporter
+from ..services.claim_boundary import (
+    fictional_profile_disclosure,
+    graph_record_disclosure,
+    synthetic_activity_disclosure,
+    synthetic_config_disclosure,
+    synthetic_output_disclosure,
+)
 from ..services.zep_tools import ZepToolsService
-from ..services.simulation_ipc import SimulationIPCClient
 from ..utils.logger import get_logger
+from ..utils.input_policy import (
+    ARCHETYPE_COUNT_MAX,
+    ARCHETYPE_EXPANSION_MAX,
+    ENTITY_TYPE_FILTER_MAX,
+    ENTITY_TYPE_NAME_MAX,
+    FOLLOWER_COUNT_MAX,
+    INTERVIEW_BATCH_MAX,
+    INTERVIEW_PROMPT_MAX,
+    InputPolicyError,
+    PARALLEL_PROFILE_WORKERS_MAX,
+    PREPARE_ENTITY_MAX,
+    PREPARED_PROFILE_MAX,
+    SIMULATION_ROUNDS_MAX,
+    bounded_integer,
+    bounded_text,
+    validate_item_count,
+    validate_weight_distribution,
+)
 from ..models.project import ProjectManager
 
 logger = get_logger('askthepeople.api.simulation')
@@ -46,14 +70,158 @@ def _safe_sim_dir(simulation_id: str) -> str:
     return safe_join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
 
 
-# Interview prompt optimization prefix
-# Adding this prefix prevents the Agent from calling tools and encourages direct text replies
-INTERVIEW_PROMPT_PREFIX = "Based on your persona, all past memories, and actions, reply to me directly with text without calling any tools:"
+def _with_profile_truth(profiles):
+    """Attach non-human provenance to detached API profile records."""
+    disclosed = []
+    for profile in profiles if isinstance(profiles, list) else []:
+        if isinstance(profile, dict):
+            disclosed.append({**profile, **fictional_profile_disclosure()})
+        else:
+            disclosed.append(profile)
+    return disclosed
+
+
+def _with_activity_truth(records):
+    """Attach synthetic-run provenance to detached API activity records."""
+    disclosed = []
+    for record in records if isinstance(records, list) else []:
+        if isinstance(record, dict):
+            disclosed.append({**record, **synthetic_activity_disclosure()})
+        else:
+            disclosed.append(record)
+    return disclosed
+
+
+def _with_config_truth(config):
+    """Ensure old and new config payloads carry the same truth contract."""
+    if not isinstance(config, dict):
+        return config
+    disclosed = dict(config)
+    disclosed["truth_status"] = synthetic_output_disclosure()
+    disclosed["control_metadata"] = synthetic_config_disclosure()
+    return disclosed
+
+
+def _resolve_graph_memory_request(
+    data: dict,
+    *,
+    source_graph_id: str | None,
+) -> tuple[bool, str | None]:
+    """Reject graph writes while keeping ordinary observation storage explicit."""
+    requested = data.get("enable_graph_memory_update", False)
+    if requested is False or requested is None:
+        return False, None
+    if requested is not True:
+        raise InputPolicyError(
+            "invalid_boolean_field",
+            "enable_graph_memory_update must be a JSON boolean.",
+        )
+    raise InputPolicyError(
+        "synthetic_graph_writes_unsupported",
+        (
+            "Writing generated activity to a graph is unsupported. Generated "
+            "activity remains in the simulation observation store."
+        ),
+    )
+
+
+def _validate_prepare_controls(data: dict) -> dict:
+    """Validate bounded profile-generation controls before any provider I/O."""
+    raw_entity_types = data.get("entity_types")
+    entity_types = None
+    if raw_entity_types is not None:
+        entity_types = validate_item_count(
+            raw_entity_types,
+            field="entity_types",
+            maximum=ENTITY_TYPE_FILTER_MAX,
+        )
+        entity_types = [
+            bounded_text(
+                item,
+                field="entity_types item",
+                max_length=ENTITY_TYPE_NAME_MAX,
+                required=True,
+            )
+            for item in entity_types
+        ]
+
+    parallel_profile_count = bounded_integer(
+        data.get("parallel_profile_count", 5),
+        field="parallel_profile_count",
+        minimum=1,
+        maximum=PARALLEL_PROFILE_WORKERS_MAX,
+    )
+
+    use_archetypes = data.get("use_archetypes", False)
+    use_llm_for_profiles = data.get("use_llm_for_profiles", True)
+    force_regenerate = data.get("force_regenerate", False)
+    for field, value in (
+        ("use_archetypes", use_archetypes),
+        ("use_llm_for_profiles", use_llm_for_profiles),
+        ("force_regenerate", force_regenerate),
+    ):
+        if not isinstance(value, bool):
+            raise InputPolicyError(
+                "invalid_boolean_field",
+                f"{field} must be a JSON boolean.",
+            )
+
+    archetype_count = data.get("archetype_count")
+    expansion_factor = data.get("expansion_factor")
+    if use_archetypes or archetype_count is not None or expansion_factor is not None:
+        archetype_count = bounded_integer(
+            (
+                Config.ARCHETYPE_DEFAULT_COUNT
+                if archetype_count is None
+                else archetype_count
+            ),
+            field="archetype_count",
+            minimum=1,
+            maximum=ARCHETYPE_COUNT_MAX,
+        )
+        expansion_factor = bounded_integer(
+            (
+                Config.ARCHETYPE_DEFAULT_EXPANSION_FACTOR
+                if expansion_factor is None
+                else expansion_factor
+            ),
+            field="expansion_factor",
+            minimum=1,
+            maximum=ARCHETYPE_EXPANSION_MAX,
+        )
+        if archetype_count * expansion_factor > PREPARED_PROFILE_MAX:
+            raise InputPolicyError(
+                "profile_count_out_of_range",
+                (
+                    "archetype_count multiplied by expansion_factor may not "
+                    f"exceed {PREPARED_PROFILE_MAX} prepared profiles."
+                ),
+            )
+
+    return {
+        "entity_types": entity_types,
+        "parallel_profile_count": parallel_profile_count,
+        "use_archetypes": use_archetypes,
+        "use_llm_for_profiles": use_llm_for_profiles,
+        "force_regenerate": force_regenerate,
+        "archetype_count": archetype_count,
+        "expansion_factor": expansion_factor,
+    }
+
+
+# Compatibility routes still use "interview" in their URLs. The operation is a
+# generated profile follow-up: another model output, never human testimony.
+INTERVIEW_PROMPT_PREFIX = (
+    "You are a fictional generated profile inside one synthetic scenario. "
+    "Your answer is another model output, not testimony, public opinion, or a "
+    "prediction. Use only the profile assumptions and records from this run. "
+    "Reply directly with text without calling tools: "
+)
 
 
 def optimize_interview_prompt(prompt: str, bypass: bool = False) -> str:
     """
-    Optimize Interview question by adding a prefix to prevent the Agent from calling tools
+    Add the synthetic-output disclosure and prevent tool calls.
     
     Args:
         prompt: Original question
@@ -103,9 +271,12 @@ def get_graph_entities(graph_id: str):
             enrich_with_edges=enrich
         )
         
+        payload = result.to_dict()
+        payload.update(graph_record_disclosure())
         return jsonify({
             "success": True,
-            "data": result.to_dict()
+            "data": payload,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -136,9 +307,12 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
                 "error": f"Entity does not exist: {entity_uuid}"
             }), 404
         
+        payload = entity.to_dict()
+        payload.update(graph_record_disclosure())
         return jsonify({
             "success": True,
-            "data": entity.to_dict()
+            "data": payload,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -169,13 +343,16 @@ def get_entities_by_type(graph_id: str, entity_type: str):
             enrich_with_edges=enrich
         )
         
+        payload = {
+            "entity_type": entity_type,
+            "count": len(entities),
+            "entities": [e.to_dict() for e in entities],
+        }
+        payload.update(graph_record_disclosure())
         return jsonify({
             "success": True,
-            "data": {
-                "entity_type": entity_type,
-                "count": len(entities),
-                "entities": [e.to_dict() for e in entities]
-            }
+            "data": payload,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -452,6 +629,15 @@ def prepare_simulation():
                 "success": False,
                 "error": "Please provide simulation_id"
             }), 400
+
+        try:
+            prepare_controls = _validate_prepare_controls(data)
+        except InputPolicyError as exc:
+            return jsonify({
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+            }), 400
         
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
@@ -463,7 +649,7 @@ def prepare_simulation():
             }), 404
         
         # Check if force regenerate
-        force_regenerate = data.get('force_regenerate', False)
+        force_regenerate = prepare_controls["force_regenerate"]
         logger.info(f"Start processing /prepare request: simulation_id={simulation_id}, force_regenerate={force_regenerate}")
         
         # Check if already prepared (avoid duplicate generation)
@@ -505,12 +691,12 @@ def prepare_simulation():
         # Get document text
         document_text = ProjectManager.get_extracted_text(state.project_id) or ""
         
-        entity_types_list = data.get('entity_types')
-        use_llm_for_profiles = data.get('use_llm_for_profiles', True)
-        parallel_profile_count = data.get('parallel_profile_count', 5)
-        use_archetypes = data.get('use_archetypes', False)
-        archetype_count = data.get('archetype_count')  # None → Config default
-        expansion_factor = data.get('expansion_factor')  # None → Config default
+        entity_types_list = prepare_controls["entity_types"]
+        use_llm_for_profiles = prepare_controls["use_llm_for_profiles"]
+        parallel_profile_count = prepare_controls["parallel_profile_count"]
+        use_archetypes = prepare_controls["use_archetypes"]
+        archetype_count = prepare_controls["archetype_count"]
+        expansion_factor = prepare_controls["expansion_factor"]
         
         # ========== Synchronously get entity count (before background task start) ==========
         # This allows the frontend to get the expected total Agent count immediately after calling prepare
@@ -523,6 +709,16 @@ def prepare_simulation():
                 defined_entity_types=entity_types_list,
                 enrich_with_edges=False  # Speed up by not retrieving edge info
             )
+            if filtered_preview.filtered_count > PREPARE_ENTITY_MAX:
+                return jsonify({
+                    "success": False,
+                    "error": "entity_count_out_of_range",
+                    "message": (
+                        "The selected graph contains "
+                        f"{filtered_preview.filtered_count} profile entities; "
+                        f"the maximum is {PREPARE_ENTITY_MAX}."
+                    ),
+                }), 400
             # Save entity count to state (for immediate frontend retrieval)
             state.entities_count = filtered_preview.filtered_count
             state.entity_types = list(filtered_preview.entity_types)
@@ -640,13 +836,19 @@ def prepare_simulation():
                 
             except Exception as e:
                 logger.error(f"Failed to prepare simulation: {str(e)}")
-                task_manager.fail_task(task_id, str(e))
+                task_manager.fail_task(
+                    task_id,
+                    str(e),
+                    public_error="simulation_prepare_failed",
+                )
                 
                 # Update simulation status to failed
                 state = manager.get_simulation(simulation_id)
                 if state:
                     state.status = SimulationStatus.FAILED
-                    state.error = str(e)
+                    state.error = (
+                        str(e) if Config.DEBUG else "simulation_prepare_failed"
+                    )
                     manager._save_simulation_state(state)
         
         # Start background thread
@@ -778,7 +980,7 @@ def get_prepare_status():
                 "error": f"Task does not exist: {task_id}"
             }), 404
         
-        task_dict = task.to_dict()
+        task_dict = task.to_public_dict()
         task_dict["already_prepared"] = False
         
         return jsonify({
@@ -839,12 +1041,20 @@ def list_simulations():
         project_id = request.args.get('project_id')
         
         manager = SimulationManager()
-        simulations = manager.list_simulations(project_id=project_id)
+        simulations = sorted(
+            manager.list_simulations(project_id=project_id),
+            key=lambda simulation: simulation.updated_at or simulation.created_at or "",
+            reverse=True,
+        )
+        summaries = [
+            _enrich_simulation_summary(simulation, manager)
+            for simulation in simulations
+        ]
         
         return jsonify({
             "success": True,
-            "data": [s.to_dict() for s in simulations],
-            "count": len(simulations)
+            "data": summaries,
+            "count": len(summaries)
         })
         
     except Exception as e:
@@ -856,7 +1066,7 @@ def list_simulations():
         }), 500
 
 
-def _get_report_id_for_simulation(simulation_id: str) -> str:
+def _get_report_summary_for_simulation(simulation_id: str):
     """
     Get the latest report_id for a simulation
     
@@ -867,10 +1077,9 @@ def _get_report_id_for_simulation(simulation_id: str) -> str:
         simulation_id: Simulation ID
         
     Returns:
-        report_id or None
+        Latest report summary or None.
     """
     import json
-    from datetime import datetime
     
     # reports directory path: backend/uploads/reports
     # __file__ is app/api/simulation.py, need to go up two levels to backend/
@@ -908,11 +1117,88 @@ def _get_report_id_for_simulation(simulation_id: str) -> str:
         
         # Sort by creation time in descending order and return the latest one
         matching_reports.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        return matching_reports[0].get("report_id")
+        return matching_reports[0]
         
     except Exception as e:
         logger.warning(f"Failed to find report for simulation {simulation_id}: {e}")
         return None
+
+
+def _get_report_id_for_simulation(simulation_id: str):
+    """Return the latest report ID for backwards-compatible callers."""
+    summary = _get_report_summary_for_simulation(simulation_id)
+    return summary.get("report_id") if summary else None
+
+
+def _enrich_simulation_summary(simulation, manager: SimulationManager):
+    """Build the persisted resume DTO shared by history and project listings."""
+    summary = simulation.to_dict()
+    project = ProjectManager.get_project(simulation.project_id)
+    config = manager.get_simulation_config(simulation.simulation_id) or {}
+    time_config = config.get("time_config", {})
+    total_hours = time_config.get("total_simulation_hours", 0)
+    minutes_per_round = max(time_config.get("minutes_per_round", 60), 1)
+    recommended_rounds = int(total_hours * 60 / minutes_per_round)
+
+    summary["project_name"] = project.name if project else ""
+    summary["simulation_requirement"] = (
+        config.get("simulation_requirement")
+        or (project.simulation_requirement if project else "")
+        or ""
+    )
+    summary["total_simulation_hours"] = total_hours
+
+    run_state = SimulationRunner.get_run_state(simulation.simulation_id)
+    if run_state:
+        summary["current_round"] = run_state.current_round
+        summary["runner_status"] = run_state.runner_status.value
+        summary["total_rounds"] = (
+            run_state.total_rounds
+            if run_state.total_rounds > 0
+            else recommended_rounds
+        )
+    else:
+        summary["current_round"] = 0
+        summary["runner_status"] = "idle"
+        summary["total_rounds"] = recommended_rounds
+
+    summary["files"] = [
+        {"filename": item.get("filename", "Unknown file")}
+        for item in ((project.files if project else []) or [])[:3]
+    ]
+
+    report = _get_report_summary_for_simulation(simulation.simulation_id)
+    summary["report_id"] = report.get("report_id") if report else None
+    summary["report_status"] = report.get("status") if report else None
+
+    runner_status = summary["runner_status"]
+    if summary["report_id"]:
+        summary["workflow_step"] = 4
+        summary["resume_target"] = "report"
+    elif runner_status in {
+        "starting",
+        "running",
+        "stopping",
+        "completed",
+        "stopped",
+        "failed",
+        "interrupted",
+    } or summary.get("status") in {
+        "running",
+        "completed",
+        "stopped",
+        "interrupted",
+    }:
+        summary["workflow_step"] = 3
+        summary["resume_target"] = "run"
+    else:
+        summary["workflow_step"] = 2
+        summary["resume_target"] = "setup"
+
+    summary["version"] = "v1.0.2"
+    created_at = summary.get("created_at", "")
+    summary["created_date"] = created_at[:10] if isinstance(created_at, str) else ""
+    return summary
 
 
 @simulation_bp.route('/history', methods=['GET'])
@@ -954,65 +1240,15 @@ def get_simulation_history():
         limit = request.args.get('limit', 20, type=int)
         
         manager = SimulationManager()
-        simulations = manager.list_simulations()[:limit]
-        
-        # Enrich simulation data, read only from Simulation file
-        enriched_simulations = []
-        for sim in simulations:
-            sim_dict = sim.to_dict()
-            
-            # Get simulation configuration info (read simulation_requirement from simulation_config.json)
-            config = manager.get_simulation_config(sim.simulation_id)
-            if config:
-                sim_dict["simulation_requirement"] = config.get("simulation_requirement", "")
-                time_config = config.get("time_config", {})
-                sim_dict["total_simulation_hours"] = time_config.get("total_simulation_hours", 0)
-                # Recommended rounds (fallback value)
-                recommended_rounds = int(
-                    time_config.get("total_simulation_hours", 0) * 60 / 
-                    max(time_config.get("minutes_per_round", 60), 1)
-                )
-            else:
-                sim_dict["simulation_requirement"] = ""
-                sim_dict["total_simulation_hours"] = 0
-                recommended_rounds = 0
-            
-            # Get run status (read actual rounds set by user from run_state.json)
-            run_state = SimulationRunner.get_run_state(sim.simulation_id)
-            if run_state:
-                sim_dict["current_round"] = run_state.current_round
-                sim_dict["runner_status"] = run_state.runner_status.value
-                # Use total_rounds set by user, otherwise use recommended rounds
-                sim_dict["total_rounds"] = run_state.total_rounds if run_state.total_rounds > 0 else recommended_rounds
-            else:
-                sim_dict["current_round"] = 0
-                sim_dict["runner_status"] = "idle"
-                sim_dict["total_rounds"] = recommended_rounds
-            
-            # Get associated project's file list (up to 3)
-            project = ProjectManager.get_project(sim.project_id)
-            if project and hasattr(project, 'files') and project.files:
-                sim_dict["files"] = [
-                    {"filename": f.get("filename", "Unknown file")} 
-                    for f in project.files[:3]
-                ]
-            else:
-                sim_dict["files"] = []
-            
-            # Get associated report_id (find the latest report for this simulation)
-            sim_dict["report_id"] = _get_report_id_for_simulation(sim.simulation_id)
-            
-            # Add version number
-            sim_dict["version"] = "v1.0.2"
-            
-            # Format date
-            try:
-                created_date = sim_dict.get("created_at", "")[:10]
-                sim_dict["created_date"] = created_date
-            except:
-                sim_dict["created_date"] = ""
-            
-            enriched_simulations.append(sim_dict)
+        simulations = sorted(
+            manager.list_simulations(),
+            key=lambda simulation: simulation.updated_at or simulation.created_at or "",
+            reverse=True,
+        )[:limit]
+        enriched_simulations = [
+            _enrich_simulation_summary(simulation, manager)
+            for simulation in simulations
+        ]
         
         return jsonify({
             "success": True,
@@ -1042,14 +1278,17 @@ def get_simulation_profiles(simulation_id: str):
         
         manager = SimulationManager()
         profiles = manager.get_profiles(simulation_id, platform=platform)
+        profiles = _with_profile_truth(profiles)
         
         return jsonify({
             "success": True,
             "data": {
                 "platform": platform,
                 "count": len(profiles),
-                "profiles": profiles
-            }
+                "profiles": profiles,
+                **fictional_profile_disclosure(),
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except ValueError as e:
@@ -1135,6 +1374,7 @@ def get_simulation_profiles_realtime(simulation_id: str):
                     with open(profiles_file, 'r', encoding='utf-8') as f:
                         reader = csv.DictReader(f)
                         profiles = list(reader)
+                profiles = _with_profile_truth(profiles)
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Failed to read profiles file (may be being written): {e}")
                 profiles = []
@@ -1164,8 +1404,10 @@ def get_simulation_profiles_realtime(simulation_id: str):
                 "is_generating": is_generating,
                 "file_exists": file_exists,
                 "file_modified_at": file_modified_at,
-                "profiles": profiles
-            }
+                "profiles": profiles,
+                **fictional_profile_disclosure(),
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -1229,7 +1471,7 @@ def get_simulation_config_realtime(simulation_id: str):
             
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
+                    config = _with_config_truth(json.load(f))
             except (json.JSONDecodeError, Exception) as e:
                 logger.warning(f"Failed to read config file (may be being written): {e}")
                 config = None
@@ -1286,7 +1528,8 @@ def get_simulation_config_realtime(simulation_id: str):
         
         return jsonify({
             "success": True,
-            "data": response_data
+            "data": response_data,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -1322,7 +1565,8 @@ def get_simulation_config(simulation_id: str):
         
         return jsonify({
             "success": True,
-            "data": config
+            "data": _with_config_truth(config),
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -1391,9 +1635,12 @@ def search_simulation_observations(simulation_id: str):
             agent_id=request.args.get('agent_id', type=int),
             limit=request.args.get('limit', 50, type=int),
         )
+        result = dict(result)
+        result["results"] = _with_activity_truth(result.get("results", []))
         return jsonify({
             "success": True,
-            "data": result
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
         })
     except Exception as e:
         logger.error(f"Failed to search observations: {str(e)}")
@@ -1418,8 +1665,16 @@ def download_simulation_config(simulation_id: str):
                 "error": "Configuration file does not exist, please call /prepare interface first"
             }), 404
         
+        with open(config_path, 'r', encoding='utf-8') as handle:
+            config = _with_config_truth(json.load(handle))
+        payload = io.BytesIO(
+            json.dumps(config, ensure_ascii=False, indent=2).encode("utf-8")
+        )
+        payload.seek(0)
+
         return send_file(
-            config_path,
+            payload,
+            mimetype="application/json",
             as_attachment=True,
             download_name="simulation_config.json"
         )
@@ -1542,6 +1797,7 @@ def generate_profiles():
             profiles_data = [p.to_twitter_format() for p in profiles]
         else:
             profiles_data = [p.to_dict() for p in profiles]
+        profiles_data = _with_profile_truth(profiles_data)
         
         return jsonify({
             "success": True,
@@ -1549,8 +1805,10 @@ def generate_profiles():
                 "platform": platform,
                 "entity_types": list(filtered.entity_types),
                 "count": len(profiles_data),
-                "profiles": profiles_data
-            }
+                "profiles": profiles_data,
+                **fictional_profile_disclosure(),
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -1574,7 +1832,6 @@ def start_simulation():
             "simulation_id": "sim_xxxx",          // Required, Simulation ID
             "platform": "parallel",                // Optional: twitter / reddit / parallel (default)
             "max_rounds": 100,                     // Optional: max simulation rounds to truncate long simulations
-            "enable_graph_memory_update": false,   // Optional: whether to dynamically update Agent activities to Zep graph memory
             "force": false                         // Optional: force restart (stops running simulation and cleans logs)
         }
 
@@ -1584,11 +1841,8 @@ def start_simulation():
         - Does not clean configuration files (simulation_config.json) or profile files
         - Suitable for scenarios where re-running simulation is needed
 
-    About enable_graph_memory_update:
-        - When enabled, all Agent activities in simulation (posts, comments, likes, etc.) are updated to Zep graph in real-time
-        - Allows the graph to "remember" the simulation process for later analysis or AI chat
-        - Requires simulation's project to have a valid graph_id
-        - Uses batch update mechanism to reduce API calls
+    Generated activity is retained only in the per-run observation store.
+    Requests to write generated activity into any graph are rejected.
 
     Returns:
         {
@@ -1600,7 +1854,9 @@ def start_simulation():
                 "twitter_running": true,
                 "reddit_running": true,
                 "started_at": "2025-12-01T10:00:00",
-                "graph_memory_update_enabled": true,  // Whether graph memory update is enabled
+                "graph_memory_update_enabled": false,
+                "observation_storage": "simulation_observation_store",
+                "source_graph_mutated": false,
                 "force_restarted": true               // Whether forced restart
             }
         }
@@ -1616,27 +1872,47 @@ def start_simulation():
             }), 400
 
         platform = data.get('platform', 'parallel')
-        max_rounds = data.get('max_rounds')  # Optional: max simulation rounds
-        enable_graph_memory_update = data.get('enable_graph_memory_update', False)  # Optional: whether to enable graph memory update
         force = data.get('force', False)  # Optional: force restart
         enable_followers = data.get('enable_followers', False)
-        follower_count = int(data.get('follower_count', Config.FOLLOWER_DEFAULT_COUNT))
-        follower_distribution = data.get('follower_distribution', None)
-
-        # Validate max_rounds parameter
-        if max_rounds is not None:
-            try:
-                max_rounds = int(max_rounds)
-                if max_rounds <= 0:
-                    return jsonify({
-                        "success": False,
-                        "error": "max_rounds must be a positive integer"
-                    }), 400
-            except (ValueError, TypeError):
-                return jsonify({
-                    "success": False,
-                    "error": "max_rounds must be a valid integer"
-                }), 400
+        try:
+            max_rounds_value = data.get('max_rounds')
+            max_rounds = (
+                bounded_integer(
+                    max_rounds_value,
+                    field="max_rounds",
+                    minimum=1,
+                    maximum=SIMULATION_ROUNDS_MAX,
+                )
+                if max_rounds_value is not None
+                else None
+            )
+            follower_count = bounded_integer(
+                data.get('follower_count', Config.FOLLOWER_DEFAULT_COUNT),
+                field="follower_count",
+                minimum=0,
+                maximum=FOLLOWER_COUNT_MAX,
+            )
+            follower_distribution = validate_weight_distribution(
+                data.get('follower_distribution'),
+                field="follower_distribution",
+                allowed_keys={
+                    "AMPLIFIER",
+                    "CONTRARIAN",
+                    "NEUTRAL",
+                    "LURKER",
+                },
+            )
+            if not isinstance(enable_followers, bool):
+                raise InputPolicyError(
+                    "invalid_boolean_field",
+                    "enable_followers must be a JSON boolean.",
+                )
+        except InputPolicyError as exc:
+            return jsonify({
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+            }), 400
 
         if platform not in ['twitter', 'reddit', 'parallel']:
             return jsonify({
@@ -1654,7 +1930,14 @@ def start_simulation():
                 "error": f"Simulation does not exist: {simulation_id}"
             }), 404
 
+        # Validate the write target before force-restart can stop a process or
+        # remove run logs. Invalid provenance settings must have no side effects.
+        enable_graph_memory_update, synthetic_graph_id = _resolve_graph_memory_request(
+            data,
+            source_graph_id=state.graph_id,
+        )
         force_restarted = False
+        
         
         # Intelligent status handling: if preparation work is complete, allow restart
         if state.status != SimulationStatus.READY:
@@ -1699,55 +1982,98 @@ def start_simulation():
                     "success": False,
                     "error": f"Simulation not ready, current status: {state.status.value}, please call /prepare API first"
                 }), 400
-        
-        # Get graph ID (for graph memory update)
-        graph_id = None
-        if enable_graph_memory_update:
-            # Get graph ID (for graph memory update)
-            graph_id = state.graph_id
-            if not graph_id:
-                # Try to get from project
-                project = ProjectManager.get_project(state.project_id)
-                if project:
-                    graph_id = project.graph_id
-            
-            if not graph_id:
-                return jsonify({
-                    "success": False,
-                    "error": "Enabling graph memory update requires a valid graph_id. Please ensure the project has a graph built."
-                }), 400
-            
-            logger.info(f"Graph memory update enabled: simulation_id={simulation_id}, graph_id={graph_id}")
-        
-        # Start the simulation
-        run_state = SimulationRunner.start_simulation(
-            simulation_id=simulation_id,
-            platform=platform,
-            max_rounds=max_rounds,
-            enable_graph_memory_update=enable_graph_memory_update,
-            graph_id=graph_id,
-            enable_followers=enable_followers,
-            follower_count=follower_count,
-            follower_distribution=follower_distribution,
+
+        # Create Task in TaskManager for background tracking
+        from ..models.task import TaskManager, TaskStatus
+        task_manager = TaskManager()
+        task_id = task_manager.create_task(
+            task_type="simulation_run",
+            metadata={
+                "simulation_id": simulation_id,
+                "platform": platform,
+                "max_rounds": max_rounds,
+            }
         )
-        
-        # Update simulation status
+
+        sim_dir = _safe_sim_dir(simulation_id)
+        config_path = os.path.join(sim_dir, "simulation_config.json")
+
+        celery_dispatched = False
+        try:
+            from ..tasks.simulation_tasks import run_simulation_task
+            async_res = run_simulation_task.delay(
+                simulation_id=simulation_id,
+                platform=platform,
+                max_rounds=max_rounds,
+                enable_graph_memory_update=enable_graph_memory_update,
+                graph_id=synthetic_graph_id,
+                enable_followers=enable_followers,
+                follower_count=follower_count,
+                follower_distribution=follower_distribution,
+                source_graph_id=state.graph_id,
+                task_id=task_id,
+                config_path=config_path,
+            )
+            if async_res and getattr(async_res, 'id', None):
+                task_id = async_res.id
+            celery_dispatched = True
+        except Exception as celery_err:
+            logger.warning(f"Celery dispatch unavailable or failed, falling back to direct runner: {celery_err}")
+
+        if not celery_dispatched:
+            # Fallback runner mode (when Celery broker is not running in test mode)
+            run_state = SimulationRunner.start_simulation(
+                simulation_id=simulation_id,
+                platform=platform,
+                max_rounds=max_rounds,
+                enable_graph_memory_update=enable_graph_memory_update,
+                graph_id=synthetic_graph_id,
+                source_graph_id=state.graph_id,
+                enable_followers=enable_followers,
+                follower_count=follower_count,
+                follower_distribution=follower_distribution,
+            )
+            task_manager.update_task(
+                task_id,
+                status=TaskStatus.PROCESSING,
+                message="Simulation execution started via runner",
+                progress=10,
+                result=run_state.to_dict(),
+            )
+            r_status = getattr(run_state, 'runner_status', 'running')
+            response_runner_status = r_status.value if hasattr(r_status, 'value') else str(r_status)
+        else:
+            response_runner_status = "queued"
+
+        # Update simulation status in SimulationManager
         state.status = SimulationStatus.RUNNING
         manager._save_simulation_state(state)
-        
-        response_data = run_state.to_dict()
+
+        data_payload = {
+            "simulation_id": simulation_id,
+            "task_id": task_id,
+            "status": "queued",
+            "runner_status": response_runner_status,
+            "graph_memory_update_enabled": enable_graph_memory_update,
+            "observation_storage": "simulation_observation_store",
+            "source_graph_mutated": False,
+            "force_restarted": force_restarted,
+        }
         if max_rounds:
-            response_data['max_rounds_applied'] = max_rounds
-        response_data['graph_memory_update_enabled'] = enable_graph_memory_update
-        response_data['force_restarted'] = force_restarted
-        if enable_graph_memory_update:
-            response_data['graph_id'] = graph_id
-        
-        return jsonify({
+            data_payload['max_rounds_applied'] = max_rounds
+
+        resp = jsonify({
             "success": True,
-            "data": response_data
+            "task_id": task_id,
+            "simulation_id": simulation_id,
+            "status": "queued",
+            "message": "Simulation execution queued.",
+            "data": data_payload,
+            "disclosure": synthetic_output_disclosure(),
         })
-        
+        resp.status_code = 202
+        return resp
+
     except ValueError as e:
         return jsonify({
             "success": False,
@@ -1765,74 +2091,30 @@ def start_simulation():
 
 @simulation_bp.route('/<simulation_id>/inject', methods=['POST'])
 def inject_simulation_event(simulation_id: str):
+    """Return the explicit capability contract for live event injection.
+
+    The subprocess runners currently poll their supported command queues only
+    after their scheduled rounds have finished, and do not apply an
+    ``inject_event`` command to later rounds. Queuing a command here would
+    therefore create a false success signal.
     """
-    Inject breaking event or press release mid-simulation
-    
-    Request JSON:
-        {
-            "content": "Breaking news statement text...",
-            "platform": "parallel",  // twitter / reddit / parallel
-            "agent_id": 101          // optional
-        }
-    """
-    try:
-        manager = SimulationManager()
-        state = manager.get_simulation(simulation_id)
-        if not state:
-            return jsonify({"success": False, "error": f"Simulation does not exist: {simulation_id}"}), 404
-
-        data = request.get_json() or {}
-        content = data.get("content")
-        if not content:
-            return jsonify({"success": False, "error": "Please provide content field for scenario injection"}), 400
-
-        platform = data.get("platform", "parallel")
-        agent_id = data.get("agent_id")
-
-        sim_dir = manager.get_simulation_dir(simulation_id)
-        ipc_client = SimulationIPCClient(sim_dir)
-        
-        if not ipc_client.check_env_alive():
-            return jsonify({
-                "success": False, 
-                "error": "Simulation IPC environment is not currently active/running"
-            }), 400
-
-        response = ipc_client.send_inject_event(
-            event_text=content,
-            platform=platform,
-            agent_id=agent_id,
-            timeout=15.0
-        )
-
-        return jsonify({
-            "success": True,
-            "data": {
-                "simulation_id": simulation_id,
-                "command_id": response.command_id,
-                "status": response.status.value,
-                "injected_content": content
-            }
-        })
-
-    except TimeoutError:
-        return jsonify({
-            "success": False,
-            "error": "Injection command sent to IPC queue (response timeout, simulation will process on next round tick)"
-        }), 202
-
-    except Exception as e:
-        logger.error(f"Failed to inject event into simulation {simulation_id}: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+    return jsonify({
+        "success": False,
+        "error": (
+            "Live scenario changes are not supported in this runtime. "
+            "Start a new run with the changed condition instead."
+        ),
+        "code": "live_scenario_injection_unsupported",
+        "supported": False,
+        "simulation_id": simulation_id,
+    }), 501
 
 
+@simulation_bp.route('/<simulation_id>/run-patterns', methods=['GET'])
 @simulation_bp.route('/<simulation_id>/metrics', methods=['GET'])
 def get_simulation_metrics(simulation_id: str):
     """
-    Get post-simulation validation metrics (polarization, Gini, echo-chamber score, etc.)
+    Get descriptive calculations over generated activity in one run.
 
     Returns 200 with success=False and error="simulation_not_complete" if simulation is still running.
     Accepts ?force=true to recompute even if cached metrics.json exists.
@@ -1856,7 +2138,11 @@ def get_simulation_metrics(simulation_id: str):
         from ..services.validation_engine import ValidationEngine
         engine = ValidationEngine()
         metrics = engine.compute_metrics(simulation_id, force=force)
-        return jsonify({"success": True, "data": metrics.to_dict()})
+        return jsonify({
+            "success": True,
+            "data": metrics.to_dict(),
+            "disclosure": synthetic_output_disclosure(),
+        })
 
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)})
@@ -1893,7 +2179,11 @@ def compare_simulations_route():
         engine = ValidationEngine()
         result = engine.compare_simulations(sim_a_clean, sim_b_clean, force=force)
 
-        return jsonify({"success": True, "data": result})
+        return jsonify({
+            "success": True,
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
+        })
 
     except ValueError as e:
         return jsonify({"success": False, "error": str(e)}), 400
@@ -1946,7 +2236,8 @@ def stop_simulation():
         
         return jsonify({
             "success": True,
-            "data": run_state.to_dict()
+            "data": run_state.to_dict(),
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except ValueError as e:
@@ -2007,16 +2298,99 @@ def get_run_status(simulation_id: str):
                     "twitter_actions_count": 0,
                     "reddit_actions_count": 0,
                     "total_actions_count": 0,
-                }
+                },
+                "disclosure": synthetic_output_disclosure(),
             })
         
         return jsonify({
             "success": True,
-            "data": run_state.to_dict()
+            "data": run_state.to_dict(),
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
         logger.error(f"Get run status failed: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/<simulation_id>/status', methods=['GET'])
+def get_simulation_status(simulation_id: str):
+    """
+    Get simulation execution status from the process-local task and run state.
+    """
+    from ..models.task import TaskManager
+    try:
+        task_manager = TaskManager()
+        tasks = task_manager.list_tasks(task_type="simulation_run")
+        matched_task = None
+        for t in tasks:
+            meta = t.get("metadata", {})
+            if meta.get("simulation_id") == simulation_id:
+                matched_task = t
+                break
+
+        run_state = SimulationRunner.get_run_state(simulation_id)
+        
+        status = "idle"
+        progress = 0
+        message = ""
+        task_id = None
+        
+        if matched_task:
+            task_id = matched_task.get("task_id")
+            status = matched_task.get("status")
+            progress = matched_task.get("progress", 0)
+            message = matched_task.get("message", "")
+        elif run_state:
+            status = run_state.runner_status.value if hasattr(run_state.runner_status, 'value') else str(run_state.runner_status)
+            if run_state.total_rounds > 0:
+                progress = int((run_state.current_round / run_state.total_rounds) * 100)
+            message = f"Simulation round {run_state.current_round}/{run_state.total_rounds}"
+
+        return jsonify({
+            "success": True,
+            "simulation_id": simulation_id,
+            "task_id": task_id,
+            "status": status,
+            "progress": progress,
+            "message": message,
+            "data": run_state.to_dict() if run_state else (matched_task or {}),
+            "disclosure": synthetic_output_disclosure(),
+        })
+    except Exception as e:
+        logger.error(f"Get simulation status failed: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/task/<task_id>/status', methods=['GET'])
+def get_task_status(task_id: str):
+    """
+    Get task status from the process-local task manager.
+    """
+    from ..models.task import TaskManager
+    try:
+        task_manager = TaskManager()
+        task = task_manager.get_task(task_id)
+        if not task:
+            return jsonify({
+                "success": False,
+                "error": f"Task not found: {task_id}"
+            }), 404
+        return jsonify({
+            "success": True,
+            "data": task.to_public_dict(),
+            "disclosure": synthetic_output_disclosure(),
+        })
+    except Exception as e:
+        logger.error(f"Get task status failed: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -2074,7 +2448,8 @@ def get_run_status_detail(simulation_id: str):
                     "all_actions": [],
                     "twitter_actions": [],
                     "reddit_actions": []
-                }
+                },
+                "disclosure": synthetic_output_disclosure(),
             })
         
         # Get complete action list
@@ -2104,16 +2479,25 @@ def get_run_status_detail(simulation_id: str):
         
         # Get basic status information
         result = run_state.to_dict()
-        result["all_actions"] = [a.to_dict() for a in all_actions]
-        result["twitter_actions"] = [a.to_dict() for a in twitter_actions]
-        result["reddit_actions"] = [a.to_dict() for a in reddit_actions]
+        result["all_actions"] = _with_activity_truth(
+            [a.to_dict() for a in all_actions]
+        )
+        result["twitter_actions"] = _with_activity_truth(
+            [a.to_dict() for a in twitter_actions]
+        )
+        result["reddit_actions"] = _with_activity_truth(
+            [a.to_dict() for a in reddit_actions]
+        )
         result["rounds_count"] = len(run_state.rounds)
         # recent_actions only shows content from both platforms for the latest round
-        result["recent_actions"] = [a.to_dict() for a in recent_actions]
+        result["recent_actions"] = _with_activity_truth(
+            [a.to_dict() for a in recent_actions]
+        )
         
         return jsonify({
             "success": True,
-            "data": result
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -2167,8 +2551,11 @@ def get_simulation_actions(simulation_id: str):
             "success": True,
             "data": {
                 "count": len(actions),
-                "actions": [a.to_dict() for a in actions]
-            }
+                "actions": _with_activity_truth(
+                    [a.to_dict() for a in actions]
+                )
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -2207,8 +2594,9 @@ def get_simulation_timeline(simulation_id: str):
             "success": True,
             "data": {
                 "rounds_count": len(timeline),
-                "timeline": timeline
-            }
+                "timeline": _with_activity_truth(timeline)
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -2234,8 +2622,9 @@ def get_agent_stats(simulation_id: str):
             "success": True,
             "data": {
                 "agents_count": len(stats),
-                "stats": stats
-            }
+                "stats": _with_activity_truth(stats)
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except Exception as e:
@@ -2279,7 +2668,8 @@ def get_simulation_posts(simulation_id: str):
                     "count": 0,
                     "posts": [],
                     "message": "Database does not exist, simulation may not have run yet"
-                }
+                },
+                "disclosure": synthetic_output_disclosure(),
             })
         
         import sqlite3
@@ -2311,8 +2701,9 @@ def get_simulation_posts(simulation_id: str):
                 "platform": platform,
                 "total": total,
                 "count": len(posts),
-                "posts": posts
-            }
+                "posts": _with_activity_truth(posts)
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except SafePathError:
@@ -2351,7 +2742,8 @@ def get_simulation_comments(simulation_id: str):
                 "data": {
                     "count": 0,
                     "comments": []
-                }
+                },
+                "disclosure": synthetic_output_disclosure(),
             })
         
         import sqlite3
@@ -2385,8 +2777,9 @@ def get_simulation_comments(simulation_id: str):
             "success": True,
             "data": {
                 "count": len(comments),
-                "comments": comments
-            }
+                "comments": _with_activity_truth(comments)
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except SafePathError:
@@ -2400,14 +2793,17 @@ def get_simulation_comments(simulation_id: str):
         }), 500
 
 
-# ============== Interview Interface ==============
+# ============== Generated Profile Follow-up Interface ==============
 
+@simulation_bp.route('/generated-response', methods=['POST'])
 @simulation_bp.route('/interview', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def interview_agent():
     """
-    Interview a single Agent
+    Ask one fictional generated profile a follow-up question.
 
-    Note: This function requires the simulation environment to be in a running state (after completing the simulation loop and entering command waiting mode)
+    The legacy ``/interview`` path remains for compatibility. The returned text
+    is another model output, not a human interview, testimony, or prediction.
 
     Request (JSON):
         {
@@ -2458,9 +2854,26 @@ def interview_agent():
         
         simulation_id = data.get('simulation_id')
         agent_id = data.get('agent_id')
-        prompt = data.get('prompt')
         platform = data.get('platform')  # Optional: twitter/reddit/None
-        timeout = data.get('timeout', 60)
+        try:
+            prompt = bounded_text(
+                data.get('prompt'),
+                field="prompt",
+                max_length=INTERVIEW_PROMPT_MAX,
+                required=True,
+            )
+            timeout = bounded_integer(
+                data.get('timeout', 60),
+                field="timeout",
+                minimum=1,
+                maximum=300,
+            )
+        except InputPolicyError as exc:
+            return jsonify({
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+            }), 400
         
         if not simulation_id:
             return jsonify({
@@ -2472,12 +2885,6 @@ def interview_agent():
             return jsonify({
                 "success": False,
                 "error": "Please provide agent_id"
-            }), 400
-        
-        if not prompt:
-            return jsonify({
-                "success": False,
-                "error": "Please provide prompt (interview question)"
             }), 400
         
         # Validate platform parameter
@@ -2495,7 +2902,10 @@ def interview_agent():
             }), 400
         
         # Optimize prompt, add prefix to avoid Agent calling tools
-        raw = data.get('raw', False) or data.get('bypass_prompt_optimization', False)
+        raw = Config.DEBUG and (
+            data.get('raw', False)
+            or data.get('bypass_prompt_optimization', False)
+        )
         optimized_prompt = optimize_interview_prompt(prompt, bypass=raw)
         
         result = SimulationRunner.interview_agent(
@@ -2508,7 +2918,8 @@ def interview_agent():
 
         return jsonify({
             "success": result.get("success", False),
-            "data": result
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
         })
         
     except ValueError as e:
@@ -2520,11 +2931,11 @@ def interview_agent():
     except TimeoutError as e:
         return jsonify({
             "success": False,
-            "error": f"Timeout waiting for Interview response: {str(e)}"
+            "error": f"Timeout waiting for generated profile response: {str(e)}"
         }), 504
         
     except Exception as e:
-        logger.error(f"Interview failed: {str(e)}")
+        logger.error(f"Generated profile follow-up failed: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -2532,26 +2943,31 @@ def interview_agent():
         }), 500
 
 
+@simulation_bp.route('/generated-response/batch', methods=['POST'])
 @simulation_bp.route('/interview/batch', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def interview_agents_batch():
     """
+    Ask multiple fictional generated profiles follow-up questions.
+
+    The legacy ``/interview/batch`` path remains for compatibility. Every
+    returned answer is synthetic and has zero human respondents.
 
     Request (JSON):
         {
             "simulation_id": "sim_xxxx",       // Required, simulation ID
-            "interviews": [                    // Required, interview list
+            "questions": [                     // Required, generated-profile questions
                 {
                     "agent_id": 0,
-                    "prompt": "What's your opinion on A?",
-                    "platform": "twitter"      // Optional, specify the interview platform for this Agent
+                    "prompt": "What concern might this profile raise?",
+                    "platform": "twitter"      // Optional fictional channel
                 },
                 {
                     "agent_id": 1,
-                    "prompt": "What's your opinion on B?"  // If platform is not specified, use default value
+                    "prompt": "What assumption should be tested?"
                 }
             ],
-            "platform": "reddit",              // Optional, default platform (overridden by individual platform field)
-                                               // When not specified: dual-platform simulation interviews each Agent on both platforms simultaneously
+            "platform": "reddit",              // Optional fictional channel
             "timeout": 120                     // Optional, timeout (seconds), default 120
         }
 
@@ -2577,9 +2993,25 @@ def interview_agents_batch():
         data = request.get_json() or {}
 
         simulation_id = data.get('simulation_id')
-        interviews = data.get('interviews')
         platform = data.get('platform')  # Optional: twitter/reddit/None
-        timeout = data.get('timeout', 120)
+        try:
+            questions = validate_item_count(
+                data.get('questions') or data.get('interviews') or [],
+                field="questions",
+                maximum=INTERVIEW_BATCH_MAX,
+            )
+            timeout = bounded_integer(
+                data.get('timeout', 120),
+                field="timeout",
+                minimum=1,
+                maximum=300,
+            )
+        except InputPolicyError as exc:
+            return jsonify({
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+            }), 400
 
         if not simulation_id:
             return jsonify({
@@ -2587,10 +3019,10 @@ def interview_agents_batch():
                 "error": "Please provide simulation_id"
             }), 400
 
-        if not interviews or not isinstance(interviews, list):
+        if not questions or not isinstance(questions, list):
             return jsonify({
                 "success": False,
-                "error": "Please provide interviews (interview list)"
+                "error": "Please provide questions for generated profiles"
             }), 400
 
         # Validate platform parameter
@@ -2600,24 +3032,37 @@ def interview_agents_batch():
                 "error": "platform parameter can only be 'twitter' or 'reddit'"
             }), 400
 
-        # Validate each interview item
-        for i, interview in enumerate(interviews):
-            if 'agent_id' not in interview:
+        # Validate each generated-profile question.
+        for i, question in enumerate(questions):
+            if 'agent_id' not in question:
                 return jsonify({
                     "success": False,
-                    "error": f"Interview list item {i+1} missing agent_id"
+                    "error": f"Question item {i+1} missing agent_id"
                 }), 400
-            if 'prompt' not in interview:
+            if 'prompt' not in question:
                 return jsonify({
                     "success": False,
-                    "error": f"Interview list item {i+1} missing prompt"
+                    "error": f"Question item {i+1} missing prompt"
+                }), 400
+            try:
+                question["prompt"] = bounded_text(
+                    question.get("prompt"),
+                    field=f"questions[{i}].prompt",
+                    max_length=INTERVIEW_PROMPT_MAX,
+                    required=True,
+                )
+            except InputPolicyError as exc:
+                return jsonify({
+                    "success": False,
+                    "error": exc.code,
+                    "message": exc.message,
                 }), 400
             # Validate platform for each item (if any)
-            item_platform = interview.get('platform')
+            item_platform = question.get('platform')
             if item_platform and item_platform not in ("twitter", "reddit"):
                 return jsonify({
                     "success": False,
-                    "error": f"Platform for interview list item {i+1} can only be 'twitter' or 'reddit'"
+                    "error": f"Platform for question item {i+1} can only be 'twitter' or 'reddit'"
                 }), 400
 
         # Check environment status
@@ -2627,26 +3072,39 @@ def interview_agents_batch():
                 "error": "Simulation environment not running or closed. Please ensure simulation is Completed and in waiting command mode."
             }), 400
 
-        # Optimize each interview item's prompt, adding prefix to avoid Agent calling tools
-        raw = data.get('raw', False) or data.get('bypass_prompt_optimization', False)
-        optimized_interviews = []
-        for interview in interviews:
-            optimized_interview = interview.copy()
+        # Add the disclosure prefix and prevent generated profiles from calling tools.
+        raw = Config.DEBUG and (
+            data.get('raw', False)
+            or data.get('bypass_prompt_optimization', False)
+        )
+        optimized_questions = []
+        for question in questions:
+            optimized_question = question.copy()
             # Also allow individual item bypass or global bypass
-            item_raw = raw or interview.get('raw', False) or interview.get('bypass_prompt_optimization', False)
-            optimized_interview['prompt'] = optimize_interview_prompt(interview.get('prompt', ''), bypass=item_raw)
-            optimized_interviews.append(optimized_interview)
+            item_raw = raw or (
+                Config.DEBUG
+                and (
+                    question.get('raw', False)
+                    or question.get('bypass_prompt_optimization', False)
+                )
+            )
+            optimized_question['prompt'] = optimize_interview_prompt(
+                question.get('prompt', ''),
+                bypass=item_raw,
+            )
+            optimized_questions.append(optimized_question)
 
         result = SimulationRunner.interview_agents_batch(
             simulation_id=simulation_id,
-            interviews=optimized_interviews,
+            interviews=optimized_questions,
             platform=platform,
             timeout=timeout
         )
 
         return jsonify({
             "success": result.get("success", False),
-            "data": result
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except ValueError as e:
@@ -2658,11 +3116,11 @@ def interview_agents_batch():
     except TimeoutError as e:
         return jsonify({
             "success": False,
-            "error": f"Timeout waiting for batch Interview response: {str(e)}"
+            "error": f"Timeout waiting for generated profile responses: {str(e)}"
         }), 504
 
     except Exception as e:
-        logger.error(f"Batch Interview failed: {str(e)}")
+        logger.error(f"Generated profile batch follow-up failed: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -2670,12 +3128,15 @@ def interview_agents_batch():
         }), 500
 
 
+@simulation_bp.route('/generated-response/all', methods=['POST'])
 @simulation_bp.route('/interview/all', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def interview_all_agents():
     """
-    Global Interview - Use the same question to interview all Agents
+    Ask every fictional generated profile the same follow-up question.
 
-    Note: This function requires the simulation environment to be in a running state
+    The legacy ``/interview/all`` path remains for compatibility. Returned
+    answers are model outputs, not a population sample or public opinion.
 
     Request (JSON):
         {
@@ -2707,20 +3168,31 @@ def interview_all_agents():
         data = request.get_json() or {}
 
         simulation_id = data.get('simulation_id')
-        prompt = data.get('prompt')
         platform = data.get('platform')  # Optional: twitter/reddit/None
-        timeout = data.get('timeout', 180)
+        try:
+            prompt = bounded_text(
+                data.get('prompt'),
+                field="prompt",
+                max_length=INTERVIEW_PROMPT_MAX,
+                required=True,
+            )
+            timeout = bounded_integer(
+                data.get('timeout', 180),
+                field="timeout",
+                minimum=1,
+                maximum=300,
+            )
+        except InputPolicyError as exc:
+            return jsonify({
+                "success": False,
+                "error": exc.code,
+                "message": exc.message,
+            }), 400
 
         if not simulation_id:
             return jsonify({
                 "success": False,
                 "error": "Please provide simulation_id"
-            }), 400
-
-        if not prompt:
-            return jsonify({
-                "success": False,
-                "error": "Please provide prompt (interview question)"
             }), 400
 
         # Validate platform parameter
@@ -2738,7 +3210,10 @@ def interview_all_agents():
             }), 400
 
         # Optimize prompt, add prefix to prevent Agent from calling tools
-        raw = data.get('raw', False) or data.get('bypass_prompt_optimization', False)
+        raw = Config.DEBUG and (
+            data.get('raw', False)
+            or data.get('bypass_prompt_optimization', False)
+        )
         optimized_prompt = optimize_interview_prompt(prompt, bypass=raw)
 
         result = SimulationRunner.interview_all_agents(
@@ -2750,7 +3225,8 @@ def interview_all_agents():
 
         return jsonify({
             "success": result.get("success", False),
-            "data": result
+            "data": result,
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except ValueError as e:
@@ -2762,11 +3238,11 @@ def interview_all_agents():
     except TimeoutError as e:
         return jsonify({
             "success": False,
-            "error": f"Timeout waiting for global Interview response: {str(e)}"
+            "error": f"Timeout waiting for generated profile responses: {str(e)}"
         }), 504
 
     except Exception as e:
-        logger.error(f"Global Interview failed: {str(e)}")
+        logger.error(f"Generated profile all-follow-up failed: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -2774,12 +3250,13 @@ def interview_all_agents():
         }), 500
 
 
+@simulation_bp.route('/generated-response/history', methods=['POST'])
 @simulation_bp.route('/interview/history', methods=['POST'])
 def get_interview_history():
     """
-    Get Interview History
+    Get saved fictional generated-profile follow-up records.
 
-    Read all Interview records from the simulation database
+    The legacy ``/interview/history`` path remains for compatibility.
 
     Request (JSON):
         {
@@ -2834,11 +3311,12 @@ def get_interview_history():
             "data": {
                 "count": len(history),
                 "history": history
-            }
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except Exception as e:
-        logger.error(f"Failed to get Interview history: {str(e)}")
+        logger.error(f"Failed to get generated profile response history: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e),
@@ -2887,7 +3365,10 @@ def get_env_status():
         env_status = SimulationRunner.get_env_status_detail(simulation_id)
 
         if env_alive:
-            message = "Environment is running, can receive Interview commands"
+            message = (
+                "Environment is running and can receive generated profile "
+                "follow-ups"
+            )
         else:
             message = "Environment is not running or has been closed"
 
@@ -2981,10 +3462,11 @@ def close_simulation_env():
         }), 500
 
 
+@simulation_bp.route('/<simulation_id>/generated-interactions', methods=['GET'])
 @simulation_bp.route('/<simulation_id>/opinions', methods=['GET'])
 def get_simulation_opinions(simulation_id: str):
     """
-    Get agent opinion coordinates from opinions.jsonl
+    Get generated interaction records saved by the legacy opinions scorer.
 
     Query parameters:
         limit: Maximum number of records to return (default 1000, most recent)
@@ -3012,7 +3494,8 @@ def get_simulation_opinions(simulation_id: str):
             "success": True,
             "data": {
                 "opinions": opinions
-            }
+            },
+            "disclosure": synthetic_output_disclosure(),
         })
 
     except Exception as e:
@@ -3023,10 +3506,14 @@ def get_simulation_opinions(simulation_id: str):
         }), 500
 
 
+@simulation_bp.route('/<simulation_id>/export/generated-responses', methods=['POST'])
 @simulation_bp.route('/<simulation_id>/export/survey', methods=['POST'])
 def export_survey_csv(simulation_id: str):
     """
-    Export survey (batch interview) results as CSV
+    Export model-generated profile responses as CSV.
+
+    The legacy ``/export/survey`` route remains as a compatibility alias. These
+    records are synthetic model outputs, not survey responses from people.
     
     Request (JSON):
         {
@@ -3054,7 +3541,10 @@ def export_survey_csv(simulation_id: str):
         mem.write(csv_content.encode('utf-8'))
         mem.seek(0)
         
-        filename = f"ATP_SURVEY_{simulation_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        filename = (
+            f"ATP_GENERATED_RESPONSES_{simulation_id}_"
+            f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        )
         
         return send_file(
             mem,
@@ -3064,7 +3554,7 @@ def export_survey_csv(simulation_id: str):
         )
         
     except Exception as e:
-        logger.error(f"Failed to export survey CSV: {str(e)}")
+        logger.error(f"Failed to export generated-response CSV: {str(e)}")
         return jsonify({
             "success": False,
             "error": str(e)
