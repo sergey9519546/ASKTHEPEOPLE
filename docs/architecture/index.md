@@ -233,13 +233,20 @@ and polls every 0.5 s for status
 The task is real and used; the polling loop is a smell — the audit
 recommends push-based event delivery.
 
-### In-process daemon thread — PARTIAL (release-blocker)
+### In-process daemon thread — CURRENT (gate 0 fix)
 
-The preparation endpoint in
-[`api/simulation.py`](../../backend/app/api/simulation.py) still creates a
-`threading.Thread(..., daemon=True)` to run preparation work. This is the
-audit §5 P0 finding. The web route MUST enqueue work and return; it MUST NOT
-create threads or own long-running execution. See
+The preparation endpoint
+[`api/simulation.py`](../../backend/app/api/simulation.py) used to create a
+`threading.Thread(..., daemon=True)` to run preparation work. This was the
+audit §5 P0 #2 finding. The route now enqueues
+`prepare_simulation_task` via Celery and returns
+**HTTP 202 Accepted** with `Location: /api/jobs/{task_id}`. The Celery task
+lives in
+[`tasks/simulation_tasks.py`](../../backend/app/tasks/simulation_tasks.py)
+and persists FAILED state on task failure. The P0 is closed; the full
+durable-workflow machinery (idempotency keys, leases, fencing tokens,
+heartbeats, retry classification) is gate 2, owned by
+`askthepeople-orchestration-engineer`. See
 [`adr/ADR-0003-durable-run-orchestration.md`](adr/ADR-0003-durable-run-orchestration.md).
 
 ### Hourly cleanup daemon thread — PARTIAL
@@ -269,6 +276,26 @@ identifies this as a horizontal-scaling blocker: another web worker cannot see
 or control the process. **TARGET** is a dedicated simulation worker process
 with a persistent lease and heartbeat
 ([`adr/ADR-0003-durable-run-orchestration.md`](adr/ADR-0003-durable-run-orchestration.md)).
+
+### Live scenario injection — CURRENT
+
+[`POST /api/simulation/<id>/inject`](../../backend/app/api/simulation.py)
+publishes real-time intervention payloads (breaking news, persona
+modifications, dynamic instructions) to the Redis Pub/Sub channel
+`simulation:<id>:events` and falls back to a process-local in-memory
+queue (`push_in_memory_event` /
+`pop_in_memory_events` in
+[`services/simulation_observation_store.py`](../../backend/app/services/simulation_observation_store.py))
+when Redis is unavailable. The runner consumes the channel via
+`RedisEventConsumer` in
+[`scripts/run_parallel_simulation.py`](../../backend/scripts/run_parallel_simulation.py)
+and applies the events through
+`apply_injected_events` in
+[`services/simulation_runtime_contract.py`](../../backend/app/services/simulation_runtime_contract.py),
+which logs each event to `injected_events.jsonl` and records it in the
+new `injected_events` SQLite table populated by
+`sync_observation_store`. Tests live in
+[`tests/test_scenario_injection.py`](../../backend/tests/test_scenario_injection.py).
 
 ## AI and reporting layer — CURRENT
 

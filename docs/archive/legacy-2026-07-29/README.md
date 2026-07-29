@@ -1,3 +1,15 @@
+---
+title: "Legacy documentation archive (2026-07-29)"
+status: "Superseded"
+version: "1.1.0"
+owner: "askthepeople-docs-steward"
+last_reviewed: "2026-07-29"
+review_cycle: "Per doc-system change"
+research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "docs/archive/legacy-2026-07-29/*"
+---
+
 # Legacy documentation archive (2026-07-29)
 
 **Status:** Superseded. Retained for audit only.
@@ -71,3 +83,43 @@ between the two include (non-exhaustive, full census pending
 A complete divergence report is required from
 [`docs/exec-plans/00-repository-census-and-governance.md`](../../exec-plans/00-repository-census-and-governance.md)
 before any release claim citing the new authority is made.
+
+## Post-archive state changes (2026-07-29)
+
+After this archive was created, the following work landed on
+`docs/production-authority` (not yet merged to `main`):
+
+- **Three P0 release-blocker fixes** in
+  [`backend/app/api/simulation.py`](../../../backend/app/api/simulation.py),
+  [`backend/app/tasks/simulation_tasks.py`](../../../backend/app/tasks/simulation_tasks.py),
+  [`backend/app/utils/llm_client.py`](../../../backend/app/utils/llm_client.py),
+  and [`backend/app/services/oasis_profile_generator.py`](../../../backend/app/services/oasis_profile_generator.py).
+  See [`docs/release/GATE_0_RELEASE_NOTES.md`](../../release/GATE_0_RELEASE_NOTES.md)
+  for the release evidence. The audit P0 findings
+  "Unvalidated `platform` path component", "Daemon-thread preparation",
+  and "Prompt prefixing is not a security boundary" are closed.
+- **One P1 capability closure**: live scenario injection, which used
+  to return HTTP 501, now publishes through Redis Pub/Sub and an
+  in-memory fallback via
+  `apply_injected_events` /
+  `RedisEventConsumer`. See
+  [`docs/release/GATE_0_RELEASE_NOTES.md`](../../release/GATE_0_RELEASE_NOTES.md) §"P1 — Live scenario injection now works".
+- **All 48 modular docs** updated with a `Project-specific … status`
+  section that cites real `file:line` references into
+  `backend/app/`. Front matter now carries
+  `version`, `baseline_commit`, and
+  `applies_to`.
+- **AGENTS.md created at the repo root** for the Mavis agent team
+  bridging to the legacy `.agents/` folder. The doc-steward,
+  architect, persistence-engineer, orchestration-engineer,
+  security-reviewer, ai-eval-steward, frontend-steward, and
+  release-operator specialists each own a domain of `docs/` and a
+  gate of the 6-gate refactor.
+- **CI workflow** at
+  [`.github/workflows/docs.yml`](../../../.github/workflows/docs.yml)
+  runs the validator, the naked wordmark check, and the
+  prohibited-language linter on every push that touches `docs/`.
+
+The archive itself was not modified. The above items are
+record-only notes; the archived files remain unchanged so that the
+2026-07-29 baseline they were frozen against is still auditable.

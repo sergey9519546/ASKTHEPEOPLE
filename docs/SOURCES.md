@@ -1,11 +1,12 @@
 ---
 title: "Research Source Register"
 status: "Reference"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Research + Product"
 last_reviewed: "2026-07-29"
 review_cycle: "Monthly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ---
 
 # Research source register

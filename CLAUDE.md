@@ -1,10 +1,20 @@
 # CLAUDE.md
 
+## Agent contract
+
+This repository uses a Mavis agent team. The project-specific
+contract is in [`AGENTS.md`](AGENTS.md). Read it first for
+domain owners, the 6-gate refactor, the truth contract, the
+hard rules, and the current state of the code. This file
+(CLAUDE.md) carries the general coding-style guidelines; the
+domain-specific rules in AGENTS.md take precedence.
+
 ## Project Commands
 - Run backend server: `cd backend && .\.venv\Scripts\python run.py`
 - Run backend tests: `cd backend && .\.venv\Scripts\pytest`
 - Run frontend server: `cd frontend && npm run dev`
 - Build frontend: `cd frontend && npm run build`
+- Validate docs: `python tools/validate_docs.py` (from repo root)
 
 ## Coding Style & Guidelines
 Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.

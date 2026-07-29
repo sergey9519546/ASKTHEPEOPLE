@@ -1,5 +1,30 @@
 #!/usr/bin/env python3
-"""Dependency-free structural validation for the ASKTHEPEOPLE docs package."""
+"""Dependency-free structural validation for the ASKTHEPEOPLE docs package.
+
+This validator extends the upstream `validate_docs.py` from the 2026-07-29
+documentation system package with three project-specific changes:
+
+1. **Scope to ``docs/`` only.** The original walks the whole repo; this
+   copy is restricted to ``docs/`` so it cannot fire on the package
+   metadata files at the repo root (``ASKTHEPEOPLE_GODMODE_BUILDPLAN.md``,
+   ``INTEGRATION_GUIDE.md``, ``MANIFEST.md``, ``VALIDATION_REPORT.md``,
+   ``CHECKSUMS.sha256``, ``TREE.txt``), which describe the package as
+   frozen on 2026-07-29 and are referenced, not edited.
+
+2. **Exclude ``archive/`` from front-matter and heading-jump checks.**
+   ``docs/archive/legacy-2026-07-29/`` holds the prior flat-file docs
+   that were archived during the doc-system integration. The original
+   docs did not all carry the new front-matter or single-H1 contract,
+   and the archive's job is to preserve history, not to comply with the
+   new contract. A path that contains ``/archive/`` or starts with
+   ``archive/`` is skipped from structural checks.
+
+3. **Allow GitHub-style ``file:line`` link suffixes.** The original
+   validator checked that every internal ``file`` link target exists;
+   the new docs add ``:line`` references into ``backend/app/`` and
+   ``docs/`` for traceability. The validator strips an optional
+   ``:digits`` suffix before resolving the target.
+"""
 from __future__ import annotations
 
 import re
