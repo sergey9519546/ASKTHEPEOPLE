@@ -1,11 +1,14 @@
 ---
 title: "ADR-0010: No hidden chain-of-thought retention"
 status: "Accepted"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Architecture Council"
 last_reviewed: "2026-07-29"
 review_cycle: "On material change"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+implements_gate: "all gates; this ADR is a permanent constraint"
+applies_to: "every persisted fact, every log, every export, every incident capture"
 ---
 # ADR-0010: No hidden chain-of-thought retention
 
@@ -52,3 +55,36 @@ privacy audit, and incident-capture controls.
 
 - [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
 - [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+
+## Project-specific implication (baseline `8b616dc7`)
+
+The current code does **not** store the model's chain-of-thought.
+The `Task` aggregate stores a `result: Optional[Dict]` and a
+`message: str`
+([`models/task.py:38-40`](../../../backend/app/models/task.py:38)),
+but neither is the model's reasoning trace. The
+`claim_boundary` and `validation_engine` services consume only the
+structured output of the model. The current behavior satisfies this
+ADR by accident of implementation rather than by design.
+
+### Required future control
+
+Any future table that the canonical persistence layer introduces
+MUST declare explicitly that no chain-of-thought field is permitted.
+A schema-review CI check is **TARGET** and is part of gate 5
+(per
+[`docs/architecture/data-model.md` §"Hidden chain-of-thought in any future table — TARGET"](../data-model.md)).
+
+### Operational consequence
+
+Some model debugging becomes less convenient. Evaluation must rely
+on outputs, controlled probes, stage traces, and deterministic
+validation rather than reasoning dumps. Auditability improves
+because records are bounded and meaningful.
+
+### Provider debugging capture
+
+Provider debugging capture is disabled by default in the current
+configuration. Any future change to enable it MUST be time-bounded,
+incident-justified, separately auditable, and excluded from the
+default retention window.
