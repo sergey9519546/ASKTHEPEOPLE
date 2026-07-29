@@ -1,76 +1,582 @@
-name: Build & Deploy
+name: Deploy Railway (after CI)
 
 on:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      tested_sha:
+        description: Exact main revision that passed the calling CI gate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-production
+  cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/askthepeople
+  PRODUCTION_URL: https://askthepeople-production-8325.up.railway.app
+  RAILWAY_API_URL: https://backboard.railway.com/graphql/v2
+  RAILWAY_PROJECT_ID: 63538bdd-ed7e-4f7a-b878-af95b2617723
+  RAILWAY_SERVICE_ID: 8cca1670-faaf-4342-985e-1e33fa9e7cc1
+  RAILWAY_ENVIRONMENT_ID: 90731f38-1f6e-4c22-bba0-21ab56982771
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Free disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-                      /opt/hostedtoolcache/CodeQL /usr/local/share/boost \
-                      "$AGENT_TOOLSDIRECTORY"
-          df -h
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ env.IMAGE_NAME }}:latest
-            ghcr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          build-args: |
-            VITE_API_BASE_URL=
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   deploy:
-    needs: build-and-push
+    name: Trigger tested Railway revision
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read # Verify reviewer/main-only policy before reading secrets.
+      contents: read
+    environment:
+      name: railway-production
+      url: https://askthepeople-production-8325.up.railway.app
 
     steps:
-      - name: Trigger Railway Deploy Hook
-        run: |
-          if [ -n "$RAILWAY_HOOK" ]; then
-            curl -fsSL -X POST "$RAILWAY_HOOK" && echo "Railway redeploy triggered"
-          else
-            echo "No RAILWAY_DEPLOY_HOOK_URL configured"
-          fi
+      - name: Require a reviewer-protected, main-only environment
         env:
-          RAILWAY_HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}
-
-      - name: Trigger Render Deploy Hook
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [ -n "$RENDER_HOOK" ]; then
-            curl -fsSL -X POST "$RENDER_HOOK" && echo "Render redeploy triggered"
-          else
-            echo "No RENDER_DEPLOY_HOOK_URL configured"
-          fi
-        env:
-          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          environment="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/environments/railway-production"
+          )"
+          printf '%s' "$environment" |
+            jq -e '
+              any(
+                .protection_rules[]?;
+                .type == "required_reviewers" and
+                .prevent_self_review == true
+              )
+            ' \
+              >/dev/null || {
+                echo "::error::railway-production must require reviewers and prevent self-approval."
+                exit 1
+              }
+          printf '%s' "$environment" |
+            jq -e '
+              .can_admins_bypass == false and
+              .deployment_branch_policy.custom_branch_policies == true
+            ' \
+              >/dev/null || {
+                echo "::error::railway-production must block admin bypass and use a custom main-only deployment policy."
+                exit 1
+              }
+          policies="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/environments/railway-production/deployment-branch-policies?per_page=100"
+          )"
+          printf '%s' "$policies" |
+            jq -e '
+              .total_count == 1 and
+              .branch_policies[0].name == "main"
+            ' >/dev/null || {
+              echo "::error::railway-production must allow only main."
+              exit 1
+            }
 
+      - name: Require protected Railway project token
+        env:
+          APP_TOKEN: ${{ secrets.PRODUCTION_APP_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::RAILWAY_PRODUCTION_TOKEN is required in the protected railway-production environment."
+            exit 1
+          fi
+          if [ -z "$APP_TOKEN" ]; then
+            echo "::error::PRODUCTION_APP_TOKEN is required in the protected railway-production environment for the authenticated smoke check."
+            exit 1
+          fi
+
+      - name: Verify Railway project-token scope
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+        run: |
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              --max-time 30 \
+              --header "Content-Type: application/json" \
+              --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+              --data '{"query":"query { projectToken { projectId environmentId } }"}' \
+              "$RAILWAY_API_URL"
+          )"
+          project_id="$(printf '%s' "$response" | jq -r '.data.projectToken.projectId // empty')"
+          environment_id="$(printf '%s' "$response" | jq -r '.data.projectToken.environmentId // empty')"
+          if [ "$project_id" != "$RAILWAY_PROJECT_ID" ] ||
+             [ "$environment_id" != "$RAILWAY_ENVIRONMENT_ID" ]; then
+            echo "::error::RAILWAY_TOKEN is not scoped to the expected production project and environment."
+            exit 1
+          fi
+
+      - name: Checkout tested commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.tested_sha }}
+          persist-credentials: false
+
+      - name: Confirm tested commit is still main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED_SHA: ${{ inputs.tested_sha }}
+        run: |
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          if [ "$current_sha" != "$TESTED_SHA" ]; then
+            echo "::error::main advanced after this CI run; refusing to deploy an ambiguous revision."
+            exit 1
+          fi
+
+      - name: Capture the currently active deployment for rollback
+        id: previous
+        env:
+          APP_TOKEN: ${{ secrets.PRODUCTION_APP_TOKEN }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+        run: |
+          payload="$(
+            jq -n \
+              --arg projectId "$RAILWAY_PROJECT_ID" \
+              --arg serviceId "$RAILWAY_SERVICE_ID" \
+              --arg environmentId "$RAILWAY_ENVIRONMENT_ID" \
+              '{
+                query: "query ActiveDeployment($input: DeploymentListInput!) { deployments(input: $input, first: 1) { edges { node { id status } } } }",
+                variables: {
+                  input: {
+                    projectId: $projectId,
+                    serviceId: $serviceId,
+                    environmentId: $environmentId,
+                    status: { successfulOnly: true }
+                  }
+                }
+              }'
+          )"
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              --retry 2 --retry-all-errors --max-time 15 \
+              --header "Content-Type: application/json" \
+              --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+              --data "$payload" \
+              "$RAILWAY_API_URL"
+          )"
+          if printf '%s' "$response" | jq -e '.errors | length > 0' \
+            >/dev/null 2>&1; then
+            echo "::error::Railway could not identify the active deployment."
+            exit 1
+          fi
+          deployment_id="$(
+            printf '%s' "$response" |
+              jq -r '.data.deployments.edges[0].node.id // empty'
+          )"
+          if ! printf '%s' "$deployment_id" |
+            grep -Eq '^[0-9a-fA-F-]{36}$'; then
+            echo "::warning::No active Railway deployment is available; this release will proceed without automatic rollback."
+            echo "deployment_id=" >> "$GITHUB_OUTPUT"
+            echo "revision=" >> "$GITHUB_OUTPUT"
+            echo "rollback_eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          health="$(
+            curl --fail --silent --show-error \
+              --retry 2 --retry-all-errors --max-time 10 \
+              "${PRODUCTION_URL}/health" || true
+          )"
+          if ! printf '%s' "$health" |
+            jq -e '.status == "ok"' >/dev/null 2>&1; then
+            echo "::warning::Existing production is unhealthy; this repair release will proceed without automatic rollback."
+            echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+            echo "revision=" >> "$GITHUB_OUTPUT"
+            echo "rollback_eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          unauthenticated_status="$(
+            curl --silent --show-error --output /dev/null \
+              --retry 2 --retry-all-errors \
+              --write-out '%{http_code}' --max-time 15 \
+              "${PRODUCTION_URL}/api/settings"
+          )"
+          rollback_eligible="true"
+          if [ "$unauthenticated_status" != "401" ]; then
+            rollback_eligible="false"
+            echo "::warning::Existing production does not enforce the required access boundary; this release will not use it as an automatic rollback target."
+          else
+            authenticated="$(
+              curl --fail --silent --show-error \
+                --retry 2 --retry-all-errors --max-time 15 \
+                --header "Authorization: Bearer ${APP_TOKEN}" \
+                "${PRODUCTION_URL}/api/settings" || true
+            )"
+            if ! printf '%s' "$authenticated" |
+              jq -e '.success == true and (.data | type == "object")' \
+                >/dev/null 2>&1; then
+              rollback_eligible="false"
+              echo "::warning::Existing production failed the authenticated rollback-target smoke check; automatic rollback is disabled for this release."
+            fi
+          fi
+          revision="$(
+            printf '%s' "$health" |
+              jq -r '.revision // empty'
+          )"
+          if [ -n "$revision" ] &&
+             ! printf '%s' "$revision" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::warning::Existing production reported an invalid revision; this repair release will proceed without automatic rollback."
+            revision=""
+            rollback_eligible="false"
+          fi
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+          echo "rollback_eligible=$rollback_eligible" >> "$GITHUB_OUTPUT"
+
+      - name: Detect an already-active tested revision
+        id: current
+        env:
+          TESTED_SHA: ${{ inputs.tested_sha }}
+        run: |
+          health="$(
+            curl --fail --silent --show-error --max-time 10 \
+              "${PRODUCTION_URL}/health" || true
+          )"
+          revision="$(
+            printf '%s' "$health" |
+              jq -r '.revision // empty' 2>/dev/null
+          )"
+          if [ "$revision" = "$TESTED_SHA" ]; then
+            echo "already_active=true" >> "$GITHUB_OUTPUT"
+            echo "Production already reports tested revision ${TESTED_SHA}; no new deployment will be queued."
+          else
+            echo "already_active=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy the exact tested commit through Railway's API
+        id: railway
+        if: steps.current.outputs.already_active != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+          TESTED_SHA: ${{ inputs.tested_sha }}
+        run: |
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)"
+          if [ "$current_sha" != "$TESTED_SHA" ]; then
+            echo "::error::main advanced immediately before deployment; refusing to release a stale revision."
+            exit 1
+          fi
+          payload="$(
+            jq -n \
+              --arg serviceId "$RAILWAY_SERVICE_ID" \
+              --arg environmentId "$RAILWAY_ENVIRONMENT_ID" \
+              --arg commitSha "$TESTED_SHA" \
+              '{
+                query: "mutation DeployTestedRevision($serviceId: String!, $environmentId: String!, $commitSha: String!) { serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId, commitSha: $commitSha) }",
+                variables: {
+                  serviceId: $serviceId,
+                  environmentId: $environmentId,
+                  commitSha: $commitSha
+                }
+              }'
+          )"
+          response="$(
+            curl --fail-with-body --silent --show-error \
+              --max-time 30 \
+              --header "Content-Type: application/json" \
+              --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+              --data "$payload" \
+              "$RAILWAY_API_URL"
+          )"
+          errors="$(printf '%s' "$response" | jq -c '.errors // empty')"
+          deployment_id="$(
+            printf '%s' "$response" |
+              jq -r '.data.serviceInstanceDeployV2 // empty'
+          )"
+          if [ -n "$errors" ] || [ -z "$deployment_id" ]; then
+            echo "::error::Railway rejected the tested revision: ${errors:-missing deployment id}"
+            exit 1
+          fi
+          if ! printf '%s' "$deployment_id" |
+            grep -Eq '^[0-9a-fA-F-]{36}$'; then
+            echo "::error::Railway returned an invalid deployment id."
+            exit 1
+          fi
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "Railway queued deployment ${deployment_id} for ${TESTED_SHA}."
+
+      - name: Verify tested deployment and production health
+        env:
+          ALREADY_ACTIVE: ${{ steps.current.outputs.already_active }}
+          DEPLOYMENT_ID: ${{ steps.railway.outputs.deployment_id }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+          TESTED_SHA: ${{ inputs.tested_sha }}
+        run: |
+          if [ "$ALREADY_ACTIVE" = "true" ]; then
+            revision="$(
+              curl --fail --silent --show-error --max-time 10 \
+                "${PRODUCTION_URL}/health" |
+                jq -r '.revision // empty'
+            )"
+            test "$revision" = "$TESTED_SHA" || {
+              echo "::error::Production changed after the already-active revision check."
+              exit 1
+            }
+            exit 0
+          fi
+          for attempt in $(seq 1 90); do
+            payload="$(
+              jq -n \
+                --arg id "$DEPLOYMENT_ID" \
+                '{
+                  query: "query DeploymentStatus($id: String!) { deployment(id: $id) { id status } }",
+                  variables: { id: $id }
+                }'
+            )"
+            deployment="$(
+              curl --fail-with-body --silent --show-error \
+                --retry 2 --retry-all-errors --max-time 15 \
+                --header "Content-Type: application/json" \
+                --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+                --data "$payload" \
+                "$RAILWAY_API_URL"
+            )"
+            status="$(
+              printf '%s' "$deployment" |
+                jq -r '.data.deployment.status // "UNKNOWN"'
+            )"
+            case "$status" in
+              FAILED|CRASHED|REMOVED)
+                echo "::error::Railway deployment ${DEPLOYMENT_ID} entered ${status}."
+                exit 1
+                ;;
+            esac
+
+            health="$(
+              curl --fail --silent --show-error --max-time 10 \
+                "${PRODUCTION_URL}/health" || true
+            )"
+            revision="$(
+              printf '%s' "$health" |
+                jq -r '.revision // empty' 2>/dev/null
+            )"
+            if [ "$status" = "SUCCESS" ] && [ "$revision" = "$TESTED_SHA" ]; then
+              echo "Production is healthy on tested revision ${TESTED_SHA}."
+              exit 0
+            fi
+            echo "Attempt ${attempt}/90: deployment=${status}, production revision=${revision:-unknown}."
+            sleep 10
+          done
+          echo "::error::Tested revision did not become healthy within fifteen minutes."
+          exit 1
+
+      - name: Verify production access boundary
+        env:
+          APP_TOKEN: ${{ secrets.PRODUCTION_APP_TOKEN }}
+        run: |
+          unauthenticated_status="$(
+            curl --silent --show-error --output /dev/null \
+              --retry 2 --retry-all-errors \
+              --write-out '%{http_code}' --max-time 15 \
+              "${PRODUCTION_URL}/api/settings"
+          )"
+          if [ "$unauthenticated_status" != "401" ]; then
+            echo "::error::The production API accepted an unauthenticated settings request."
+            exit 1
+          fi
+          authenticated="$(
+            curl --fail --silent --show-error \
+              --retry 2 --retry-all-errors --max-time 15 \
+              --header "Authorization: Bearer ${APP_TOKEN}" \
+              "${PRODUCTION_URL}/api/settings"
+          )"
+          printf '%s' "$authenticated" |
+            jq -e '.success == true and (.data | type == "object")' \
+              >/dev/null || {
+                echo "::error::Authenticated API smoke check returned an unexpected response."
+                exit 1
+              }
+
+      - name: Roll back a newly active revision after a failed verification
+        if: >-
+          failure() &&
+          steps.current.outputs.already_active != 'true' &&
+          steps.railway.outputs.deployment_id != '' &&
+          steps.previous.outputs.deployment_id != '' &&
+          steps.previous.outputs.rollback_eligible == 'true'
+        env:
+          APP_TOKEN: ${{ secrets.PRODUCTION_APP_TOKEN }}
+          NEW_DEPLOYMENT_ID: ${{ steps.railway.outputs.deployment_id }}
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.previous.outputs.deployment_id }}
+          PREVIOUS_REVISION: ${{ steps.previous.outputs.revision }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_PRODUCTION_TOKEN }}
+        run: |
+          active_payload="$(
+            jq -n \
+              --arg projectId "$RAILWAY_PROJECT_ID" \
+              --arg serviceId "$RAILWAY_SERVICE_ID" \
+              --arg environmentId "$RAILWAY_ENVIRONMENT_ID" \
+              '{
+                query: "query ActiveDeployment($input: DeploymentListInput!) { deployments(input: $input, first: 1) { edges { node { id status } } } }",
+                variables: {
+                  input: {
+                    projectId: $projectId,
+                    serviceId: $serviceId,
+                    environmentId: $environmentId,
+                    status: { successfulOnly: true }
+                  }
+                }
+              }'
+          )"
+          active_response="$(
+            curl --fail-with-body --silent --show-error \
+              --retry 2 --retry-all-errors --max-time 15 \
+              --header "Content-Type: application/json" \
+              --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+              --data "$active_payload" \
+              "$RAILWAY_API_URL"
+          )"
+          if printf '%s' "$active_response" | jq -e '.errors | length > 0' \
+            >/dev/null 2>&1; then
+            echo "::error::Railway could not determine which deployment is active; rollback state is unknown."
+            exit 1
+          fi
+          active_id="$(
+            printf '%s' "$active_response" |
+              jq -r '.data.deployments.edges[0].node.id // empty'
+          )"
+          if ! printf '%s' "$active_id" |
+            grep -Eq '^[0-9a-fA-F-]{36}$'; then
+            echo "::error::Railway returned an invalid active deployment during rollback."
+            exit 1
+          fi
+          if [ "$active_id" != "$NEW_DEPLOYMENT_ID" ]; then
+            echo "The failed revision is not the active deployment; no rollback mutation is needed."
+            exit 0
+          fi
+
+          previous_payload="$(
+            jq -n \
+              --arg id "$PREVIOUS_DEPLOYMENT_ID" \
+              '{
+                query: "query RollbackTarget($id: String!) { deployment(id: $id) { id canRollback } }",
+                variables: { id: $id }
+              }'
+          )"
+          previous_response="$(
+            curl --fail-with-body --silent --show-error \
+              --retry 2 --retry-all-errors --max-time 15 \
+              --header "Content-Type: application/json" \
+              --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+              --data "$previous_payload" \
+              "$RAILWAY_API_URL"
+          )"
+          printf '%s' "$previous_response" |
+            jq -e --arg id "$PREVIOUS_DEPLOYMENT_ID" '
+              .data.deployment.id == $id and
+              .data.deployment.canRollback == true
+            ' >/dev/null || {
+              echo "::error::The previous Railway deployment is no longer rollback-eligible."
+              exit 1
+            }
+
+          rollback_payload="$(
+            jq -n \
+              --arg id "$PREVIOUS_DEPLOYMENT_ID" \
+              '{
+                query: "mutation Rollback($id: String!) { deploymentRollback(id: $id) { id status } }",
+                variables: { id: $id }
+              }'
+          )"
+          rollback_response="$(
+            curl --fail-with-body --silent --show-error \
+              --max-time 30 \
+              --header "Content-Type: application/json" \
+              --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+              --data "$rollback_payload" \
+              "$RAILWAY_API_URL"
+          )"
+          rollback_id="$(
+            printf '%s' "$rollback_response" |
+              jq -r '.data.deploymentRollback.id // empty'
+          )"
+          if ! printf '%s' "$rollback_id" |
+            grep -Eq '^[0-9a-fA-F-]{36}$'; then
+            echo "::error::Railway did not accept the rollback mutation."
+            exit 1
+          fi
+
+          for attempt in $(seq 1 60); do
+            status_payload="$(
+              jq -n \
+                --arg id "$rollback_id" \
+                '{
+                  query: "query RollbackStatus($id: String!) { deployment(id: $id) { id status } }",
+                  variables: { id: $id }
+                }'
+            )"
+            status_response="$(
+              curl --fail-with-body --silent --show-error \
+                --retry 2 --retry-all-errors --max-time 15 \
+                --header "Content-Type: application/json" \
+                --header "Project-Access-Token: ${RAILWAY_TOKEN}" \
+                --data "$status_payload" \
+                "$RAILWAY_API_URL"
+            )"
+            status="$(
+              printf '%s' "$status_response" |
+                jq -r '.data.deployment.status // "UNKNOWN"'
+            )"
+            case "$status" in
+              FAILED|CRASHED|REMOVED)
+                echo "::error::Railway rollback ${rollback_id} entered ${status}."
+                exit 1
+                ;;
+            esac
+
+            health="$(
+              curl --fail --silent --show-error --max-time 10 \
+                "${PRODUCTION_URL}/health" || true
+            )"
+            health_ok="$(
+              printf '%s' "$health" |
+                jq -r 'if .status == "ok" then "true" else "false" end' \
+                2>/dev/null
+            )"
+            revision="$(
+              printf '%s' "$health" |
+                jq -r '.revision // empty' 2>/dev/null
+            )"
+            revision_ok="false"
+            if [ -n "$PREVIOUS_REVISION" ]; then
+              [ "$revision" = "$PREVIOUS_REVISION" ] && revision_ok="true"
+            elif [ "$health_ok" = "true" ]; then
+              revision_ok="true"
+            fi
+            if [ "$status" = "SUCCESS" ] &&
+               [ "$health_ok" = "true" ] &&
+               [ "$revision_ok" = "true" ]; then
+              unauthenticated_status="$(
+                curl --silent --show-error --output /dev/null \
+                  --retry 2 --retry-all-errors \
+                  --write-out '%{http_code}' --max-time 15 \
+                  "${PRODUCTION_URL}/api/settings"
+              )"
+              if [ "$unauthenticated_status" != "401" ]; then
+                echo "::error::Rollback restored a deployment that does not enforce the required access boundary."
+                exit 1
+              fi
+              authenticated="$(
+                curl --fail --silent --show-error \
+                  --retry 2 --retry-all-errors --max-time 15 \
+                  --header "Authorization: Bearer ${APP_TOKEN}" \
+                  "${PRODUCTION_URL}/api/settings"
+              )"
+              printf '%s' "$authenticated" |
+                jq -e '.success == true and (.data | type == "object")' \
+                  >/dev/null || {
+                    echo "::error::Rollback restored a deployment that failed the authenticated API smoke check."
+                    exit 1
+                  }
+              echo "::notice::Rolled production back after the new revision failed verification."
+              exit 0
+            fi
+            echo "Rollback attempt ${attempt}/60: deployment=${status}, revision=${revision:-unreported}."
+            sleep 10
+          done
+          echo "::error::Railway rollback did not restore healthy production within ten minutes."
+          exit 1

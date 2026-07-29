@@ -1,49 +1,428 @@
 name: Build and push Docker image
 
 on:
-  push:
-    tags: ["*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Existing stable tag on the current main revision (for example v1.2.3)
+        required: true
+        type: string
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-push:
+  validate-release:
+    name: Validate release source
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout complete release history
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Require main and a stable tag on this exact revision
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          test "$RELEASE_REF" = "refs/heads/main" || {
+            echo "::error::Image publication is allowed only from the current main workflow."
+            exit 1
+          }
+          if ! printf '%s' "$RELEASE_VERSION" |
+            grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "::error::Release tags must be stable semantic versions such as v1.2.3."
+            exit 1
+          fi
+          git fetch --force --no-tags origin \
+            "refs/tags/${RELEASE_VERSION}:refs/tags/${RELEASE_VERSION}"
+          tag_revision="$(git rev-parse "${RELEASE_VERSION}^{commit}")"
+          if [ "$tag_revision" != "$GITHUB_SHA" ]; then
+            echo "::error::${RELEASE_VERSION} must already point to the current main revision."
+            exit 1
+          fi
+
+  verify:
+    name: Verify release revision
+    needs: validate-release
+    permissions:
+      actions: read # Preserve the reusable CI workflow's declared token scope.
+      contents: read
+      security-events: write # Allow nested CodeQL results to reach code scanning.
+    uses: ./.github/workflows/ci.yml
+
+  publish-image:
+    name: Build, scan, and publish the exact release image
+    needs: [validate-release, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read # Verify release-environment reviewer/branch protections.
+      attestations: write # Publish GitHub identity-bound provenance.
+      contents: read
+      id-token: write # Exchange OIDC identity for the provenance attestation.
+      packages: write # Push candidate, release tags, and attestation.
+    environment:
+      name: ghcr-production
+    env:
+      CANDIDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/askthepeople-candidate
+    steps:
+      - name: Require a reviewer-protected, main-only release environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          environment="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/environments/ghcr-production"
+          )"
+          printf '%s' "$environment" |
+            jq -e '
+              any(
+                .protection_rules[]?;
+                .type == "required_reviewers" and
+                .prevent_self_review == true
+              )
+            ' \
+              >/dev/null || {
+                echo "::error::ghcr-production must require reviewers and prevent self-approval."
+                exit 1
+              }
+          printf '%s' "$environment" |
+            jq -e '
+              .can_admins_bypass == false and
+              .deployment_branch_policy.custom_branch_policies == true
+            ' \
+              >/dev/null || {
+                echo "::error::ghcr-production must block admin bypass and use a custom main-only deployment policy."
+                exit 1
+              }
+          policies="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/environments/ghcr-production/deployment-branch-policies?per_page=100"
+          )"
+          printf '%s' "$policies" |
+            jq -e '
+              .total_count == 1 and
+              .branch_policies[0].name == "main"
+            ' >/dev/null || {
+              echo "::error::ghcr-production must allow only main."
+              exit 1
+            }
+
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: Revalidate reviewed main and tag before candidate work
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          git fetch --force --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/tags/${RELEASE_VERSION}:refs/tags/${RELEASE_VERSION}"
+          main_revision="$(git rev-parse refs/remotes/origin/main)"
+          tag_revision="$(git rev-parse "${RELEASE_VERSION}^{commit}")"
+          if [ "$main_revision" != "$GITHUB_SHA" ] ||
+             [ "$tag_revision" != "$GITHUB_SHA" ]; then
+            echo "::error::main or ${RELEASE_VERSION} changed after verification; refusing candidate work."
+            exit 1
+          fi
+
+      - name: Extract final release metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/askthepeople
+          labels: |
+            org.opencontainers.image.version=${{ inputs.version }}
           tags: |
-            type=ref,event=tag
+            type=raw,value=${{ inputs.version }}
             type=sha
             type=raw,value=latest
 
-      - name: Build and push
-        uses: docker/build-push-action@v5
+      - name: Block high or critical configuration findings
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          version: v0.69.3
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          format: table
+          timeout: 10m0s
+          trivyignores: .trivyignore.yaml
+
+      - name: Resolve a persisted per-version candidate
+        id: candidate-cache
+        env:
+          CANDIDATE_TAG: ${{ env.CANDIDATE_IMAGE }}:${{ inputs.version }}-${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if digest="$(
+            bash .github/scripts/inspect-image-digest.sh "$CANDIDATE_TAG"
+          )"; then
+            if gh attestation verify \
+              "oci://${CANDIDATE_IMAGE}@${digest}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow \
+                "${GITHUB_REPOSITORY}/.github/workflows/docker-image.yml" \
+              --source-digest "$GITHUB_SHA" \
+              --source-ref "refs/heads/main" \
+              --deny-self-hosted-runners \
+              >/dev/null; then
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+              echo "digest=$digest" >> "$GITHUB_OUTPUT"
+              echo "Reusing attested candidate ${CANDIDATE_TAG}@${digest}."
+            else
+              echo "::warning::The persisted candidate lacks valid provenance from this release workflow; it will be replaced by a fresh build."
+              echo "exists=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              exit "$status"
+            fi
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No persisted candidate exists; this run will build it once."
+          fi
+
+      # The per-version candidate is deliberately persisted. A retry reuses and
+      # rescans this exact digest instead of assuming a provenance-bearing build
+      # will reproduce the same digest.
+      - name: Build and push immutable release candidate
+        if: steps.candidate-cache.outputs.exists != 'true'
+        id: candidate
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          platforms: linux/amd64
+          tags: ${{ env.CANDIDATE_IMAGE }}:${{ inputs.version }}-${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_API_BASE_URL=
+            BUILD_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=release-${{ github.sha }}
+          cache-to: type=gha,mode=max,scope=release-${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+
+      - name: Attest a newly built candidate before it can be reused
+        if: steps.candidate-cache.outputs.exists != 'true'
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-name: ${{ env.CANDIDATE_IMAGE }}
+          subject-digest: ${{ steps.candidate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Select and validate the immutable candidate digest
+        id: selected-candidate
+        env:
+          BUILT_DIGEST: ${{ steps.candidate.outputs.digest }}
+          CACHED_DIGEST: ${{ steps.candidate-cache.outputs.digest }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          candidate_digest="${CACHED_DIGEST:-$BUILT_DIGEST}"
+          if ! printf '%s' "$candidate_digest" |
+            grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "::error::No valid persisted or newly built candidate digest is available."
+            exit 1
+          fi
+          image="$(
+            docker buildx imagetools inspect \
+              "${CANDIDATE_IMAGE}@${candidate_digest}" \
+              --format '{{json .Image}}'
+          )"
+          printf '%s' "$image" |
+            jq -e \
+              --arg revision "$GITHUB_SHA" \
+              --arg version "$RELEASE_VERSION" '
+              (keys | length) == 1 and
+              has("linux/amd64") and
+              .["linux/amd64"].config.Labels[
+                "org.opencontainers.image.revision"
+              ] == $revision and
+              .["linux/amd64"].config.Labels[
+                "org.opencontainers.image.version"
+              ] == $version
+            ' >/dev/null || {
+              echo "::error::Candidate platform, revision, or version label does not match the reviewed release."
+              exit 1
+            }
+          echo "digest=$candidate_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Block high or critical container vulnerabilities
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          version: v0.69.3
+          scan-type: image
+          image-ref: ${{ env.CANDIDATE_IMAGE }}@${{ steps.selected-candidate.outputs.digest }}
+          scanners: vuln,secret
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          format: table
+          timeout: 15m0s
+
+      - name: Revalidate reviewed main and tag after scanning
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          git fetch --force --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/tags/${RELEASE_VERSION}:refs/tags/${RELEASE_VERSION}"
+          main_revision="$(git rev-parse refs/remotes/origin/main)"
+          tag_revision="$(git rev-parse "${RELEASE_VERSION}^{commit}")"
+          if [ "$main_revision" != "$GITHUB_SHA" ] ||
+             [ "$tag_revision" != "$GITHUB_SHA" ]; then
+            echo "::error::main or ${RELEASE_VERSION} changed during scanning; refusing publication."
+            exit 1
+          fi
+
+      - name: Check any existing immutable release
+        env:
+          CANDIDATE_DIGEST: ${{ steps.selected-candidate.outputs.digest }}
+          RELEASE_IMAGE: ghcr.io/${{ github.repository_owner }}/askthepeople
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          version_tag="${RELEASE_IMAGE}:${RELEASE_VERSION}"
+          if existing="$(
+            bash .github/scripts/inspect-image-digest.sh "$version_tag"
+          )"; then
+            if [ "$existing" != "$CANDIDATE_DIGEST" ]; then
+              echo "::error::${RELEASE_VERSION} already exists at a different digest and is immutable."
+              exit 1
+            fi
+            echo "${RELEASE_VERSION} already points to the scanned digest; this run will safely resume."
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              exit "$status"
+            fi
+            echo "${RELEASE_VERSION} is available for this scanned digest."
+          fi
+
+      - name: Stage the scanned digest in the release repository
+        env:
+          CANDIDATE_DIGEST: ${{ steps.selected-candidate.outputs.digest }}
+          RELEASE_IMAGE: ghcr.io/${{ github.repository_owner }}/askthepeople
+        run: |
+          sha_tag="${RELEASE_IMAGE}:sha-${GITHUB_SHA}"
+          if existing="$(
+            bash .github/scripts/inspect-image-digest.sh "$sha_tag"
+          )"; then
+            if [ "$existing" != "$CANDIDATE_DIGEST" ]; then
+              echo "::error::The immutable commit tag already points to a different digest."
+              exit 1
+            fi
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              exit "$status"
+            fi
+            existing=""
+          fi
+          if [ "$existing" != "$CANDIDATE_DIGEST" ]; then
+            docker buildx imagetools create \
+              --prefer-index=false \
+              --tag "$sha_tag" \
+              "${CANDIDATE_IMAGE}@${CANDIDATE_DIGEST}"
+          fi
+          observed="$(
+            bash .github/scripts/inspect-image-digest.sh "$sha_tag"
+          )"
+          if [ "$observed" != "$CANDIDATE_DIGEST" ]; then
+            echo "::error::The staged commit tag does not resolve to the scanned digest."
+            exit 1
+          fi
+
+      # Attest after the scanned digest exists in the final repository, but
+      # before publishing the human-facing immutable version.
+      - name: Add GitHub build-provenance attestation
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/askthepeople
+          subject-digest: ${{ steps.selected-candidate.outputs.digest }}
+          push-to-registry: true
+
+      - name: Revalidate reviewed main and tag before publication
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          git fetch --force --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/tags/${RELEASE_VERSION}:refs/tags/${RELEASE_VERSION}"
+          main_revision="$(git rev-parse refs/remotes/origin/main)"
+          tag_revision="$(git rev-parse "${RELEASE_VERSION}^{commit}")"
+          if [ "$main_revision" != "$GITHUB_SHA" ] ||
+             [ "$tag_revision" != "$GITHUB_SHA" ]; then
+            echo "::error::main or ${RELEASE_VERSION} changed before publication; refusing release tags."
+            exit 1
+          fi
+
+      - name: Publish latest, then the immutable version
+        env:
+          CANDIDATE_DIGEST: ${{ steps.selected-candidate.outputs.digest }}
+          RELEASE_IMAGE: ghcr.io/${{ github.repository_owner }}/askthepeople
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          promote_tag() {
+            tag="$1"
+            immutable="$2"
+            if existing="$(
+              bash .github/scripts/inspect-image-digest.sh "$tag"
+            )"; then
+              :
+            else
+              status=$?
+              if [ "$status" -ne 1 ]; then
+                exit "$status"
+              fi
+              existing=""
+            fi
+            if [ "$immutable" = "true" ] &&
+               [ -n "$existing" ] &&
+               [ "$existing" != "$CANDIDATE_DIGEST" ]; then
+                echo "::error::Refusing to replace immutable tag ${tag}."
+                exit 1
+            fi
+            if [ "$existing" != "$CANDIDATE_DIGEST" ]; then
+              docker buildx imagetools create \
+                --prefer-index=false \
+                --tag "$tag" \
+                "${CANDIDATE_IMAGE}@${CANDIDATE_DIGEST}"
+            fi
+            observed="$(
+              bash .github/scripts/inspect-image-digest.sh "$tag"
+            )"
+            if [ "$observed" != "$CANDIDATE_DIGEST" ]; then
+              echo "::error::Promoted tag ${tag} resolved to ${observed:-none}, not the scanned digest."
+              exit 1
+            fi
+          }
+
+          # The immutable version is deliberately last: every operation that
+          # could fail after scanning completes before that release marker.
+          promote_tag "${RELEASE_IMAGE}:latest" "false"
+          promote_tag "${RELEASE_IMAGE}:${RELEASE_VERSION}" "true"

@@ -1,6 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci --no-audit --no-fund && npm --prefix frontend ci --no-audit --no-fund",
+  "buildCommand": "npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+  "redirects": [
+    {
+      "source": "/:path*",
+      "destination": "https://askthepeople-production-8325.up.railway.app/:path*",
+      "permanent": false
+    }
   ]
 }

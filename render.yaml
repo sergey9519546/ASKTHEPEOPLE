@@ -2,18 +2,44 @@ services:
   - type: web
     name: askthepeople
     runtime: docker
-    dockerfilePath: ./Dockerfile
+    branch: main
     plan: starter
     region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Railway is canonical. Keep this reviewed alternative manual so it cannot
+    # become a second, weaker auto-deploy path.
+    autoDeployTrigger: "off"
+    healthCheckPath: /health
+    maxShutdownDelaySeconds: 300
     envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: CORS_ORIGINS
+        value: https://askthepeople.onrender.com
+      - key: REQUIRE_APP_AUTH
+        value: "true"
+      - key: APP_TOKEN
+        sync: false
       - key: LLM_API_KEY
         sync: false
       - key: LLM_BASE_URL
-        value: https://dashscope.aliyuncs.com/compatible-mode/v1
+        sync: false
+      - key: LLM_ALLOWED_BASE_URLS
+        sync: false
       - key: LLM_MODEL_NAME
-        value: qwen-plus
+        sync: false
       - key: ZEP_API_KEY
         sync: false
-      - key: PORT
-        value: 5001
-    healthCheckPath: /
+      - key: ALLOW_RUNTIME_SETTINGS
+        value: "false"
+      - key: ALLOW_PRIVATE_LLM_ENDPOINTS
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+# Production simulations and reports require a persistent disk mounted at:
+# /app/backend/uploads
+# It is deliberately not provisioned here because disk size/cost is an
+# operator decision. Without it, all uploaded and generated data is ephemeral.

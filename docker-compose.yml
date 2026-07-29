@@ -8,18 +8,27 @@ services:
     env_file:
       - .env
     ports:
-      - "5001:5001"
+      - "127.0.0.1:5001:5001"
     restart: unless-stopped
-    # M4: defense-in-depth — drop all Linux capabilities and forbid privilege
-    # escalation. The Dockerfile already runs as a non-root user (UID 10001);
-    # these settings further constrain the container at runtime. We do NOT set
-    # read_only: true because the app writes log files to /app/backend/logs via
-    # a RotatingFileHandler at startup (os.makedirs requires a writable FS).
+    stop_grace_period: 5m
+    # The entrypoint starts as root only to repair the writable mount, then
+    # drops permanently to UID 10001 before Gunicorn or simulations start.
+    # These capabilities are the minimum needed for that transition and for
+    # inspecting a pre-existing restrictive bind mount. We do not set read_only
+    # because the app writes logs and generated artifacts.
     cap_drop:
       - "ALL"
+    cap_add:
+      # Required only by the root entrypoint to repair bind-mount ownership
+      # and switch UID/GID; gosu drops them before the application starts.
+      - "CHOWN"
+      - "DAC_READ_SEARCH"
+      - "SETGID"
+      - "SETUID"
     security_opt:
       - "no-new-privileges:true"
     tmpfs:
       - /tmp
     volumes:
+      # The entrypoint normalizes this exact mount to container UID 10001.
       - ./backend/uploads:/app/backend/uploads

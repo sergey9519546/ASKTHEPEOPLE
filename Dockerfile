@@ -1,66 +1,72 @@
-# Stage 1: Frontend Build
-FROM node:20-slim AS frontend-builder
+# syntax=docker/dockerfile:1.7
+
+ARG NODE_IMAGE=node:24.18.0-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
+ARG PYTHON_IMAGE=python:3.11.15-slim@sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93
+
+FROM ${NODE_IMAGE} AS frontend-builder
 WORKDIR /app/frontend
-COPY frontend/package*.json ./
-RUN npm ci
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
 COPY frontend/ ./
-# Pass Railway backend URL at build time so Vite bakes it into the bundle
-# Empty default = relative URLs, so the unified container works on any Railway URL.
-# Override at build time (e.g. for a standalone Vercel frontend) if needed.
 ARG VITE_API_BASE_URL=
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN npm run build
 
-# Stage 2: Backend Dependencies
-FROM python:3.11-slim AS backend-builder
-COPY --from=ghcr.io/astral-sh/uv:0.9.26 /uv /uvx /bin/
+FROM ${PYTHON_IMAGE} AS backend-builder
+COPY --from=ghcr.io/astral-sh/uv:0.9.26@sha256:9a23023be68b2ed09750ae636228e903a54a05ea56ed03a934d00fe9fbeded4b /uv /uvx /bin/
 WORKDIR /app/backend
-COPY backend/pyproject.toml backend/uv.lock ./
-# uv sync (without --frozen) lets Docker resolve new deps not yet in uv.lock
-# (e.g. flask-sock) while keeping all pinned packages at their locked versions.
-# Run `uv lock` locally and commit the updated uv.lock to restore --frozen.
-#
-# CPU-only torch is pinned via [tool.uv.sources] in pyproject.toml, and all
-# nvidia-*/triton transitive GPU packages are blocked via [tool.uv] override
-# markers (sys_platform == 'never'). This eliminates the ~3GB CUDA download
-# that previously caused Railway build timeouts.
-RUN uv sync --extra dev
 
-# Stage 3: Runtime
-FROM python:3.11-slim
+COPY backend/pyproject.toml backend/uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
+
+FROM ${PYTHON_IMAGE} AS runtime
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+ARG GOSU_VERSION=1.17-3+b4
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends "gosu=${GOSU_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=backend-builder /app/backend/.venv /app/backend/.venv
-COPY backend/ /app/backend/
+ARG BUILD_REVISION=unknown
+LABEL org.opencontainers.image.title="ASKTHEPEOPLE" \
+    org.opencontainers.image.description="Synthetic scenario explorer" \
+    org.opencontainers.image.source="https://github.com/sergey9519546/ASKTHEPEOPLE" \
+    org.opencontainers.image.licenses="AGPL-3.0-only" \
+    org.opencontainers.image.revision="${BUILD_REVISION}"
+ENV PATH="/app/backend/.venv/bin:$PATH" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    FLASK_APP=backend/run.py \
+    FLASK_DEBUG=false \
+    BUILD_REVISION=${BUILD_REVISION} \
+    PORT=5001
 
-# Copy built frontend dist
+COPY --from=backend-builder /app/backend/.venv /app/backend/.venv
+COPY backend/app/ /app/backend/app/
+COPY backend/scripts/ /app/backend/scripts/
+COPY backend/run.py backend/wsgi.py /app/backend/
+COPY backend/docker-entrypoint.sh /usr/local/bin/askthepeople-entrypoint
+COPY LICENSE /usr/share/licenses/askthepeople/AGPL-3.0.txt
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
 
-RUN mkdir -p /app/backend/uploads /app/backend/uploads/simulations /app/backend/logs
-
-ENV PATH="/app/backend/.venv/bin:$PATH"
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV FLASK_APP=backend/run.py
+RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
+    && install -d -o app -g app \
+      /app/backend/uploads \
+      /app/backend/uploads/simulations \
+      /app/backend/logs \
+    && chmod 0755 /usr/local/bin/askthepeople-entrypoint
 
 EXPOSE 5001
+STOPSIGNAL SIGTERM
 
-# Verify the app can be imported at build time — surfaces import errors in CI logs.
-# SECRET_KEY is set to a dummy value just for the smoke test; the real key is
-# provided at runtime via Railway environment variables.
-RUN cd /app/backend && SECRET_KEY=build-smoke-test python -c "import sys; sys.path.insert(0, '.'); from app import create_app; app = create_app(); print('WSGI app import OK')"
+RUN cd /app/backend \
+    && python -c "import os, secrets; os.environ.update({'SECRET_KEY': secrets.token_urlsafe(32), 'APP_TOKEN': secrets.token_urlsafe(32), 'REQUIRE_APP_AUTH': 'true', 'LLM_API_KEY': 'build-validation-model-key', 'ZEP_API_KEY': 'build-validation-zep-key', 'CORS_ORIGINS': 'http://127.0.0.1'}); from wsgi import app; print('Validated WSGI import OK')"
 
-# Run as non-root user for defense-in-depth
-RUN useradd --create-home --shell /bin/false --uid 10001 app \
-    && chown -R app:app /app
-USER app
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '5001') + '/health', timeout=3).read()" || exit 1
 
-# Single worker + threads: keeps in-memory state (TaskManager, SimulationRunner) consistent.
-# Timeout 300s: supports long-running report generation via background thread.
-# --chdir ensures wsgi.py is loaded from /app/backend so `from app import ...` resolves correctly.
-CMD ["sh", "-c", "gunicorn --bind 0.0.0.0:${PORT:-5001} --workers 1 --threads 4 --timeout 300 --chdir /app/backend wsgi:app"]
-
+# One worker is intentional while task/simulation state is process-local.
+ENTRYPOINT ["/usr/local/bin/askthepeople-entrypoint"]
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:${PORT:-5001} --workers 1 --threads 4 --timeout 300 --graceful-timeout 240 --access-logfile - --access-logformat '%(h)s %(l)s %(u)s %(t)s \"%(m)s %(U)s %(H)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\"' --error-logfile - --chdir /app/backend wsgi:app"]

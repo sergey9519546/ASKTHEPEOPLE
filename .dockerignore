@@ -1,9 +1,18 @@
 .git
 .github
 .gitignore
+.gitattributes
 .cursor
 .DS_Store
 .env
+.env.*
+!.env.example
+
+.claude
+.jules
+.kilo
+.qodo
+.playwright-cli
 
 node_modules
 frontend/node_modules
@@ -21,3 +30,21 @@ frontend/dist
 frontend/.vite
 
 backend/uploads
+backend/log
+backend/logs
+backend/tests
+backend/scripts/test_*.py
+
+docs
+static
+README*
+LICENSE
+docker-compose.yml
+render.yaml
+railway.toml
+vercel.json
+package.json
+package-lock.json
+
+# Retain the distribution license in the runtime image.
+!LICENSE
