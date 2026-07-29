@@ -103,8 +103,8 @@
 
                     <!-- DROPZONE AREA -->
                     <div 
-                        class="h-full border border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-8 transition-all relative min-h-[250px] bg-slate-50/50 hover:bg-slate-50 cursor-pointer"
-                        :class="{ 'bg-rose-50/30 border-rose-400': isDragOver }"
+                        class="h-full border border-dashed border-[#333333] rounded-none flex flex-col items-center justify-center p-8 transition-all relative min-h-[250px] bg-[#0a0a0a] hover:bg-[#121212] cursor-pointer"
+                        :class="{ 'bg-[#1a1a1a] border-[#a3e635]': isDragOver }"
                         @dragover.prevent="isDragOver = true"
                         @dragleave.prevent="isDragOver = false"
                         @drop.prevent="handleDrop"
@@ -113,9 +113,9 @@
                         <input ref="fileInput" type="file" multiple accept=".pdf,.md,.txt" @change="handleFileSelect" hidden />
                         
                         <div v-if="files.length === 0" class="text-center group">
-                            <span class="material-symbols-outlined text-5xl mb-3 text-slate-400 group-hover:scale-105 transition-transform">upload_file</span>
-                            <div class="text-xs font-semibold uppercase tracking-widest text-slate-600">Attach Data Seeds</div>
-                            <div class="text-[10px] font-mono opacity-40 mt-1">PDF / MARKDOWN / TXT</div>
+                            <span class="material-symbols-outlined text-5xl mb-3 text-[#6b7280] group-hover:text-[#a3e635] transition-colors">upload_file</span>
+                            <div class="text-[10px] font-mono font-semibold uppercase tracking-[0.2em] text-[#9ca3af]">Attach Data Seeds</div>
+                            <div class="text-[9px] font-mono opacity-40 mt-1 text-[#6b7280]">PDF / MARKDOWN / TXT</div>
                         </div>
 
                         <div v-else class="w-full grid grid-cols-1 gap-2">
@@ -349,23 +349,23 @@
 
     <!-- MOBILE NAV -->
     <nav class="md:hidden fixed bottom-0 left-0 w-full h-16 z-50 flex bg-[#0a0a0a] border-t border-[#222222]">
-        <button @click="scrollToSection('hero')" class="flex-1 flex flex-col items-center justify-center bg-slate-900 text-white border-none rounded-none">
+        <button @click="scrollToSection('hero')" class="flex-1 flex flex-col items-center justify-center bg-[#a3e635] text-[#1a2e05] border-none rounded-none hover:bg-[#bef264] transition-colors">
             <span class="material-symbols-outlined text-lg mb-0.5">dashboard_customize</span>
-            <span class="text-[8px] font-bold uppercase tracking-wider">CORE</span>
+            <span class="text-[8px] font-mono font-bold uppercase tracking-[0.2em]">CORE</span>
         </button>
-        <button @click="scrollToSection('sessions')" class="flex-1 flex flex-col items-center justify-center bg-transparent text-slate-600 border-none rounded-none">
+        <button @click="scrollToSection('sessions')" class="flex-1 flex flex-col items-center justify-center bg-transparent text-[#9ca3af] hover:text-[#f3f4f6] hover:bg-[#121212] border-none rounded-none transition-colors">
             <span class="material-symbols-outlined text-lg mb-0.5">analytics</span>
-            <span class="text-[8px] font-bold uppercase tracking-wider">DATA</span>
+            <span class="text-[8px] font-mono font-bold uppercase tracking-[0.2em]">DATA</span>
         </button>
-        <button @click="scrollToSection('archive')" class="flex-1 flex flex-col items-center justify-center bg-transparent text-slate-600 border-none rounded-none">
+        <button @click="scrollToSection('archive')" class="flex-1 flex flex-col items-center justify-center bg-transparent text-[#9ca3af] hover:text-[#f3f4f6] hover:bg-[#121212] border-none rounded-none transition-colors">
             <span class="material-symbols-outlined text-lg mb-0.5">history</span>
-            <span class="text-[8px] font-bold uppercase tracking-wider">ARCHIVE</span>
+            <span class="text-[8px] font-mono font-bold uppercase tracking-[0.2em]">ARCHIVE</span>
         </button>
     </nav>
 
     <!-- FAB -->
     <div class="fixed bottom-8 right-8 z-50 hidden md:block">
-        <button @click="scrollToSection('hero')" class="w-14 h-14 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-rose-600 transition-colors border-none p-0" title="New Objective">
+        <button @click="scrollToSection('hero')" class="w-14 h-14 bg-[#a3e635] text-[#1a2e05] rounded-none border border-[#a3e635] flex items-center justify-center shadow-none hover:bg-[#bef264] transition-colors p-0" title="New Objective">
             <span class="material-symbols-outlined text-2xl">add</span>
         </button>
     </div>
