@@ -1,11 +1,14 @@
 ---
 title: "Terminology and Claim Language"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Content Design + Product + Legal"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §1–§6"
+applies_to: "UI copy, exports, APIs, analytics, support scripts, marketing, AI outputs"
 ---
 
 # Terminology
@@ -270,3 +273,101 @@ analytics may interpret it differently.
 
 - [AAPOR, Responsible AI Integration in Survey Research (2026)](https://aapor.org/announcements/task-force-on-responsible-ai-integration-in-survey-research-report/) — Professional guidance on validity, reliability, sensitivity, performance, transparency, and human oversight when AI is used in survey research.
 - [GOV.UK Design System — Notification banner](https://design-system.service.gov.uk/components/notification-banner/) — Warns against repeated banner overuse and supports putting task-critical information in the main journey.
+
+---
+
+## Project-specific terminology status (baseline `8b616dc7`)
+
+This section maps every canonical term above to the actual code under
+[`backend/app/`](../../backend/app/) and [`frontend/src/`](../../frontend/src/).
+Items are marked **CURRENT** (the term is what the code uses), **PARTIAL**
+(the term is partly used; legacy or internal names remain), or **TARGET**
+(the term is normative; the code has not been migrated to it). The CI
+content linter in
+[`.github/workflows/docs.yml`](../../.github/workflows/docs.yml) blocks
+prohibited synthetic-outcome language in `docs/product/`, `docs/design/`,
+`docs/release/`, and the repo root `README.md`. See
+[`docs/architecture/index.md`](../architecture/index.md) for the legend.
+
+## Canonical term → current code map
+
+| Canonical term | Current code entity | Status | File |
+|---|---|---|---|
+| Synthetic decision explorer | Product category — no internal name; backend is `app` | CURRENT (text), TARGET (no internal rename) | — |
+| Source material | `Project.files: List[Dict[str, str]]` and `extracted_text.txt` per project | CURRENT | [`models/project.py:36-41`](../../backend/app/models/project.py:36), [`models/project.py:280-296`](../../backend/app/models/project.py:280) |
+| Candidate starting condition | Implicit in the extraction step (no explicit field) | TARGET | — |
+| Starting condition | Implied by `simulation_requirement` text | PARTIAL (renames to be picked up in gate 1) | [`models/project.py:48-49`](../../backend/app/models/project.py:48) |
+| Assumption | Free-text input via `simulation_requirement`; not separately modeled | PARTIAL | [`models/project.py:48-49`](../../backend/app/models/project.py:48) |
+| Critical uncertainty | Not separately modeled | TARGET | — |
+| Generated profile / decision lens | Produced by `oasis_profile_generator.py`; persisted as JSON files in the simulation directory | CURRENT | [`services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py) |
+| Synthetic action | Stored in the per-platform SQLite DBs (`reddit_simulation.db`, `twitter_simulation.db`) | CURRENT | `backend/uploads/simulations/{simulation_id}/*.db` |
+| Possible path | Synthesized in the report agent | PARTIAL (no explicit data type yet) | [`services/report_agent.py`](../../backend/app/services/report_agent.py) |
+| Decision consideration | A section in the generated report | PARTIAL (rendered in the report JSON; the frontend may use a legacy term) | [`services/report_agent.py`](../../backend/app/services/report_agent.py) |
+| Disconfirming condition | Produced in the report | PARTIAL | [`services/report_agent.py`](../../backend/app/services/report_agent.py) |
+| Question to validate with people | A section in the generated report; the explicit "research handoff" UI is **TARGET** | PARTIAL | [`services/report_agent.py`](../../backend/app/services/report_agent.py) |
+| Related run record | Post-hoc keyword-overlap match in the report | PARTIAL (the disclosure block is required by this contract and **not yet rendered** in the frontend) | [`services/report_evidence.py`](../../backend/app/services/report_evidence.py) |
+| Human finding | A separate, method-documented external artifact | TARGET (no import flow) | — |
+
+## Legacy terms still present in the codebase
+
+The integration audit identifies legacy alias endpoints and identifier
+names that must be retired. Until the migration in gate 1, they appear in
+the codebase and in analytics:
+
+- `/interview`, `/interview/all`, `/interview/batch` (routes)
+- `/opinions` (route)
+- `/export/survey` (route)
+- `interviews_count` (field)
+- `export_survey_results` (field)
+
+These are documented in the audit at
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §5 P2 "Misleading legacy terminology remains public"](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#5-release-blocking-findings).
+The retirement plan is in
+[`docs/exec-plans/01-truth-layer-and-foundations.md`](../exec-plans/01-truth-layer-and-foundations.md)
+and must add the deprecation header per the audit:
+
+```http
+Deprecation: true
+Sunset: <date>
+Link: </replacement>; rel="successor-version"
+```
+
+## Legacy internal field names still in APIs
+
+The audit's P1 finding on "Client-supplied export data can fabricate
+provenance" is the deepest terminology hazard today: a client can submit
+arbitrary `results` rows to the export route and receive a file under the
+ASKTHEPEOPLE wordmark. Until gate 3 closes this, the export route accepts:
+
+```json
+{
+  "results": [
+    { "respondent_id": "...", "answer": "...", "evidence_score": 0.7 }
+  ],
+  "format": "csv"
+}
+```
+
+The fields `respondent_id` and `evidence_score` are the exact terms this
+lexicon prohibits in user-facing copy and that the public API rewrite in
+gate 1 will wrap behind clearly-synthetic internal names. Today, the
+export route does not enforce this. Tracked in
+[`docs/exec-plans/05-brief-handoff-exports-and-provenance.md`](../exec-plans/05-brief-handoff-exports-and-provenance.md).
+
+## Content linter expansion — TARGET
+
+The linter enforced by
+[`.github/workflows/docs.yml`](../../.github/workflows/docs.yml) currently
+covers `docs/product/`, `docs/design/`, `docs/release/`, and the repo
+root `README.md`. The contract requires linter coverage of:
+
+- AI outputs (report JSON, profile responses);
+- UI copy in `frontend/src/` and `frontend/dist/`;
+- Exports (CSV, JSON, PDF, DOCX, PNG) — see
+  [`docs/security/INCIDENT_RESPONSE.md`](../security/INCIDENT_RESPONSE.md) for the
+  disclosure-block requirement;
+- Email templates, share previews, marketing pages;
+- Seed data and fixture files in `backend/uploads/`.
+
+The expansion is **TARGET**, part of gate 5, owned by
+`askthepeople-ai-eval-steward`.
