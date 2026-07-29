@@ -1,11 +1,15 @@
 ---
 title: "ADR-0012: Canonical Transactional and Object Persistence"
 status: "Accepted"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Architecture Council + Data Platform"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+implements_gate: "3"
+applies_to: "all aggregates under backend/app/models/, all state.json files under backend/uploads/, all per-platform SQLite DBs, all object artifacts"
+audit_relevance: "P1 'Non-atomic file persistence and unsafe concurrent reads', P1 'Force restart destroys provenance', P2 'Nested report-directory scans'"
 ---
 
 # ADR-0012: Canonical transactional and object persistence
@@ -67,3 +71,84 @@ large generated artifacts.
 - Backup restoration is tested against declared recovery objectives.
 - Object deletion, orphan repair, retention, and legal-hold flows are tested.
 - A derived index can be destroyed and rebuilt without losing canonical facts.
+
+## Project-specific implication (baseline `8b616dc7`)
+
+The current code uses five storage substrates, none of which satisfies
+this ADR. Gate 3 is owned by `askthepeople-persistence-engineer`.
+
+### Storage today vs. the decision
+
+| Substrate | Path / service | ADR requirement | Status |
+|---|---|---|---|
+| Filesystem JSON (projects) | `backend/uploads/projects/{project_id}/project.json` | PostgreSQL canonical | CURRENT, non-atomic — must migrate |
+| Filesystem JSON (simulations) | `backend/uploads/simulations/{simulation_id}/state.json` | PostgreSQL canonical | CURRENT, non-atomic, repair-on-read |
+| Filesystem JSON (reports) | `backend/uploads/reports/{report_id}/...` | Object storage canonical | CURRENT, must migrate |
+| Per-platform SQLite (actions) | `backend/uploads/simulations/{simulation_id}/{reddit,twitter}_simulation.db` | PostgreSQL canonical | CURRENT, audit-flagged path-escape endpoint |
+| Redis (Task) | `task:{task_id}` keys with 24h TTL | Broker / cache / rate-limit only | CURRENT, must not be the only canonical store |
+| ZEP Cloud | external | Derived index, not canonical | CURRENT |
+| NetworkX | in-process | Derived, must be rebuildable | CURRENT |
+
+### Non-atomic file writes — release-blocker (audit P1)
+
+Every JSON write today is a non-atomic
+`open(..., 'w').write(...)` with no temporary file, no atomic rename, no
+file lock, no version check, no compare-and-swap, no transaction, and
+no coordination with job state. The audit cites this as P1
+"Non-atomic file persistence and unsafe concurrent reads".
+
+A reader of `state.json` during a write can observe a partial file. A
+parser failure becomes an empty array or `None`, creating a
+false-valid state. Reaching this ADR requires write →
+verify → hash → mark-ready, with the canonical row in PostgreSQL
+gating access to the artifact in object storage.
+
+### Force restart destroys provenance — release-blocker (audit P1)
+
+The force-restart path in
+[`backend/app/api/simulation.py`](../../../backend/app/api/simulation.py)
+can stop an existing run, delete logs, reset state, and rerun under
+the same simulation ID. This violates "Completed run configuration and
+release identifiers are immutable" and the
+[`docs/architecture/data-model.md`](../data-model.md) append-only rule.
+Reaching the ADR requires separate identifiers per
+[`docs/architecture/data-model.md`](../data-model.md) — `project_id`,
+`decision_version_id`, `source_bundle_version_id`, `scenario_version_id`,
+`simulation_id`, `preparation_attempt_id`, `run_attempt_id`,
+`report_version_id`, `export_id` — and per-attempt
+immutability.
+
+### In-memory rate limiter — release-blocker for multi-worker
+
+[`backend/app/api/__init__.py:36-42`](../../../backend/app/api/__init__.py:36)
+uses `storage_uri="memory://"` for the Flask-Limiter. The ADR requires
+production rate limits to be tenant-aware and to share state across
+workers. The memory store is fine for single-worker development but
+must move to Redis for production.
+
+### Object storage — TARGET
+
+There is no object storage today. Source bytes are written to
+`backend/uploads/projects/{project_id}/files/{uuid}{ext}`
+([`models/project.py:247-278`](../../../backend/app/models/project.py:247)).
+Reports are written to `backend/uploads/reports/{report_id}/...`.
+Reaching the ADR requires the storage substrate to be private object
+storage with environment/workspace-scoped keys, separate
+quarantine/approved prefixes, and short-lived authorized URLs. The
+existing filesystem layout becomes a development-only fallback.
+
+### Outbox events — TARGET
+
+State transitions today have no outbox event. Reaching the ADR requires
+every state transition to write the row version increment and the
+outbox event in the same transaction, with a separate publisher.
+
+### Migrations — TARGET
+
+Schema migrations, backup/restore, point-in-time recovery, and
+connection management are not yet operating responsibilities because
+the canonical store does not exist. When PostgreSQL lands, the
+[`docs/release/RUNBOOK.md`](../../release/RUNBOOK.md) must be extended
+with rehearsal procedures; the
+[`docs/release/ACCEPTANCE.md`](../../release/ACCEPTANCE.md) must include
+migration rehearsals as a release evidence item.
