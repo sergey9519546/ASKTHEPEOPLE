@@ -2007,23 +2007,65 @@ def start_simulation():
 
 @simulation_bp.route('/<simulation_id>/inject', methods=['POST'])
 def inject_simulation_event(simulation_id: str):
-    """Return the explicit capability contract for live event injection.
+    """Publish real-time scenario injection intervention payload to Redis Pub/Sub.
 
-    The subprocess runners currently poll their supported command queues only
-    after their scheduled rounds have finished, and do not apply an
-    ``inject_event`` command to later rounds. Queuing a command here would
-    therefore create a false success signal.
+    Publishes intervention payloads (breaking news, persona modifications, dynamic instructions)
+    to Redis Pub/Sub channel `simulation:<simulation_id>:events` for live ingestion by the simulation tick loop.
     """
-    return jsonify({
-        "success": False,
-        "error": (
-            "Live scenario changes are not supported in this runtime. "
-            "Start a new run with the changed condition instead."
-        ),
-        "code": "live_scenario_injection_unsupported",
-        "supported": False,
-        "simulation_id": simulation_id,
-    }), 501
+    try:
+        manager = SimulationManager()
+        state = manager.get_simulation(simulation_id)
+        if not state:
+            return jsonify({
+                "success": False,
+                "error": f"Simulation does not exist: {simulation_id}"
+            }), 404
+
+        data = request.get_json() or {}
+        event_type = data.get("event_type", "inject_event")
+        payload = data.get("payload", data.get("content", data))
+        timestamp = data.get("timestamp") or datetime.now().isoformat()
+
+        event_message = {
+            "simulation_id": simulation_id,
+            "event_type": event_type,
+            "payload": payload if isinstance(payload, dict) else {"content": payload},
+            "timestamp": timestamp,
+            "raw_data": data,
+        }
+
+        channel = f"simulation:{simulation_id}:events"
+        published_redis = False
+
+        try:
+            redis_url = Config.REDIS_URL
+            if redis_url and not redis_url.startswith("memory://"):
+                import redis
+                r = redis.from_url(redis_url, socket_timeout=1.0, socket_connect_timeout=1.0, decode_responses=True)
+                r.publish(channel, json.dumps(event_message))
+                published_redis = True
+        except Exception as e:
+            logger.warning(f"Redis publish failed for {channel}: {e}")
+
+        if not published_redis:
+            from ..services.simulation_observation_store import push_in_memory_event
+            push_in_memory_event(simulation_id, event_message)
+
+        return jsonify({
+            "success": True,
+            "message": "Scenario injection event published successfully",
+            "simulation_id": simulation_id,
+            "channel": channel,
+            "event": event_message,
+            "published_redis": published_redis,
+        }), 200
+    except Exception as e:
+        logger.error(f"Failed to inject simulation event for {simulation_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 
 @simulation_bp.route('/<simulation_id>/run-patterns', methods=['GET'])

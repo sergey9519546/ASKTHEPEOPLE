@@ -7,7 +7,27 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional
+
+_IN_MEMORY_EVENT_QUEUES: Dict[str, List[Dict[str, Any]]] = {}
+_EVENT_QUEUE_LOCK = threading.Lock()
+
+
+def push_in_memory_event(simulation_id: str, event_data: Dict[str, Any]) -> None:
+    """Push an injected event to the in-memory fallback event queue for simulation_id."""
+    with _EVENT_QUEUE_LOCK:
+        if simulation_id not in _IN_MEMORY_EVENT_QUEUES:
+            _IN_MEMORY_EVENT_QUEUES[simulation_id] = []
+        _IN_MEMORY_EVENT_QUEUES[simulation_id].append(event_data)
+
+
+def pop_in_memory_events(simulation_id: str) -> List[Dict[str, Any]]:
+    """Pop and return all pending in-memory injected events for simulation_id."""
+    with _EVENT_QUEUE_LOCK:
+        return _IN_MEMORY_EVENT_QUEUES.pop(simulation_id, [])
+
 
 from .claim_boundary import synthetic_activity_disclosure
 from .simulation_artifacts import (
@@ -118,6 +138,15 @@ def ensure_observation_store(simulation_dir: str) -> str:
         );
 
         CREATE TABLE IF NOT EXISTS scheduled_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform TEXT,
+            round_num INTEGER,
+            event_type TEXT,
+            payload_json TEXT,
+            timestamp TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS injected_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             platform TEXT,
             round_num INTEGER,
@@ -518,6 +547,22 @@ def sync_observation_store(simulation_dir: str, run_state: Optional[Dict[str, An
             ),
         )
 
+    injected_path = os.path.join(simulation_dir, "injected_events.jsonl")
+    for row in _iter_jsonl(injected_path):
+        cursor.execute(
+            """
+            INSERT INTO injected_events(platform, round_num, event_type, payload_json, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                row.get("platform"),
+                row.get("round_num", 0),
+                row.get("event_type"),
+                json.dumps(row.get("payload", row), ensure_ascii=False),
+                row.get("timestamp"),
+            ),
+        )
+
     if run_state:
         for summary in run_state.get("rounds", [])[:10_000]:
             cursor.execute(
@@ -531,6 +576,31 @@ def sync_observation_store(simulation_dir: str, run_state: Optional[Dict[str, An
     conn.commit()
     conn.close()
     return db_path
+
+
+def record_injected_event(
+    simulation_dir: str,
+    platform: str,
+    round_num: int,
+    event_type: str,
+    payload: Dict[str, Any],
+    timestamp: Optional[str] = None,
+) -> None:
+    """Record an injected scenario event into simulation_observations.db."""
+    db_path = ensure_observation_store(simulation_dir)
+    conn = _connect(db_path)
+    cursor = conn.cursor()
+    ts = timestamp or datetime.now().isoformat()
+    payload_json = json.dumps(payload, ensure_ascii=False)
+    cursor.execute(
+        """
+        INSERT INTO injected_events(platform, round_num, event_type, payload_json, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (platform, round_num, event_type, payload_json, ts),
+    )
+    conn.commit()
+    conn.close()
 
 
 def search_observations(
