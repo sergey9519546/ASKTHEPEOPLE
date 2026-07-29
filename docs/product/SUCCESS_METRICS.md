@@ -1,11 +1,14 @@
 ---
 title: "Success Metrics"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Product Analytics + Research + Trust"
 last_reviewed: "2026-07-29"
 review_cycle: "Monthly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation'"
+applies_to: "every metric surfaced to the user, every metric captured for internal analysis, every release-evidence bundle"
 ---
 
 # Success Metrics
@@ -363,5 +366,73 @@ Each metric requires:
 
 ## References
 
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
-- [AAPOR, Responsible AI Integration in Survey Research (2026)](https://aapor.org/announcements/task-force-on-responsible-ai-integration-in-survey-research-report/) — Professional guidance on validity, reliability, sensitivity, performance, transparency, and human oversight when AI is used in survey research.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [AAPOR, Responsible AI Integration in Survey Research (2026)](https://aapor.org/announcements/task-force-on-responsible-ai-integration-in-survey-research-report/) - Professional guidance on validity, reliability, sensitivity, performance, transparency, and human oversight when AI is used in survey research.
+
+---
+
+## Project-specific metrics status (baseline `8b616dc7`)
+
+The current code captures per-task status and progress
+([`backend/app/models/task.py:38-43`](../../backend/app/models/task.py:38))
+and a per-source-type evidence heuristic in
+[`services/report_evidence.py`](../../backend/app/services/report_evidence.py).
+There is no metrics pipeline; the North Star metric in this doc and
+its supporting list are not yet instrumented.
+
+### What is captured today
+
+- Per-task status, progress, message, progress_detail, public_error
+  ([`models/task.py:38-43`](../../backend/app/models/task.py:38)).
+  Best-effort to Redis; in-memory fallback. Sufficient for a
+  progress indicator and a 24h activity history.
+- Per-platform action counts in the per-platform SQLite DBs
+  (`backend/uploads/simulations/{simulation_id}/{reddit,twitter}_simulation.db`).
+  Sufficient for run-internal diagnostics.
+- The README discloses the product's current methodological
+  status
+  ([`README.md:99-114`](../../README.md)): no benchmark demonstrates
+  population representation, no prospective backtest, no
+  calibration curve, no causal identification, no end-to-end
+  reproducibility, internal graph metrics validate computation
+  inside a run, persona generation can add details absent from
+  source and can reproduce stereotypes, outputs can change with
+  model / provider / prompt / temperature / source parsing /
+  concurrency / dependency / external-service changes.
+
+### What is not yet instrumented (TARGET)
+
+- North Star: proportion of completed decision runs that produce a
+  reviewed human-validation handoff in which the decision owner
+  can correctly distinguish source inputs, assumptions, synthetic
+  paths, and human evidence.
+- Truth-layer comprehension, source-role comprehension, number of
+  assumptions corrected before a run, number of disconfirming
+  questions retained in the handoff, percentage of paths linked
+  to explicit reviewed assumptions, time from decision statement
+  to reviewed handoff, successful research-handoff export rate,
+  critical misunderstanding rate, accessibility task success,
+  model/schema failure rate, prompt-injection block rate, cost per
+  successful completed run.
+
+The instrumentation, the comprehension-test program, and the
+release-evidence bundle are **TARGET** and are part of gate 5
+([`docs/exec-plans/07-evals-accessibility-and-release.md`](../exec-plans/07-evals-accessibility-and-release.md)).
+
+### Anti-patterns to avoid
+
+- Optimizing for agreement, persuasion, synthetic positivity, or
+  apparent decisiveness. The current `report_agent.py` already
+  labels the evidence score as a per-source-type heuristic, not a
+  calibrated confidence. Reaching the contract requires the
+  report UI to render the score with the same disclosure and to
+  forbid the export of any unlabeled "agreement" or "support"
+  number.
+
+### Honest reporting obligation
+
+Per the README's "Current methodological status" section, every
+release claim citing the docs as already-live must expand that
+section. A release that claims the methodology has reached the
+contract must show the corresponding instrumentation evidence in
+the release-evidence bundle.

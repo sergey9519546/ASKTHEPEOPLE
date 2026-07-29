@@ -1,11 +1,14 @@
 ---
 title: "Incident Response"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Security Incident Commander"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly exercise"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation' / SECURITY-INCIDENT-2026-07-29 (archived)"
+applies_to: "every confirmed or reasonably suspected compromise of confidentiality, integrity, availability, tenant isolation, source/export access, model/prompt/tool behavior, or truth contract"
 ---
 
 # Incident Response
@@ -310,6 +313,84 @@ compromise, missing export disclosure, malware parser escape, and model drift.
 
 ## References
 
-- [NIST SP 800-61 Rev. 3](https://csrc.nist.gov/pubs/sp/800/61/r3/final) — Final incident-response recommendations aligned with CSF 2.0.
-- [EDPB — Data breaches](https://www.edpb.europa.eu/sme/assess-the-risks/data-breaches_en) — EU-oriented breach assessment and notification overview.
-- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+- [NIST SP 800-61 Rev. 3](https://csrc.nist.gov/pubs/sp/800/61/r3/final) - Final incident-response recommendations aligned with CSF 2.0.
+- [EDPB - Data breaches](https://www.edpb.europa.eu/sme/assess-the-risks/data-breaches_en) - EU-oriented breach assessment and notification overview.
+- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) - Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+
+---
+
+## Project-specific incident-response status (baseline `8b616dc7`)
+
+The current code does **not** have a dedicated incident-class table
+or a runbook-driven response procedure. The legacy
+[`SECURITY-INCIDENT-2026-07-29.md`](../archive/legacy-2026-07-29/SECURITY-INCIDENT-2026-07-29.md)
+(archived) records the prior in-repo incident. Reaching the contract
+requires the canonical persistence layer plus the durable
+orchestration layer.
+
+### Incident class registration — TARGET
+
+The doc specifies eleven incident classes (cross-tenant disclosure,
+prompt injection succeeded, source content affected system
+instructions, incorrect origin label, export missing disclosure,
+prohibited-use generation, model/prompt regression, source parser
+vulnerability, signing/provenance failure, sensitive-data
+exposure, unsupported public claim). None of these is registered
+in the current code. The incident table is **TARGET** and lands
+with gate 3.
+
+### Affected-run lookup — TARGET
+
+The `TaskManager` records per-task status and a `task_id`
+([`models/task.py:30-43`](../../backend/app/models/task.py:30)),
+but the cross-aggregate lookup (find every run, export, and report
+affected by a given prompt or model release) requires the canonical
+persistence layer. The doc requires
+"identify affected prompt/model/source/run versions" and the
+current code cannot.
+
+### Run cancellation and export revocation — TARGET (audit P1)
+
+The audit's P1 finding "Contradictory lifecycle semantics"
+identifies the present risk: a `close_environment` route marks the
+simulation `COMPLETED` regardless of outcome, and there is no
+export-revocation endpoint. The fix is gate 2 + gate 3 in
+[`adr/ADR-0003-durable-run-orchestration.md`](../architecture/adr/ADR-0003-durable-run-orchestration.md)
+and
+[`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md).
+
+### Disclosure-stripping adversarial test — TARGET
+
+The doc's "export-stripping adversarial test" and the audit's P1
+"Client-supplied export data can fabricate provenance" are the
+same hazard. The fix is
+[`adr/ADR-0008-export-provenance.md`](../architecture/adr/ADR-0008-export-provenance.md).
+
+### Notification capability — PARTIAL
+
+The `TaskManager.update_task` API
+([`models/task.py:252-302`](../../backend/app/models/task.py:252))
+carries a `public_error` field, but there is no in-product
+notification, no email template, and no webhook. The
+notification-capability layer is **TARGET** and is part of gate 4.
+
+### Investigation evidence preservation — PARTIAL
+
+The `log_request` middleware logs the request line and content
+length, never the body
+([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
+The production stripping of tracebacks and 5xx error strings is
+in place
+([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+These are appropriate for production but limit forensic value
+during an incident. The doc's "preserve investigation evidence"
+capability needs an incident-specific capture path that is
+separately justified and time-bounded, in line with
+[`adr/ADR-0010-no-chain-of-thought-retention.md`](../architecture/adr/ADR-0010-no-chain-of-thought-retention.md).
+
+### Quarterly exercise — PARTIAL
+
+The doc requires a quarterly incident-response exercise. No such
+exercise is recorded in the current repository. Tracked in
+[`docs/release/RUNBOOK.md`](../release/RUNBOOK.md) and in the
+release acceptance evidence bundle.

@@ -1,11 +1,14 @@
 ---
 title: "Retention and Deletion"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Privacy + Data Governance + SRE"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Non-atomic file persistence'"
+applies_to: "every byte uploaded, every model call output, every audit log, every backup, every region"
 ---
 
 # Retention
@@ -235,5 +238,70 @@ Increasing retention is a material privacy change. It requires:
 
 ## References
 
-- [NIST Privacy Framework](https://www.nist.gov/privacy-framework) — Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
-- [EDPB — Data breaches and risk assessment](https://www.edpb.europa.eu/sme/assess-the-risks/data-breaches_en) — Privacy/accountability reference for handling personal-data incidents.
+- [NIST Privacy Framework](https://www.nist.gov/privacy-framework) - Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
+- [EDPB - Data breaches and risk assessment](https://www.edpb.europa.eu/sme/assess-the-risks/data-breaches_en) - Privacy/accountability reference for handling personal-data incidents.
+
+---
+
+## Project-specific retention status (baseline `8b616dc7`)
+
+The current code has a partial retention implementation. Gate 3
+(canonical persistence + deletion state machine + provider
+deletion tracking) is required to land before the doc is
+satisfied in production. Items are marked **CURRENT**, **PARTIAL**,
+or **TARGET**.
+
+### Per-task retention — CURRENT
+
+`TaskManager` retains completed and failed task records for 24 hours
+in memory and in Redis
+([`models/task.py:365-387`](../../backend/app/models/task.py:365)).
+The hourly cleanup worker at
+[`app/__init__.py:229`](../../backend/app/__init__.py:229) calls
+`TaskManager().cleanup_old_tasks(max_age_hours=24)`. The 24h
+window is hard-coded; it is not configurable per task type, per
+workspace, or per jurisdiction. Configurable per-class retention
+is **TARGET**.
+
+### Project / simulation / report storage — PARTIAL
+
+- `backend/uploads/projects/{project_id}/` retains project
+  metadata, source files, and extracted text. No retention class
+  is recorded.
+- `backend/uploads/simulations/{simulation_id}/` retains state.json
+  and the per-platform SQLite DBs. No retention class is recorded.
+- `backend/uploads/reports/{report_id}/` retains the generated
+  report. No retention class is recorded.
+
+Reaching the contract requires a `retention_class` column on every
+aggregate and a daily job that purges expired records. Tracked in
+[`docs/exec-plans/02-tenancy-data-and-secure-ingestion.md`](../exec-plans/02-tenancy-data-and-secure-ingestion.md).
+
+### Deletion — PARTIAL
+
+`ProjectManager.delete_project`
+([`models/project.py:227-244`](../../backend/app/models/project.py:227))
+calls `shutil.rmtree` synchronously. There is no LEGAL_HOLD state,
+no provider-deletion step, no backup aging record. The
+deletion state machine in
+[`docs/architecture/state-machines.md`](../architecture/state-machines.md)
+("Deletion state machine") is **TARGET**.
+
+### No backup or region tracking — TARGET
+
+The current code does not declare a backup policy or a per-region
+storage layout. Reaching the contract requires a documented
+backup schedule, an aging record, and a per-region data-residency
+policy. Gate 3.
+
+### Subprocessor deletion limitations — CURRENT (declared)
+
+The
+[`SUBPROCESSORS.md`](SUBPROCESSORS.md)
+doc records the configured subprocessors (LLM provider, Zep Cloud,
+OASIS dependencies). Provider-side deletion windows and
+limitations are surfaced per subprocessor. The current
+implementation is honest about the limitations; reaching the
+contract requires the retention UI to reflect the actual
+subprocessor status (in-progress / confirmed / aged out) for
+each user-initiated deletion.

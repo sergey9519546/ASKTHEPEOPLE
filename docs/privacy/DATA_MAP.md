@@ -1,11 +1,14 @@
 ---
 title: "Privacy Data Map"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Privacy + Security + Data Governance"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly and every subprocessor/data-flow change"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'No object-level authorization model'"
+applies_to: "every byte uploaded, every model call, every export, every subprocessed transmission, every deletion"
 ---
 
 # Data Map
@@ -330,6 +333,100 @@ Before enabling a provider or region, record:
 
 ## References
 
-- [NIST Privacy Framework](https://www.nist.gov/privacy-framework) — Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
-- [European Commission Article 50 transparency guidelines](https://digital-strategy.ec.europa.eu/en/library/guidelines-transparency-obligations-providers-and-deployers-ai-systems) — Final July 2026 guidance on transparency obligations that apply from 2 August 2026.
+- [NIST Privacy Framework](https://www.nist.gov/privacy-framework) - Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [European Commission Article 50 transparency guidelines](https://digital-strategy.ec.europa.eu/en/library/guidelines-transparency-obligations-providers-and-deployers-ai-systems) - Final July 2026 guidance on transparency obligations that apply from 2 August 2026.
+
+---
+
+## Project-specific data-map status (baseline `8b616dc7`)
+
+The current code processes the data flows below. Gate 3 (multi-tenant
+isolation + canonical persistence + object storage) and gate 0
+(zero-trust source ingestion) are required to land before the data
+map is complete in production. Items are marked **CURRENT**,
+**PARTIAL**, or **TARGET**. See
+[`docs/architecture/index.md`](../architecture/index.md) for the
+legend.
+
+### Source material — PARTIAL (gate 0)
+
+- User uploads to `backend/uploads/projects/{project_id}/files/...`
+  via [`api/graph.py`](../../backend/app/api/graph.py) +
+  [`models/project.py:247-278`](../../backend/app/models/project.py:247).
+- Original filename is captured but not exposed downstream.
+- Extracted text written to `extracted_text.txt`
+  ([`models/project.py:280-296`](../../backend/app/models/project.py:280)).
+- No quarantine, no MIME/signature check, no malware scan. The
+  full
+  [`adr/ADR-0005-zero-trust-source-ingestion.md`](../architecture/adr/ADR-0005-zero-trust-source-ingestion.md)
+  state machine is TARGET.
+
+### Subprocessor calls — PARTIAL
+
+The repo README and the
+[`SUBPROCESSORS.md`](SUBPROCESSORS.md) doc list configured
+subprocessors. Each LLM call goes through
+[`utils/llm_client.py`](../../backend/app/utils/llm_client.py) and
+the provider config; each ZEP call goes through
+[`services/zep_tools.py`](../../backend/app/services/zep_tools.py).
+The current code does not record which subprocessor was used for
+which call in a per-attempt manifest. That is **TARGET** and is
+part of gate 3.
+
+### Generated artifacts — CURRENT (storage) / TARGET (tenant isolation)
+
+- Profile artifacts:
+  [`services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py)
+  writes to the simulation directory.
+- Config artifacts:
+  [`services/simulation_config_generator.py`](../../backend/app/services/simulation_config_generator.py)
+  writes the YAML/JSON config used by the runner.
+- Action records: per-platform SQLite DBs
+  (`backend/uploads/simulations/{simulation_id}/*.db`).
+- Reports:
+  [`services/report_agent.py`](../../backend/app/services/report_agent.py)
+  writes a JSON/Markdown report per `report_id` directory.
+
+The storage substrate is filesystem. Reaching the contract requires
+private object storage with environment/workspace-scoped keys,
+quarantine/approved prefixes, and short-lived authorized URLs. Gate 3.
+
+### No tenant boundary — TARGET (audit P1)
+
+A valid `APP_TOKEN` can read and write every project, simulation,
+report, and export. There is no `organization_id` or `workspace_id`
+on any aggregate. The fix is
+[`adr/ADR-0009-multi-tenant-isolation.md`](../architecture/adr/ADR-0009-multi-tenant-isolation.md)
+plus
+[`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md).
+
+### Deletion — PARTIAL
+
+`ProjectManager.delete_project`
+([`models/project.py:227-244`](../../backend/app/models/project.py:227))
+calls `shutil.rmtree` synchronously. There is no retention policy,
+no LEGAL_HOLD state, no provider-deletion step, and no backup aging
+record. Reaching the deletion state machine in
+[`docs/architecture/state-machines.md`](../architecture/state-machines.md)
+requires the canonical persistence layer.
+
+### Sensitive content in logs and traces — CURRENT (by design)
+
+The `log_request` middleware never logs request bodies
+([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
+The production stripping of tracebacks and 5xx error strings is in
+place
+([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+The current behavior satisfies the doc's "no PII in logs" objective
+at the wire today.
+
+### Jurisdiction and lawful basis — PARTIAL
+
+`config.py` exposes
+[`CORS_ORIGINS`](../../backend/app/config.py),
+`REQUIRE_APP_AUTH`, `APP_TOKEN`, `SECRET_KEY`, and
+`TRUST_X_REAL_IP` (line 30-39 of `app/__init__.py`). The current
+configuration does not carry an explicit jurisdiction, a lawful
+basis, or a per-region data-residency policy. These are
+**TARGET** and land with gate 3.

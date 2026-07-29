@@ -1,11 +1,14 @@
 ---
 title: "Subprocessors"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Privacy + Procurement + Security"
 last_reviewed: "2026-07-29"
 review_cycle: "Monthly and before provider change"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'No object-level authorization model'"
+applies_to: "every external API call, every subprocessed transmission, every per-call telemetry record"
 ---
 
 # Subprocessors
@@ -214,7 +217,78 @@ evidence.
 
 ## References
 
-- [NIST Privacy Framework](https://www.nist.gov/privacy-framework) — Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
-- [EDPB opinion on processors and subprocessors](https://www.edpb.europa.eu/news/edpb-adopts-opinion-on-processors-guidelines-on-legitimate-interest-statement-on-draft_en) — Controllers should have processor/subprocessor identity information readily available and verify sufficient guarantees.
-- [Zep Software, Inc. privacy policy](https://help.getzep.com/legal/privacy-policy) — Public baseline only; contract and current service configuration control.
-- [Zep BYOK documentation](https://help.getzep.com/bring-your-own-key) — Documents selected enterprise cloud encryption and region behavior; verify against purchased service.
+- [NIST Privacy Framework](https://www.nist.gov/privacy-framework) - Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
+- [EDPB opinion on processors and subprocessors](https://www.edpb.europa.eu/news/edpb-adopts-opinion-on-processors-guidelines-on-legitimate-interest-statement-on-draft_en) - Controllers should have processor/subprocessor identity information readily available and verify sufficient guarantees.
+- [Zep Software, Inc. privacy policy](https://help.getzep.com/legal/privacy-policy) - Public baseline only; contract and current service configuration control.
+- [Zep BYOK documentation](https://help.getzep.com/bring-your-own-key) - Documents selected enterprise cloud encryption and region behavior; verify against purchased service.
+
+---
+
+## Project-specific subprocessor status (baseline `8b616dc7`)
+
+The current code makes the following external calls. Per-call
+recording (which subprocessor, which call, which input hashes,
+which output hash, which prompt and model release) is **TARGET** and
+is part of gate 3 (canonical persistence) and gate 1 (prompt
+registry and model release ledger).
+
+### LLM provider — CURRENT (call surface) / TARGET (per-call record)
+
+- LLM calls go through
+  [`utils/llm_client.py`](../../backend/app/utils/llm_client.py) and
+  the provider factory
+  [`services/camel_model_factory.py`](../../backend/app/services/camel_model_factory.py).
+- The model alias is read from environment configuration. There is
+  no per-call record of the model identifier used.
+- The OpenAI-compatible endpoint URL and key are read from
+  [`config.py`](../../backend/app/config.py).
+
+### Zep Cloud graph memory — CURRENT (call surface) / TARGET (per-call record)
+
+- ZEP calls go through
+  [`services/zep_tools.py`](../../backend/app/services/zep_tools.py) (76 KB)
+  and the entity reader
+  [`services/zep_entity_reader.py`](../../backend/app/services/zep_entity_reader.py).
+- ZEP is treated as a derived index. The current code does not
+  declare a per-call record of which entities and which page
+  contents were sent to ZEP for a given run.
+
+### OASIS / CAMEL — CURRENT (in-process) / TARGET (per-call record)
+
+- OASIS is invoked from
+  [`services/simulation_runner.py`](../../backend/app/services/simulation_runner.py) (82 KB)
+  via the
+  [`services/simulation_ipc.py`](../../backend/app/services/simulation_ipc.py)
+  layer. OASIS is loaded in-process today; it is a Python
+  dependency, not an external network call.
+- The OASIS dependency version is not recorded per run. Reaching
+  the contract requires the per-attempt manifest from
+  [`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md).
+
+### File parser dependencies — CURRENT
+
+- [`utils/file_parser.py`](../../backend/app/utils/file_parser.py) (8 KB)
+  uses PyMuPDF, python-docx, BeautifulSoup, and other open-source
+  libraries. These are bundled Python dependencies, not network
+  services. A separate SBOM and license inventory is at the repo
+  root
+  [`THIRD_PARTY_NOTICES.md`](../../THIRD_PARTY_NOTICES.md).
+
+### Rate limits and provider timeouts — PARTIAL
+
+Provider rate limits are not surfaced per call. The
+[`utils/retry.py`](../../backend/app/utils/retry.py) (8 KB) module
+implements bounded retries. Reaching the contract requires per-
+provider rate-limit visibility, per-call timeout, and an explicit
+per-attempt cost estimate, all part of gate 4.
+
+### Subprocessor UI / disclosure — TARGET
+
+The doc requires a subprocessor list with region, data category,
+purpose, retention, and a per-subprocessor change-log surfaced in
+the UI. The current code does not have a subprocessor UI; the
+information is in
+[`docs/privacy/SUBPROCESSORS.md`](SUBPROCESSORS.md) only.
+Reaching the contract requires a subprocessor component in the
+admin UI and a per-call subprocessor correlation in the run
+manifest. Gate 3 + gate 5.

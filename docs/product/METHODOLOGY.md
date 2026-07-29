@@ -1,11 +1,14 @@
 ---
 title: "Methodology"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Research + Product + AI Engineering"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation' / §5 P1 'Contradictory lifecycle semantics'"
+applies_to: "all OASIS/CAMEL social-environment runs, all generated reports, all exports, all model prompts"
 ---
 
 # Methodology
@@ -673,3 +676,97 @@ The methodology owner MUST review this document:
 - [OECD Strategic Foresight Toolkit for Resilient Public Policy](https://www.oecd.org/en/publications/foresight-toolkit-for-resilient-public-policy_bcdd9304-en.html) — Scenario and stress-testing guidance that treats disruptions and alternative futures as hypothetical, not predictions.
 - [UK Government Futures Toolkit](https://www.gov.uk/government/publications/futures-toolkit-for-policy-makers-and-analysts/the-futures-toolkit-html) — Practical scenario-design guidance; scenarios are possible futures rather than predictions or plans.
 - [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+
+---
+
+## Project-specific methodology status (baseline `8b616dc7`)
+
+The "Current-engine containment contract" in this doc is implemented
+in the existing OASIS/CAMEL adapters but **not yet enforced as a
+methodology gate**. The audit's P1 finding "Inconsistent request
+validation" is the deepest hazard against this doc today. Reaching
+the contract requires gate 0, gate 1, and gate 3 to land together.
+
+### Current OASIS/CAMEL integration
+
+- Profile generation:
+  [`backend/app/services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py)
+  (56 KB). The output is the closest current analogue of "generated
+  decision lenses" in this doc.
+- Configuration generation:
+  [`backend/app/services/simulation_config_generator.py`](../../backend/app/services/simulation_config_generator.py)
+  (52 KB).
+- Simulation runner:
+  [`backend/app/services/simulation_runner.py`](../../backend/app/services/simulation_runner.py)
+  (82 KB).
+- Cross-process IPC:
+  [`backend/app/services/simulation_ipc.py`](../../backend/app/services/simulation_ipc.py)
+  (14 KB).
+- CLI runners:
+  [`backend/scripts/run_twitter_simulation.py`](../../backend/scripts/run_twitter_simulation.py),
+  [`backend/scripts/run_reddit_simulation.py`](../../backend/scripts/run_reddit_simulation.py),
+  [`backend/scripts/run_parallel_simulation.py`](../../backend/scripts/run_parallel_simulation.py).
+- The `SimulationRunner` registers a process cleanup hook at startup
+  ([`app/__init__.py:106-109`](../../backend/app/__init__.py:106))
+  that terminates spawned processes when the web process exits. The
+  audit identifies this as a horizontal-scaling blocker.
+
+### Truth Rail and disclosure — TARGET (already covered)
+
+See the project-specific mapping in
+[`PRODUCT_TRUTH_CONTRACT.md`](PRODUCT_TRUTH_CONTRACT.md). The four
+methodology phrases the validator enforces ("not a synthetic survey",
+"External validity", "disconfirming", "Human-validation handoff")
+remain in this document.
+
+### Frozen run manifest — TARGET
+
+The "Run manifest and reproducibility" section above specifies
+decision-version IDs, source-version IDs, prompt definition and
+release IDs, model provider and exact identifier, decoding
+parameters, tool/retrieval configuration, simulation-engine versions,
+seeds, schema versions, and content hashes. **None of these are
+persisted today.** The current state is `state.json` per simulation
+plus a per-platform SQLite DB. Reaching the manifest requires:
+
+- The canonical persistence layer in
+  [`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md)
+  to host the manifest row.
+- The prompt registry and model release ledger in
+  [`adr/ADR-0004-provider-adapters-and-prompt-registry.md`](../architecture/adr/ADR-0004-provider-adapters-and-prompt-registry.md)
+  to provide the IDs.
+- The seed-control and reproducibility implementation in gate 5
+  ([`docs/exec-plans/04-durable-orchestration-and-path-engine.md`](../exec-plans/04-durable-orchestration-and-path-engine.md)).
+
+### Seed-controlled ensembles, branching, and replay — TARGET
+
+The "Advanced simulation methodology" section in this doc
+(seed-controlled ensembles, assumption-isolation runs, cross-model
+comparison, immutable scenario branching, scheduled intervention
+events, deterministic replay, stability ledger, coverage ledger,
+disconfirming conditions, human-validation comparison without
+evidence blending) is **TARGET** and is gate 5. The current code
+does not implement any of these.
+
+### Coverage tests and duplicate-path detection — TARGET
+
+"Coverage tests prove that selected uncertainty states and profiles
+are not silently omitted" and "Duplicate-path detection catches
+paraphrased branches" are TARGET and require the canonical path
+schema and the path engine from
+[`adr/ADR-0003-durable-run-orchestration.md`](../architecture/adr/ADR-0003-durable-run-orchestration.md).
+
+### Adversarial fixtures — TARGET
+
+"Adversarial fixtures cannot turn source instructions into system
+commands" is the test counterpart of the audit's P0 prompt-prefixing
+finding. The fixture corpus and the test runner are TARGET and are
+owned by `askthepeople-ai-eval-steward` in gate 5.
+
+### Comprehension testing — TARGET
+
+"Human-research specialists judge the handoff questions usable and
+non-leading" and "No evaluation report describes synthetic stability
+as human accuracy" require a comprehension-test program that is
+**TARGET** and is part of gate 5
+([`docs/exec-plans/07-evals-accessibility-and-release.md`](../exec-plans/07-evals-accessibility-and-release.md)).

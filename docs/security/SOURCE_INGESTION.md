@@ -1,11 +1,14 @@
 ---
 title: "Secure Source Ingestion"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Security + Source Platform + Privacy"
 last_reviewed: "2026-07-29"
 review_cycle: "Every parser/file-type change"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P0 'Unvalidated platform path component in the posts endpoint' / P0 'Prompt prefixing is not a security boundary'"
+applies_to: "all upload routes, all parser entry points, all LLM prompts that consume extracted source text"
 ---
 
 # Source Ingestion
@@ -382,6 +385,75 @@ legal/security hold.
 
 ## References
 
-- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
-- [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) — Extension, MIME/signature, filename, size, authorization, and storage guidance.
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) - Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+- [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html) - Extension, MIME/signature, filename, size, authorization, and storage guidance.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+
+---
+
+## Project-specific source-ingestion status (baseline `8b616dc7`)
+
+The current code partially implements this doc. Gate 0 is owned by
+`askthepeople-security-reviewer`.
+
+### Upload path — PARTIAL
+
+- [`api/graph.py`](../../backend/app/api/graph.py) accepts a
+  `FileStorage` upload.
+- [`models/project.py:247-278`](../../backend/app/models/project.py:247)
+  writes the file with a randomized safe filename to
+  `backend/uploads/projects/{project_id}/files/{uuid}{ext}`.
+- The original filename is stored in the project metadata but is
+  not exposed downstream.
+- The upload is **not** validated against extension, MIME, or
+  signature. There is no malware scan, no decompression-bomb
+  check, no quarantine state, no scan worker. A PDF with a
+  `Content-Type` of `image/png` is accepted today.
+
+### File parser — PARTIAL
+
+[`utils/file_parser.py`](../../backend/app/utils/file_parser.py) (8 KB)
+handles PDF, DOCX, MD, TXT, EML. There is no per-format size cap,
+no per-format timeout, no parser sandbox, and no network-isolated
+worker. The parser runs in the web process. A parser compromise
+would cross the application trust boundary.
+
+### Source-text prompt isolation — TARGET (audit P0)
+
+The extracted text is written to
+`backend/uploads/projects/{project_id}/extracted_text.txt`
+([`models/project.py:280-296`](../../backend/app/models/project.py:280))
+and is consumed by LLM calls in
+[`services/ontology_generator.py`](../../backend/app/services/ontology_generator.py),
+[`services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py),
+and
+[`services/simulation_config_generator.py`](../../backend/app/services/simulation_config_generator.py).
+The current code does not isolate source text as a separate prompt
+role. The audit's P0 finding "Prompt prefixing is not a security
+boundary" applies.
+
+### Required correction (gate 0)
+
+- Reject uploads of unknown MIME / extension; for accepted types,
+  enforce a hard size cap, a per-format timeout, and a
+  decompression-bomb check before parsing.
+- Quarantine every new upload; do not expose through user-facing
+  download routes.
+- Run parsing in an isolated no-network worker.
+- Add a per-source prompt-injection scanner; flag for review if
+  risk exceeds threshold.
+- Require user approval of `NEEDS_REVIEW` or `FLAGGED` artifacts
+  before they can be consumed by generation.
+- Bind zero tools to source-consuming LLM calls.
+- Use structured output and run deterministic truth and terminology
+  validators on the response.
+
+### ZEP graph memory — PARTIAL
+
+[`services/zep_graph_memory_updater.py`](../../backend/app/services/zep_graph_memory_updater.py)
+(27 KB) and
+[`services/zep_tools.py`](../../backend/app/services/zep_tools.py) (76 KB)
+update ZEP graph memory from source-extracted entities. ZEP is a
+derived index and must be rebuildable from canonical records.
+Reaching the contract requires the canonical persistence layer
+in gate 3.

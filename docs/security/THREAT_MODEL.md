@@ -1,11 +1,14 @@
 ---
 title: "Threat Model"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Security Engineering + AI Security"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly and after material architecture change"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P0/P1 cluster"
+applies_to: "every HTTP route, every LLM call, every upload, every export, every background process"
 ---
 
 # Threat Model
@@ -409,7 +412,150 @@ A security review is required for:
 
 ## References
 
-- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
-- [OWASP Application Security Verification Standard](https://owasp.org/www-project-application-security-verification-standard/) — Web-application security verification baseline.
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
-- [NIST SP 800-61 Rev. 3](https://csrc.nist.gov/pubs/sp/800/61/r3/final) — Final incident-response recommendations aligned with CSF 2.0.
+- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) - Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+- [OWASP Application Security Verification Standard](https://owasp.org/www-project-application-security-verification-standard/) - Web-application security verification baseline.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [NIST SP 800-61 Rev. 3](https://csrc.nist.gov/pubs/sp/800/61/r3/final) - Final incident-response recommendations aligned with CSF 2.0.
+
+---
+
+## Project-specific threat-model status (baseline `8b616dc7`)
+
+This section maps the threat classes in the model above to the actual
+code under [`backend/app/`](../../backend/app/) and the audit
+findings. Items are marked **CURRENT**, **PARTIAL**, or **TARGET**.
+See [`docs/architecture/index.md`](../architecture/index.md) for the
+legend.
+
+### Defenses in place at the request/response seam — CURRENT
+
+[`create_app()`](../../backend/app/__init__.py:25) implements the
+outer security boundary:
+
+- Bearer auth + `hmac.compare_digest`
+  ([`app/__init__.py:125-141`](../../backend/app/__init__.py:125));
+  fail-closed at startup if `APP_TOKEN` is missing or weak
+  ([`app/__init__.py:30-39`](../../backend/app/__init__.py:30)).
+- Production CORS lockdown — `CORS_ORIGINS='*'` refused
+  ([`app/__init__.py:74-82`](../../backend/app/__init__.py:74)).
+- Security headers — CSP, X-Content-Type-Options nosniff,
+  X-Frame-Options DENY, Referrer-Policy no-referrer, Permissions-
+  Policy (all sensitive features disabled), COOP same-origin, CORP
+  same-origin, HSTS
+  ([`app/__init__.py:149-196`](../../backend/app/__init__.py:149)).
+- `Cache-Control: no-store` for `/api/*` and `/health`
+  ([`app/__init__.py:193-195`](../../backend/app/__init__.py:193)).
+- Production stripping of `traceback` and 5xx `error` strings
+  ([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+- `SafePathError` → `400 {"success": false, "error": "invalid_id"}`
+  ([`app/__init__.py:263-267`](../../backend/app/__init__.py:263)).
+- `RateLimitExceeded` → `429` with a stable error code
+  ([`app/__init__.py:254-261`](../../backend/app/__init__.py:254)).
+- No request body logging in any debug path
+  ([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
+- Per-IP rate limiting via `flask-limiter`; storage is
+  `memory://` (single-worker only) — see
+  [`api/__init__.py:36-42`](../../backend/app/api/__init__.py:36).
+
+### P0 — Unvalidated `platform` path component in the posts endpoint
+
+[`api/simulation.py`](../../backend/app/api/simulation.py) accepts
+`platform` as a request-controlled value and interpolates it into a
+filename:
+
+```python
+platform = request.args.get("platform", "reddit")
+db_file = f"{platform}_simulation.db"
+```
+
+This MUST be replaced with a fixed allowlist (`reddit`,
+`twitter`) and the SQLite opened read-only. The fix is gate 0,
+owned by `askthepeople-security-reviewer`. Tracked in
+[`adr/ADR-0005-zero-trust-source-ingestion.md`](../architecture/adr/ADR-0005-zero-trust-source-ingestion.md).
+
+### P0 — Preparation runs in a local daemon thread
+
+The preparation endpoint in
+[`api/simulation.py`](../../backend/app/api/simulation.py) creates a
+`threading.Thread(..., daemon=True)`. The web route MUST enqueue
+work and return. The fix is gate 2 in
+[`adr/ADR-0003-durable-run-orchestration.md`](../architecture/adr/ADR-0003-durable-run-orchestration.md).
+
+### P0 — Prompt prefixing is not a security boundary
+
+The generated-profile follow-up system in
+[`services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py)
+concatenates a fixed prefix with user input. A textual instruction
+is not a security boundary. The fix is the structured-prompt
+contract from
+[`adr/ADR-0004-provider-adapters-and-prompt-registry.md`](../architecture/adr/ADR-0004-provider-adapters-and-prompt-registry.md).
+
+### P1 — No object-level authorization model
+
+A valid `APP_TOKEN` can read and write every project, simulation,
+report, and export. There is no `organization_id` or `workspace_id`.
+The fix is
+[`adr/ADR-0009-multi-tenant-isolation.md`](../architecture/adr/ADR-0009-multi-tenant-isolation.md)
+plus the canonical persistence layer in
+[`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md).
+
+### P1 — Non-atomic file persistence
+
+Every JSON write today is a non-atomic
+`open(..., 'w').write(...)`. A reader of `state.json` during a
+write can observe a partial file. The fix is
+write → verify → hash → mark-ready, with the canonical row in
+PostgreSQL gating access to the artifact in object storage. Gate 3.
+
+### P1 — Client-supplied export data can fabricate provenance
+
+`services/export_service.py` accepts arbitrary `results` rows from
+the caller and exports them under the ASKTHEPEOPLE wordmark. The
+fix is canonical record IDs plus a server-side provenance manifest.
+Gate 5, [`adr/ADR-0008-export-provenance.md`](../architecture/adr/ADR-0008-export-provenance.md).
+
+### Multi-tenant isolation in every query — TARGET
+
+The doc requires organization/workspace scoping on every database
+query, every worker, every export, and every object-storage access.
+The current code has none. Reaching the contract requires
+PostgreSQL row-level security as defense in depth, plus
+tenant-prefixed object keys, plus tenant-aware cache keys, plus
+scoped worker credentials. The test suite must cover every data
+path with cross-tenant negative tests. Gate 3.
+
+### Source as untrusted data — PARTIAL
+
+Source upload uses a randomized safe filename and never exposes
+the original filename downstream. The current file parser handles
+PDF, DOCX, MD, TXT, EML with no malware scan, no MIME signature
+check, no quarantine state. The full zero-trust ingestion state
+machine (UPLOADING → QUARANTINED → SCANNING → PARSING → FLAGGED
+→ NEEDS_REVIEW → READY → DELETION_PENDING → DELETED) is **TARGET**.
+Gate 0, [`adr/ADR-0005-zero-trust-source-ingestion.md`](../architecture/adr/ADR-0005-zero-trust-source-ingestion.md).
+
+### Provider output as untrusted input — PARTIAL
+
+`claim_boundary.py` and `validation_engine.py` exist and check
+schema-level constraints, but they do not run adversarial prompt-
+injection red-team or deterministic truth-validators on every
+output. Gate 0 + gate 5.
+
+### Cost, queue age, and provider exposure — TARGET
+
+The current in-memory rate limiter is the only resource control.
+There is no per-run cost budget, no per-tenant queue age, no
+provider-exposure ceiling. The audit's P1 finding
+"Unbounded collection loading" applies. The fix is gate 4
+([`docs/release/RUNBOOK.md`](../release/RUNBOOK.md)).
+
+### Sensitive content in logs and traces — CURRENT (by design)
+
+The `log_request` middleware never logs request bodies
+([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)). The
+production stripping of tracebacks and 5xx error strings removes
+internal paths, credentials, and upstream API error bodies leaked
+via `str(e)`
+([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+The doc's "keep secrets and sensitive content out of logs and
+analytics" objective is satisfied at the wire today.
