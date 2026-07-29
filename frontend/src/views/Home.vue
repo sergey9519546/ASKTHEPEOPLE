@@ -1,5 +1,5 @@
 <template>
-  <div class="bauhaus-interface selection:bg-bauhaus-red selection:text-white">
+  <div class="app-interface">
     <!-- HEADER -->
     <header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 flex flex-col md:flex-row justify-between items-center w-full px-10 py-4 gap-6 border-b border-slate-200">
         <div class="flex items-center gap-6">
@@ -95,7 +95,7 @@
                             <button @click="startSimulation" :disabled="!canSubmit || loading"
                                         class="w-full bg-slate-900 text-white p-5 rounded-xl font-medium text-base flex items-center justify-center gap-4 hover:bg-slate-800 transition-all group border-none shadow-md">
                                     <span v-if="!loading">INITIALIZE ENGINE SEQUENCE</span>
-                                    <span v-else class="bauhaus-spinner-small"></span>
+                                    <span v-else class="app-spinner-small"></span>
                                     <span class="material-symbols-outlined group-hover:translate-x-1.5 transition-transform text-slate-300">arrow_forward</span>
                                 </button>
                         </div>
@@ -146,8 +146,40 @@
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-12 gap-6 font-sans">
-                <!-- Large Placeholder Vote Card -->
-                <div class="md:col-span-8 bg-white border border-slate-200 p-0 flex flex-col group relative overflow-hidden rounded-2xl shadow-xl shadow-slate-100/50">
+                <!-- Large Vote Card (Latest Session) -->
+                <div v-if="simulationHistory.length > 0" class="md:col-span-8 bg-white border border-slate-200 p-0 flex flex-col group relative overflow-hidden rounded-2xl shadow-xl shadow-slate-100/50 cursor-pointer" @click="router.push({ name: 'Process', params: { projectId: simulationHistory[0].project_id } })">
+                    <div class="flex border-b border-slate-100 bg-slate-50/50">
+                        <div class="bg-rose-500 text-white p-5 aspect-square flex items-center justify-center">
+                            <span class="material-symbols-outlined text-2xl">policy</span>
+                        </div>
+                        <div class="flex-grow p-5 flex items-center justify-between">
+                            <span class="text-xs font-semibold tracking-wider text-slate-500 uppercase">Status: {{ simulationHistory[0].status }}</span>
+                            <span class="text-[9px] font-mono font-bold text-slate-400">Ref ID: {{ simulationHistory[0].simulation_id.substring(0, 8) }}</span>
+                        </div>
+                    </div>
+                    <div class="p-8 md:p-10">
+                        <h3 class="text-2xl md:text-3xl font-extrabold leading-snug tracking-tight mb-8 text-slate-800 uppercase line-clamp-2">
+                            {{ simulationHistory[0].prompt || 'Unnamed Simulation Goal' }}
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+                            <div class="space-y-4 md:col-span-8">
+                                <div class="flex justify-between items-end">
+                                    <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Nodes Active</span>
+                                    <span class="text-2xl font-bold text-slate-800">{{ simulationHistory[0].entities_count || 0 }}</span>
+                                </div>
+                                <div class="h-6 bg-slate-100 rounded-full relative overflow-hidden">
+                                    <div class="absolute inset-y-0 left-0 bg-rose-500 rounded-full" style="width: 100%;"></div>
+                                </div>
+                            </div>
+                            <button class="md:col-span-4 bg-slate-900 text-white py-4 rounded-xl text-xs font-semibold uppercase tracking-wider hover:bg-slate-800 transition-colors flex items-center justify-center gap-2 border-none shadow-md">
+                                View Data <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fallback Large Placeholder Vote Card -->
+                <div v-else class="md:col-span-8 bg-white border border-slate-200 p-0 flex flex-col group relative overflow-hidden rounded-2xl shadow-xl shadow-slate-100/50">
                     <div class="flex border-b border-slate-100 bg-slate-50/50">
                         <div class="bg-rose-500 text-white p-5 aspect-square flex items-center justify-center">
                             <span class="material-symbols-outlined text-2xl">policy</span>
@@ -178,34 +210,52 @@
                     </div>
                 </div>
 
-                <!-- Small Vote Cards Placeholder -->
+                <!-- Small Vote Cards -->
                 <div class="md:col-span-4 flex flex-col gap-4">
-                    <div class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-colors cursor-pointer group shadow-sm">
-                        <div>
-                            <div class="flex justify-between mb-6">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Urban Systems</span>
-                                <span class="material-symbols-outlined text-slate-400">domain</span>
+                    <template v-if="simulationHistory.length > 1">
+                        <div v-for="sim in simulationHistory.slice(1, 3)" :key="sim.simulation_id" @click="router.push({ name: 'Process', params: { projectId: sim.project_id } })" class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-colors cursor-pointer group shadow-sm">
+                            <div>
+                                <div class="flex justify-between mb-6">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">{{ new Date(sim.created_at).toLocaleDateString() }}</span>
+                                    <span class="material-symbols-outlined text-slate-400">data_object</span>
+                                </div>
+                                <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase line-clamp-2">{{ sim.prompt || 'Unnamed Goal' }}</h3>
                             </div>
-                            <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase">REPLACE PUBLIC TRANSIT WITH AUTONOMOUS PODS?</h3>
-                        </div>
-                        <div class="flex justify-between items-end mt-6">
-                            <div class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Stage: Evaluation</div>
-                            <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                        </div>
-                    </div>
-                    <div class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-all cursor-pointer group shadow-sm">
-                        <div>
-                            <div class="flex justify-between mb-6">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data Privacy</span>
-                                <span class="material-symbols-outlined text-slate-400">encrypted</span>
+                            <div class="flex justify-between items-end mt-6">
+                                <div class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Status: {{ sim.status }}</div>
+                                <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
                             </div>
-                            <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase">GLOBAL MANDATORY BIO-ENCRYPTION FOR PAYMENTS?</h3>
                         </div>
-                        <div class="flex justify-between items-end mt-6">
-                            <div class="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">Status: Critical</div>
-                            <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    </template>
+                    <template v-else>
+                        <!-- Fallback Small Vote Cards -->
+                        <div class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-colors cursor-pointer group shadow-sm">
+                            <div>
+                                <div class="flex justify-between mb-6">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Urban Systems</span>
+                                    <span class="material-symbols-outlined text-slate-400">domain</span>
+                                </div>
+                                <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase">REPLACE PUBLIC TRANSIT WITH AUTONOMOUS PODS?</h3>
+                            </div>
+                            <div class="flex justify-between items-end mt-6">
+                                <div class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">Stage: Evaluation</div>
+                                <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                            </div>
                         </div>
-                    </div>
+                        <div class="flex-grow bg-white border border-slate-200 p-6 rounded-2xl flex flex-col justify-between hover:border-slate-300 transition-all cursor-pointer group shadow-sm">
+                            <div>
+                                <div class="flex justify-between mb-6">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Data Privacy</span>
+                                    <span class="material-symbols-outlined text-slate-400">encrypted</span>
+                                </div>
+                                <h3 class="text-lg font-bold leading-snug text-slate-800 uppercase">GLOBAL MANDATORY BIO-ENCRYPTION FOR PAYMENTS?</h3>
+                            </div>
+                            <div class="flex justify-between items-end mt-6">
+                                <div class="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">Status: Critical</div>
+                                <span class="material-symbols-outlined text-slate-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
         </section>
@@ -332,6 +382,7 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { getTemplates } from "../api/graph";
+import { getSimulationHistory } from "../api/simulation";
 import HistoryDatabase from "../components/HistoryDatabase.vue";
 import SettingsModal from "../components/SettingsModal.vue";
 
@@ -343,6 +394,18 @@ const loading = ref(false);
 const isDragOver = ref(false);
 const fileInput = ref(null);
 const templates = ref([]);
+const simulationHistory = ref([]);
+
+const fetchHistory = async () => {
+  try {
+    const res = await getSimulationHistory(3); // Fetch the latest 3 for the dashboard
+    if (res.success && res.data) {
+      simulationHistory.value = res.data;
+    }
+  } catch (err) {
+    if (import.meta.env.DEV) console.warn("Failed to fetch simulation history:", err);
+  }
+};
 
 const fetchTemplates = async () => {
   try {
@@ -351,7 +414,7 @@ const fetchTemplates = async () => {
       templates.value = res.data;
     }
   } catch (err) {
-    console.warn("Failed to fetch templates:", err);
+    if (import.meta.env.DEV) console.warn("Failed to fetch templates:", err);
   }
 };
 
@@ -393,10 +456,11 @@ const scrollToSection = (id) => {
 };
 
 fetchTemplates();
+fetchHistory();
 </script>
 
 <style scoped>
-.bauhaus-interface {
+.app-interface {
   background-color: #F8F9FA;
   color: #0F0F0F;
   font-family: 'Space Grotesk', sans-serif;
@@ -422,11 +486,11 @@ fetchTemplates();
     clip-path: polygon(0% 0%, 100% 0%, 100% 75%, 75% 100%, 0% 100%);
 }
 
-.bauhaus-spinner-small { 
+.app-spinner-small { 
   width: 24px; 
   height: 24px; 
   border: 4px solid white; 
-  border-top-color: #E63946; 
+  border-top-color: var(--accent-color); 
   border-radius: 50%; 
   animation: spin 1s infinite linear; 
 }

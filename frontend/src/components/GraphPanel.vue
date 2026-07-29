@@ -71,7 +71,7 @@
           >
             <header class="detail-header" id="detail-header">
               <span class="detail-category">{{
-                selectedItem.type === "node" ? "NODE_DATA" : "RELATION_LINK"
+                selectedItem.type === "node" ? "NODE DATA" : "RELATION LINK"
               }}</span>
               <span
                 v-if="selectedItem.type === 'node'"
@@ -295,11 +295,15 @@ const render = () => {
 
   const width = graphContainer.value.clientWidth;
   const height = graphContainer.value.clientHeight;
+  if (!width || !height) return;
+
   const svg = d3
     .select(graphSvg.value)
     .attr("width", width)
     .attr("height", height)
     .attr("viewBox", `0 0 ${width} ${height}`);
+  
+  svg.on(".zoom", null);
   svg.selectAll("*").remove();
 
   const nodes = (props.graphData.nodes || []).map((n) => ({
@@ -332,12 +336,11 @@ const render = () => {
 
   currentSimulation = simulation;
   const g = svg.append("g");
-  svg.call(
-    d3
-      .zoom()
-      .scaleExtent([0.1, 8])
-      .on("zoom", (event) => g.attr("transform", event.transform)),
-  );
+  const zoomBehavior = d3
+    .zoom()
+    .scaleExtent([0.1, 8])
+    .on("zoom", (event) => g.attr("transform", event.transform));
+  svg.call(zoomBehavior);
 
   const links = g
     .append("g")
@@ -345,7 +348,7 @@ const render = () => {
     .data(edges)
     .enter()
     .append("line")
-    .attr("stroke", "rgba(255, 255, 255, 0.2)")
+    .attr("stroke", "rgba(148, 163, 184, 0.5)")
     .attr("stroke-width", 1.5);
 
   const nodeDots = g
@@ -359,7 +362,7 @@ const render = () => {
       "fill",
       (d) => entityTypes.value.find((t) => t.name === d.type)?.color || "#94a3b8",
     )
-    .attr("stroke", "rgba(0, 0, 0, 0.4)")
+    .attr("stroke", "#ffffff")
     .attr("stroke-width", 2)
     .style("cursor", "pointer")
     .on("click", (event, d) => {
@@ -387,8 +390,8 @@ const render = () => {
     .append("text")
     .text((d) => d.name)
     .attr("font-size", "10px")
-    .attr("font-weight", "600")
-    .attr("fill", "rgba(255, 255, 255, 0.85)")
+    .attr("font-weight", "700")
+    .attr("fill", "#1e293b")
     .attr("dx", 16)
     .attr("dy", 4);
 

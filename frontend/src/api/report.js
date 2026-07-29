@@ -89,3 +89,13 @@ export const exportReportCSV = (reportId) => {
     responseType: "blob",
   });
 };
+
+/**
+ * Export report as Executive HTML Slide Deck
+ * @param {string} reportId
+ */
+export const exportReportExecutive = (reportId) => {
+  return service.get(`/api/report/${reportId}/export/executive`, {
+    responseType: "blob",
+  });
+};

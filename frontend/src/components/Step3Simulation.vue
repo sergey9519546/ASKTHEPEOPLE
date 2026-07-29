@@ -152,7 +152,14 @@
         </div>
       </div>
 
-      <div class="action-controls">
+      <div class="action-controls" style="display: flex; gap: 10px; align-items: center;">
+        <button
+          class="inject-action-btn"
+          style="background: rgba(225, 29, 72, 0.15); color: #f43f5e; border: 1fr solid rgba(225, 29, 72, 0.3); padding: 10px 16px; border-radius: 8px; font-weight: 700; font-size: 11px; cursor: pointer; display: flex; items-center; gap: 6px; transition: all 0.2s;"
+          @click="showInjectModal = true"
+        >
+          ⚡ INJECT SCENARIO EVENT
+        </button>
         <button
           class="final-action-btn"
           :disabled="!canGenerateReport || isGeneratingReport"
@@ -835,12 +842,62 @@
     <div class="system-logs">
       <div class="log-header">
         <span class="log-title">SIMULATION MONITOR</span>
-        <span class="log-id">{{ simulationId || "NO_SIMULATION" }}</span>
+        <span class="log-id">{{ simulationId || "NO SIMULATION" }}</span>
       </div>
       <div class="log-content" ref="logContent">
         <div class="log-line" v-for="(log, idx) in systemLogs" :key="idx">
           <span class="log-time">{{ log.time }}</span>
           <span class="log-msg">{{ log.msg }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIVE SCENARIO INJECTION MODAL -->
+    <div v-if="showInjectModal" class="modal-overlay" style="position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; items-center; justify-content: center; padding: 16px;" @click.self="showInjectModal = false">
+      <div class="modal-card" style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; width: 100%; max-width: 520px; padding: 24px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="font-size: 14px; font-weight: 700; color: #0f172a; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px; margin: 0;">
+            <span>⚡</span> Inject Live Scenario Event
+          </h3>
+          <button @click="showInjectModal = false" style="background: transparent; border: none; font-size: 18px; color: #64748b; cursor: pointer;">✕</button>
+        </div>
+        <p style="font-size: 12px; color: #64748b; margin-bottom: 16px; leading-height: 1.5;">
+          Inject a breaking press release, external statement, or crisis event into the live simulation. All social agents will process this event in subsequent rounds.
+        </p>
+
+        <div style="margin-bottom: 16px;">
+          <label style="font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; display: block; margin-bottom: 6px;">Target Platform</label>
+          <select v-model="injectPlatform" style="width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; background: #f8fafc; outline: none;">
+            <option value="parallel">Parallel (Both X/Twitter & Reddit)</option>
+            <option value="twitter">X (Twitter) Plaza Only</option>
+            <option value="reddit">Reddit Community Only</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <label style="font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; display: block; margin-bottom: 6px;">Event Content / Breaking News Text</label>
+          <textarea 
+            v-model="injectContent" 
+            rows="4" 
+            placeholder="e.g. BREAKING: Regulatory authorities announce unexpected policy shift impacting market pricing..."
+            style="width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; outline: none; font-family: inherit; resize: vertical;"
+          ></textarea>
+        </div>
+
+        <div v-if="injectMessage" style="font-size: 11px; font-weight: 600; padding: 10px; border-radius: 6px; margin-bottom: 16px;" :style="{ background: injectMessage.startsWith('✓') ? '#ecfdf5' : '#fef2f2', color: injectMessage.startsWith('✓') ? '#047857' : '#b91c1c' }">
+          {{ injectMessage }}
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button @click="showInjectModal = false" style="padding: 8px 16px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 12px; font-weight: 600; color: #475569; background: #ffffff; cursor: pointer;">Cancel</button>
+          <button 
+            @click="handleInjectScenario" 
+            :disabled="isInjecting || !injectContent.trim()" 
+            style="padding: 8px 16px; border: none; border-radius: 8px; font-size: 12px; font-weight: 700; color: #ffffff; background: #e11d48; cursor: pointer; display: flex; align-items: center; gap: 6px;"
+          >
+            <span v-if="isInjecting" class="spinner-sm"></span>
+            <span>Inject Event</span>
+          </button>
         </div>
       </div>
     </div>
@@ -858,7 +915,15 @@ import {
   startSimulation,
   getSimulationMetrics,
 } from "../api/simulation";
+import axios from "axios";
 import { connectSimulationWs } from "../api/ws";
+
+// Live Scenario Injection State
+const showInjectModal = ref(false);
+const injectContent = ref("");
+const injectPlatform = ref("parallel");
+const isInjecting = ref(false);
+const injectMessage = ref("");
 
 const props = defineProps({
   simulationId: String,
@@ -1168,7 +1233,7 @@ const startWs = () => {
   _simWs = connectSimulationWs(props.simulationId, {
     onMessage: _handleWsFrame,
     onClose: () => { _simWs = null; },
-    onError: (e) => console.warn("Simulation WS error:", e),
+    onError: (e) => { if (import.meta.env.DEV) console.warn("Simulation WS error:", e); },
   });
 };
 
@@ -1278,7 +1343,34 @@ const handleNextStep = async () => {
   }
 };
 
-import { watch } from "vue";
+const handleInjectScenario = async () => {
+  if (!injectContent.value.trim() || !props.simulationId) return;
+  isInjecting.value = true;
+  injectMessage.value = "";
+
+  try {
+    const res = await axios.post(`/api/simulation/${props.simulationId}/inject`, {
+      content: injectContent.value.trim(),
+      platform: injectPlatform.value,
+    });
+
+    if (res.data?.success) {
+      injectMessage.value = "✓ Breaking scenario event injected into simulation stream!";
+      addLog(`[LIVE INJECTION] ${injectContent.value.slice(0, 50)}...`);
+      injectContent.value = "";
+      setTimeout(() => {
+        showInjectModal.value = false;
+        injectMessage.value = "";
+      }, 1500);
+    } else {
+      injectMessage.value = `✗ Injection failed: ${res.data?.error || "Unknown error"}`;
+    }
+  } catch (err) {
+    injectMessage.value = `✗ Injection exception: ${err.response?.data?.error || err.message}`;
+  } finally {
+    isInjecting.value = false;
+  }
+};
 
 watch(activeSubTab, (newTab) => {
   if (newTab === "metrics" && !metricsData.value && !loadingMetrics.value) {

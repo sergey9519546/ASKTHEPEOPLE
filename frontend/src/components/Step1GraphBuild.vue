@@ -241,7 +241,7 @@
       <div class="log-header">
         <span class="log-title">System Dashboard</span>
         <span class="log-id">{{
-          projectData?.project_id || "NO_PROJECT"
+          projectData?.project_id || "NO PROJECT"
         }}</span>
       </div>
       <div class="log-content scrollbar-thin" ref="logContent">
@@ -270,7 +270,7 @@ const props = defineProps({
   systemLogs: { type: Array, default: () => [] },
 });
 
-defineEmits(["next-step"]);
+const emit = defineEmits(["next-step"]);
 
 const selectedOntologyItem = ref(null);
 const logContent = ref(null);
@@ -278,7 +278,7 @@ const creatingSimulation = ref(false);
 
 const handleEnterEnvSetup = async () => {
   if (!props.projectData?.project_id || !props.projectData?.graph_id) {
-    console.error("Missing project or graph info");
+    if (import.meta.env.DEV) console.error("Missing project or graph info");
     return;
   }
 
@@ -293,16 +293,15 @@ const handleEnterEnvSetup = async () => {
     });
 
     if (res.success && res.data?.simulation_id) {
-      router.push({
-        name: "Simulation",
-        params: { simulationId: res.data.simulation_id },
+      emit("next-step", {
+        simulationId: res.data.simulation_id
       });
     } else {
-      console.error("Failed to create simulation:", res.error);
+      if (import.meta.env.DEV) console.error("Failed to create simulation:", res.error);
       alert("Failed to create simulation: " + (res.error || "Unknown error"));
     }
   } catch (err) {
-    console.error("Simulation creation exception:", err);
+    if (import.meta.env.DEV) console.error("Simulation creation exception:", err);
     alert("Simulation creation exception: " + err.message);
   } finally {
     creatingSimulation.value = false;

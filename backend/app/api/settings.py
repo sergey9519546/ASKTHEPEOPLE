@@ -61,7 +61,10 @@ def update_settings():
             "LLM_BOOST_API_KEY", "LLM_BOOST_BASE_URL", "LLM_BOOST_MODEL_NAME"
         ]:
             if key in data:
-                settings_dict[key] = _sanitize_val(data[key])
+                val = _sanitize_val(data[key])
+                # Do not overwrite with masked values
+                if val and '***' not in val and '...' not in val:
+                    settings_dict[key] = val
         
         # Write to .env
         env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../.env'))
@@ -120,12 +123,12 @@ def update_settings():
             "success": True,
             "message": "Settings saved successfully",
             "data": {
-                "LLM_API_KEY": Config.LLM_API_KEY,
+                "LLM_API_KEY": _mask_secret(Config.LLM_API_KEY),
                 "LLM_BASE_URL": Config.LLM_BASE_URL,
                 "LLM_MODEL_NAME": Config.LLM_MODEL_NAME,
-                "ZEP_API_KEY": Config.ZEP_API_KEY,
-                "BRAVE_SEARCH_API_KEY": os.environ.get('BRAVE_SEARCH_API_KEY', ''),
-                "LLM_BOOST_API_KEY": os.environ.get('LLM_BOOST_API_KEY', ''),
+                "ZEP_API_KEY": _mask_secret(Config.ZEP_API_KEY),
+                "BRAVE_SEARCH_API_KEY": _mask_secret(os.environ.get('BRAVE_SEARCH_API_KEY', '')),
+                "LLM_BOOST_API_KEY": _mask_secret(os.environ.get('LLM_BOOST_API_KEY', '')),
                 "LLM_BOOST_BASE_URL": os.environ.get('LLM_BOOST_BASE_URL', ''),
                 "LLM_BOOST_MODEL_NAME": os.environ.get('LLM_BOOST_MODEL_NAME', '')
             }

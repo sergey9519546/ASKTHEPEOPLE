@@ -72,10 +72,27 @@ class LLMClient:
         if response_format:
             kwargs["response_format"] = response_format
         
-        response = self.client.chat.completions.create(**kwargs)
-        content = response.choices[0].message.content
-        if content is None:
-            raise ValueError(f"LLM returned empty content (finish_reason={response.choices[0].finish_reason})")
+        import time
+        max_retries = 3
+        base_delay = 2.0
+        
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(**kwargs)
+                content = response.choices[0].message.content
+                if content is None:
+                    raise ValueError(f"LLM returned empty content (finish_reason={response.choices[0].finish_reason})")
+                break
+            except Exception as e:
+                # Include standard OpenAI errors and general exceptions
+                if attempt == max_retries - 1:
+                    raise e
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"LLM chat request failed (attempt {attempt+1}/{max_retries}): {e}. Retrying in {base_delay}s...")
+                time.sleep(base_delay)
+                base_delay *= 2
+        
         # Some models (like MiniMax M2.5) may include <think> reasoning in content, which needs removal
         content = re.sub(r'<think>[\s\S]*?</think>', '', content).strip()
         return content

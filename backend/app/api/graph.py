@@ -9,6 +9,7 @@ import threading
 from flask import request, jsonify
 
 from . import graph_bp
+from . import limiter
 from ..config import Config
 from ..services.ontology_generator import OntologyGenerator
 from ..services.graph_builder import GraphBuilderService
@@ -119,6 +120,7 @@ def reset_project(project_id: str):
 # ============== Endpoint 1: Upload File and Generate Ontology ==============
 
 @graph_bp.route('/ontology/generate', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def generate_ontology():
     """
     Endpoint 1: Upload file, analyze and generate ontology definition (async)
@@ -319,6 +321,7 @@ def generate_ontology():
 # ============== Endpoint 2: Build Graph ==============
 
 @graph_bp.route('/build', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
 def build_graph():
     """
     Endpoint 2: Build graph based on project_id

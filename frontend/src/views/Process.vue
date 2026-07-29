@@ -1,7 +1,7 @@
 <template>
-  <div class="bauhaus-process-root">
+  <div class="app-process-root">
     <!-- TOP BAR -->
-    <nav class="bauhaus-header">
+    <nav class="app-header">
       <div class="header-left" @click="goHome">
         <span class="brand-monogram">ATP</span>
         <span class="brand-full">ASK THE PEOPLE</span>
@@ -73,7 +73,7 @@
             <Transition name="fade">
               <div v-if="currentPhase === phase.id" class="step-runtime-view">
                 <!-- Build Progress for Phase 1 -->
-                <div v-if="phase.id === 1" class="progress-container-bauhaus">
+                <div v-if="phase.id === 1" class="progress-container">
                   <div class="progress-track">
                     <div
                       class="progress-thumb"
@@ -82,7 +82,7 @@
                   </div>
                   <div class="progress-stats">
                     <span class="stat-msg">{{
-                      buildProgress?.message || "AWAITING_INPUT..."
+                      buildProgress?.message || "AWAITING INPUT..."
                     }}</span>
                     <span class="stat-pct"
                       >{{ buildProgress?.progress || 0 }}%</span
@@ -99,7 +99,7 @@
 
           <!-- LAUNCH CTA -->
           <div class="launch-sequence-box" v-if="currentPhase >= 2">
-            <button class="bauhaus-cta-btn" @click="goToNextStep">
+            <button class="app-cta-btn" @click="goToNextStep">
               INITIALIZE ENVIRONMENT <span class="arrow">→</span>
             </button>
           </div>
@@ -108,7 +108,7 @@
     </main>
 
     <!-- FOOTER STATUS -->
-    <footer class="bauhaus-footer-bar">
+    <footer class="app-footer-bar">
       <div class="f-left">LOC: Workspace Phase 01</div>
       <div class="f-right">
         System Time: {{ new Date().toLocaleTimeString() }}
@@ -154,15 +154,16 @@ const statusClass = computed(() => {
 });
 
 const statusText = computed(() => {
-  if (error.value) return "SYS_ERROR";
-  return currentPhase.value < 3 ? "EXECUTING" : "SEQUENCE_READY";
+  if (error.value) return "SYS ERROR";
+  return currentPhase.value < 3 ? "EXECUTING" : "SEQUENCE READY";
 });
 
 const goHome = () => router.push("/");
 const goToNextStep = () => {
   router.push({
-    name: "Main",
-    query: { step: 2, projectId: currentProjectId.value },
+    name: "Process",
+    params: { projectId: currentProjectId.value },
+    query: { step: 2 },
   });
 };
 
@@ -187,7 +188,10 @@ const pollTaskStatus = (taskId) => {
     const result = await getTaskStatus(taskId);
     if (result.success) {
       const task = result.data;
-      buildProgress.value = { progress: task.progress, message: task.message };
+      buildProgress.value = {
+        progress: task.progress ?? 0,
+        message: task.message ?? "",
+      };
       if (task.status === "completed") {
         clearInterval(pollTimer);
         currentPhase.value = 2;
@@ -219,16 +223,17 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
 </script>
 
 <style scoped>
-.bauhaus-process-root {
+.app-process-root {
   height: 100vh;
-  background: var(--bg-color);
   display: flex;
   flex-direction: column;
+  background: var(--bg-color);
   color: var(--text-primary);
   overflow: hidden;
+  font-family: var(--font-sans);
 }
 
-.bauhaus-header {
+.app-header {
   height: 70px;
   background: var(--surface-color);
   border-bottom: 1px solid var(--border-color);
@@ -411,7 +416,7 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
   margin-top: 16px;
 }
 
-.progress-container-bauhaus {
+.progress-container {
   margin-top: 12px;
 }
 .progress-track {
@@ -446,7 +451,7 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
   color: #065f46;
 }
 
-.bauhaus-cta-btn {
+.app-cta-btn {
   width: 100%;
   height: 52px;
   background: var(--accent-secondary);
@@ -463,13 +468,13 @@ onUnmounted(() => pollTimer && clearInterval(pollTimer));
   gap: 12px;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
 }
-.bauhaus-cta-btn:hover {
+.app-cta-btn:hover {
   background: #2563eb !important;
   box-shadow: 0 6px 16px rgba(59, 130, 246, 0.25) !important;
   transform: translateY(-1px) !important;
 }
 
-.bauhaus-footer-bar {
+.app-footer-bar {
   height: 40px;
   padding: 0 30px;
   border-top: 1px solid var(--border-color);

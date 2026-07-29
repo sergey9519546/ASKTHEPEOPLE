@@ -148,10 +148,12 @@ class SimulationIPCClient:
             args=args
         )
         
-        # Write command file
+        # Write command file atomically using a temporary file
         command_file = os.path.join(self.commands_dir, f"{command_id}.json")
-        with open(command_file, 'w', encoding='utf-8') as f:
+        tmp_command_file = os.path.join(self.commands_dir, f"{command_id}.tmp")
+        with open(tmp_command_file, 'w', encoding='utf-8') as f:
             json.dump(command.to_dict(), f, ensure_ascii=False, indent=2)
+        os.replace(tmp_command_file, command_file)
         
         logger.info(f"Sending IPC Command: {command_type.value}, command_id={command_id}")
         
@@ -283,7 +285,27 @@ class SimulationIPCClient:
             args=args or {},
             timeout=timeout,
         )
-    
+
+    def send_inject_event(
+        self,
+        event_text: str,
+        platform: str = "parallel",
+        agent_id: Optional[int] = None,
+        timeout: float = 30.0,
+    ) -> IPCResponse:
+        """Inject breaking news or scenario event mid-simulation"""
+        args = {
+            "content": event_text,
+            "platform": platform
+        }
+        if agent_id is not None:
+            args["agent_id"] = agent_id
+        return self.send_command(
+            command_type=CommandType.INJECT_EVENT,
+            args=args,
+            timeout=timeout
+        )
+
     def check_env_alive(self) -> bool:
         """
         Check if simulation environment is alive
@@ -338,13 +360,15 @@ class SimulationIPCServer:
         self._update_env_status("stopped")
     
     def _update_env_status(self, status: str):
-        """Update environment state file"""
+        """Update environment state file atomically"""
         status_file = os.path.join(self.simulation_dir, "env_status.json")
-        with open(status_file, 'w', encoding='utf-8') as f:
+        tmp_status_file = os.path.join(self.simulation_dir, "env_status.tmp")
+        with open(tmp_status_file, 'w', encoding='utf-8') as f:
             json.dump({
                 "status": status,
                 "timestamp": datetime.now().isoformat()
             }, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_status_file, status_file)
     
     def poll_commands(self) -> Optional[IPCCommand]:
         """
@@ -361,7 +385,10 @@ class SimulationIPCServer:
         for filename in os.listdir(self.commands_dir):
             if filename.endswith('.json'):
                 filepath = os.path.join(self.commands_dir, filename)
-                command_files.append((filepath, os.path.getmtime(filepath)))
+                try:
+                    command_files.append((filepath, os.path.getmtime(filepath)))
+                except OSError:
+                    continue
         
         command_files.sort(key=lambda x: x[1])
         
@@ -378,19 +405,22 @@ class SimulationIPCServer:
     
     def send_response(self, response: IPCResponse):
         """
-        Send response
+        Send response atomically
         
         Args:
             response: IPC Response
         """
         response_file = os.path.join(self.responses_dir, f"{response.command_id}.json")
-        with open(response_file, 'w', encoding='utf-8') as f:
+        tmp_response_file = os.path.join(self.responses_dir, f"{response.command_id}.tmp")
+        with open(tmp_response_file, 'w', encoding='utf-8') as f:
             json.dump(response.to_dict(), f, ensure_ascii=False, indent=2)
+        os.replace(tmp_response_file, response_file)
         
         # Delete command file
         command_file = os.path.join(self.commands_dir, f"{response.command_id}.json")
         try:
-            os.remove(command_file)
+            if os.path.exists(command_file):
+                os.remove(command_file)
         except OSError:
             pass
     

@@ -1,7 +1,7 @@
 <template>
-  <div class="bauhaus-view-root">
+  <div class="app-view-root">
     <!-- HEADER -->
-    <header class="bauhaus-header">
+    <header class="app-header">
       <div class="header-left" @click="router.push('/')">
         <span class="brand-monogram">ATP</span>
         <span class="brand-full">ASK THE PEOPLE</span>
@@ -67,7 +67,7 @@
     </main>
 
     <!-- FOOTER -->
-    <footer class="bauhaus-footer-mini">
+    <footer class="app-footer-mini">
       <div class="f-block">SYS_STATUS: READY</div>
       <div class="f-block">LOC: WORKSPACE_DEEP_INTERACTION</div>
     </footer>
@@ -93,6 +93,7 @@ const projectData = ref(null);
 const graphData = ref(null);
 const graphLoading = ref(false);
 const systemLogs = ref([]);
+const error = ref("");
 const currentStatus = ref("ready");
 
 // Layout Styles
@@ -145,6 +146,11 @@ const loadReportData = async () => {
     if (reportRes.success && reportRes.data) {
       const reportData = reportRes.data;
       simulationId.value = reportData.simulation_id;
+      if (!simulationId.value) {
+        error.value = "Report data missing simulation reference";
+        addLog("Error: Report data missing simulation reference");
+        return;
+      }
       if (simulationId.value) {
         const simRes = await getSimulation(simulationId.value);
         if (simRes.success && simRes.data) {
@@ -195,7 +201,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.bauhaus-view-root {
+.app-view-root {
   height: 100vh;
   background: var(--bg-color);
   color: var(--text-primary);
@@ -204,7 +210,7 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.bauhaus-header {
+.app-header {
   height: 70px;
   background: var(--surface-color);
   border-bottom: 1px solid var(--border-color);
@@ -352,7 +358,7 @@ onMounted(() => {
   padding: 0px;
 }
 
-.bauhaus-footer-mini {
+.app-footer-mini {
   height: 40px;
   padding: 0 40px;
   border-top: 1px solid var(--border-color);

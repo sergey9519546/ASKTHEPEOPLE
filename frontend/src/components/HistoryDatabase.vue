@@ -45,20 +45,17 @@
               class="flag"
               :class="{ active: project.project_id }"
               title="Graph Building"
-              aria-label="Graph Building: {{ project.project_id ? 'Available' : 'Not available' }}"
-              >GB</span
+              :aria-label="`Graph Building: ${project.project_id ? 'Available' : 'Not available'}`"
             >
+              GRAPH BUILD
+            </span>
+            <span class="flag-pill is-active" aria-label="Environment Setup: Available">
+              ENV SETUP
+            </span>
             <span
-              class="flag active"
-              title="Environment Setup"
-              aria-label="Environment Setup: Available"
-              >ES</span
-            >
-            <span
-              class="flag"
-              :class="{ active: project.report_id }"
-              title="Analysis Report"
-              aria-label="Analysis Report: {{ project.report_id ? 'Available' : 'Not available' }}"
+              class="flag-pill"
+              :class="{ 'is-active': project.report_id }"
+              :aria-label="`Analysis Report: ${project.report_id ? 'Available' : 'Not available'}`"
               >AR</span
             >
           </div>
@@ -316,6 +313,7 @@ const CARDS_PER_ROW = 4;
 const CARD_WIDTH = 280;
 const CARD_HEIGHT = 280;
 const CARD_GAP = 24;
+const HISTORY_FETCH_LIMIT = 24;
 
 const gridContainerStyle = computed(() => {
   if (!isExpanded.value) return { minHeight: "360px" };
@@ -451,7 +449,7 @@ const jumpToReport = () => {
 const fetchHistory = async () => {
   try {
     loading.value = true;
-    const res = await getSimulationHistory(24);
+    const res = await getSimulationHistory(HISTORY_FETCH_LIMIT);
     if (res.success) projects.value = res.data || [];
   } finally {
     loading.value = false;

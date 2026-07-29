@@ -234,3 +234,69 @@ class CSVExporter:
         output = io.StringIO()
         df.to_csv(output, index=False)
         return output.getvalue()
+
+
+class ExecutiveExporter:
+    """Generates an executive presentation slide deck (HTML format) with metrics visualization."""
+
+    def generate_html_deck(self, report_data: Dict[str, Any], metrics_data: Optional[Dict[str, Any]] = None) -> str:
+        title = report_data.get("title", "Executive Simulation Brief")
+        summary = report_data.get("summary", "No executive summary provided.")
+        sections = report_data.get("sections", [])
+        
+        pol_q = metrics_data.get("polarization_index", "N/A") if metrics_data else "N/A"
+        echo_score = metrics_data.get("echo_chamber_score", "N/A") if metrics_data else "N/A"
+        gini = metrics_data.get("engagement_gini", "N/A") if metrics_data else "N/A"
+
+        slides_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{title} — Executive Presentation</title>
+    <style>
+        body {{ font-family: 'Outfit', -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 40px; }}
+        .slide {{ background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 40px; margin-bottom: 30px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }}
+        .slide-title {{ font-size: 24px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 20px; }}
+        .metrics-grid {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0; }}
+        .metric-card {{ background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 20px; text-align: center; }}
+        .metric-val {{ font-size: 32px; font-weight: 800; color: #f43f5e; font-family: monospace; }}
+        .metric-lbl {{ font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-top: 6px; }}
+        .summary-box {{ background: rgba(56, 189, 248, 0.1); border-left: 4px solid #38bdf8; padding: 20px; border-radius: 8px; font-size: 14px; line-height: 1.6; color: #e2e8f0; }}
+        .section-body {{ font-size: 13px; line-height: 1.6; color: #cbd5e1; white-space: pre-wrap; }}
+    </style>
+</head>
+<body>
+    <div class="slide">
+        <div class="slide-title">{title}</div>
+        <div class="summary-box">
+            <strong>EXECUTIVE SUMMARY</strong><br><br>
+            {summary}
+        </div>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-val">{pol_q}</div>
+                <div class="metric-lbl">Polarization Index (Q)</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val">{echo_score}</div>
+                <div class="metric-lbl">Echo Chamber Score</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-val">{gini}</div>
+                <div class="metric-lbl">Engagement Gini</div>
+            </div>
+        </div>
+    </div>
+"""
+
+        for sec in sections:
+            sec_title = sec.get("title", "Section")
+            sec_content = sec.get("content", "")
+            slides_html += f"""
+    <div class="slide">
+        <div class="slide-title">{sec_title}</div>
+        <div class="section-body">{sec_content}</div>
+    </div>"""
+
+        slides_html += "\n</body>\n</html>"
+        return slides_html

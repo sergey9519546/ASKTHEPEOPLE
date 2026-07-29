@@ -69,7 +69,7 @@ class ValidationEngine:
         """
         from .simulation_runner import SimulationRunner
 
-        sim_dir = os.path.join(SimulationRunner.RUN_STATE_DIR, simulation_id)
+        sim_dir = SimulationRunner._get_run_state_dir(simulation_id)
         metrics_path = os.path.join(sim_dir, self.METRICS_FILENAME)
 
         # Cache hit
@@ -272,11 +272,46 @@ class ValidationEngine:
         """Load cached metrics from disk, or None if not yet computed."""
         from .simulation_runner import SimulationRunner  # lazy import — avoids circular
         path = os.path.join(
-            SimulationRunner.RUN_STATE_DIR,
-            simulation_id,
+            SimulationRunner._get_run_state_dir(simulation_id),
             ValidationEngine.METRICS_FILENAME,
         )
         if not os.path.exists(path):
             return None
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
+
+    def compare_simulations(self, sim_a_id: str, sim_b_id: str, force: bool = False) -> Dict[str, Any]:
+        """
+        Compare two simulation runs side-by-side and compute delta metrics.
+        """
+        metrics_a = self.compute_metrics(sim_a_id, force=force)
+        metrics_b = self.compute_metrics(sim_b_id, force=force)
+
+        delta_polarization = round(metrics_b.polarization_index - metrics_a.polarization_index, 4)
+        delta_gini = round(metrics_b.engagement_gini - metrics_a.engagement_gini, 4)
+        delta_echo = round(metrics_b.echo_chamber_score - metrics_a.echo_chamber_score, 4)
+
+        if delta_polarization < -0.05:
+            assessment = f"Variant B ({sim_b_id}) significantly reduced polarization (Q reduced by {abs(delta_polarization):.2f})."
+        elif delta_polarization > 0.05:
+            assessment = f"Variant A ({sim_a_id}) was less polarized (Variant B increased Q by {delta_polarization:.2f})."
+        else:
+            assessment = "Both scenario variants produced comparable social polarization and community echo levels."
+
+        return {
+            "simulation_a": {
+                "id": sim_a_id,
+                "metrics": metrics_a.to_dict()
+            },
+            "simulation_b": {
+                "id": sim_b_id,
+                "metrics": metrics_b.to_dict()
+            },
+            "comparative_deltas": {
+                "delta_polarization_q": delta_polarization,
+                "delta_engagement_gini": delta_gini,
+                "delta_echo_chamber_score": delta_echo,
+                "action_count_difference": metrics_b.total_actions - metrics_a.total_actions,
+            },
+            "strategic_assessment": assessment
+        }

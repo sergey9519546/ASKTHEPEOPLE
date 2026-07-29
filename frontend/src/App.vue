@@ -1,9 +1,26 @@
 <template>
   <router-view />
+  <ToastContainer />
+
+  <!-- Global crash banner (Layer 1 safety net) -->
+  <div v-if="hasCrashed" class="crash-overlay">
+    <div class="crash-banner">
+      <div class="crash-message">
+        <span class="crash-title">Something went wrong</span>
+        <span class="crash-subtitle">An unexpected error occurred. Reload to continue.</span>
+      </div>
+      <button class="crash-reload" @click="reloadPage">Reload</button>
+    </div>
+  </div>
 </template>
 
 <script setup>
-// Use Vue Router to manage navigation
+import ToastContainer from './components/ToastContainer.vue';
+import { hasCrashed } from './composables/useCrashState.js';
+
+function reloadPage() {
+  window.location.reload();
+}
 </script>
 
 <style>
@@ -202,5 +219,67 @@ input[type="text"]:focus, textarea:focus, select:focus {
 
 .animate-fade-in {
   animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Global crash banner (Layer 1 safety net) — dark glass theme */
+.crash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.crash-banner {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 24px 32px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+  color: #ffffff;
+}
+
+.crash-message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crash-title {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 17px;
+  color: #ffffff;
+}
+
+.crash-subtitle {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.crash-reload {
+  font-family: var(--font-sans) !important;
+  font-weight: 500 !important;
+  padding: 10px 22px !important;
+  background: var(--bauhaus-red) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--bauhaus-red) !important;
+  border-radius: var(--radius-sm) !important;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.crash-reload:hover {
+  background: #e11d48 !important;
+  border-color: #e11d48 !important;
+  color: #ffffff !important;
 }
 </style>

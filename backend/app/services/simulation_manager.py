@@ -144,7 +144,8 @@ class SimulationManager:
     
     def _get_simulation_dir(self, simulation_id: str) -> str:
         """Get simulation data directory"""
-        sim_dir = os.path.join(self.SIMULATION_DATA_DIR, simulation_id)
+        from ..utils.safe_path import safe_join
+        sim_dir = safe_join(self.SIMULATION_DATA_DIR, simulation_id)
         os.makedirs(sim_dir, exist_ok=True)
         return sim_dir
     

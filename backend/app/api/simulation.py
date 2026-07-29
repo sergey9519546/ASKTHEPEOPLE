@@ -9,8 +9,10 @@ import json
 import traceback
 from datetime import datetime
 from flask import request, jsonify, send_file
+from werkzeug.utils import secure_filename
 
 from . import simulation_bp
+from . import limiter
 from ..config import Config
 from ..services.zep_entity_reader import ZepEntityReader
 from ..services.oasis_profile_generator import OasisProfileGenerator
@@ -19,10 +21,29 @@ from ..services.simulation_observation_store import search_observations
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
 from ..services.export_service import CSVExporter
 from ..services.zep_tools import ZepToolsService
+from ..services.simulation_ipc import SimulationIPCClient
 from ..utils.logger import get_logger
 from ..models.project import ProjectManager
 
 logger = get_logger('askthepeople.api.simulation')
+
+from ..utils.safe_path import safe_join, SafePathError
+
+
+# Base directory for simulation run-state data, computed once. Used as the
+# safe_join base for all user-supplied simulation_id values flowing into
+# filesystem/sqlite paths (path-traversal defense).
+_RUN_STATE_BASE = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '../../uploads/simulations')
+)
+
+
+def _safe_sim_dir(simulation_id: str) -> str:
+    """Resolve a validated simulation run-state directory (path-traversal safe).
+
+    Centralizes OASIS_SIMULATION_DATA_DIR joins; raises SafePathError on bad ids.
+    """
+    return safe_join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
 
 
 # Interview prompt optimization prefix
@@ -169,6 +190,7 @@ def get_entities_by_type(graph_id: str, entity_type: str):
 # ============== Simulation Management Interfaces ==============
 
 @simulation_bp.route('/create', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
 def create_simulation():
     """
     Create new simulation
@@ -262,7 +284,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     import os
     from ..config import Config
     
-    simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+    simulation_dir = _safe_sim_dir(simulation_id)
     
     # Check if directory exists
     if not os.path.exists(simulation_dir):
@@ -375,6 +397,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
 
 
 @simulation_bp.route('/prepare', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def prepare_simulation():
     """
     Prepare simulation environment (asynchronous task, LLM intelligently generates all parameters)
@@ -1080,7 +1103,7 @@ def get_simulation_profiles_realtime(simulation_id: str):
         platform = request.args.get('platform', 'reddit')
         
         # Get simulation directory
-        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        sim_dir = _safe_sim_dir(simulation_id)
         
         if not os.path.exists(sim_dir):
             return jsonify({
@@ -1183,7 +1206,7 @@ def get_simulation_config_realtime(simulation_id: str):
     
     try:
         # Get simulation directory
-        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        sim_dir = _safe_sim_dir(simulation_id)
         
         if not os.path.exists(sim_dir):
             return jsonify({
@@ -1355,7 +1378,7 @@ def get_simulation_diagnostics(simulation_id: str):
 @simulation_bp.route('/<simulation_id>/observations/search', methods=['GET'])
 def search_simulation_observations(simulation_id: str):
     try:
-        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        sim_dir = _safe_sim_dir(simulation_id)
         if not os.path.exists(sim_dir):
             return jsonify({
                 "success": False,
@@ -1400,7 +1423,9 @@ def download_simulation_config(simulation_id: str):
             as_attachment=True,
             download_name="simulation_config.json"
         )
-        
+
+    except SafePathError:
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to download configuration: {str(e)}")
         return jsonify({
@@ -1465,6 +1490,7 @@ def download_simulation_script(script_name: str):
 # ============== Profile Generation Interface (standalone) ==============
 
 @simulation_bp.route('/generate-profiles', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
 def generate_profiles():
     """
     Generate OASIS Agent Profile directly from graph (without creating simulation)
@@ -1737,6 +1763,72 @@ def start_simulation():
         }), 500
 
 
+@simulation_bp.route('/<simulation_id>/inject', methods=['POST'])
+def inject_simulation_event(simulation_id: str):
+    """
+    Inject breaking event or press release mid-simulation
+    
+    Request JSON:
+        {
+            "content": "Breaking news statement text...",
+            "platform": "parallel",  // twitter / reddit / parallel
+            "agent_id": 101          // optional
+        }
+    """
+    try:
+        manager = SimulationManager()
+        state = manager.get_simulation(simulation_id)
+        if not state:
+            return jsonify({"success": False, "error": f"Simulation does not exist: {simulation_id}"}), 404
+
+        data = request.get_json() or {}
+        content = data.get("content")
+        if not content:
+            return jsonify({"success": False, "error": "Please provide content field for scenario injection"}), 400
+
+        platform = data.get("platform", "parallel")
+        agent_id = data.get("agent_id")
+
+        sim_dir = manager.get_simulation_dir(simulation_id)
+        ipc_client = SimulationIPCClient(sim_dir)
+        
+        if not ipc_client.check_env_alive():
+            return jsonify({
+                "success": False, 
+                "error": "Simulation IPC environment is not currently active/running"
+            }), 400
+
+        response = ipc_client.send_inject_event(
+            event_text=content,
+            platform=platform,
+            agent_id=agent_id,
+            timeout=15.0
+        )
+
+        return jsonify({
+            "success": True,
+            "data": {
+                "simulation_id": simulation_id,
+                "command_id": response.command_id,
+                "status": response.status.value,
+                "injected_content": content
+            }
+        })
+
+    except TimeoutError:
+        return jsonify({
+            "success": False,
+            "error": "Injection command sent to IPC queue (response timeout, simulation will process on next round tick)"
+        }), 202
+
+    except Exception as e:
+        logger.error(f"Failed to inject event into simulation {simulation_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 @simulation_bp.route('/<simulation_id>/metrics', methods=['GET'])
 def get_simulation_metrics(simulation_id: str):
     """
@@ -1774,6 +1866,42 @@ def get_simulation_metrics(simulation_id: str):
             "success": False,
             "error": str(e),
             "traceback": traceback.format_exc()
+        }), 500
+
+
+@simulation_bp.route('/compare', methods=['GET'])
+def compare_simulations_route():
+    """
+    Compare two simulation runs side-by-side and return delta matrix.
+    Query parameters:
+        sim_a: Simulation ID A (required)
+        sim_b: Simulation ID B (required)
+        force: Whether to force recomputation (default false)
+    """
+    try:
+        sim_a = request.args.get('sim_a')
+        sim_b = request.args.get('sim_b')
+        if not sim_a or not sim_b:
+            return jsonify({"success": False, "error": "Please provide both sim_a and sim_b query parameters"}), 400
+
+        sim_a_clean = secure_filename(sim_a)
+        sim_b_clean = secure_filename(sim_b)
+
+        force = request.args.get('force', 'false').lower() == 'true'
+
+        from ..services.validation_engine import ValidationEngine
+        engine = ValidationEngine()
+        result = engine.compare_simulations(sim_a_clean, sim_b_clean, force=force)
+
+        return jsonify({"success": True, "data": result})
+
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Failed to compare simulations {sim_a} vs {sim_b}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
         }), 500
 
 
@@ -2138,11 +2266,8 @@ def get_simulation_posts(simulation_id: str):
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
         
-        sim_dir = os.path.join(
-            os.path.dirname(__file__),
-            f'../../uploads/simulations/{simulation_id}'
-        )
-        
+        sim_dir = safe_join(_RUN_STATE_BASE, simulation_id)
+
         db_file = f"{platform}_simulation.db"
         db_path = os.path.join(sim_dir, db_file)
         
@@ -2190,6 +2315,8 @@ def get_simulation_posts(simulation_id: str):
             }
         })
         
+    except SafePathError:
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Get posts failed: {str(e)}")
         return jsonify({
@@ -2214,11 +2341,8 @@ def get_simulation_comments(simulation_id: str):
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
         
-        sim_dir = os.path.join(
-            os.path.dirname(__file__),
-            f'../../uploads/simulations/{simulation_id}'
-        )
-        
+        sim_dir = safe_join(_RUN_STATE_BASE, simulation_id)
+
         db_path = os.path.join(sim_dir, "reddit_simulation.db")
         
         if not os.path.exists(db_path):
@@ -2265,6 +2389,8 @@ def get_simulation_comments(simulation_id: str):
             }
         })
         
+    except SafePathError:
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Get comments failed: {str(e)}")
         return jsonify({
@@ -2865,7 +2991,7 @@ def get_simulation_opinions(simulation_id: str):
     """
     try:
         limit = int(request.args.get('limit', 1000))
-        sim_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        sim_dir = _safe_sim_dir(simulation_id)
         opinion_file = os.path.join(sim_dir, 'opinions.jsonl')
 
         opinions = []

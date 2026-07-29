@@ -49,4 +49,25 @@ const router = createRouter({
   routes
 })
 
+// Required route params keyed by route name — used by the navigation guard below
+const requiredParamsByRoute = {
+  Process: 'projectId',
+  Simulation: 'simulationId',
+  SimulationRun: 'simulationId',
+  Report: 'reportId',
+  Interaction: 'reportId'
+}
+
+// Redirect to Home when a required route param is missing or the literal "undefined" string
+router.beforeEach((to) => {
+  const requiredParam = requiredParamsByRoute[to.name]
+  if (requiredParam) {
+    const value = to.params[requiredParam]
+    if (!value || value === 'undefined') {
+      return { path: '/' }
+    }
+  }
+  return true
+})
+
 export default router

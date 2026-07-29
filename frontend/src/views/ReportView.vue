@@ -93,6 +93,7 @@ const projectData = ref(null);
 const graphData = ref(null);
 const graphLoading = ref(false);
 const systemLogs = ref([]);
+const error = ref("");
 const currentStatus = ref("processing");
 
 // Layout Styles
@@ -145,6 +146,11 @@ const loadReportData = async () => {
     if (reportRes.success && reportRes.data) {
       const reportData = reportRes.data;
       simulationId.value = reportData.simulation_id;
+      if (!simulationId.value) {
+        error.value = "Report data missing simulation reference";
+        addLog("Error: Report data missing simulation reference");
+        return;
+      }
       if (simulationId.value) {
         const simRes = await getSimulation(simulationId.value);
         if (simRes.success && simRes.data) {

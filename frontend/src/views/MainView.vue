@@ -64,12 +64,48 @@
         <!-- Step 2: Env Setup -->
         <Step2EnvSetup
           v-else-if="currentStep === 2"
+          :simulationId="processState.simulationId"
           :projectData="projectData"
           :graphData="graphData"
           :systemLogs="systemLogs"
           @go-back="handleGoBack"
           @next-step="handleNextStep"
           @add-log="addLog"
+        />
+        <!-- Step 3: Simulation -->
+        <Step3Simulation
+          v-else-if="currentStep === 3"
+          :simulationId="processState.simulationId"
+          :maxRounds="processState.maxRounds"
+          :minutesPerRound="30"
+          :projectData="projectData"
+          :graphData="graphData"
+          :systemLogs="systemLogs"
+          @go-back="handleGoBack"
+          @next-step="handleNextStep"
+          @add-log="addLog"
+        />
+        <!-- Step 4: Report Generation -->
+        <Step4Report
+          v-else-if="currentStep === 4"
+          :simulationId="processState.simulationId"
+          :reportId="processState.reportId"
+          :projectData="projectData"
+          :graphData="graphData"
+          :systemLogs="systemLogs"
+          @go-back="handleGoBack"
+          @next-step="handleNextStep"
+          @add-log="addLog"
+        />
+        <!-- Step 5: Deep Interaction -->
+        <Step5Interaction
+          v-else-if="currentStep === 5"
+          :simulationId="processState.simulationId"
+          :reportId="processState.reportId"
+          :projectData="projectData"
+          :graphData="graphData"
+          :systemLogs="systemLogs"
+          @go-back="handleGoBack"
         />
       </div>
     </main>
@@ -89,6 +125,9 @@ import {
 import GraphPanel from "../components/GraphPanel.vue";
 import Step1GraphBuild from "../components/Step1GraphBuild.vue";
 import Step2EnvSetup from "../components/Step2EnvSetup.vue";
+import Step3Simulation from "../components/Step3Simulation.vue";
+import Step4Report from "../components/Step4Report.vue";
+import Step5Interaction from "../components/Step5Interaction.vue";
 import { clearPendingUpload, getPendingUpload } from "../store/pendingUpload";
 
 const route = useRoute();
@@ -118,6 +157,13 @@ const currentPhase = ref(-1); // -1: Upload, 0: Ontology, 1: Build, 2: Complete
 const ontologyProgress = ref(null);
 const buildProgress = ref(null);
 const systemLogs = ref([]);
+
+// Process State passed between steps
+const processState = ref({
+  simulationId: null,
+  maxRounds: 40,
+  reportId: null
+});
 
 // Polling timers
 let pollTimer = null;
@@ -190,7 +236,11 @@ const handleNextStep = (params = {}) => {
       `Entering Step ${currentStep.value}: ${stepNames[currentStep.value - 1]}`,
     );
 
-    // If entering Step 3 from Step 2, log simulation rounds config
+    // Save step params into state
+    if (params.simulationId) processState.value.simulationId = params.simulationId;
+    if (params.maxRounds) processState.value.maxRounds = params.maxRounds;
+    if (params.reportId) processState.value.reportId = params.reportId;
+
     if (currentStep.value === 3 && params.maxRounds) {
       addLog(`Custom simulation rounds: ${params.maxRounds}`);
     }
@@ -276,11 +326,14 @@ const stopOntologyPolling = () => {
 const pollOntologyTask = async (taskId) => {
   try {
     const res = await getTaskStatus(taskId);
-    if (!res.success) return;
+    if (!res.success) {
+      error.value = "Ontology poll failed";
+      return;
+    }
 
     const task = res.data;
 
-    if (task.message && task.message !== ontologyProgress.value?.message) {
+    if (task.message && (task.message ?? "") !== (ontologyProgress.value?.message ?? "")) {
       addLog(task.message);
     }
     ontologyProgress.value = {
@@ -313,6 +366,13 @@ const loadProject = async () => {
       projectData.value = res.data;
       updatePhaseByStatus(res.data.status);
       addLog(`Project loaded. Status: ${res.data.status}`);
+
+      if (res.data.latest_simulation_id) {
+        processState.value.simulationId = res.data.latest_simulation_id;
+      }
+      if (res.data.latest_report_id) {
+        processState.value.reportId = res.data.latest_report_id;
+      }
 
       if (res.data.status === "ontology_generated" && !res.data.graph_id) {
         await startBuildGraph();
@@ -388,7 +448,7 @@ const fetchGraphData = async () => {
   try {
     // Refresh project info to check for graph_id
     const projRes = await getProject(currentProjectId.value);
-    if (projRes.success && projRes.data.graph_id) {
+    if (projRes.success && projRes.data?.graph_id) {
       const gRes = await getGraphData(projRes.data.graph_id);
       if (gRes.success) {
         graphData.value = gRes.data;
@@ -433,7 +493,7 @@ const pollTaskStatus = async (taskId) => {
 
         // Final load
         const projRes = await getProject(currentProjectId.value);
-        if (projRes.success && projRes.data.graph_id) {
+        if (projRes.success && projRes.data?.graph_id) {
           projectData.value = projRes.data;
           await loadGraph(projRes.data.graph_id);
         }

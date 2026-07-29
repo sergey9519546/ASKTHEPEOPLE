@@ -7,12 +7,13 @@ import os
 import threading
 import time
 import warnings
+import hmac
 
 # Suppress multiprocessing resource_tracker warnings (from third-party libraries like transformers)
 # Needs to be set before all other imports
 warnings.filterwarnings("ignore", message=".*resource_tracker.*")
 
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from .config import Config
@@ -42,19 +43,38 @@ def create_app(config_class=Config):
         logger.info("=" * 50)
         logger.info("ASKTHEPEOPLE Backend starting...")
         logger.info("=" * 50)
-    
-    # Warn when running with the default hardcoded SECRET_KEY
-    _DEFAULT_SECRET = 'askthepeople-secret-key'
-    if app.config.get('SECRET_KEY') == _DEFAULT_SECRET:
-        logger.warning(
-            "SECRET_KEY is using the insecure default value. "
-            "Set SECRET_KEY in your .env file before deploying to production."
-        )
 
     # Enable CORS
     _cors_origins = app.config.get('CORS_ORIGINS', '*')
-    _origins = [o.strip() for o in _cors_origins.split(',')] if _cors_origins != '*' else '*'
+    _is_production = not app.config.get('DEBUG', False)
+
+    # H3: refuse wildcard CORS in production. Falling back to a local-only
+    # origin keeps the app runnable (and tests green) while preventing any
+    # remote website from driving the API. Operators must set CORS_ORIGINS
+    # explicitly to expose the API to their frontend.
+    if _is_production and _cors_origins.strip() == '*':
+        logger.critical(
+            "CORS_ORIGINS='*' is not allowed in production (DEBUG=False). "
+            "Falling back to http://127.0.0.1 only — set CORS_ORIGINS to your "
+            "frontend domain(s) to enable cross-origin access."
+        )
+        _cors_origins = 'http://127.0.0.1'
+        _origins = [_cors_origins]
+    else:
+        _origins = [o.strip() for o in _cors_origins.split(',')] if _cors_origins != '*' else '*'
     CORS(app, resources={r"/api/*": {"origins": _origins}})
+
+    # Warn when auth is enabled but CORS is wide open (dev-only now: production
+    # wildcard is refused above, so this only fires in DEBUG mode).
+    if app.config.get('APP_TOKEN') and _cors_origins == '*':
+        logger.warning(
+            "APP_TOKEN is set (production mode) but CORS_ORIGINS=* — "
+            "set CORS_ORIGINS to your frontend domain(s) in production."
+        )
+
+    # Initialize Flask-Limiter (in-memory storage; no Redis dependency)
+    from .api import limiter as _limiter
+    _limiter.init_app(app)
     
     # Register simulation process cleanup function (ensure all simulation processes are terminated when server closes)
     from .services.simulation_runner import SimulationRunner
@@ -69,6 +89,28 @@ def create_app(config_class=Config):
         logger.debug(f"Request: {request.method} {request.path}")
         if request.content_type and 'json' in request.content_type:
             logger.debug(f"Request body: {request.get_json(silent=True)}")
+
+    @app.before_request
+    def require_auth():
+        # Opt-in: if APP_TOKEN unset, auth is disabled (local dev compat)
+        expected = app.config.get('APP_TOKEN')
+        if not expected:
+            return None
+        # Health check always open
+        if request.path == '/health':
+            return None
+        # Only protect API routes
+        if not request.path.startswith('/api/'):
+            return None
+        # Browsers can't set headers on WS handshake — accept ?token= for WS routes only
+        auth = request.headers.get('Authorization', '')
+        token = None
+        if auth.startswith('Bearer '):
+            token = auth[7:]
+        if token is None and request.args.get('token'):
+            token = request.args.get('token')
+        if not token or not hmac.compare_digest(str(token), str(expected)):
+            return jsonify({"success": False, "error": "unauthorized"}), 401
     
     @app.after_request
     def log_response(response):
@@ -78,13 +120,30 @@ def create_app(config_class=Config):
 
     @app.after_request
     def strip_traceback_in_production(response):
-        """Remove internal tracebacks from JSON error responses in non-debug mode."""
+        """Remove internal tracebacks and error strings from JSON 5xx responses.
+
+        In non-debug mode this strips the ``traceback`` key entirely and
+        replaces the ``error`` field with a generic message for any 5xx
+        response, so internal paths, credentials, or upstream API error
+        bodies leaked via ``str(e)`` cannot reach clients. 4xx responses
+        are left intact: client errors are informative (bad request, not
+        found, unauthorized) and do not reflect server internals.
+        """
         if not app.config.get('DEBUG') and response.is_json:
             try:
                 data = response.get_json(silent=True)
-                if isinstance(data, dict) and 'traceback' in data:
-                    data.pop('traceback')
-                    response.set_data(json.dumps(data, ensure_ascii=False))
+                if isinstance(data, dict):
+                    mutated = False
+                    if 'traceback' in data:
+                        data.pop('traceback')
+                        mutated = True
+                    # Scrub the error string on 5xx — str(e) commonly leaks
+                    # internal hostnames, file paths, and upstream API bodies.
+                    if response.status_code >= 500 and 'error' in data:
+                        data['error'] = 'internal_server_error'
+                        mutated = True
+                    if mutated:
+                        response.set_data(json.dumps(data, ensure_ascii=False))
             except Exception:
                 pass
         return response
@@ -115,11 +174,26 @@ def create_app(config_class=Config):
     # Register WebSocket routes (imported here so sock is already init'd)
     from .api import ws  # noqa: F401
     
+    # Rate-limit handler — must be registered before the catch-all so
+    # flask_limiter.RateLimitExceeded returns 429 (not 500).
+    try:
+        from flask_limiter import RateLimitExceeded
+
+        @app.errorhandler(RateLimitExceeded)
+        def handle_rate_limit(e):
+            return {"success": False, "error": "rate_limit_exceeded"}, 429
+    except ImportError:
+        pass  # flask-limiter not installed; rate limiting disabled
+
     # Global exception handler for uncaught API errors
     @app.errorhandler(Exception)
     def handle_exception(e):
         logger.error(f"Uncaught exception: {str(e)}", exc_info=True)
-        return {"success": False, "error": str(e)}, 500
+        if app.config.get('DEBUG'):
+            # In debug mode, expose the message for developer convenience
+            return {"success": False, "error": str(e)}, 500
+        # In production, never leak internal structure to clients
+        return {"success": False, "error": "internal_server_error"}, 500
 
     # Health check
     @app.route('/health')

@@ -345,7 +345,7 @@ onMounted(async () => {
       detectPreset()
     }
   } catch (err) {
-    console.error('Failed to load settings:', err)
+    if (import.meta.env.DEV) console.error('Failed to load settings:', err)
   }
 })
 

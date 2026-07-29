@@ -216,10 +216,15 @@ class GraphBuilderService:
                 return f"entity_{attr_name}"
             return attr_name
         
+        def to_pascal_case(s: str) -> str:
+            import re
+            s = re.sub(r'[^a-zA-Z0-9\s_]', '', s)
+            return ''.join(word.capitalize() for word in s.replace(' ', '_').split('_') if word)
+
         # Dynamically create entity types
         entity_types = {}
         for entity_def in ontology.get("entity_types", []):
-            name = entity_def["name"]
+            name = to_pascal_case(entity_def["name"])
             description = entity_def.get("description", f"A {name} entity.")
             
             # Create attribute dictionary and type annotations (required by Pydantic v2)
@@ -243,7 +248,7 @@ class GraphBuilderService:
         # Dynamically create edge types
         edge_definitions = {}
         for edge_def in ontology.get("edge_types", []):
-            name = edge_def["name"]
+            name = to_pascal_case(edge_def["name"])
             description = edge_def.get("description", f"A {name} relationship.")
             
             # Create attribute dictionary and type annotations
@@ -260,7 +265,8 @@ class GraphBuilderService:
             attrs["__annotations__"] = annotations
             
             # Dynamically create class
-            class_name = ''.join(word.capitalize() for word in name.split('_'))
+            class_name = name
+
             edge_class = type(class_name, (EdgeModel,), attrs)
             edge_class.__doc__ = description
             
@@ -269,8 +275,8 @@ class GraphBuilderService:
             for st in edge_def.get("source_targets", []):
                 source_targets.append(
                     EntityEdgeSourceTarget(
-                        source=st.get("source", "Entity"),
-                        target=st.get("target", "Entity")
+                        source=to_pascal_case(st.get("source", "Entity")),
+                        target=to_pascal_case(st.get("target", "Entity"))
                     )
                 )
             

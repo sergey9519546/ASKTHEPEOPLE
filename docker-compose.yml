@@ -10,5 +10,16 @@ services:
     ports:
       - "5001:5001"
     restart: unless-stopped
+    # M4: defense-in-depth — drop all Linux capabilities and forbid privilege
+    # escalation. The Dockerfile already runs as a non-root user (UID 10001);
+    # these settings further constrain the container at runtime. We do NOT set
+    # read_only: true because the app writes log files to /app/backend/logs via
+    # a RotatingFileHandler at startup (os.makedirs requires a writable FS).
+    cap_drop:
+      - "ALL"
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp
     volumes:
       - ./backend/uploads:/app/backend/uploads

@@ -13,6 +13,7 @@ import logging
 import random
 import re
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from .oasis_profile_generator import OasisAgentProfile
@@ -26,6 +27,62 @@ def _sanitize_label(label: str, max_len: int = 30) -> str:
     """Convert a human-readable label to a safe identifier string."""
     sanitized = _USERNAME_SAFE.sub("", label.lower().replace(" ", "_").replace("-", "_"))
     return sanitized[:max_len] if sanitized else "archetype"
+
+
+class PopulationTierId(str, Enum):
+    TIER_1 = "MICRO_PRECISION"
+    TIER_2 = "BALANCED_NETWORK"
+    TIER_3 = "MACRO_CROWD"
+
+
+@dataclass
+class PopulationTierSpec:
+    tier_id: PopulationTierId
+    name: str
+    description: str
+    target_llm_agents: int  # Core LLM / Archetype Variant agents
+    n_archetypes: int       # Number of K archetypes clustered by LLM
+    expansion_factor: int   # Number of variant profiles per archetype
+    follower_count: int     # Rule-based follower count
+    variance_level: float   # Stochastic variance multiplier
+
+    @property
+    def total_population(self) -> int:
+        return self.target_llm_agents + self.follower_count
+
+
+TIER_SPECS: Dict[PopulationTierId, PopulationTierSpec] = {
+    PopulationTierId.TIER_1: PopulationTierSpec(
+        tier_id=PopulationTierId.TIER_1,
+        name="Micro Precision",
+        description="High-fidelity 1:1 LLM agent modeling for targeted focus groups.",
+        target_llm_agents=20,
+        n_archetypes=20,
+        expansion_factor=1,
+        follower_count=0,
+        variance_level=0.10,
+    ),
+    PopulationTierId.TIER_2: PopulationTierSpec(
+        tier_id=PopulationTierId.TIER_2,
+        name="Balanced Network",
+        description="Balanced agent graph with LLM core agents and lightweight follower agents.",
+        target_llm_agents=80,
+        n_archetypes=16,
+        expansion_factor=5,
+        follower_count=500,
+        variance_level=0.20,
+    ),
+    PopulationTierId.TIER_3: PopulationTierSpec(
+        tier_id=PopulationTierId.TIER_3,
+        name="Macro Crowd",
+        description="Mass crowd scale using 300 archetype variants and 5,000 follower agents.",
+        target_llm_agents=300,
+        n_archetypes=20,
+        expansion_factor=15,
+        follower_count=5000,
+        variance_level=0.35,
+    ),
+}
 
 
 @dataclass
@@ -50,6 +107,26 @@ class ArchetypeEngine:
     """Clusters profiles into archetypes and expands each to M variants."""
 
     MAX_PROFILES_FOR_CLUSTERING = 500
+
+    @staticmethod
+    def get_tier_spec(tier: str | PopulationTierId) -> PopulationTierSpec:
+        """Resolve tier spec by string or PopulationTierId enum."""
+        if isinstance(tier, PopulationTierId):
+            return TIER_SPECS[tier]
+        
+        tier_str = str(tier).upper().replace(" ", "_")
+        for tid, spec in TIER_SPECS.items():
+            if tid.value == tier_str or spec.name.upper().replace(" ", "_") == tier_str:
+                return spec
+            
+        if tier_str in ("1", "TIER_1", "TIER1", "MICRO"):
+            return TIER_SPECS[PopulationTierId.TIER_1]
+        elif tier_str in ("2", "TIER_2", "TIER2", "BALANCED"):
+            return TIER_SPECS[PopulationTierId.TIER_2]
+        elif tier_str in ("3", "TIER_3", "TIER3", "MACRO"):
+            return TIER_SPECS[PopulationTierId.TIER_3]
+
+        return TIER_SPECS[PopulationTierId.TIER_2]
 
     def cluster_agents(
         self,

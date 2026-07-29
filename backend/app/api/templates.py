@@ -26,6 +26,38 @@ TEMPLATES = [
         "icon": "✍️",
         "prompt_base": "Extract the social hierarchy, faction leaders, and historical tensions from the narrative documents. Simulate how a disruptive event affects the existing social order.",
         "suggested_ontology_goal": "Map factions, their leaders, and the conflicting ideologies. Focus on social hierarchy and faction loyalty/rivalry."
+    },
+    {
+        "id": "crisis_pr",
+        "name": "Crisis PR & Counter-Narrative",
+        "description": "Test real-time counter-narratives, press releases, and executive statements against viral public backlash.",
+        "icon": "🚨",
+        "prompt_base": "Identify corporate executives, investigative journalists, vocal critics, and industry observers. Simulate how live statement injections alter public perception and hashtag virality.",
+        "suggested_ontology_goal": "Map corporate spokespeople, media outlets, boycotters, and industry regulators. Focus on trust degradation and recovery vectors."
+    },
+    {
+        "id": "market_panic",
+        "name": "Financial Market & Rumor Panic",
+        "description": "Simulate bank runs, speculative asset dumps, or liquidity panics triggered by social media rumor cascades.",
+        "icon": "📉",
+        "prompt_base": "Identify institutional investors, retail day traders, short sellers, and financial news outlets. Model how unverified rumors propagate across trader communities.",
+        "suggested_ontology_goal": "Map market whales, retail trader hubs, financial analysts, and regulatory agencies. Focus on panic contagion and liquidity sentiment."
+    },
+    {
+        "id": "product_launch",
+        "name": "Product Launch & Viral Adoption",
+        "description": "Simulate consumer tech launches, early adopter reviews, feature feedback loops, and word-of-mouth growth.",
+        "icon": "🚀",
+        "prompt_base": "Identify tech reviewers, early adopters, skeptical power users, and competitor advocates. Model post-launch feature reaction and organic community referral networks.",
+        "suggested_ontology_goal": "Map tech influencers, power users, casual consumers, and rival brand loyalists. Focus on feature sentiment and viral reach."
+    },
+    {
+        "id": "policy_shift",
+        "name": "Regulatory & Policy Shift",
+        "description": "Evaluate stakeholder compliance, lobbying resistance, and public adoption of new regulatory frameworks.",
+        "icon": "🏛️",
+        "prompt_base": "Identify regulatory bodies, corporate compliance officers, consumer advocacy groups, and trade unions. Model public adaptation to new legislation.",
+        "suggested_ontology_goal": "Map government agencies, industry lobbies, consumer groups, and legal experts. Focus on compliance likelihood and institutional friction."
     }
 ]
 

@@ -37,12 +37,12 @@
             @click="handleStopSimulation"
             :disabled="isStopping"
           >
-            {{ isStopping ? "STOPPING..." : "ABORT_SIM" }}
+            {{ isStopping ? "STOPPING..." : "ABORT SIM" }}
           </button>
         </div>
 
         <div class="simulation-badge">
-          <span class="badge-label">SIM_ID:</span>
+          <span class="badge-label">SIM ID:</span>
           <span class="badge-value">{{ simulationId || "N/A" }}</span>
         </div>
       </div>
@@ -144,7 +144,7 @@
           <!-- Activity Section -->
           <div v-if="activePanel === 'activity'" class="activity-container">
             <div class="activity-header">
-              <h3 class="panel-subtitle">LIVE_SIM_STREAM</h3>
+              <h3 class="panel-subtitle">LIVE SIM STREAM</h3>
               <span class="live-dot" :class="{ pulse: isSimRunning }"></span>
             </div>
 
@@ -224,7 +224,7 @@
             <div class="agent-list">
               <div
                 v-for="(agent, idx) in profiles"
-                :key="idx"
+                :key="agent.id"
                 class="agent-item"
                 @click="selectAgent(agent, idx)"
               >
@@ -232,7 +232,7 @@
                 <div class="agent-info">
                   <span class="agent-name">{{ agent.username }}</span>
                   <span class="agent-role">{{
-                    agent.profession || "SIM_CITIZEN"
+                    agent.profession || "SIM CITIZEN"
                   }}</span>
                 </div>
               </div>
@@ -265,7 +265,7 @@
                   msg.role === "user"
                     ? "USER"
                     : chatTarget === "report_agent"
-                      ? "REPORT_AGENT"
+                      ? "REPORT AGENT"
                       : selectedAgent?.username.toUpperCase()
                 }}</span>
                 <span class="message-time">{{
@@ -328,7 +328,7 @@
                   @click="handleExportSurvey"
                   :disabled="isExporting"
                 >
-                  {{ isExporting ? "EXPORTING..." : "DOWNLOAD_CSV" }}
+                  {{ isExporting ? "EXPORTING..." : "DOWNLOAD CSV" }}
                 </button>
               </div>
             </div>
@@ -336,7 +336,7 @@
             <div class="agent-selection-grid">
               <label
                 v-for="(agent, idx) in profiles"
-                :key="idx"
+                :key="agent.id"
                 class="agent-label"
                 :class="{ checked: selectedAgents.has(idx) }"
               >
@@ -437,6 +437,8 @@ const props = defineProps({
 const emit = defineEmits(["add-log", "update-status"]);
 
 // UI State
+const STATUS_POLL_INTERVAL_MS = 5000;
+
 const activeTab = ref("chat");
 const activePanel = ref("report");
 const chatTarget = ref("report_agent");
@@ -563,7 +565,7 @@ const pollStatus = async () => {
       recentActions.value = res.data.recent_actions || [];
     }
   } catch (e) {
-    console.error("Status poll error", e);
+    if (import.meta.env.DEV) console.error("Status poll error", e);
   }
 };
 
@@ -786,7 +788,7 @@ const loadData = async () => {
 
 onMounted(() => {
   loadData();
-  statusTimer = setInterval(pollStatus, 5000);
+  statusTimer = setInterval(pollStatus, STATUS_POLL_INTERVAL_MS);
 
   const onClick = (e) => {
     if (!e.target.closest(".agent-dropdown") && !e.target.closest(".tab-btn"))

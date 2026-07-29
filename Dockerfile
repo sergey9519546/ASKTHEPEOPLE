@@ -56,6 +56,11 @@ EXPOSE 5001
 # Verify the app can be imported at build time — surfaces import errors in CI logs.
 RUN cd /app/backend && python -c "import sys; sys.path.insert(0, '.'); from app import create_app; app = create_app(); print('WSGI app import OK')"
 
+# Run as non-root user for defense-in-depth
+RUN useradd --create-home --shell /bin/false --uid 10001 app \
+    && chown -R app:app /app
+USER app
+
 # Single worker + threads: keeps in-memory state (TaskManager, SimulationRunner) consistent.
 # Timeout 300s: supports long-running report generation via background thread.
 # --chdir ensures wsgi.py is loaded from /app/backend so `from app import ...` resolves correctly.

@@ -2,7 +2,7 @@ name: Build & Deploy
 
 on:
   push:
-    branches: [master]
+    branches: [main]
 
 env:
   REGISTRY: ghcr.io
@@ -56,10 +56,21 @@ jobs:
     steps:
       - name: Trigger Railway Deploy Hook
         run: |
-          if [ -n "$HOOK_URL" ]; then
-            curl -fsSL -X POST "$HOOK_URL" && echo "Railway redeploy triggered"
+          if [ -n "$RAILWAY_HOOK" ]; then
+            curl -fsSL -X POST "$RAILWAY_HOOK" && echo "Railway redeploy triggered"
           else
-            echo "No RAILWAY_DEPLOY_HOOK_URL configured — redeploy manually in Railway dashboard"
+            echo "No RAILWAY_DEPLOY_HOOK_URL configured"
           fi
         env:
-          HOOK_URL: ${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}
+          RAILWAY_HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK_URL }}
+
+      - name: Trigger Render Deploy Hook
+        run: |
+          if [ -n "$RENDER_HOOK" ]; then
+            curl -fsSL -X POST "$RENDER_HOOK" && echo "Render redeploy triggered"
+          else
+            echo "No RENDER_DEPLOY_HOOK_URL configured"
+          fi
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+

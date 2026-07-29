@@ -2,7 +2,7 @@
   <div class="opinion-map-container">
     <div class="map-header">
       <div class="title-group">
-        <h3 class="map-title">3D_OPINION_SPACE</h3>
+        <h3 class="map-title">3D OPINION SPACE</h3>
         <span class="map-subtitle"
           >Polarity (X) | Intensity (Y) | Nuance (Z)</span
         >
@@ -97,6 +97,8 @@ const props = defineProps({
   simulationId: String,
 });
 
+const OPINION_POLL_INTERVAL_MS = 5000;
+
 const opinions = ref([]);
 const activeAgentId = ref(null);
 const isRotating = ref(true);
@@ -149,7 +151,7 @@ const fetchOpinions = async () => {
       opinions.value = res.data.opinions || [];
     }
   } catch (e) {
-    console.error("3D Space fetch failed", e);
+    if (import.meta.env.DEV) console.error("3D Space fetch failed", e);
   }
 };
 
@@ -189,7 +191,7 @@ const stopDrag = () => {
 
 onMounted(() => {
   fetchOpinions();
-  pollTimer = setInterval(fetchOpinions, 5000);
+  pollTimer = setInterval(fetchOpinions, OPINION_POLL_INTERVAL_MS);
   animate();
   window.addEventListener("mouseup", stopDrag);
 });

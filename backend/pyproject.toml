@@ -12,6 +12,7 @@ dependencies = [
     # Core Framework
     "flask>=3.0.0",
     "flask-cors>=6.0.0",
+    "flask-limiter>=3.5.0",
     "flask-sock>=0.7.0",
     # LLM-Related
     "openai>=1.0.0",
@@ -62,6 +63,9 @@ asyncio_mode = "auto"
 addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
-    "ignore::SyntaxWarning"
+    "ignore::SyntaxWarning",
+]
+setenv = [
+    "PYTHONPATH=",
 ]
 

@@ -6,18 +6,20 @@ Provides interfaces for simulation report generation, retrieval, chat, etc.
 import os
 import traceback
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from flask import request, jsonify, send_file
 
-from . import report_bp
+from . import report_bp, limiter
 from ..config import Config
 from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
 from ..services.report_evidence import load_report_evidence
 from ..services.simulation_manager import SimulationManager
-from ..services.export_service import PDFGenerator, CSVExporter
+from ..services.export_service import PDFGenerator, CSVExporter, ExecutiveExporter
 from ..services.zep_tools import ZepToolsService
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
 from ..utils.logger import get_logger
+from ..utils.safe_path import SafePathError
 
 logger = get_logger('askthepeople.api.report')
 
@@ -40,6 +42,7 @@ def _get_status_request_data():
 # ============== Report Generation Interfaces ==============
 
 @report_bp.route('/generate', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def generate_report():
     """
     Generate simulation analysis report (asynchronous task)
@@ -163,12 +166,23 @@ def generate_report():
                         message=f"[{stage}] {message}"
                     )
                 
-                # Generate report (passing pre-generated report_id)
-                report = agent.generate_report(
-                    progress_callback=progress_callback,
-                    report_id=report_id
-                )
-                
+                # Generate report (passing pre-generated report_id) with a wall-clock timeout
+                timeout_secs = Config.REPORT_GENERATION_TIMEOUT
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(
+                        agent.generate_report,
+                        progress_callback=progress_callback,
+                        report_id=report_id
+                    )
+                    try:
+                        report = future.result(timeout=timeout_secs)
+                    except FuturesTimeoutError:
+                        task_manager.fail_task(
+                            task_id,
+                            f"Report generation exceeded the {timeout_secs}s time limit"
+                        )
+                        return
+
                 # Save report
                 ReportManager.save_report(report)
                 
@@ -339,6 +353,9 @@ def get_report_evidence(report_id: str):
             }
         })
 
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get report evidence: {str(e)}")
         return jsonify({
@@ -379,7 +396,10 @@ def get_report(report_id: str):
             "success": True,
             "data": report.to_dict()
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get report: {str(e)}")
         return jsonify({
@@ -502,7 +522,10 @@ def download_report(report_id: str):
             as_attachment=True,
             download_name=f"{report_id}.md"
         )
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to download report: {str(e)}")
         return jsonify({
@@ -532,6 +555,9 @@ def export_report_pdf(report_id: str):
             download_name=f"ATP_REPORT_{report_id}.pdf",
             mimetype='application/pdf'
         )
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to export PDF: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -563,8 +589,44 @@ def export_report_csv(report_id: str):
             download_name=f"ATP_DATA_{report_id}.csv",
             mimetype='text/csv'
         )
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to export CSV: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@report_bp.route('/<report_id>/export/executive', methods=['GET'])
+def export_report_executive(report_id: str):
+    """
+    Export report as executive HTML presentation slide deck
+    """
+    try:
+        report = ReportManager.get_report(report_id)
+        if not report:
+            return jsonify({"success": False, "error": f"Report does not exist: {report_id}"}), 404
+            
+        metrics_data = None
+        if report.simulation_id:
+            from ..services.validation_engine import ValidationEngine
+            metrics_data = ValidationEngine.load_metrics(report.simulation_id)
+
+        exporter = ExecutiveExporter()
+        html_deck = exporter.generate_html_deck(report.to_dict(), metrics_data=metrics_data)
+        
+        from io import BytesIO
+        return send_file(
+            BytesIO(html_deck.encode('utf-8')),
+            as_attachment=True,
+            download_name=f"ATP_EXECUTIVE_PRESENTATION_{report_id}.html",
+            mimetype='text/html'
+        )
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
+    except Exception as e:
+        logger.error(f"Failed to export executive presentation: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -584,7 +646,10 @@ def delete_report(report_id: str):
             "success": True,
             "message": f"Report deleted: {report_id}"
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to delete report: {str(e)}")
         return jsonify({
@@ -597,6 +662,7 @@ def delete_report(report_id: str):
 # ============== Report Agent Chat Interfaces ==============
 
 @report_bp.route('/chat', methods=['POST'])
+@limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def chat_with_report_agent():
     """
     Chat with Report Agent
@@ -724,7 +790,10 @@ def get_report_progress(report_id: str):
             "success": True,
             "data": progress
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get report progress: {str(e)}")
         return jsonify({
@@ -775,7 +844,10 @@ def get_report_sections(report_id: str):
                 "is_complete": is_complete
             }
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get section list: {str(e)}")
         return jsonify({
@@ -819,7 +891,10 @@ def get_single_section(report_id: str, section_index: int):
                 "content": content
             }
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get section content: {str(e)}")
         return jsonify({
@@ -931,7 +1006,10 @@ def get_agent_log(report_id: str):
             "success": True,
             "data": log_data
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get Agent log: {str(e)}")
         return jsonify({
@@ -957,7 +1035,7 @@ def stream_agent_log(report_id: str):
     """
     try:
         logs = ReportManager.get_agent_log_stream(report_id)
-        
+
         return jsonify({
             "success": True,
             "data": {
@@ -965,7 +1043,10 @@ def stream_agent_log(report_id: str):
                 "count": len(logs)
             }
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get Agent log: {str(e)}")
         return jsonify({
@@ -1008,12 +1089,15 @@ def get_console_log(report_id: str):
         from_line = request.args.get('from_line', 0, type=int)
         
         log_data = ReportManager.get_console_log(report_id, from_line=from_line)
-        
+
         return jsonify({
             "success": True,
             "data": log_data
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get console log: {str(e)}")
         return jsonify({
@@ -1039,7 +1123,7 @@ def stream_console_log(report_id: str):
     """
     try:
         logs = ReportManager.get_console_log_stream(report_id)
-        
+
         return jsonify({
             "success": True,
             "data": {
@@ -1047,7 +1131,10 @@ def stream_console_log(report_id: str):
                 "count": len(logs)
             }
         })
-        
+
+    except SafePathError:
+        logger.warning(f"Rejected path-traversal report_id: {report_id!r}")
+        return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:
         logger.error(f"Failed to get console log: {str(e)}")
         return jsonify({

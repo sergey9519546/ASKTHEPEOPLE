@@ -44,14 +44,16 @@ class ReportLogger:
     def __init__(self, report_id: str):
         """
         Initialize logger
-        
+
         Args:
             report_id: Report ID, used to determine log file path
         """
+        from ..utils.safe_path import safe_join
         self.report_id = report_id
-        self.log_file_path = os.path.join(
-            Config.UPLOAD_FOLDER, 'reports', report_id, 'agent_log.jsonl'
-        )
+        # Path-traversal defense: validate report_id before joining.
+        reports_root = os.path.join(Config.UPLOAD_FOLDER, 'reports')
+        report_folder = safe_join(reports_root, report_id)
+        self.log_file_path = os.path.join(report_folder, 'agent_log.jsonl')
         self.start_time = datetime.now()
         self._ensure_log_file()
     
@@ -1998,7 +2000,8 @@ class ReportManager:
     @classmethod
     def _get_report_folder(cls, report_id: str) -> str:
         """Get report folder path"""
-        return os.path.join(cls.REPORTS_DIR, report_id)
+        from ..utils.safe_path import safe_join
+        return safe_join(cls.REPORTS_DIR, report_id)
     
     @classmethod
     def _ensure_report_folder(cls, report_id: str) -> str:
@@ -2535,10 +2538,12 @@ class ReportManager:
     def get_report(cls, report_id: str) -> Optional[Report]:
         """Get report"""
         path = cls._get_report_path(report_id)
-        
+
         if not os.path.exists(path):
             # Compatibility with old format: check directly in reports directory
-            old_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
+            # (path-traversal defense: route report_id through safe_join).
+            from ..utils.safe_path import safe_join
+            old_path = safe_join(cls.REPORTS_DIR, report_id + ".json")
             if os.path.exists(old_path):
                 path = old_path
             else:
@@ -2645,9 +2650,12 @@ class ReportManager:
             return True
         
         # Compatibility with old format: delete individual files
+        # (path-traversal defense: route report_id through safe_join — note
+        # _get_report_folder above already validates, but keep this layer too).
+        from ..utils.safe_path import safe_join
         deleted = False
-        old_json_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.json")
-        old_md_path = os.path.join(cls.REPORTS_DIR, f"{report_id}.md")
+        old_json_path = safe_join(cls.REPORTS_DIR, report_id + ".json")
+        old_md_path = safe_join(cls.REPORTS_DIR, report_id + ".md")
         
         if os.path.exists(old_json_path):
             os.remove(old_json_path)

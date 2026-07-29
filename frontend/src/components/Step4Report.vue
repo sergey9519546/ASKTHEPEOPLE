@@ -12,7 +12,7 @@
         <div class="status-indicator" :class="{ 'is-complete': isComplete }">
           <span class="status-dot"></span>
           <span class="status-text">{{
-            isComplete ? "COMPLETED" : "GENERAING REPORT..."
+            isComplete ? "COMPLETED" : "GENERATING REPORT..."
           }}</span>
         </div>
       </div>
@@ -31,7 +31,7 @@
             >
               <span v-if="exportingPDF">GENERATING...</span>
               <span v-else-if="exportPDFSuccess">✓ EXPORTED PDF</span>
-              <span v-else>EXPORT_PDF</span>
+              <span v-else>EXPORT PDF</span>
             </button>
             <button
               class="action-btn secondary"
@@ -40,7 +40,16 @@
             >
               <span v-if="exportingCSV">EXTRACTING...</span>
               <span v-else-if="exportCSVSuccess">✓ EXPORTED CSV</span>
-              <span v-else>EXPORT_CSV</span>
+              <span v-else>EXPORT CSV</span>
+            </button>
+            <button
+              class="action-btn secondary"
+              @click="handleExportExecutive"
+              :disabled="!isComplete || exportingExecutive"
+            >
+              <span v-if="exportingExecutive">BUILDING DECK...</span>
+              <span v-else-if="exportExecutiveSuccess">✓ DECK READY</span>
+              <span v-else>EXPORT SLIDES</span>
             </button>
             <button
               class="action-btn"
@@ -329,7 +338,7 @@
             <div v-else class="evidence-grid">
               <div
                 v-for="(ev, idx) in reportEvidence"
-                :key="idx"
+                :key="ev.id"
                 class="evidence-card bauhaus-card"
               >
                 <div class="card-header">
@@ -354,7 +363,7 @@
         <!-- Terminal Logs -->
         <div class="console-logs">
           <div class="log-header">
-            <span class="log-title">SYSTEM_STREAM</span>
+            <span class="log-title">SYSTEM STREAM</span>
             <span class="log-line-count">{{ consoleLogs.length }} LINES</span>
           </div>
           <div class="log-content" ref="consoleLogContent">
@@ -376,6 +385,7 @@ import { h, onMounted, onUnmounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   exportReportCSV,
+  exportReportExecutive,
   exportReportPDF,
   getAgentLog,
   getConsoleLog,
@@ -393,6 +403,8 @@ const props = defineProps({
 const emit = defineEmits(["add-log", "update-status"]);
 
 // State
+const LOG_POLL_INTERVAL_MS = 3000;
+
 const agentLogs = ref([]);
 const consoleLogs = ref([]);
 const agentLogLine = ref(0);
@@ -416,6 +428,8 @@ const exportingPDF = ref(false);
 const exportingCSV = ref(false);
 const exportPDFSuccess = ref(false);
 const exportCSVSuccess = ref(false);
+const exportingExecutive = ref(false);
+const exportExecutiveSuccess = ref(false);
 
 const leftPanel = ref(null);
 const rightPanel = ref(null);
@@ -477,6 +491,31 @@ const handleExportCSV = async () => {
   }
 };
 
+const handleExportExecutive = async () => {
+  if (exportingExecutive.value || !props.reportId) return;
+  exportingExecutive.value = true;
+  exportExecutiveSuccess.value = false;
+  emit("add-log", "Generating Executive Presentation Deck...");
+  try {
+    const res = await exportReportExecutive(props.reportId);
+    const blob = new Blob([res.data || res], { type: "text/html" });
+    const link = document.createElement("a");
+    link.href = window.URL.createObjectURL(blob);
+    link.download = `ATP_EXECUTIVE_PRESENTATION_${props.reportId}.html`;
+    link.click();
+    window.URL.revokeObjectURL(link.href);
+    exportExecutiveSuccess.value = true;
+    emit("add-log", "✓ Executive Slide Deck exported successfully");
+    setTimeout(() => {
+      exportExecutiveSuccess.value = false;
+    }, 3000);
+  } catch (err) {
+    emit("add-log", `✗ Failed to export Executive Slide Deck: ${err.message || err}`);
+  } finally {
+    exportingExecutive.value = false;
+  }
+};
+
 // Parser Functions
 const parseInsightForge = (text) => {
   const result = {
@@ -496,7 +535,7 @@ const parseInsightForge = (text) => {
     const factMatch = text.match(/Facts:\s*(\d+)/);
     if (factMatch) result.stats.facts = parseInt(factMatch[1]);
   } catch (e) {
-    console.warn("Parse insight_forge failed:", e);
+    if (import.meta.env.DEV) console.warn("Parse insight_forge failed:", e);
   }
   return result;
 };
@@ -513,7 +552,7 @@ const parsePanorama = (text) => {
     const queryMatch = text.match(/Query:\s*(.+?)(?:\n|$)/);
     if (queryMatch) result.query = queryMatch[1].trim();
   } catch (e) {
-    console.warn("Parse panorama failed:", e);
+    if (import.meta.env.DEV) console.warn("Parse panorama failed:", e);
   }
   return result;
 };
@@ -532,7 +571,7 @@ const parseInterview = (text) => {
     const topicMatch = text.match(/\*\*Topic:\*\*\s*(.+?)(?:\n|$)/);
     if (topicMatch) result.topic = topicMatch[1].trim();
   } catch (e) {
-    console.warn("Parse interview failed:", e);
+    if (import.meta.env.DEV) console.warn("Parse interview failed:", e);
   }
   return result;
 };
@@ -543,7 +582,7 @@ const parseQuickSearch = (text) => {
     const queryMatch = text.match(/Search Query:\s*(.+?)(?:\n|$)/);
     if (queryMatch) result.query = queryMatch[1].trim();
   } catch (e) {
-    console.warn("Parse quick_search failed:", e);
+    if (import.meta.env.DEV) console.warn("Parse quick_search failed:", e);
   }
   return result;
 };
@@ -691,12 +730,12 @@ const fetchLogs = async () => {
       clearInterval(timer);
     }
   } catch (e) {
-    console.error(e);
+    if (import.meta.env.DEV) console.error(e);
   }
 };
 
 onMounted(() => {
-  timer = setInterval(fetchLogs, 3000);
+  timer = setInterval(fetchLogs, LOG_POLL_INTERVAL_MS);
   fetchLogs();
   if (props.reportId) {
     isEvidenceLoading.value = true;
