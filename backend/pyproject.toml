@@ -28,7 +28,7 @@ dependencies = [
     # Security advisory override
     "transformers==5.14.1",
     # MCP server compatibility pin
-    "mcp>=1.3.0,<2",
+    "mcp>=2.0.0,<3",
     # File Processing
     "PyMuPDF>=1.24.0",
     "fpdf2>=2.7.9",
