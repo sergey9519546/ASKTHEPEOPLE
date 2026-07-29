@@ -41,6 +41,9 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run tests
+        env:
+          FLASK_DEBUG: "true"
+          SECRET_KEY: "ci-secret-key-for-testing-only"
         run: uv run pytest -q
 
       # Ad-hoc install so we don't add pip-audit to the dev dependency group.
