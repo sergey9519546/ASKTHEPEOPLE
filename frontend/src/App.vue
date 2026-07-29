@@ -28,9 +28,8 @@ function reloadPage() {
    ASKTHEPEOPLE — Simulation Command Center
    Aesthetic: Bloomberg terminal × editorial serif × stripe-docs clarity.
    Solid dark, hairline borders, single bold accent, no glass.
+   Self-hosted fonts loaded via design-tokens.css (@fontsource).
    ========================================================================== */
-
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
   /* Pure dark surfaces — NO transparency/blur */

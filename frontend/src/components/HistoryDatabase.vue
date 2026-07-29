@@ -542,22 +542,21 @@ onUnmounted(() => {
   position: absolute;
   width: 280px;
   height: 280px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-color);
-  backdrop-filter: blur(16px);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-base);
+  border-radius: 0;
   padding: 16px;
   cursor: pointer;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   display: flex;
   flex-direction: column;
 }
 
 .simulation-card:hover {
-  box-shadow: 0 12px 40px 0 rgba(255, 69, 0, 0.2);
-  transform: translate3d(0, -6px, 0) scale(1.02) !important;
+  border-color: var(--accent);
+  background: var(--bg-panel);
+  transform: translate3d(0, -4px, 0) !important;
   z-index: 2000 !important;
-  border-color: var(--accent-color);
 }
 
 .card-header-row {

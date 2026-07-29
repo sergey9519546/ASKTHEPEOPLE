@@ -200,23 +200,24 @@ onMounted(async () => {
 <style scoped>
 .bauhaus-view-root {
   height: 100vh;
-  background: var(--bg-color);
-  color: var(--text-primary);
+  background: var(--bg-void);
+  color: var(--text-void);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  font-family: var(--font-sans);
 }
 
 .bauhaus-header {
-  height: 70px;
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
+  height: 54px;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 40px;
+  padding: 0 24px;
   z-index: 100;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+  box-shadow: none;
 }
 
 .header-left {
@@ -226,85 +227,91 @@ onMounted(async () => {
   cursor: pointer;
 }
 .brand-monogram {
-  background: var(--accent-color);
-  color: white;
+  background: var(--accent);
+  color: var(--accent-ink);
   padding: 4px 8px;
   font-weight: 700;
-  font-size: 1rem;
-  border-radius: 4px;
+  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  border-radius: 0;
 }
 .brand-full {
   font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: -0.5px;
+  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  color: var(--text-primary);
 }
 
 .view-mode-selector {
   display: flex;
-  border: 1px solid var(--border-color);
-  background: var(--atp-light-gray);
-  padding: 4px;
-  border-radius: var(--radius-sm);
-  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--bg-void);
+  padding: 3px;
+  border-radius: 0;
+  gap: 2px;
 }
 .mode-btn {
-  border: none !important;
+  border: 1px solid transparent !important;
   background: transparent !important;
-  padding: 6px 16px !important;
+  padding: 5px 14px !important;
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
-  border-radius: 6px !important;
+  color: var(--text-secondary);
+  border-radius: 0 !important;
   box-shadow: none !important;
   transform: none !important;
 }
 .mode-btn.is-active {
-  background: var(--surface-color) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-color) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+  background: var(--accent) !important;
+  color: var(--accent-ink) !important;
+  border-color: var(--accent) !important;
 }
 .mode-btn:hover:not(.is-active) {
-  background: rgba(15, 23, 42, 0.03) !important;
-  color: var(--text-primary) !important;
+  background: var(--bg-hover) !important;
+  color: var(--text-void) !important;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 25px;
+  gap: 20px;
 }
 .step-indicator {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-weight: 600;
   font-size: 11px;
+  font-family: var(--font-mono);
 }
 .step-val {
-  color: var(--accent-secondary);
-  font-family: var(--font-mono);
+  color: var(--accent);
 }
 .status-box {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-family: var(--font-mono);
-  font-weight: 600;
+  font-weight: 500;
   font-size: 10px;
+  color: var(--text-secondary);
 }
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
+  background: var(--text-muted);
 }
 .status-box.processing .status-dot {
-  background: var(--accent-color);
+  background: var(--accent);
   animation: flash 1s infinite alternate;
 }
 .status-box.completed .status-dot {
-  background: var(--accent-tertiary);
+  background: var(--status-live);
 }
 @keyframes flash {
   from { opacity: 0.3; }
@@ -314,18 +321,19 @@ onMounted(async () => {
 .workbench-viewport {
   flex: 1;
   display: flex;
-  padding: 24px;
-  gap: 24px;
+  padding: 12px;
+  gap: 12px;
   overflow: hidden;
   position: relative;
+  background: var(--bg-void);
 }
 .panel-container {
   height: 100%;
-  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
+  transition: all 0.2s ease;
+  background: var(--bg-panel);
+  border: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -335,18 +343,19 @@ onMounted(async () => {
   flex-direction: column;
 }
 .workbench-header {
-  height: 50px;
-  border-bottom: 1px solid var(--border-color);
+  height: 44px;
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  background: var(--atp-light-gray);
+  padding: 0 16px;
+  background: var(--bg-base);
 }
 .wb-label {
   font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
   text-transform: uppercase;
 }
 .wb-content {
@@ -356,17 +365,17 @@ onMounted(async () => {
 }
 
 .bauhaus-footer-mini {
-  height: 40px;
-  padding: 0 40px;
-  border-top: 1px solid var(--border-color);
+  height: 36px;
+  padding: 0 24px;
+  border-top: 1px solid var(--line);
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
   font-weight: 500;
   font-size: 9px;
-  color: var(--text-secondary);
-  background: var(--surface-color);
+  color: var(--text-muted);
+  background: var(--bg-base);
 }
 
 @media (max-width: 1100px) {

@@ -1,0 +1,113 @@
+/* ==========================================================================
+   COMMAND CENTER DESIGN SYSTEM TOKENS & UTILITIES
+   Bloomberg Terminal x OKAY DEV Aesthetic Engine
+   ========================================================================== */
+
+/* Self-Hosted Fonts via Fontsource */
+@import "@fontsource/fraunces/400.css";
+@import "@fontsource/fraunces/600.css";
+@import "@fontsource/fraunces/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/600.css";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+
+:root {
+  /* Font Families */
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Palette - Void & Hairline Grays */
+  --color-void: #000000;
+  --color-surface-base: #060606;
+  --color-surface-panel: #0a0a0a;
+  --color-surface-elevated: #121212;
+  --color-surface-header: #161616;
+
+  /* Hairline Borders */
+  --border-hairline: 1px solid #222222;
+  --border-hairline-subtle: 1px solid #1a1a1a;
+  --border-hairline-bright: 1px solid #333333;
+  --border-hairline-active: 1px solid #a3e635;
+
+  /* Electric Lime Accent */
+  --color-lime: #a3e635;
+  --color-lime-dim: rgba(163, 230, 53, 0.15);
+  --color-lime-glow: rgba(163, 230, 53, 0.35);
+
+  /* Telemetry Status Colors */
+  --color-status-active: #a3e635;
+  --color-status-warning: #f59e0b;
+  --color-status-danger: #ef4444;
+  --color-status-info: #3b82f6;
+
+  /* Text Contrast Hierarchy */
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #4b5563;
+  --text-dim: #2d3748;
+}
+
+/* Base Body Styles */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-void);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Subtle Organic Noise Texture Overlay */
+.cmd-noise-overlay {
+  position: relative;
+}
+.cmd-noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  z-index: 99;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* High-Density Hairline Terminal Grid Background */
+.cmd-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+}
+
+/* Terminal Scanline Texture */
+.cmd-scanlines {
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0),
+    rgba(255,255,255,0) 50%,
+    rgba(0, 0, 0, 0.3) 50%,
+    rgba(0, 0, 0, 0.3)
+  );
+  background-size: 100% 4px;
+}
+
+/* Custom Scrollbar for Terminal Data Density */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #222222;
+  border-radius: 0px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a3e635;
+}

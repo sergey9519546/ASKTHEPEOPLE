@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router";
 import { hasCrashed } from "./composables/useCrashState.js";
+import "./assets/design-tokens.css";
 
 const app = createApp(App);
 

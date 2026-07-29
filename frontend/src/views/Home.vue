@@ -1,33 +1,34 @@
 <template>
-  <div class="app-interface">
+  <div class="app-interface cmd-noise-overlay min-h-screen bg-[#000000] text-[#d4d4d4]">
     <!-- HEADER -->
-    <header class="bg-white/80 backdrop-blur-md sticky top-0 z-50 flex flex-col md:flex-row justify-between items-center w-full px-10 py-4 gap-6 border-b border-slate-200">
-        <div class="flex items-center gap-6">
-            <div class="text-xl font-bold tracking-tight uppercase leading-none px-3 py-1 border border-slate-200 rounded-lg bg-slate-50">ATP</div>
-            <div class="hidden md:flex flex-col text-[9px] font-bold font-mono opacity-50 leading-tight uppercase tracking-widest">
-                <span>Terminal_Auth: active</span>
+    <header class="sticky top-0 z-50 flex flex-col md:flex-row justify-between items-center w-full px-6 py-3 gap-4 bg-[#0a0a0a] border-b border-[#222222]">
+        <div class="flex items-center gap-4">
+            <div class="text-sm font-mono font-bold tracking-widest uppercase px-3 py-1 border border-[#333333] bg-[#121212] text-[#a3e635]">ATP // CMD</div>
+            <div class="hidden md:flex flex-col text-[10px] font-mono opacity-60 leading-tight uppercase tracking-wider text-[#9ca3af]">
+                <span>Terminal: active</span>
                 <span>Uptime: 99.98%</span>
             </div>
         </div>
-        <nav class="flex gap-1 items-center bg-slate-100/50 p-1 rounded-xl border border-slate-200/50">
-            <button @click="scrollToSection('hero')" class="bg-slate-900 text-white px-6 py-2 rounded-lg text-xs font-medium uppercase tracking-wider hover:bg-slate-800 transition-colors border-none shadow-none">DEPLOY</button>
-            <button @click="scrollToSection('sessions')" class="px-6 py-2 text-xs font-medium uppercase tracking-wider rounded-lg hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent shadow-none">ANALYTICS</button>
-            <button @click="scrollToSection('archive')" class="px-6 py-2 text-xs font-medium uppercase tracking-wider rounded-lg hover:bg-slate-100 hover:text-slate-900 border-none bg-transparent shadow-none">ARCHIVE</button>
+        <nav class="flex gap-1 items-center bg-[#121212] p-1 border border-[#222222]">
+            <button @click="scrollToSection('hero')" class="bg-[#a3e635] text-[#1a2e05] px-5 py-1.5 text-xs font-mono font-bold uppercase tracking-wider hover:bg-[#bef264] transition-colors border-none">DEPLOY</button>
+            <button @click="scrollToSection('sessions')" class="px-5 py-1.5 text-xs font-mono font-medium uppercase tracking-wider text-[#9ca3af] hover:text-[#f3f4f6] hover:bg-[#1c1c1c] border-none bg-transparent">ANALYTICS</button>
+            <button @click="scrollToSection('archive')" class="px-5 py-1.5 text-xs font-mono font-medium uppercase tracking-wider text-[#9ca3af] hover:text-[#f3f4f6] hover:bg-[#1c1c1c] border-none bg-transparent">ARCHIVE</button>
         </nav>
-        <div class="flex items-center gap-6">
-            <div class="hidden lg:flex flex-col items-end text-[10px] font-mono font-bold leading-none uppercase">
-                <span class="text-rose-500">// LINK_ESTABLISHED</span>
-                <span class="opacity-40">node_id: 8172_alpha</span>
+        <div class="flex items-center gap-4">
+            <div class="hidden lg:flex flex-col items-end text-[10px] font-mono leading-none uppercase">
+                <span class="text-[#a3e635]">// LINK_ESTABLISHED</span>
+                <span class="text-[#4b5563]">node_id: 8172_alpha</span>
             </div>
             <div class="flex gap-2">
-                <button class="w-9 h-9 border border-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-50 p-0 bg-white"><span class="material-symbols-outlined text-slate-600">person</span></button>
-                <button @click="showSettings = true" class="w-9 h-9 border border-slate-200 rounded-lg flex items-center justify-center hover:bg-slate-50 p-0 bg-white" title="System Settings"><span class="material-symbols-outlined text-slate-600">settings_input_component</span></button>
+                <button @click="showSettings = true" class="w-8 h-8 border border-[#333333] bg-[#121212] hover:bg-[#1c1c1c] text-[#d4d4d4] flex items-center justify-center p-0" title="System Settings">
+                  <span class="material-symbols-outlined text-sm">settings_input_component</span>
+                </button>
             </div>
         </div>
     </header>
 
     <!-- SIDEBAR -->
-    <aside class="hidden lg:flex fixed left-6 top-24 bottom-6 w-20 hover:w-64 bg-white/90 backdrop-blur-md border border-slate-200/80 rounded-2xl flex-col z-40 pt-12 transition-all duration-300 group overflow-hidden shadow-xl shadow-slate-100/50">
+    <aside class="hidden lg:flex fixed left-6 top-24 bottom-6 w-20 hover:w-64 bg-[#0a0a0a] border border-[#222222] flex-col z-40 pt-12 transition-all duration-300 group overflow-hidden shadow-2xl">
         <div class="flex-grow space-y-2 px-3">
             <a class="flex items-center w-full px-4 py-4 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-colors text-slate-600" href="#">
                 <span class="material-symbols-outlined text-xl min-w-[32px]">sensors</span>
@@ -351,7 +352,7 @@
     </main>
 
     <!-- MOBILE NAV -->
-    <nav class="md:hidden fixed bottom-0 left-0 w-full h-16 z-50 flex bg-white/95 backdrop-blur-md border-t border-slate-200">
+    <nav class="md:hidden fixed bottom-0 left-0 w-full h-16 z-50 flex bg-[#0a0a0a] border-t border-[#222222]">
         <button @click="scrollToSection('hero')" class="flex-1 flex flex-col items-center justify-center bg-slate-900 text-white border-none rounded-none">
             <span class="material-symbols-outlined text-lg mb-0.5">dashboard_customize</span>
             <span class="text-[8px] font-bold uppercase tracking-wider">CORE</span>

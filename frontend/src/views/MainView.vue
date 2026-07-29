@@ -564,21 +564,21 @@ onUnmounted(() => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg-color);
+  background: var(--bg-void);
   overflow: hidden;
   font-family: var(--font-sans);
+  color: var(--text-void);
 }
 
-/* Header - Modern Minimalist */
+/* Header - Modern Bloomberg Command Bar */
 .app-header {
-  height: 60px;
-  border-bottom: 1px solid var(--border-color);
+  height: 54px;
+  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: rgba(255, 255, 255, 0.85);
-  backdrop-filter: blur(12px);
+  background: var(--bg-base);
   z-index: 100;
   position: relative;
 }
@@ -590,52 +590,56 @@ onUnmounted(() => {
 }
 
 .brand {
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 1.1rem;
-  letter-spacing: -0.5px;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
   cursor: pointer;
-  color: var(--accent-color);
-  transition: opacity 0.15s ease;
+  color: var(--accent-ink);
+  background: var(--accent);
+  padding: 4px 10px;
+  border: 1px solid var(--accent);
+  transition: background 0.15s ease;
 }
 .brand:hover {
-  opacity: 0.8;
+  background: var(--accent-bright);
 }
 
 .view-switcher {
   display: flex;
-  background: var(--atp-light-gray);
-  padding: 4px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
+  background: var(--bg-void);
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 0;
   gap: 2px;
 }
 
 .switch-btn {
-  border: none !important;
+  border: 1px solid transparent !important;
   background: transparent !important;
-  padding: 6px 14px;
+  padding: 5px 14px;
   font-size: 11px;
   font-weight: 600;
-  color: var(--on-surface-variant);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: var(--font-sans);
-  text-transform: none;
-  border-radius: 6px !important;
+  transition: all 0.15s ease;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 0 !important;
   box-shadow: none !important;
   transform: none !important;
 }
 
 .switch-btn.active {
-  background: var(--atp-white) !important;
-  color: var(--atp-black) !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+  background: var(--accent) !important;
+  color: var(--accent-ink) !important;
+  border-color: var(--accent) !important;
 }
 
 .switch-btn:hover:not(.active) {
-  background: rgba(0, 0, 0, 0.03) !important;
-  color: var(--atp-black) !important;
+  background: var(--bg-hover) !important;
+  color: var(--text-void) !important;
 }
 
 .header-right {
@@ -650,22 +654,25 @@ onUnmounted(() => {
   gap: 8px;
   font-size: 11px;
   font-weight: 600;
-  font-family: var(--font-sans);
+  font-family: var(--font-mono);
 }
 
 .step-num {
-  color: var(--accent-color);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .step-name {
-  color: var(--atp-black);
-  text-transform: none;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .step-divider {
   width: 1px;
   height: 12px;
-  background-color: var(--border-color);
+  background-color: var(--line);
 }
 
 .status-indicator {
@@ -673,27 +680,29 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: var(--on-surface-variant);
-  font-weight: 600;
-  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
-  background: #94a3b8;
+  width: 6px;
+  height: 6px;
+  background: var(--text-muted);
   border-radius: 50%;
 }
 
 .status-indicator.processing .dot {
-  background: var(--accent-color);
+  background: var(--accent);
   animation: smooth-pulse 1.2s infinite ease-in-out;
 }
 .status-indicator.completed .dot {
-  background: var(--accent-tertiary);
+  background: var(--status-live);
 }
 .status-indicator.error .dot {
-  background: #ef4444;
+  background: var(--status-error);
 }
 
 @keyframes smooth-pulse {
@@ -708,18 +717,18 @@ onUnmounted(() => {
   display: flex;
   position: relative;
   overflow: hidden;
-  padding: 16px;
-  gap: 16px;
-  background-color: var(--background) !important;
+  padding: 12px;
+  gap: 12px;
+  background-color: var(--bg-void) !important;
 }
 
 .panel-wrapper {
   height: 100%;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  background: var(--atp-white);
-  border: 1px solid var(--border-color) !important;
-  border-radius: var(--radius-md) !important;
-  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.02), 0 2px 8px -1px rgba(15, 23, 42, 0.01) !important;
+  transition: all 0.2s ease;
+  background: var(--bg-panel);
+  border: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 </style>
