@@ -1,11 +1,14 @@
 ---
 title: "Design Direction C — Civic Wayfinding"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Product Design + Content Design + Accessibility"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation' / §5 P1 'Contradictory lifecycle semantics'"
+applies_to: "every UI surface, every generated route, every export, every social card, every share preview"
 ---
 
 # Direction C — Civic Wayfinding
@@ -669,7 +672,72 @@ documentation system.
 
 ## References
 
-- [GOV.UK Design System — Notification banner](https://design-system.service.gov.uk/components/notification-banner/) — Warns against repeated banner overuse and supports putting task-critical information in the main journey.
-- [GOV.UK Design System — Check answers](https://design-system.service.gov.uk/patterns/check-answers/) — Review-before-submit pattern used as the basis for the immutable run-configuration checkpoint.
-- [ONS Service Manual — Using colours in charts](https://service-manual.ons.gov.uk/data-visualisation/colours/using-colours-in-charts) — Color restraint, contrast, and non-color redundancy for data and route visualization.
-- [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) — Current accessibility conformance target for the product.
+- [GOV.UK Design System - Notification banner](https://design-system.service.gov.uk/components/notification-banner/) - Warns against repeated banner overuse and supports putting task-critical information in the main journey.
+- [GOV.UK Design System - Check answers](https://design-system.service.gov.uk/patterns/check-answers/) - Review-before-submit pattern used as the basis for the immutable run-configuration checkpoint.
+- [ONS Service Manual - Using colours in charts](https://service-manual.ons.gov.uk/data-visualisation/colours/using-colours-in-charts) - Color restraint, contrast, and non-color redundancy for data and route visualization.
+- [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) - Current accessibility conformance target for the product.
+
+---
+
+## Project-specific design status (baseline `8b616dc7`)
+
+The Civic Wayfinding visual system is implemented in
+`frontend/src/` as CSS and SVG. The semantic route list required
+by
+[`adr/ADR-0006-route-map-list-parity.md`](../architecture/adr/ADR-0006-route-map-list-parity.md)
+is **TARGET**. Owned by `askthepeople-frontend-steward`.
+
+### Current state — PARTIAL
+
+- Frontend is Vue 3 + Vite + vue-router + Pinia. Built into
+  `frontend/dist/` and served by
+  [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
+- Route visualization uses D3; the route grammar is documented
+  in [`docs/design/ROUTE_GRAMMAR.md`](ROUTE_GRAMMAR.md).
+- The Truth Rail, the per-screen contextual statements, and the
+  full disclosure block are **not yet rendered** in the
+  frontend. The text disclosures live in
+  [`README.md:9-12`](../../README.md) and
+  [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md).
+- The route-list / map parity test required by ADR-0006 is
+  missing. There is no automated check that every node, edge,
+  and action in the visual map has a corresponding list entry.
+- The qualitative-only constraint ("line width, color, position,
+  spacing, order, count and placement never communicate
+  probability, support, prevalence, confidence, or rank") has
+  no automated check on rendered SVG.
+- The disclosure block required by the contract is not
+  automatically attached to social cards, share previews, or
+  exported report files.
+
+### Required correction (per this doc and ADR-0006)
+
+- Canonical semantic route list at the API or JSON-LD level
+  that the visual map and the list view both consume.
+- Parity test in CI asserting every map fact has a list entry,
+  and vice versa.
+- Keyboard-only and screen-reader-only navigation of every
+  map fact and action.
+- Mobile default to the list view.
+- WCAG 2.2 conformance verified per
+  [`docs/design/ACCESSIBILITY.md`](ACCESSIBILITY.md).
+- Comprehension-test program confirming users understand that
+  route geometry carries no quantitative meaning.
+
+### Lockup and disclosure
+
+The product lockup is locked in the contract:
+
+```text
+ASKTHEPEOPLE
+SYNTHETIC DECISION EXPLORER
+
+Explore assumptions before you ask.
+Validate with people after.
+```
+
+The full lockup MUST be visually adjacent to every generated
+route, every report, every social card, and every share preview.
+The naked wordmark is prohibited. The CI linter in
+[`.github/workflows/docs.yml`](../../.github/workflows/docs.yml)
+enforces the wordmark rule in the doc tree.

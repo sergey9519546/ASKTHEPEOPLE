@@ -1,11 +1,14 @@
 ---
 title: "AI Failure Modes"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "AI Safety + SRE + Product"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly and after incident"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P0 cluster"
+applies_to: "every LLM call, every generated artifact, every Truth Rail, every export"
 ---
 
 # Failure Modes
@@ -193,7 +196,61 @@ reviewer can revise inputs or create a new run, not bless an invalid artifact.
 
 ## References
 
-- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
-- [OWASP LLM05:2025 Improper Output Handling](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/) — Model output must be validated and sanitized before downstream use.
-- [OWASP LLM06:2025 Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/) — Limit tools, permissions, functionality, and autonomy.
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) - Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+- [OWASP LLM05:2025 Improper Output Handling](https://genai.owasp.org/llmrisk/llm052025-improper-output-handling/) - Model output must be validated and sanitized before downstream use.
+- [OWASP LLM06:2025 Excessive Agency](https://genai.owasp.org/llmrisk/llm062025-excessive-agency/) - Limit tools, permissions, functionality, and autonomy.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+
+---
+
+## Project-specific failure-modes status (baseline `8b616dc7`)
+
+The current code has the start of a failure-handling pipeline
+([`utils/retry.py`](../../backend/app/utils/retry.py) (8 KB) for
+bounded retries) but no failure-mode catalogue, no
+deterministic validation of model output, and no per-failure-mode
+regression test. Gate 5 is owned by `askthepeople-ai-eval-steward`.
+
+### Current state — PARTIAL
+
+- `utils/retry.py` implements bounded retries with backoff and
+  jitter for transient provider failures. It does not implement
+  the doc's retry-category table (provider rate limit = yes
+  bounded; invalid schema = no; auth failure = no; worker crash =
+  reclaim with fencing; deterministic engine failure = no
+  automatic loop). The doc's classification is **TARGET** and
+  lands with gate 2.
+- `validation_engine.py` runs schema-level checks on prompt
+  outputs. The doc's deterministic truth and terminology
+  validators are missing.
+- The Truth Rail and the per-screen contextual statements
+  ([`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md))
+  are not yet rendered in `frontend/src/`. The frontend is a
+  Vue 3 + Vite + D3 application; the Truth Rail rendering is
+  gate 5.
+- The disclosure block required by the doc is present in the
+  README and in the contract, but is not automatically
+  attached to every generated report, export, share, or
+  social-card.
+
+### Required correction (per this doc)
+
+- A maintained failure-mode catalogue with: failure name,
+  reproducer, guardrail, status, owner, regression test. The
+  current code has none.
+- Deterministic truth and terminology validators that block
+  release on prohibited output.
+- Adversarial prompt-injection red team with a maintained
+  release corpus (see
+  [`docs/ai/EVALS.md`](EVALS.md)).
+- Truth Rail rendering in the frontend, with the disclosure
+  block automatically attached to every detached artifact
+  (PDF, DOCX, CSV, JSON, social card, email template).
+
+### Release gating
+
+Per the doc, prompt and model release MUST NOT ship without a
+passing eval result, a passing adversarial-suite result, a passing
+disclosure-block check, and a passing Truth Rail rendering check.
+This is **TARGET** and is part of
+[`docs/release/ACCEPTANCE.md`](../release/ACCEPTANCE.md).

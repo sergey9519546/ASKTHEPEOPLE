@@ -1,11 +1,14 @@
 ---
 title: "Route Grammar"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Product Design + Domain Engineering + Accessibility"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation'"
+applies_to: "every UI route surface, every report, every export, every share preview"
 ---
 
 # Route Grammar
@@ -367,7 +370,53 @@ A route payload fails when:
 
 ## References
 
-- [OECD Strategic Foresight Toolkit for Resilient Public Policy](https://www.oecd.org/en/publications/foresight-toolkit-for-resilient-public-policy_bcdd9304-en.html) — Scenario and stress-testing guidance that treats disruptions and alternative futures as hypothetical, not predictions.
-- [UK Government Futures Toolkit](https://www.gov.uk/government/publications/futures-toolkit-for-policy-makers-and-analysts/the-futures-toolkit-html) — Practical scenario-design guidance; scenarios are possible futures rather than predictions or plans.
-- [ONS Service Manual — Using colours in charts](https://service-manual.ons.gov.uk/data-visualisation/colours/using-colours-in-charts) — Color restraint, contrast, and non-color redundancy for data and route visualization.
-- [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) — Current accessibility conformance target for the product.
+- [OECD Strategic Foresight Toolkit for Resilient Public Policy](https://www.oecd.org/en/publications/foresight-toolkit-for-resilient-public-policy_bcdd9304-en.html) - Scenario and stress-testing guidance that treats disruptions and alternative futures as hypothetical, not predictions.
+- [UK Government Futures Toolkit](https://www.gov.uk/government/publications/futures-toolkit-for-policy-makers-and-analysts/the-futures-toolkit-html) - Practical scenario-design guidance; scenarios are possible futures rather than predictions or plans.
+- [ONS Service Manual - Using colours in charts](https://service-manual.ons.gov.uk/data-visualisation/colours/using-colours-in-charts) - Color restraint, contrast, and non-color redundancy for data and route visualization.
+- [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) - Current accessibility conformance target for the product.
+
+---
+
+## Project-specific route-grammar status (baseline `8b616dc7`)
+
+The route grammar is normative. The Civic Wayfinding design
+system
+([`docs/design/DIRECTION_C.md`](DIRECTION_C.md)) is implemented
+in `frontend/src/`; the qualitative-only constraint has no
+automated check on rendered SVG; the canonical semantic route
+list is **TARGET**. Gate 1 + gate 5, owned by
+`askthepeople-frontend-steward`.
+
+### Current state — PARTIAL
+
+- Frontend is Vue 3 + Vite + vue-router + Pinia. Built into
+  `frontend/dist/` and served by
+  [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
+- Route visualization uses D3 to render paths from a JSON
+  configuration; the design is implemented in CSS and SVG.
+- The semantic route list as a first-class accessible
+  alternative is **not yet rendered**. There is no parity test
+  asserting that every fact and action in the visual map is
+  reachable in the list by keyboard and screen reader.
+- The qualitative-only constraint has no automated check.
+- Mobile defaults to the map view today; the doc requires
+  defaults to the list.
+- The disclosure block required by the contract is not
+  automatically attached to exported report files, social
+  cards, or share previews.
+
+### Required correction (per this doc and ADR-0006)
+
+- A canonical semantic route list at the API or JSON-LD level
+  that the visual map and the list view both consume.
+- Parity test in CI asserting every map fact has a list entry,
+  and vice versa.
+- Keyboard-only and screen-reader-only navigation of every
+  map fact and action.
+- Mobile default to the list view.
+- WCAG 2.2 conformance verified per
+  [`docs/design/ACCESSIBILITY.md`](ACCESSIBILITY.md).
+- Automated check on rendered SVG that line width, color,
+  position, spacing, order, count, and placement do not
+  communicate probability, support, prevalence, confidence, or
+  rank.

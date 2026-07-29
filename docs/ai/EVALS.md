@@ -1,11 +1,14 @@
 ---
 title: "AI Evaluations"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "AI Evaluation + Research + Trust"
 last_reviewed: "2026-07-29"
 review_cycle: "Every AI release"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P0 'Prompt prefixing is not a security boundary' / §5 P1 'Inconsistent request validation'"
+applies_to: "every prompt release, every model release, every UI release, every change to ontology / profile / config / report generation"
 ---
 
 # Evals
@@ -446,7 +449,63 @@ Raw customer content is not used for monitoring by default.
 
 ## References
 
-- [AAPOR, Responsible AI Integration in Survey Research (2026)](https://aapor.org/announcements/task-force-on-responsible-ai-integration-in-survey-research-report/) — Professional guidance on validity, reliability, sensitivity, performance, transparency, and human oversight when AI is used in survey research.
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
-- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
-- [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model) — Example provider guidance supporting lean, task-specific prompts and representative evaluations; the product remains provider-neutral.
+- [AAPOR, Responsible AI Integration in Survey Research (2026)](https://aapor.org/announcements/task-force-on-responsible-ai-integration-in-survey-research-report/) - Professional guidance on validity, reliability, sensitivity, performance, transparency, and human oversight when AI is used in survey research.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) - Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+- [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model) - Example provider guidance supporting lean, task-specific prompts and representative evaluations; the product remains provider-neutral.
+
+---
+
+## Project-specific evals status (baseline `8b616dc7`)
+
+The current code has the start of a validation pipeline
+([`services/validation_engine.py`](../../backend/app/services/validation_engine.py) (14 KB)
+and
+[`services/claim_boundary.py`](../../backend/app/services/claim_boundary.py) (3 KB))
+but no automated eval suite, no frozen-output fixtures, no
+adversarial prompt-injection suite, and no per-release gating.
+Gate 5 is owned by `askthepeople-ai-eval-steward`.
+
+### Current state — PARTIAL
+
+- `validation_engine.py` runs schema-level checks on prompt
+  outputs. It is invoked from the report agent.
+- `claim_boundary.py` enforces a per-source-type evidence
+  heuristic. It is acknowledged as a heuristic, not a calibrated
+  confidence, in
+  [`docs/product/SUCCESS_METRICS.md`](../product/SUCCESS_METRICS.md).
+- The `report_evidence.py` service carries a per-source-type
+  evidence score; the README discloses that this is a
+  per-source-type heuristic, not a calibrated measurement
+  ([`README.md:99-114`](../../README.md)).
+- There is no frozen-output fixture suite, no offline evaluation
+  harness, no per-prompt regression gate, and no
+  adversarial prompt-injection red team.
+
+### Required correction (per this doc)
+
+Reaching the contract requires:
+
+- Frozen-output fixtures per prompt template. Every prompt change
+  is gated on the fixture regression.
+- Adversarial prompt-injection red team with a maintained
+  release corpus (the audit's P0 finding). Critical prohibited
+  cases require a 100% block rate; false-positive rates MUST be
+  measured and reviewed.
+- Truth and terminology validators that block the response on
+  prohibited output. The current `validation_engine.py` is the
+  start; the deterministic truth and terminology layers are
+  missing.
+- Cross-model comparison with paired-run analysis, not a
+  single-model result.
+- Coverage and stability ledgers per prompt release.
+- Eval results linked to the prompt registry and the model
+  release ledger; a release cannot ship without regression
+  results.
+
+### Release evidence
+
+The release evidence bundle required by
+[`docs/release/ACCEPTANCE.md`](../release/ACCEPTANCE.md) MUST
+include the eval results, the adversarial suite results, and the
+fixture regression for the prompts and models in the release.

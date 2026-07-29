@@ -1,11 +1,14 @@
 ---
 title: "AI Prompt Registry"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "AI Platform + Research + Security"
 last_reviewed: "2026-07-29"
 review_cycle: "Every prompt release"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P0 'Prompt prefixing is not a security boundary'"
+applies_to: "every LLM call, every prompt template, every model release"
 ---
 
 # Prompt Registry
@@ -594,6 +597,62 @@ enable tools in production.
 
 ## References
 
-- [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model) — Example provider guidance supporting lean, task-specific prompts and representative evaluations; the product remains provider-neutral.
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
-- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) — Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+- [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model) - Example provider guidance supporting lean, task-specific prompts and representative evaluations; the product remains provider-neutral.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [OWASP LLM01:2025 Prompt Injection](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) - Direct, indirect, and multimodal prompt-injection risks and defense-in-depth recommendations.
+
+---
+
+## Project-specific prompt-registry status (baseline `8b616dc7`)
+
+The current code does **not** have a prompt registry. Prompt
+templates are inlined in service code. Gate 1 / gate 5 is owned by
+`askthepeople-ai-eval-steward`.
+
+### Current state — PARTIAL
+
+Prompt templates exist as Python string literals in:
+
+- [`services/ontology_generator.py`](../../backend/app/services/ontology_generator.py) (16 KB)
+- [`services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py) (56 KB)
+- [`services/simulation_config_generator.py`](../../backend/app/services/simulation_config_generator.py) (52 KB)
+- [`services/report_agent.py`](../../backend/app/services/report_agent.py) (114 KB)
+- [`services/report_evidence.py`](../../backend/app/services/report_evidence.py) (13 KB)
+- [`services/validation_engine.py`](../../backend/app/services/validation_engine.py) (14 KB)
+- [`services/claim_boundary.py`](../../backend/app/services/claim_boundary.py) (3 KB)
+- [`services/zep_tools.py`](../../backend/app/services/zep_tools.py) (76 KB)
+
+None has a stable prompt template ID, a version, a release date,
+an evaluation result, or a deprecation status. The audit's P0
+finding "Prompt prefixing is not a security boundary" applies.
+
+### Required correction (per audit P0)
+
+Every LLM call that consumes source text or generation context
+MUST:
+
+- Use separate system, developer, context, and user roles.
+- Treat source material and run records as untrusted data.
+- Bind zero tools.
+- Use structured output.
+- Run deterministic truth and terminology validators.
+- Record per call: prompt template ID, prompt version, model
+  release, input hashes, output hash.
+- Remove remotely accessible raw bypasses.
+- Include adversarial prompt-injection evaluations.
+
+### Required correction (per this doc)
+
+Reaching the contract requires:
+
+- A prompt registry table with stable IDs, versions, owners,
+  creation dates, deprecation status, evaluation results, and
+  provenance.
+- A model release ledger (see
+  [`docs/ai/MODEL_RELEASES.md`](MODEL_RELEASES.md)).
+- A run manifest that pins the exact prompt ID, version, model
+  release, and decoding settings per call (see
+  [`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md)).
+- Adapter conformance tests and frozen-output fixtures.
+- A canary release and rollback drill, called out in
+  [`docs/release/RUNBOOK.md`](../release/RUNBOOK.md).

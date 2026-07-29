@@ -1,11 +1,14 @@
 ---
 title: "Content System"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Content Design + Product Truth + Localization"
 last_reviewed: "2026-07-29"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation'"
+applies_to: "every UI string, every generated text, every export, every email template, every share preview, every marketing surface"
 ---
 
 # Content System
@@ -461,6 +464,58 @@ Machine translation alone cannot approve a locale.
 
 ## References
 
-- [GOV.UK Design System — Notification banner](https://design-system.service.gov.uk/components/notification-banner/) — Warns against repeated banner overuse and supports putting task-critical information in the main journey.
-- [GOV.UK Design System — Check answers](https://design-system.service.gov.uk/patterns/check-answers/) — Review-before-submit pattern used as the basis for the immutable run-configuration checkpoint.
-- [AAPOR, Responsible AI Integration in Survey Research (2026)](https://aapor.org/announcements/task-force-on-responsible-ai-integration-in-survey-research-report/) — Professional guidance on validity, reliability, sensitivity, performance, transparency, and human oversight when AI is used in survey research.
+- [GOV.UK Design System - Notification banner](https://design-system.service.gov.uk/components/notification-banner/) - Warns against repeated banner overuse and supports putting task-critical information in the main journey.
+- [GOV.UK Design System - Check answers](https://design-system.service.gov.uk/patterns/check-answers/) - Review-before-submit pattern used as the basis for the immutable run-configuration checkpoint.
+- [AAPOR, Responsible AI Integration in Survey Research (2026)](https://aapor.org/announcements/task-force-on-responsible-ai-integration-in-survey-research-report/) - Professional guidance on validity, reliability, sensitivity, performance, transparency, and human oversight when AI is used in survey research.
+
+---
+
+## Project-specific content-system status (baseline `8b616dc7`)
+
+The content system is normative. The current linter
+([`.github/workflows/docs.yml`](../../.github/workflows/docs.yml))
+checks the doc tree and the repo README for prohibited language.
+The required coverage (UI strings, generated output, exports,
+email templates, share previews, seed data, marketing pages,
+documentation examples) is **TARGET**. Gate 5, owned by
+`askthepeople-frontend-steward` and
+`askthepeople-ai-eval-steward`.
+
+### Current state — PARTIAL
+
+- The CI linter in
+  [`.github/workflows/docs.yml`](../../.github/workflows/docs.yml)
+  blocks prohibited outcome language in `docs/product/`,
+  `docs/design/`, `docs/release/`, and the repo root `README.md`.
+- The linter does **not** cover AI outputs in the report
+  agent, UI strings in `frontend/src/`, exports (CSV, JSON,
+  PDF, DOCX, PNG), email templates, share previews, seed data,
+  or marketing pages.
+- The Truth Rail and the per-screen contextual statements
+  ([`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md))
+  are not yet rendered in the frontend.
+- The disclosure block required by the contract is not
+  automatically attached to detached artifacts.
+
+### Required correction (per this doc and the audit)
+
+- Expand the linter to cover every artifact surface listed
+  above. Critical violations block artifact finalization and
+  release.
+- Render the Truth Rail and the per-screen contextual
+  statements in the frontend.
+- Attach the disclosure block to every detached artifact
+  (PDF, DOCX, CSV, JSON, social card, email template).
+- Comprehension-test program confirming users understand the
+  qualitative-only nature of the routes and the
+  non-respondent nature of the system.
+- Localized and right-to-left support per
+  [`docs/design/ACCESSIBILITY.md`](ACCESSIBILITY.md).
+
+### Terminology enforcement
+
+The terminology linter in
+[`docs/product/TERMINOLOGY.md`](../product/TERMINOLOGY.md) defines
+canonical terms, preferred terms, and prohibited terms. The CI
+linter enforces a subset today. The full coverage is **TARGET**
+and is part of gate 5.

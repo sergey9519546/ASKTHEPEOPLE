@@ -1,11 +1,14 @@
 ---
 title: "Model Releases"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "AI Platform + SRE + Research"
 last_reviewed: "2026-07-29"
 review_cycle: "Every model release"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation'"
+applies_to: "every LLM provider alias, every model snapshot, every prompt release, every run manifest"
 ---
 
 # Model Releases
@@ -227,5 +230,48 @@ organization, and global environment. A provider incident can:
 
 ## References
 
-- [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model) — Example provider guidance supporting lean, task-specific prompts and representative evaluations; the product remains provider-neutral.
-- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) — Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+- [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model) - Example provider guidance supporting lean, task-specific prompts and representative evaluations; the product remains provider-neutral.
+- [NIST AI Risk Management Framework 1.0 and GenAI Profile](https://www.nist.gov/itl/ai-risk-management-framework) - Voluntary framework and GenAI profile for governing, mapping, measuring, and managing AI risk.
+
+---
+
+## Project-specific model-releases status (baseline `8b616dc7`)
+
+The current code has **no model release ledger**. The provider
+alias is read from environment configuration and the exact model
+identifier is not recorded per call. Gate 1 is owned by
+`askthepeople-architect`; gate 5 by `askthepeople-ai-eval-steward`.
+
+### Current state — PARTIAL
+
+- LLM calls go through
+  [`utils/llm_client.py`](../../backend/app/utils/llm_client.py) and
+  the provider factory
+  [`services/camel_model_factory.py`](../../backend/app/services/camel_model_factory.py).
+  The model alias is read from `OPENAI_API_BASE`,
+  `OPENAI_API_KEY`, and provider-specific environment variables in
+  [`config.py`](../../backend/app/config.py).
+- The exact model identifier used for a call is not persisted in
+  the `Task.result`, the `state.json`, or anywhere else.
+- The release state machine (`DRAFT → EVALUATING → REJECTED |
+  APPROVED → CANARY → ACTIVE | ROLLED_BACK → DEPRECATED →
+  RETIRED`) is not implemented in code.
+
+### Required correction (per this doc and ADR-0004)
+
+- Every LLM call must record the model release alias and the
+  resolved snapshot identifier in the run manifest.
+- Mutable provider aliases never become `ACTIVE` without being
+  resolved to an exact model identifier in the run manifest.
+- A canary release and rollback drill is part of the release
+  procedure
+  ([`docs/release/RUNBOOK.md`](../release/RUNBOOK.md)).
+- Cross-model robustness comparisons (seed-controlled ensembles)
+  are part of gate 5.
+
+### Adapter conformance
+
+Reaching the contract requires the adapter surface
+([`services/camel_model_factory.py`](../../backend/app/services/camel_model_factory.py))
+to be the single seam that hides model changes. Provider-specific
+SDK calls must not appear elsewhere in the service code.

@@ -1,11 +1,14 @@
 ---
 title: "Accessibility"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Accessibility Lead + Frontend Engineering"
 last_reviewed: "2026-07-29"
 review_cycle: "Every release"
 research_cutoff: "2026-07-29"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation'"
+applies_to: "every UI surface, every generated route, every report, every export"
 ---
 
 # Accessibility
@@ -251,5 +254,54 @@ Versions MUST be recorded in the release evidence.
 
 ## References
 
-- [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) — Current accessibility conformance target for the product.
-- [WAI-ARIA APG — Modal Dialog Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/) — Required modal focus, inert-background, Escape, and focus-restoration behavior.
+- [W3C Web Content Accessibility Guidelines 2.2](https://www.w3.org/TR/WCAG22/) - Current accessibility conformance target for the product.
+- [WAI-ARIA APG - Modal Dialog Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/) - Required modal focus, inert-background, Escape, and focus-restoration behavior.
+
+---
+
+## Project-specific accessibility status (baseline `8b616dc7`)
+
+The accessibility standards in this doc are normative. The
+current frontend is a Vue 3 + Vite application. There is **no
+automated accessibility check** in CI and **no comprehension-
+test program**. Gate 1 + gate 5, owned by
+`askthepeople-frontend-steward` and
+`askthepeople-ai-eval-steward`.
+
+### Current state — PARTIAL
+
+- Frontend is Vue 3 + Vite + vue-router + Pinia. Built into
+  `frontend/dist/` and served by
+  [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
+- The accessibility conformance target is WCAG 2.2; no
+  conformance evidence is recorded.
+- The semantic route list required by
+  [`adr/ADR-0006-route-map-list-parity.md`](../architecture/adr/ADR-0006-route-map-list-parity.md)
+  is not yet rendered.
+- The Truth Rail and the per-screen contextual statements
+  ([`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md))
+  are not yet rendered in the frontend.
+- The disclosure block required by the contract is not
+  automatically attached to exports, social cards, or share
+  previews.
+
+### Required correction (per this doc and the audit)
+
+- WCAG 2.2 conformance verified by automated and manual
+  testing on every release.
+- A semantic route list as the canonical accessible
+  alternative to the visual map (see ADR-0006).
+- Truth Rail rendering in the frontend, with the disclosure
+  block automatically attached to every detached artifact.
+- Comprehension-test program confirming users understand the
+  qualitative-only nature of the routes.
+- Keyboard-only and screen-reader-only navigation of every map
+  fact and action.
+- Color/contrast conformance with non-color redundancy.
+
+### Release evidence
+
+The release evidence bundle required by
+[`docs/release/ACCEPTANCE.md`](../release/ACCEPTANCE.md) MUST
+include the accessibility conformance report and the
+comprehension-test results.
