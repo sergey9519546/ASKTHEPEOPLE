@@ -211,12 +211,20 @@ def select_active_agent_ids(
     for cfg in agent_configs:
         agent_id = cfg.get("agent_id", 0)
         active_hours = cfg.get("active_hours", list(range(8, 23)))
-        if current_hour not in active_hours:
+        if current_hour not in active_hours and agent_id not in boost_ids:
             continue
 
         platform_preference = cfg.get("platform_preference", "both")
+
+        # Strictly enforce platform matching (except for boosted agents)
+        if not _platform_matches(platform_preference, platform) and agent_id not in boost_ids:
+            continue
+
         activity_probability = float(cfg.get("activity_level", 0.5))
-        activity_probability *= _platform_weight(platform_preference, platform)
+
+        # When bypassing for boosted agents, do not multiply by mismatched platform weight (which is 0.3 or similar low)
+        if agent_id not in boost_ids:
+            activity_probability *= _platform_weight(platform_preference, platform)
 
         reaction_style = str(cfg.get("reaction_style", "measured")).lower()
         novelty = float(cfg.get("novelty_seeking", 0.45))
