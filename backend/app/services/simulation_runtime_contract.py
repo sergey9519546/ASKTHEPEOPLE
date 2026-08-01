@@ -215,8 +215,13 @@ def select_active_agent_ids(
             continue
 
         platform_preference = cfg.get("platform_preference", "both")
+        is_boosted = event_boost_agent_ids is not None and agent_id in event_boost_agent_ids
+        if not _platform_matches(platform_preference, platform) and not is_boosted:
+            continue
+
         activity_probability = float(cfg.get("activity_level", 0.5))
-        activity_probability *= _platform_weight(platform_preference, platform)
+        if not is_boosted:
+            activity_probability *= _platform_weight(platform_preference, platform)
 
         reaction_style = str(cfg.get("reaction_style", "measured")).lower()
         novelty = float(cfg.get("novelty_seeking", 0.45))
