@@ -49,30 +49,40 @@ def check_celery():
 
 @health_bp.route('/', methods=['GET'], strict_slashes=False)
 def health():
-    """Liveness probe with component status"""
+    """Liveness probe with component status.
+    
+    Returns 503 only for FATAL conditions that mean the app cannot serve requests.
+    Degraded conditions (Redis unavailable, Celery down) return 200 with
+    status='degraded' so Railway doesn't kill the deployment unnecessarily.
+    
+    Fatal (503): storage not writable
+    Degraded (200): database unavailable, Redis unavailable, Celery down
+    """
     upload_folder = os.path.abspath(current_app.config['UPLOAD_FOLDER'])
     
     # Ensure folder exists (create if needed for first-time startup)
     try:
         os.makedirs(upload_folder, exist_ok=True)
     except (OSError, PermissionError):
-        pass  # If we can't create it, the next check will catch it
-    
+        pass
+
     storage_writable = os.path.isdir(upload_folder) and os.access(
         upload_folder,
         os.W_OK,
     )
-    
+
     # Check all components
     db_ok = check_database()
     redis_ok = check_redis()
     celery_ok = check_celery()
-    
-    # Overall status
+
+    # Only storage failure is fatal — the app cannot function without writable storage.
+    # Redis and DB unavailability are degraded: app starts, tasks queue when Redis recovers.
+    is_fatal = not storage_writable
     all_ok = storage_writable and db_ok and redis_ok
-    
+
     payload = {
-        'status': 'ok' if all_ok else 'degraded',
+        'status': 'ok' if all_ok else ('error' if is_fatal else 'degraded'),
         'service': 'ASKTHEPEOPLE Backend',
         'revision': (
             os.environ.get('RAILWAY_GIT_COMMIT_SHA')
@@ -81,42 +91,36 @@ def health():
         ),
         'components': {
             'storage': 'ok' if storage_writable else 'error',
-            'database': 'ok' if db_ok else 'error',
-            'redis': 'ok' if redis_ok else 'error',
+            'database': 'ok' if db_ok else 'degraded',
+            'redis': 'ok' if redis_ok else 'degraded',
             'celery': 'ok' if celery_ok else 'degraded',
         },
         # Deprecated fields (keep for backward compatibility)
         'storage_writable': storage_writable,
     }
-    return jsonify(payload), 200 if all_ok else 503
+    # 503 only when storage is broken — Railway liveness must pass for the app to serve
+    return jsonify(payload), 503 if is_fatal else 200
+
 
 @health_bp.route('/readiness', methods=['GET'], strict_slashes=False)
 def readiness():
-    """Readiness probe (checks all dependencies)"""
-    # 1. Storage Readiness
+    """Readiness probe — all dependencies must be available."""
     upload_folder = os.path.abspath(current_app.config['UPLOAD_FOLDER'])
-    
-    # Ensure folder exists (create if needed for first-time startup)
+
     try:
         os.makedirs(upload_folder, exist_ok=True)
     except (OSError, PermissionError):
-        pass  # If we can't create it, the next check will catch it
-    
+        pass
+
     storage_writable = os.path.isdir(upload_folder) and os.access(
         upload_folder,
         os.W_OK,
     )
 
-    # 2. Database connectivity
     db_ok = check_database()
-    
-    # 3. Redis connectivity
     redis_ok = check_redis()
-    
-    # 4. Celery worker availability
     celery_ok = check_celery()
-    
-    # Application is ready if all critical components are available
+
     ready = storage_writable and db_ok and redis_ok
 
     payload = {

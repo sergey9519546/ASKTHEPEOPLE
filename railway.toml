@@ -1,19 +1,23 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+# dockerfilePath is NOT hardcoded here so that each service can set
+# RAILWAY_DOCKERFILE_PATH in its own environment variables.
+# Web service: uses default Dockerfile discovery (finds Dockerfile).
+# Worker service: sets RAILWAY_DOCKERFILE_PATH=Dockerfile.worker.
 watchPatterns = [
   "/backend/**",
   "/frontend/**",
   "/Dockerfile",
+  "/Dockerfile.worker",
   "/.dockerignore",
   "/LICENSE",
   "/railway.toml",
 ]
 
 [deploy]
-# No startCommand — the Dockerfile CMD ["sh", "-c", "exec gunicorn..."] handles
-# the web process. Railway passes startCommand as a raw single arg to gosu,
-# which cannot exec shell builtins like 'cd'. Let Docker handle it instead.
+# healthcheckPath applies to both web and worker services.
+# Worker runs worker_health.py which responds 200 at /health.
+# Web runs Flask which responds at /health.
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 drainingSeconds = 300
