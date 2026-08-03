@@ -571,15 +571,10 @@ class OasisProfileGenerator:
         
         is_individual = self._is_individual_entity(entity_type)
         
-        if is_individual:
-            prompt = self._build_individual_persona_prompt(
-                entity_name, entity_type, entity_summary, entity_attributes, context
-            )
-        else:
-            prompt = self._build_group_persona_prompt(
-                entity_name, entity_type, entity_summary, entity_attributes, context
-            )
-
+        # Prepare template variables
+        attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "None"
+        context_str = context[:3000] if context else "No additional context"
+        
         # Retry up to max_attempts times. Each attempt uses the
         # P0 prompt-prefixing structural contract (chat_with_role_contract):
         # separate system + user roles, zero tools, structured output
@@ -602,12 +597,21 @@ class OasisProfileGenerator:
 
         max_attempts = 3
         last_error = None
+        
+        # Determine which prompt to use
+        prompt_id = "profile_generation" if is_individual else "group_profile_generation"
 
         for attempt in range(max_attempts):
             try:
-                contract_result = llm_client.chat_with_role_contract(
-                    system_prompt=self._get_system_prompt(is_individual),
-                    user_prompt=prompt,
+                # Use registry-based prompt
+                contract_result = llm_client.chat_with_registry_prompt(
+                    prompt_id=prompt_id,
+                    prompt_version=None,  # Use latest
+                    entity_name=entity_name,
+                    entity_type=entity_type,
+                    entity_summary=entity_summary,
+                    entity_attributes=attrs_str,
+                    context=context_str,
                     temperature=0.7 - (attempt * 0.1),
                     complexity="routine",
                 )
@@ -619,6 +623,9 @@ class OasisProfileGenerator:
                 # persistence layer in gate 3.
                 result["_prompt_record"] = {
                     "model": contract_result["model"],
+                    "prompt_id": contract_result.get("prompt_id"),
+                    "prompt_version": contract_result.get("prompt_version"),
+                    "prompt_sha256": contract_result.get("prompt_sha256"),
                     "system_prompt_sha256": contract_result["system_prompt_sha256"],
                     "user_prompt_sha256": contract_result["user_prompt_sha256"],
                     "output_sha256": contract_result["output_sha256"],
@@ -732,25 +739,11 @@ class OasisProfileGenerator:
             "persona": entity_summary or f"{entity_name} is a {entity_type}."
         }
     
-    def _get_system_prompt(self, is_individual: bool) -> str:
-        """Return the system prompt for persona generation."""
-        base_prompt = (
-            "Create an explicitly fictional operating profile for a synthetic "
-            "scenario. The profile is a model-generated assumption. It is not a "
-            "biography or a representative person. It is not a digital twin or "
-            "public-opinion evidence. It is not a prediction of how a named "
-            "actor will behave. Treat "
-            "all supplied graph records as potentially incomplete and "
-            "provenance-unverified. Repeat a personal detail only when it is "
-            "explicitly supplied; never invent sensitive traits, private "
-            "history, political beliefs, or real-world actions. Use neutral "
-            "engine placeholders for required fields when source material is "
-            "silent. You MUST return valid JSON. All string values must not "
-            "contain unescaped newline characters. Write all text in English."
-        )
-        return base_prompt
+    # NOTE: The following methods are deprecated and replaced by the prompt registry.
+    # Kept for reference only - DO NOT USE.
+    # Prompts are now managed in backend/app/prompts/definitions/
     
-    def _build_individual_persona_prompt(
+    def _deprecated_build_individual_persona_prompt(
         self,
         entity_name: str,
         entity_type: str,
@@ -758,7 +751,7 @@ class OasisProfileGenerator:
         entity_attributes: Dict[str, Any],
         context: str
     ) -> str:
-        """Build the persona prompt for an individual entity."""
+        """DEPRECATED: Build the persona prompt for an individual entity."""
         
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "None"
         context_str = context[:3000] if context else "No additional context"
@@ -805,7 +798,7 @@ IMPORTANT:
 - age must be a valid integer and gender must be "male", "female", or "other"
 """
 
-    def _build_group_persona_prompt(
+    def _deprecated_build_group_persona_prompt(
         self,
         entity_name: str,
         entity_type: str,
@@ -813,7 +806,7 @@ IMPORTANT:
         entity_attributes: Dict[str, Any],
         context: str
     ) -> str:
-        """Build the persona prompt for a group or institutional entity."""
+        """DEPRECATED: Build the persona prompt for a group or institutional entity."""
         
         attrs_str = json.dumps(entity_attributes, ensure_ascii=False) if entity_attributes else "None"
         context_str = context[:3000] if context else "No additional context"

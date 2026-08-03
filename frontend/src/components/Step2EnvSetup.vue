@@ -1028,9 +1028,17 @@ const startPrepareSimulation = async () => {
       startPolling();
       startProfilesPolling();
     } else {
-      failPreparation(
-        `The assumptions could not be prepared: ${res.error || "Unknown error"}`,
-      );
+      // Check if this is a profile validation error (Gate 1)
+      const errorMsg = res.error || "Unknown error";
+      if (errorMsg.includes("diverse profiles") || errorMsg.includes("validation") || errorMsg.includes("decision parameters")) {
+        failPreparation(
+          `Profile validation failed: The system could not generate sufficiently diverse profiles from your source material. This may occur when source documents lack varied perspectives. Please try again or consider enriching your input documents.`,
+        );
+      } else {
+        failPreparation(
+          `The assumptions could not be prepared: ${errorMsg}`,
+        );
+      }
     }
   } catch (err) {
     failPreparation(`The assumptions could not be prepared: ${err.message}`);
@@ -1113,9 +1121,17 @@ const pollPrepareStatus = async () => {
         stopProfilesPolling();
         await loadPreparedData();
       } else if (data.status === "failed") {
-        failPreparation(
-          `Scenario preparation failed: ${data.error || "Unknown error"}`,
-        );
+        // Check if this is a profile validation error (Gate 1)
+        const errorMsg = data.error || "Unknown error";
+        if (errorMsg.includes("diverse profiles") || errorMsg.includes("validation")) {
+          failPreparation(
+            `Profile generation validation failed: ${errorMsg}. The system could not generate sufficiently diverse profiles. Please try again, or consider adjusting your source documents to include more varied perspectives.`,
+          );
+        } else {
+          failPreparation(
+            `Scenario preparation failed: ${errorMsg}`,
+          );
+        }
       }
     } else {
       failPreparation(

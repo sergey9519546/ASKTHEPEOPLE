@@ -15,9 +15,15 @@ Key validation rules:
 from typing import Dict, List, Any, Optional, Tuple
 import re
 from dataclasses import dataclass
-from ..utils.logger import get_logger
+import logging
 
-logger = get_logger('askthepeople.profile_validators')
+# Try relative import first, fall back to absolute for standalone usage
+try:
+    from ..utils.logger import get_logger
+    logger = get_logger('askthepeople.profile_validators')
+except (ImportError, ValueError):
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger('askthepeople.profile_validators')
 
 
 class ProfileValidationError(Exception):

@@ -159,26 +159,40 @@ class ArchetypeEngine:
             for i, p in enumerate(clustering_profiles)
         ]
 
-        prompt = (
-            f"You are grouping {n} social media agent profiles into exactly "
-            f"{n_archetypes} archetypes for a simulation.\n\n"
-            "Profiles:\n"
-            f"{json.dumps(summaries, ensure_ascii=False)}\n\n"
-            f"Return a JSON object with a single key 'archetypes' containing an array of "
-            f"exactly {n_archetypes} objects. Each object must have:\n"
-            '  "archetype_id": integer (0-based index)\n'
-            '  "label": short snake_case identifier (e.g. "skeptical_student")\n'
-            '  "member_indices": array of profile indices belonging to this archetype\n\n'
-            "Every profile index must appear in exactly one archetype. "
-            "Do not omit any indices. Return only the JSON object."
-        )
-
         try:
-            response = llm_client.chat_json(
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-            )
-            raw_archetypes = response.get("archetypes", [])
+            # Use registry-based prompt if available
+            if hasattr(llm_client, 'registry') and llm_client.registry:
+                contract_result = llm_client.chat_with_registry_prompt(
+                    prompt_id="archetype_clustering",
+                    prompt_version=None,  # Use latest
+                    n_profiles=n,
+                    n_archetypes=n_archetypes,
+                    profiles_json=json.dumps(summaries, ensure_ascii=False),
+                    temperature=0.2,
+                    complexity="routine",
+                )
+                response = contract_result["data"]
+                raw_archetypes = response.get("archetypes", [])
+            else:
+                # Fallback to direct call
+                prompt = (
+                    f"You are grouping {n} social media agent profiles into exactly "
+                    f"{n_archetypes} archetypes for a simulation.\n\n"
+                    "Profiles:\n"
+                    f"{json.dumps(summaries, ensure_ascii=False)}\n\n"
+                    f"Return a JSON object with a single key 'archetypes' containing an array of "
+                    f"exactly {n_archetypes} objects. Each object must have:\n"
+                    '  "archetype_id": integer (0-based index)\n'
+                    '  "label": short snake_case identifier (e.g. "skeptical_student")\n'
+                    '  "member_indices": array of profile indices belonging to this archetype\n\n'
+                    "Every profile index must appear in exactly one archetype. "
+                    "Do not omit any indices. Return only the JSON object."
+                )
+                response = llm_client.chat_json(
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.2,
+                )
+                raw_archetypes = response.get("archetypes", [])
         except Exception as e:
             logger.error(f"LLM clustering call failed: {e}. Falling back to round-robin.")
             raw_archetypes = []
