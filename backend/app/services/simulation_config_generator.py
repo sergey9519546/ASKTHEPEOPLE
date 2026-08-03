@@ -232,13 +232,6 @@ class SimulationConfigGenerator:
     
     # Context truncation limits per step (characters)
     TIME_CONFIG_CONTEXT_LENGTH = 10000   # Time config
-    # Maximum context length in characters
-    MAX_CONTEXT_LENGTH = 50000
-    # Agents generated per batch
-    AGENTS_PER_BATCH = 15
-    
-    # Context truncation limits per step (characters)
-    TIME_CONFIG_CONTEXT_LENGTH = 10000   # Time config
     EVENT_CONFIG_CONTEXT_LENGTH = 8000   # Event config
     ENTITY_SUMMARY_LENGTH = 300          # Entity summary
     AGENT_SUMMARY_LENGTH = 300           # Entity summary in agent configs
