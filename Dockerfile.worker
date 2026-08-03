@@ -56,14 +56,13 @@ RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
       /app/backend/uploads \
       /app/backend/uploads/simulations \
       /app/backend/logs \
-    && chmod 0755 /usr/local/bin/askthepeople-entrypoint
+    && chmod 0755 /usr/local/bin/askthepeople-entrypoint \
+    && chmod 0755 /app/backend/scripts/worker_wrapper.sh
 
 EXPOSE 5001
 STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/usr/local/bin/askthepeople-entrypoint"]
 
-# Start health HTTP server (Railway needs /health to return 200), then Celery.
-# Use | instead of & so both processes share the same PID namespace and the
-# health server survives after the shell is replaced.
-CMD ["sh", "-c", "python /app/backend/scripts/worker_health.py | celery -A app.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=100 --time-limit=3600 --soft-time-limit=3000"]
+# Wrapper script starts health server in background, then execs Celery
+CMD ["/app/backend/scripts/worker_wrapper.sh"]
