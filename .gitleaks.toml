@@ -3,6 +3,30 @@ title = "ASKTHEPEOPLE secret detection"
 [extend]
 useDefault = true
 
+[allowlist]
+description = "Global allowlist for non-production code"
+paths = [
+    '''^backend/tests/''',
+    '''^frontend/src/__tests__/''',
+    '''^docs/''',
+    '''^\.env\.example$''',
+    '''^\.env\.production$''',
+    '''^README\.md$''',
+    '''^NEXT_STEPS_ROADMAP\.md$''',
+]
+stopwords = [
+    "test",
+    "example",
+    "fixture",
+    "mock",
+    "fake",
+    "dummy",
+    "sample",
+    "placeholder",
+    "build-validation",
+    "ci-secret",
+]
+
 [[rules]]
 id = "generic-api-key"
 
