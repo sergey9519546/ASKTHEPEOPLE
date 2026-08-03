@@ -11,8 +11,9 @@ watchPatterns = [
 ]
 
 [deploy]
-# Web process: gunicorn serving the Flask app
-startCommand = "cd /app/backend && exec gunicorn --bind 0.0.0.0:${PORT:-5001} --workers 1 --threads 4 --timeout 300 --graceful-timeout 240 --access-logfile - --access-logformat '%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" %(D)s' wsgi:app"
+# No startCommand — the Dockerfile CMD ["sh", "-c", "exec gunicorn..."] handles
+# the web process. Railway passes startCommand as a raw single arg to gosu,
+# which cannot exec shell builtins like 'cd'. Let Docker handle it instead.
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 drainingSeconds = 300
