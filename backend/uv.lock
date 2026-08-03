@@ -189,7 +189,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "torch", specifier = "==2.13.0", index = "https://download.pytorch.org/whl/cpu" },
     { name = "transformers", specifier = "==5.14.1" },
-    { name = "zep-cloud", specifier = "==3.13.0" },
+    { name = "zep-cloud", specifier = "==3.25.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -3682,7 +3682,7 @@ wheels = [
 
 [[package]]
 name = "zep-cloud"
-version = "3.13.0"
+version = "3.25.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -3691,7 +3691,7 @@ dependencies = [
     { name = "python-dateutil" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/32/c7/c835debf13302f8aaf8d0561ac6ff5a9bc15cc140cd692a1330fb1900c55/zep_cloud-3.13.0.tar.gz", hash = "sha256:c55d9c511773bb2177ae8e08546141404f87d2099affafabd7ec4b4505763e48", size = 63116, upload-time = "2025-11-20T15:25:40.745Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/81/0d/7a866e1e1e5f0f1353eedf3d0e17df9b3cf362c494bccd41eb121b49c43f/zep_cloud-3.25.0.tar.gz", hash = "sha256:a77867e02c2a9036a20623e85d03415e237e76510b6e05ff2e9ab2cdced0aeb9", size = 94772, upload-time = "2026-07-16T00:46:43.918Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f7/e1/bbf03c6c8007c0cb238780e7fc6d8e1a52633893933a41aa09678618985a/zep_cloud-3.13.0-py3-none-any.whl", hash = "sha256:b2fbdeef73e262194c8f67b58f76471de6ee87e1a629541a09d8f7bbf475f12b", size = 110601, upload-time = "2025-11-20T15:25:38.484Z" },
+    { url = "https://files.pythonhosted.org/packages/77/fc/5ca2bdd20b83bd62bc2708580f756e704f69704709e0ed43e735aa590c1e/zep_cloud-3.25.0-py3-none-any.whl", hash = "sha256:94d9599038b154af9ad33cab4b4873ed9adb1bcaa48fc4c41cbd407c1a657ef5", size = 166438, upload-time = "2026-07-16T00:46:42.39Z" },
 ]
