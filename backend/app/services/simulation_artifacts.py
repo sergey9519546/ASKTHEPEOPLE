@@ -221,7 +221,13 @@ def build_canonical_agents_from_profiles(
                 "profession": profile.profession or role_info["normalized_role"],
                 "age": profile.age or 30,
                 "gender": _normalize_gender(profile.gender),
-                "mbti": profile.mbti or "ISTJ",
+                # effective_mbti() derives the code from Big Five traits when
+                # present, so personality is not silently flattened to the
+                # placeholder on the path that feeds OASIS.
+                "mbti": profile.effective_mbti(),
+                # Substantive personality representation. None when not
+                # source-derived; never fabricated.
+                "big_five": profile.big_five,
                 "country": profile.country or "Unknown",
                 "interested_topics": profile.interested_topics or [],
                 "stance_seed": "neutral",
@@ -257,7 +263,13 @@ def build_canonical_agents(
                 "profession": profile.profession or role_info["normalized_role"],
                 "age": profile.age or 30,
                 "gender": _normalize_gender(profile.gender),
-                "mbti": profile.mbti or "ISTJ",
+                # effective_mbti() derives the code from Big Five traits when
+                # present, so personality is not silently flattened to the
+                # placeholder on the path that feeds OASIS.
+                "mbti": profile.effective_mbti(),
+                # Substantive personality representation. None when not
+                # source-derived; never fabricated.
+                "big_five": profile.big_five,
                 "country": profile.country or "Unknown",
                 "interested_topics": profile.interested_topics or [],
                 "stance_seed": "neutral",

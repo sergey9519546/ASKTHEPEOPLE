@@ -26,6 +26,7 @@ from .claim_boundary import (
     synthetic_output_disclosure,
 )
 from .role_normalizer import normalize_entity_type
+from .trait_behavior_projection import controls_from_canonical_agent
 from .zep_entity_reader import EntityNode, ZepEntityReader
 
 logger = get_logger('askthepeople.simulation_config')
@@ -1145,7 +1146,30 @@ Return JSON format (no markdown):
                     "profile %s; neutral fictional controls retained",
                     agent_id,
                 )
-            
+
+            # Big Five traits are a different provenance class from an LLM's
+            # free-text guess: they are either source-derived or absent, and the
+            # projection is fixed, deterministic, unit-tested arithmetic with no
+            # model call. That reproducibility is the property this clamp exists
+            # to protect, so a trait projection may supply controls where an
+            # LLM proposal may not. Absent traits change nothing.
+            canonical_agent = (
+                canonical_agents[i]
+                if canonical_agents and i < len(canonical_agents)
+                else None
+            )
+            trait_controls = controls_from_canonical_agent(canonical_agent)
+            control_basis = "neutral_fictional_default"
+            if trait_controls:
+                cfg = {**cfg, **trait_controls}
+                control_basis = trait_controls["control_assumption_basis"]
+                logger.info(
+                    "Applied source-derived trait projection to synthetic "
+                    "profile %s (basis=%s)",
+                    agent_id,
+                    control_basis,
+                )
+
             config = AgentActivityConfig(
                 agent_id=agent_id,
                 entity_uuid=entity.uuid,
@@ -1166,7 +1190,9 @@ Return JSON format (no markdown):
                 authority_sensitivity=cfg.get("authority_sensitivity", 0.4),
                 novelty_seeking=cfg.get("novelty_seeking", 0.45),
                 platform_preference=cfg.get("platform_preference", "both"),
-                control_assumption_basis="neutral_fictional_default",
+                control_assumption_basis=control_basis,
+                # A trait projection is a scenario assumption, not evidence.
+                # These four remain false regardless of provenance class.
                 behavioral_override_applied=False,
                 measured_human_behavior=False,
                 human_respondents=0,
