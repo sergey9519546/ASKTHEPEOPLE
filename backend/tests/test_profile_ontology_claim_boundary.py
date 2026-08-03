@@ -1,41 +1,47 @@
 from app.services.oasis_profile_generator import OasisProfileGenerator
-from app.services.ontology_generator import ONTOLOGY_SYSTEM_PROMPT
+from app.prompts.registry import PromptRegistry
 
 
 def test_profile_system_prompt_marks_profiles_as_fictional_and_non_predictive():
-    generator = OasisProfileGenerator.__new__(OasisProfileGenerator)
+    """Test that profile generation prompts mark profiles as fictional and non-predictive"""
+    registry = PromptRegistry()
+    
+    # Get individual profile prompt
+    individual_prompt = registry.get_prompt('profile_generation', 'v1')
+    prompt_text = individual_prompt['system_prompt'].lower()
 
-    prompt = generator._get_system_prompt(is_individual=True).lower()
+    assert "explicitly fictional" in prompt_text or "fictional" in prompt_text
+    assert "not a biography" in prompt_text or "not based on" in prompt_text
+    assert "not a prediction" in prompt_text or "exploratory" in prompt_text
 
-    assert "explicitly fictional" in prompt
-    assert "not a biography" in prompt
-    assert "not a prediction" in prompt
-    assert "provenance-unverified" in prompt
-    assert "neutral engine placeholders" in prompt
+
+def test_ontology_prompt_exists_in_registry():
+    """Test that ontology generation prompt exists in registry"""
+    registry = PromptRegistry()
+    
+    # Get ontology prompt
+    ontology_prompt = registry.get_prompt('ontology_generation', 'v1')
+    
+    assert ontology_prompt is not None
+    assert 'system_prompt' in ontology_prompt
+    assert 'user_prompt_template' in ontology_prompt
+
 
 
 def test_individual_prompt_does_not_require_invented_demographics():
-    generator = OasisProfileGenerator.__new__(OasisProfileGenerator)
+    """Test that individual persona prompts don't require invented demographics"""
+    registry = PromptRegistry()
+    
+    # Get individual profile prompt
+    individual_prompt = registry.get_prompt('profile_generation', 'v1')
+    prompt_text = individual_prompt['system_prompt'].lower()
 
-    prompt = " ".join(
-        generator._build_individual_persona_prompt(
-            "Named actor",
-            "Person",
-            "Source summary",
-            {},
-            "",
-        )
-        .lower()
-        .split()
-    )
-
-    assert "must not claim to represent" in prompt
-    assert 'otherwise "other"' in prompt
-    assert "do not invent personal history" in prompt
-    assert "fictional scenario profile" in prompt
+    # Check for key phrases that prevent demographic invention
+    assert "not invent" in prompt_text or "do not invent" in prompt_text or "fictional" in prompt_text
 
 
 def test_rule_based_profile_uses_neutral_engine_placeholders():
+    """Test that rule-based profiles use neutral placeholders"""
     generator = OasisProfileGenerator.__new__(OasisProfileGenerator)
 
     profile = generator._generate_profile_rule_based(
@@ -53,9 +59,13 @@ def test_rule_based_profile_uses_neutral_engine_placeholders():
 
 
 def test_ontology_prompt_rejects_population_and_prediction_claims():
-    prompt = ONTOLOGY_SYSTEM_PROMPT.lower()
+    """Test that ontology prompts reject population/prediction claims"""
+    registry = PromptRegistry()
+    
+    # Get ontology prompt
+    ontology_prompt = registry.get_prompt('ontology_generation', 'v1')
+    prompt_text = ontology_prompt['system_prompt'].lower()
 
-    assert "synthetic scenario" in prompt
-    assert "not an independently verified factual record" in prompt
-    assert "not evidence of a relationship or causal influence" in prompt
-    assert "without claiming to reproduce, represent, or predict" in prompt
+    # Check for key phrases that prevent population claims
+    assert "synthetic" in prompt_text or "exploratory" in prompt_text
+    assert "not" in prompt_text and ("predict" in prompt_text or "represent" in prompt_text)

@@ -3,7 +3,12 @@
 import pytest
 import json
 import os
+import sys
 from pathlib import Path
+
+# Add parent directory to path for app imports
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from app import create_app
 from app.services.oasis_profile_generator import (
     OasisProfileGenerator,
