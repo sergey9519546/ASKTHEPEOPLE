@@ -152,6 +152,7 @@ class Config:
     
     # JSON Configuration - Disable ASCII escaping to display characters directly (instead of \uXXXX format)
     JSON_AS_ASCII = False
+    LOG_FORMAT = os.environ.get('LOG_FORMAT', 'text')
     
     # LLM Configuration (Uniformly use OpenAI format)
     LLM_API_KEY = os.environ.get('LLM_API_KEY')

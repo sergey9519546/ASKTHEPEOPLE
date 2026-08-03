@@ -189,139 +189,26 @@ def generate_report():
         )
         lease.task_id = task_id
         
-        # Define background task
-        def run_generate():
-            executor = None
-            future = None
-            try:
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    progress=0,
-                    message="Initializing Report Agent..."
-                )
-                
-                # Create Report Agent
-                agent = ReportAgent(
-                    graph_id=graph_id,
-                    simulation_id=simulation_id,
-                    simulation_requirement=simulation_requirement
-                )
-                
-                # Progress callback
-                def progress_callback(stage, progress, message):
-                    try:
-                        with lease.write_guard():
-                            task_manager.update_task(
-                                task_id,
-                                progress=progress,
-                                message=f"[{stage}] {message}"
-                            )
-                    except ReportGenerationCancelled:
-                        return
-                
-                # Generate report (passing pre-generated report_id) with a wall-clock timeout
-                timeout_secs = Config.REPORT_GENERATION_TIMEOUT
-                executor = ThreadPoolExecutor(max_workers=1)
-                future = executor.submit(
-                    agent.generate_report,
-                    progress_callback=progress_callback,
-                    report_id=report_id,
-                    generation_lease=lease,
-                )
-                future.add_done_callback(
-                    lambda _completed: report_generation_coordinator.release(lease)
-                )
-                try:
-                    report = future.result(timeout=timeout_secs)
-                except FuturesTimeoutError:
-                    lease.cancel()
-                    future.cancel()
-                    # A running Python thread cannot be force-killed safely.
-                    # The lease fences subsequent writes/retries while the
-                    # current provider call reaches its own timeout.
-                    executor.shutdown(wait=False, cancel_futures=True)
-                    timeout_message = (
-                        f"Report generation exceeded the {timeout_secs}s time "
-                        "limit; cancellation is in progress"
-                    )
-                    with lease.write_guard(allow_cancelled=True):
-                        timed_out_report = ReportManager.get_report(report_id)
-                        if timed_out_report is None:
-                            timed_out_report = Report(
-                                report_id=report_id,
-                                simulation_id=simulation_id,
-                                graph_id=graph_id,
-                                simulation_requirement=simulation_requirement,
-                                status=ReportStatus.FAILED,
-                            )
-                        timed_out_report.status = ReportStatus.FAILED
-                        timed_out_report.error = "report_generation_time_limit_exceeded"
-                        ReportManager.save_report(timed_out_report)
-                        ReportManager.update_progress(
-                            report_id,
-                            "failed",
-                            -1,
-                            timeout_message,
-                            completed_sections=[],
-                        )
-                        task_manager.fail_task(
-                            task_id,
-                            timeout_message,
-                            public_error="report_generation_time_limit_exceeded",
-                        )
-                    return
-                else:
-                    executor.shutdown(wait=True)
-                
-                if report.status == ReportStatus.COMPLETED:
-                    task_manager.complete_task(
-                        task_id,
-                        result={
-                            "report_id": report.report_id,
-                            "simulation_id": simulation_id,
-                            "status": "completed"
-                        }
-                    )
-                else:
-                    task_manager.fail_task(
-                        task_id,
-                        (
-                            report.error
-                            if Config.DEBUG and report.error
-                            else "Report generation failed"
-                        ),
-                        public_error="report_generation_failed",
-                    )
-                
-            except Exception as e:
-                logger.error(f"Report generation failed: {str(e)}")
-                task_manager.fail_task(
-                    task_id,
-                    str(e) if Config.DEBUG else "Report generation failed",
-                    public_error="report_generation_failed",
-                )
-                if future is None:
-                    report_generation_coordinator.release(lease)
-                if executor is not None:
-                    executor.shutdown(wait=False, cancel_futures=True)
+        from ..tasks.report_tasks import generate_report_task
         
-        # Start background thread
-        thread = threading.Thread(target=run_generate, daemon=True)
-        thread.start()
         generation_thread_started = True
+        
+        generate_report_task.delay(
+            simulation_id=simulation_id,
+            report_id=report_id,
+            user_prompt=data.get('user_prompt'),
+            custom_instructions=data.get('custom_instructions'),
+            task_id=task_id
+        )
         
         return jsonify({
             "success": True,
             "data": {
-                "simulation_id": simulation_id,
                 "report_id": report_id,
                 "task_id": task_id,
-                "status": "generating",
-                "message": "Report generation task started, please check progress via /api/report/generate/status",
-                "already_generated": False
+                "status": "pending"
             }
-        })
+        }), 202, {'Location': f'/api/jobs/{task_id}'}
         
     except Exception as e:
         if lease is not None and not generation_thread_started:

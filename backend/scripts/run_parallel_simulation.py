@@ -226,6 +226,7 @@ try:
         generate_twitter_agent_graph,
         generate_reddit_agent_graph
     )
+    from app.services.network_topology import apply_network_topology, apply_homophily_rewiring
 except ImportError as e:
     print(f"Error: Missing dependency {e}")
     print("Please install: pip install oasis-ai camel-ai")
@@ -1088,6 +1089,35 @@ def get_active_agents_for_round(
     )
 
 
+def _extract_and_record_reflections(simulation_dir: str, platform: str, round_num: int, agent_names: Dict[int, str]):
+    """Extract reflection results from oasis trace DB and persist to the canonical simulation observations DB."""
+    db_path = os.path.join(simulation_dir, f"{platform}_simulation.db")
+    if not os.path.exists(db_path):
+        return
+        
+    try:
+        from app.services.simulation_observation_store import add_reflection
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        for agent_id, agent_name in agent_names.items():
+            cursor.execute("""
+                SELECT info
+                FROM trace
+                WHERE action = ? AND user_id = ?
+                ORDER BY rowid DESC
+                LIMIT 1
+            """, ("INTERVIEW", agent_id))
+            row = cursor.fetchone()
+            if row and row[0]:
+                info = row[0]
+                # The info string is the JSON string of the agent's response to the interview prompt.
+                # Default importance is 1.0.
+                add_reflection(simulation_dir, agent_name, round_num, info, 1.0)
+        conn.close()
+    except Exception as e:
+        print(f"Failed to extract and record reflections: {e}")
+
+
 class PlatformSimulation:
     """Platform simulation result container"""
     def __init__(self):
@@ -1127,6 +1157,9 @@ async def run_twitter_simulation(
         model=model,
         available_actions=TWITTER_ACTIONS,
     )
+    
+    # Apply initial network topology before starting the simulation
+    apply_network_topology(result.agent_graph, config)
     
     # Get Agent real name mapping from configuration (using entity_name instead of default Agent_X)
     agent_names = build_agent_name_lookup(config)
@@ -1333,6 +1366,12 @@ async def run_twitter_simulation(
                 action_type_cls=ActionType,
                 action_logger=action_logger
             )
+            # Fetch the just-generated reflection interviews and store them canonically
+            _extract_and_record_reflections(simulation_dir, "twitter", round_num + 1, agent_names)
+            
+            # Use reflections to apply homophily-based rewiring (filter bubbles)
+            await apply_homophily_rewiring(result.agent_graph, simulation_dir, round_num + 1, config)
+            
             log_info(f"Twitter Reflection phase complete: {reflected_count} agents processed.")
 
     
@@ -1378,6 +1417,9 @@ async def run_reddit_simulation(
         model=model,
         available_actions=REDDIT_ACTIONS,
     )
+    
+    # Apply initial network topology before starting the simulation
+    apply_network_topology(result.agent_graph, config)
     
     # Get Agent real name mapping from configuration (using entity_name instead of default Agent_X)
     agent_names = build_agent_name_lookup(config)
@@ -1585,6 +1627,12 @@ async def run_reddit_simulation(
                 action_type_cls=ActionType,
                 action_logger=action_logger
             )
+            # Fetch the just-generated reflection interviews and store them canonically
+            _extract_and_record_reflections(simulation_dir, "reddit", round_num + 1, agent_names)
+            
+            # Use reflections to apply homophily-based rewiring (filter bubbles)
+            await apply_homophily_rewiring(result.agent_graph, simulation_dir, round_num + 1, config)
+            
             log_info(f"Reddit Reflection phase complete: {reflected_count} agents processed.")
 
     

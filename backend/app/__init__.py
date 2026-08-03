@@ -239,12 +239,13 @@ def create_app(config_class=Config):
     cleanup_thread.start()
 
     # Register blueprints
-    from .api import auth_bp, graph_bp, simulation_bp, report_bp, settings_bp
+    from .api import auth_bp, graph_bp, simulation_bp, report_bp, settings_bp, health_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
+    app.register_blueprint(health_bp, url_prefix='/health')
 
     # Register WebSocket routes (imported here so sock is already init'd)
     from .api import ws  # noqa: F401
@@ -286,25 +287,7 @@ def create_app(config_class=Config):
         # In production, never leak internal structure to clients
         return {"success": False, "error": "internal_server_error"}, 500
 
-    # Health check
-    @app.route('/health')
-    def health():
-        upload_folder = os.path.abspath(app.config['UPLOAD_FOLDER'])
-        storage_writable = os.path.isdir(upload_folder) and os.access(
-            upload_folder,
-            os.W_OK,
-        )
-        payload = {
-            'status': 'ok' if storage_writable else 'degraded',
-            'service': 'ASKTHEPEOPLE Backend',
-            'revision': (
-                os.environ.get('RAILWAY_GIT_COMMIT_SHA')
-                or os.environ.get('BUILD_REVISION')
-                or 'unknown'
-            ),
-            'storage_writable': storage_writable,
-        }
-        return payload, 200 if storage_writable else 503
+
 
     # Keep unknown API routes out of the SPA catch-all.  Without this route,
     # a misspelled API URL returned index.html with status 200.

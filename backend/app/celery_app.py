@@ -22,7 +22,11 @@ celery_app = Celery(
     'askthepeople',
     broker=broker_url,
     backend=result_backend,
-    include=['app.tasks.simulation_tasks'],
+    include=[
+        'app.tasks.simulation_tasks',
+        'app.tasks.graph_tasks',
+        'app.tasks.report_tasks',
+    ],
 )
 
 is_testing = os.environ.get('PYTEST_CURRENT_TEST') is not None or getattr(Config, 'TESTING', False)

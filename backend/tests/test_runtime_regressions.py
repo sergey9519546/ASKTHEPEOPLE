@@ -64,10 +64,14 @@ def test_simulation_config_llm_retry_forwards_prompts_and_parses_json():
             ]
         )
 
+    def mock_chat_json(messages, temperature=None, complexity=None):
+        calls.append({"messages": messages, "temperature": temperature, "complexity": complexity})
+        return {"ok": True}
+
     generator = SimulationConfigGenerator.__new__(SimulationConfigGenerator)
     generator.model_name = "test-model"
     generator.client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+        chat_json=mock_chat_json
     )
 
     result = generator._call_llm_with_retry("user prompt", "system prompt")

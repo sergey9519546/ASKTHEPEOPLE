@@ -20,6 +20,7 @@ class LLMClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
+        routine_model: Optional[str] = None,
         timeout: Optional[float] = None,
         prefer_boost: bool = False,
     ):
@@ -28,10 +29,12 @@ class LLMClient:
             self.api_key = api_key or os.environ.get("LLM_BOOST_API_KEY")
             self.base_url = base_url or os.environ.get("LLM_BOOST_BASE_URL") or Config.LLM_BASE_URL
             self.model = model or os.environ.get("LLM_BOOST_MODEL_NAME") or Config.LLM_MODEL_NAME
+            self.routine_model = routine_model or os.environ.get("LLM_ROUTINE_MODEL_NAME") or self.model
         else:
             self.api_key = api_key or Config.LLM_API_KEY
             self.base_url = base_url or Config.LLM_BASE_URL
             self.model = model or Config.LLM_MODEL_NAME
+            self.routine_model = routine_model or os.environ.get("LLM_ROUTINE_MODEL_NAME") or self.model
 
         self.timeout = timeout if timeout is not None else Config.LLM_TIMEOUT
 
@@ -49,7 +52,8 @@ class LLMClient:
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        response_format: Optional[Dict] = None
+        response_format: Optional[Dict] = None,
+        complexity: str = "complex"
     ) -> str:
         """
         Send chat request
@@ -59,12 +63,14 @@ class LLMClient:
             temperature: Temperature parameter
             max_tokens: Maximum tokens
             response_format: Response format (e.g., JSON mode)
+            complexity: Task complexity ("routine" or "complex") to determine routing
 
         Returns:
             Model response text
         """
+        target_model = self.routine_model if complexity == "routine" else self.model
         kwargs = {
-            "model": self.model,
+            "model": target_model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -102,7 +108,8 @@ class LLMClient:
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.3,
-        max_tokens: int = 4096
+        max_tokens: int = 4096,
+        complexity: str = "complex"
     ) -> Dict[str, Any]:
         """
         Send chat request and return JSON
@@ -111,6 +118,7 @@ class LLMClient:
             messages: List of messages
             temperature: Temperature parameter
             max_tokens: Maximum tokens
+            complexity: Task complexity ("routine" or "complex")
 
         Returns:
             Parsed JSON object
@@ -119,6 +127,7 @@ class LLMClient:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            complexity=complexity,
         )
         # Clean up markdown code block tags
         cleaned_response = response.strip()
@@ -138,6 +147,7 @@ class LLMClient:
         context_prompts: Optional[List[str]] = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
+        complexity: str = "complex",
     ) -> Dict[str, Any]:
         """Send a chat request under the prompt-prefixing structural contract.
 
@@ -194,6 +204,7 @@ class LLMClient:
             temperature=temperature,
             max_tokens=max_tokens,
             response_format={"type": "json_object"},
+            complexity=complexity,
         )
 
         # Clean markdown code fences before parsing.
@@ -211,10 +222,11 @@ class LLMClient:
 
         # Deterministic validators. These do not block; they record.
         truth_audit = _audit_response(parsed, response_text)
+        target_model = self.routine_model if complexity == "routine" else self.model
 
         return {
             "data": parsed,
-            "model": self.model,
+            "model": target_model,
             "system_prompt_sha256": _sha256(system_prompt),
             "user_prompt_sha256": _sha256(user_prompt),
             "context_prompt_sha256s": [_sha256(c) for c in (context_prompts or []) if c],

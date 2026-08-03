@@ -232,6 +232,13 @@ class SimulationConfigGenerator:
     
     # Context truncation limits per step (characters)
     TIME_CONFIG_CONTEXT_LENGTH = 10000   # Time config
+    # Maximum context length in characters
+    MAX_CONTEXT_LENGTH = 50000
+    # Agents generated per batch
+    AGENTS_PER_BATCH = 15
+    
+    # Context truncation limits per step (characters)
+    TIME_CONFIG_CONTEXT_LENGTH = 10000   # Time config
     EVENT_CONFIG_CONTEXT_LENGTH = 8000   # Event config
     ENTITY_SUMMARY_LENGTH = 300          # Entity summary
     AGENT_SUMMARY_LENGTH = 300           # Entity summary in agent configs
@@ -243,17 +250,8 @@ class SimulationConfigGenerator:
         base_url: Optional[str] = None,
         model_name: Optional[str] = None
     ):
-        self.api_key = api_key or Config.LLM_API_KEY
-        self.base_url = base_url or Config.LLM_BASE_URL
-        self.model_name = model_name or Config.LLM_MODEL_NAME
-        
-        if not self.api_key:
-            raise ValueError("LLM_API_KEY is not configured")
-        
-        self.client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url
-        )
+        from ..utils.llm_client import LLMClient
+        self.client = LLMClient(api_key=api_key, base_url=base_url, model=model_name)
     
     def generate_config(
         self,
@@ -676,45 +674,23 @@ class SimulationConfigGenerator:
         
         for attempt in range(max_attempts):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
+                # Use complex routing for config generation
+                return self.client.chat_json(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}
                     ],
-                    response_format={"type": "json_object"},
-                    temperature=0.7 - (attempt * 0.1)  # Lower temperature on each retry
+                    temperature=0.7 - (attempt * 0.1),
+                    complexity="complex"
                 )
-                
-                content = response.choices[0].message.content
-                finish_reason = response.choices[0].finish_reason
-                
-                # Check if output was truncated
-                if finish_reason == 'length':
-                    logger.warning(f"LLM output truncated (attempt {attempt+1})")
-                    content = self._fix_truncated_json(content)
-                
-                # Attempt JSON parse
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError as e:
-                    logger.warning(f"JSON parse failed (attempt {attempt+1}): {str(e)[:80]}")
-                    
-                    # Attempt JSON repair
-                    fixed = self._try_fix_config_json(content)
-                    if fixed:
-                        return fixed
-                    
-                    last_error = e
-                    
             except Exception as e:
-                logger.warning(f"LLM call failed (attempt {attempt+1}): {str(e)[:80]}")
+                logger.warning(f"Failed to generate config (attempt {attempt+1}/{max_attempts}): {e}")
                 last_error = e
                 import time
                 time.sleep(2 * (attempt + 1))
         
-        raise last_error or Exception("LLM call failed")
-    
+        raise ValueError(f"Failed to generate valid JSON configuration after {max_attempts} attempts. Last error: {last_error}")
+
     def _fix_truncated_json(self, content: str) -> str:
         """Attempt to repair JSON truncated by token limits."""
         content = content.strip()

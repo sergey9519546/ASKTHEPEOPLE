@@ -7,6 +7,7 @@ import os
 import sys
 import logging
 import re
+import json
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 
@@ -70,6 +71,23 @@ class _ProductionPrivacyFilter(logging.Filter):
         return True
 
 
+class JSONLogFormatter(logging.Formatter):
+    """Structured JSON log formatter"""
+    def format(self, record: logging.LogRecord) -> str:
+        log_data = {
+            'timestamp': self.formatTime(record, self.datefmt or '%Y-%m-%d %H:%M:%S'),
+            'level': record.levelname,
+            'logger': record.name,
+            'module': record.module,
+            'function': record.funcName,
+            'line': record.lineno,
+            'message': record.getMessage(),
+        }
+        if record.exc_info:
+            log_data['exception'] = self.formatException(record.exc_info)
+        return json.dumps(log_data)
+
+
 def _configured_level() -> int:
     """Return an operator-controlled level with safe production defaults."""
     debug_mode = os.environ.get('FLASK_DEBUG', 'False').lower() == 'true'
@@ -115,15 +133,19 @@ def setup_logger(name: str = 'askthepeople', level: int | None = None) -> loggin
         return logger
     
     # Log format
-    detailed_formatter = logging.Formatter(
-        '[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    
-    simple_formatter = logging.Formatter(
-        '[%(asctime)s] %(levelname)s: %(message)s',
-        datefmt='%H:%M:%S'
-    )
+    if os.environ.get('LOG_FORMAT', 'text').lower() == 'json':
+        detailed_formatter = JSONLogFormatter()
+        simple_formatter = JSONLogFormatter()
+    else:
+        detailed_formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)s [%(name)s.%(funcName)s:%(lineno)d] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        simple_formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)s: %(message)s',
+            datefmt='%H:%M:%S'
+        )
     
     # 1. File handler - Detailed logs (named by date, with rotation)
     log_filename = datetime.now().strftime('%Y-%m-%d') + '.log'
@@ -137,7 +159,6 @@ def setup_logger(name: str = 'askthepeople', level: int | None = None) -> loggin
     # into another level through LOG_LEVEL, but the default follows
     # FLASK_DEBUG instead of silently writing verbose files in every mode.
     file_handler.setLevel(level)
-    file_handler.setFormatter(detailed_formatter)
     
     # 2. Console handler - Simple logs (INFO and above)
     # Ensure UTF-8 encoding on Windows to avoid encoding issues

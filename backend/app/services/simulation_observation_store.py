@@ -159,6 +159,15 @@ def ensure_observation_store(simulation_dir: str) -> str:
             round_num INTEGER PRIMARY KEY,
             payload_json TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS reflections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            agent_name TEXT,
+            round_num INTEGER,
+            synthesis_text TEXT,
+            importance_score REAL,
+            timestamp TEXT
+        );
         """
     )
     conn.commit()
@@ -385,6 +394,7 @@ def sync_observation_store(simulation_dir: str, run_state: Optional[Dict[str, An
     cursor.execute("DELETE FROM bootstrap_events")
     cursor.execute("DELETE FROM scheduled_events")
     cursor.execute("DELETE FROM round_summaries")
+    cursor.execute("DELETE FROM reflections")
 
     agent_path = canonical_agents_path(simulation_dir)
     agents = (
@@ -658,3 +668,71 @@ def search_observations(
     ]
     conn.close()
     return {"query": query, "count": len(rows), "results": rows}
+
+
+def add_reflection(
+    simulation_dir: str,
+    agent_name: str,
+    round_num: int,
+    synthesis_text: str,
+    importance_score: float,
+    timestamp: Optional[str] = None,
+) -> None:
+    """Record an agent's periodic memory reflection synthesis."""
+    db_path = ensure_observation_store(simulation_dir)
+    conn = _connect(db_path)
+    cursor = conn.cursor()
+    ts = timestamp or datetime.now().isoformat()
+    cursor.execute(
+        """
+        INSERT INTO reflections(agent_name, round_num, synthesis_text, importance_score, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (agent_name, round_num, synthesis_text, importance_score, ts),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_relevant_memories(
+    simulation_dir: str,
+    agent_name: str,
+    current_round: int,
+    query_text: str = "",
+    limit: int = 5,
+    w_r: float = 1.0,
+    w_i: float = 1.0,
+    w_v: float = 1.0,
+) -> List[Dict[str, Any]]:
+    """Retrieve memories using a weighted sum of Recency, Importance, and (simulated) Relevance."""
+    db_path = ensure_observation_store(simulation_dir)
+    conn = _connect(db_path)
+    cursor = conn.cursor()
+    
+    # Simple lexical relevance if query_text is provided, otherwise 0
+    query_pattern = f"%{query_text}%" if query_text else ""
+    
+    cursor.execute(
+        """
+        SELECT id, round_num, synthesis_text, importance_score, timestamp,
+               (? / (1.0 + (? - round_num))) AS recency_score,
+               (CASE WHEN ? != '' AND synthesis_text LIKE ? THEN ? ELSE 0 END) AS relevance_score
+        FROM reflections
+        WHERE agent_name = ?
+        """,
+        (w_r, current_round, query_pattern, query_pattern, w_v, agent_name)
+    )
+    
+    rows = []
+    for row in cursor.fetchall():
+        d = dict(row)
+        # Score = w_r * Recency + w_i * Importance + w_v * Relevance
+        d["total_score"] = d["recency_score"] + (w_i * d["importance_score"]) + d["relevance_score"]
+        rows.append(d)
+        
+    conn.close()
+    
+    # Sort by total_score descending
+    rows.sort(key=lambda x: x["total_score"], reverse=True)
+    return rows[:limit]
+

@@ -15,6 +15,8 @@ simulation_bp = Blueprint('simulation', __name__)
 report_bp = Blueprint('report', __name__)
 settings_bp = Blueprint('settings', __name__)
 auth_bp = Blueprint('auth', __name__)
+from .health import health_bp
+
 
 # Module-level Limiter instance. Initialized against the Flask app inside
 # create_app() via `limiter.init_app(app)`. `default_limits` and `storage_uri`
@@ -47,3 +49,4 @@ from . import simulation  # noqa: E402, F401
 from . import report  # noqa: E402, F401
 from . import settings  # noqa: E402, F401
 from . import auth  # noqa: E402, F401
+from . import branching_routes  # noqa: E402, F401

@@ -532,6 +532,7 @@ class OasisProfileGenerator:
                     system_prompt=self._get_system_prompt(is_individual),
                     user_prompt=prompt,
                     temperature=0.7 - (attempt * 0.1),
+                    complexity="routine",
                 )
                 result = contract_result["data"]
 
