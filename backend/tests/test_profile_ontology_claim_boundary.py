@@ -7,7 +7,7 @@ def test_profile_system_prompt_marks_profiles_as_fictional_and_non_predictive():
     registry = PromptRegistry()
     
     # Get individual profile prompt
-    individual_prompt = registry.get_prompt('profile_generation', 'v1')
+    individual_prompt = registry.get_prompt('profile_generation', '1.0.0')
     prompt_text = individual_prompt['system_prompt'].lower()
 
     assert "explicitly fictional" in prompt_text or "fictional" in prompt_text
@@ -20,7 +20,7 @@ def test_ontology_prompt_exists_in_registry():
     registry = PromptRegistry()
     
     # Get ontology prompt
-    ontology_prompt = registry.get_prompt('ontology_generation', 'v1')
+    ontology_prompt = registry.get_prompt('ontology_generation', '1.0.0')
     
     assert ontology_prompt is not None
     assert 'system_prompt' in ontology_prompt
@@ -33,7 +33,7 @@ def test_individual_prompt_does_not_require_invented_demographics():
     registry = PromptRegistry()
     
     # Get individual profile prompt
-    individual_prompt = registry.get_prompt('profile_generation', 'v1')
+    individual_prompt = registry.get_prompt('profile_generation', '1.0.0')
     prompt_text = individual_prompt['system_prompt'].lower()
 
     # Check for key phrases that prevent demographic invention
@@ -63,7 +63,7 @@ def test_ontology_prompt_rejects_population_and_prediction_claims():
     registry = PromptRegistry()
     
     # Get ontology prompt
-    ontology_prompt = registry.get_prompt('ontology_generation', 'v1')
+    ontology_prompt = registry.get_prompt('ontology_generation', '1.0.0')
     prompt_text = ontology_prompt['system_prompt'].lower()
 
     # Check for key phrases that prevent population claims

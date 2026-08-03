@@ -140,15 +140,15 @@ class ProfileValidator:
         if not essentialism_check.passed:
             return essentialism_check
         
-        # Check for demographic-only content
-        demographic_check = self._check_demographic_only(profile)
-        if not demographic_check.passed:
-            return demographic_check
-        
-        # Check required fields
+        # Check required fields first (more specific errors)
         required_check = self._check_required_fields(profile)
         if not required_check.passed:
             return required_check
+        
+        # Check for demographic-only content (generic, after specific checks)
+        demographic_check = self._check_demographic_only(profile)
+        if not demographic_check.passed:
+            return demographic_check
         
         return ValidationResult.success()
     
