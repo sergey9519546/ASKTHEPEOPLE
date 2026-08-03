@@ -63,6 +63,7 @@ STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/usr/local/bin/askthepeople-entrypoint"]
 
-# Start health HTTP server (Railway needs /health to return 200) then exec Celery.
-# The health server runs in the background; Celery replaces the shell via exec.
-CMD ["sh", "-c", "python /app/backend/scripts/worker_health.py & exec celery -A app.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=100 --time-limit=3600 --soft-time-limit=3000"]
+# Start health HTTP server (Railway needs /health to return 200), then Celery.
+# Use | instead of & so both processes share the same PID namespace and the
+# health server survives after the shell is replaced.
+CMD ["sh", "-c", "python /app/backend/scripts/worker_health.py | celery -A app.celery_app worker --loglevel=info --concurrency=2 --max-tasks-per-child=100 --time-limit=3600 --soft-time-limit=3000"]
