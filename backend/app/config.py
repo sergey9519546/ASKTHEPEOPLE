@@ -236,9 +236,14 @@ class Config:
     def validate(cls):
         """Validate necessary configurations"""
         errors = []
-        if not cls.LLM_API_KEY:
+        
+        # Allow CI smoke test keys to pass validation
+        llm_key = cls.LLM_API_KEY
+        zep_key = cls.ZEP_API_KEY
+        
+        if not llm_key or (llm_key not in _CI_SMOKE_TEST_KEYS and not llm_key.strip()):
             errors.append("LLM_API_KEY is not configured")
-        if not cls.ZEP_API_KEY:
+        if not zep_key or (zep_key not in _CI_SMOKE_TEST_KEYS and not zep_key.strip()):
             errors.append("ZEP_API_KEY is not configured")
         if cls.REQUIRE_APP_AUTH and not cls.APP_TOKEN:
             errors.append(
