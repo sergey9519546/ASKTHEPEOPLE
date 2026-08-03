@@ -246,3 +246,15 @@ export const getSimulationMetrics = (simulationId, force = false) => {
     params: { force },
   });
 };
+
+/**
+ * Fork a simulation at a specific turn to create a counterfactual scenario branch
+ * @param {string} simulationId
+ * @param {number} targetTurn
+ */
+export const forkSimulation = (simulationId, targetTurn) => {
+  return service.post(`/api/simulation/${simulationId}/fork`, {
+    target_turn: targetTurn,
+  });
+};
+
