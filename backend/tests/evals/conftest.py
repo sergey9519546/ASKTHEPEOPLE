@@ -1,4 +1,4 @@
-"""Shared fixtures for evaluation suite."""
+"""Shared fixtures and pytest plugin for evaluation suite."""
 
 import pytest
 import json
@@ -99,3 +99,88 @@ def save_eval_results(results: dict, results_path: Path):
     # Save
     with open(results_path, 'w') as f:
         json.dump(existing, f, indent=2)
+
+
+# ============================================================================
+# Pytest Plugin for Result Collection
+# ============================================================================
+
+class EvalResultsPlugin:
+    """Plugin to collect and save evaluation results."""
+    
+    def __init__(self):
+        self.results = {}
+        self.test_outcomes = {}
+    
+    def pytest_runtest_logreport(self, report):
+        """Collect test outcomes."""
+        if report.when == "call":
+            self.test_outcomes[report.nodeid] = {
+                "outcome": report.outcome,
+                "duration": report.duration,
+            }
+    
+    def pytest_sessionfinish(self, session, exitstatus):
+        """Save results at the end of the test session."""
+        # Only save if we're in the evals directory
+        if not any('evals' in str(item.fspath) for item in session.items):
+            return
+        
+        # Determine output path
+        evals_dir = Path(__file__).parent
+        results_path = evals_dir / "results.json"
+        
+        # Try to load existing results from tmp_path if available
+        try:
+            for item in session.items:
+                if hasattr(item, 'funcargs') and 'eval_results_path' in item.funcargs:
+                    tmp_path = item.funcargs['eval_results_path']
+                    if tmp_path.exists():
+                        with open(tmp_path, 'r') as f:
+                            self.results.update(json.load(f))
+                        break
+        except Exception:
+            pass
+        
+        # Add test execution metadata
+        eval_tests = [
+            item for item in session.items
+            if 'evals' in str(item.fspath)
+        ]
+        
+        passed = sum(
+            1 for nodeid, outcome in self.test_outcomes.items()
+            if outcome['outcome'] == 'passed'
+        )
+        failed = sum(
+            1 for nodeid, outcome in self.test_outcomes.items()
+            if outcome['outcome'] == 'failed'
+        )
+        
+        self.results['_test_summary'] = {
+            'total_tests': len(eval_tests),
+            'passed': passed,
+            'failed': failed,
+            'exit_status': exitstatus,
+        }
+        
+        # Save results
+        try:
+            with open(results_path, 'w') as f:
+                json.dump(self.results, f, indent=2)
+            print(f"\n\nEvaluation results saved to: {results_path}")
+        except Exception as e:
+            print(f"\n\nWarning: Failed to save evaluation results: {e}")
+
+
+def pytest_configure(config):
+    """Register custom markers and plugin."""
+    config.addinivalue_line(
+        "markers", "eval: mark test as an evaluation suite test"
+    )
+    
+    if config.pluginmanager.hasplugin('eval_results'):
+        return
+    
+    plugin = EvalResultsPlugin()
+    config.pluginmanager.register(plugin, 'eval_results')

@@ -482,6 +482,7 @@ def list_reports():
             "data": [r.to_dict() for r in reports],
             "count": len(reports),
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
         
     except Exception as e:
@@ -856,6 +857,7 @@ def get_report_sections(report_id: str):
                 "is_complete": is_complete
             },
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
 
     except SafePathError:
@@ -904,6 +906,7 @@ def get_single_section(report_id: str, section_index: int):
                 "content": content
             },
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
 
     except SafePathError:
@@ -964,6 +967,7 @@ def check_report_status(simulation_id: str):
                 "interview_unlocked": generated_response_tools_unlocked,
             },
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
         
     except Exception as e:

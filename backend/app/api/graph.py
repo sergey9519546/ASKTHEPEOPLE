@@ -90,7 +90,8 @@ def get_project(project_id: str):
     
     return jsonify({
         "success": True,
-        "data": _attach_model_schema_status(project.to_dict())
+        "data": _attach_model_schema_status(project.to_dict()),
+        **truth_metadata()
     })
 
 
@@ -108,7 +109,8 @@ def list_projects():
             _attach_model_schema_status(project.to_dict())
             for project in projects
         ],
-        "count": len(projects)
+        "count": len(projects),
+        **truth_metadata()
     })
 
 
@@ -532,7 +534,8 @@ def get_task(task_id: str):
     
     return jsonify({
         "success": True,
-        "data": _attach_model_schema_status(task.to_public_dict())
+        "data": _attach_model_schema_status(task.to_public_dict()),
+        **truth_metadata()
     })
 
 
@@ -549,7 +552,8 @@ def list_tasks():
             _attach_model_schema_status(task)
             for task in tasks
         ],
-        "count": len(tasks)
+        "count": len(tasks),
+        **truth_metadata()
     })
 
 

@@ -186,7 +186,7 @@ class Config:
     ZEP_API_KEY = os.environ.get('ZEP_API_KEY')
     
     # File Upload Configuration
-    MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB (Security: P0 file upload limit)
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '../uploads')
     ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown'}
     

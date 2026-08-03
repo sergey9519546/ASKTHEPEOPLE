@@ -78,7 +78,15 @@ jobs:
           SECRET_KEY: "ci-secret-key-for-testing-only"
           LLM_API_KEY: "ci-test-key"
           ZEP_API_KEY: "ci-test-key"
-        run: uv run --frozen pytest -q
+        run: uv run --frozen pytest -q --ignore=tests/evals
+
+      - name: Run evaluation suite
+        env:
+          FLASK_DEBUG: "true"
+          SECRET_KEY: "ci-secret-key-for-testing-only"
+          LLM_API_KEY: "ci-test-key"
+          ZEP_API_KEY: "ci-test-key"
+        run: uv run --frozen pytest tests/evals/ -v --tb=short
 
   frontend:
     name: Frontend (Node 24)

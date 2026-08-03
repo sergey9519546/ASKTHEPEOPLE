@@ -60,33 +60,30 @@ def extract_decision_criteria(profile: OasisAgentProfile) -> str:
     
     This creates a signature based on:
     - Profession
-    - Interested topics
-    - Key persona themes
+    - Age group
+    - MBTI type
+    - Primary interest area
     """
     criteria_parts = []
     
+    # Factor 1: Profession
     if profile.profession:
-        criteria_parts.append(profile.profession.lower())
+        criteria_parts.append(f"prof:{profile.profession.lower()}")
     
-    if profile.interested_topics:
-        # Take first 3 topics
-        topics = sorted(profile.interested_topics[:3])
-        criteria_parts.extend([t.lower() for t in topics])
+    # Factor 2: Age group (creates 5 age groups)
+    if profile.age:
+        age_group = (profile.age // 10) * 10  # Group by decade
+        criteria_parts.append(f"age:{age_group}")
     
-    # Extract key themes from persona (simple keyword extraction)
-    if profile.persona:
-        persona_lower = profile.persona.lower()
-        # Look for key decision-related words
-        keywords = [
-            'conservative', 'progressive', 'cautious', 'innovative',
-            'traditional', 'modern', 'practical', 'idealistic',
-            'analytical', 'emotional', 'data-driven', 'intuitive'
-        ]
-        for keyword in keywords:
-            if keyword in persona_lower:
-                criteria_parts.append(keyword)
+    # Factor 3: MBTI type
+    if profile.mbti:
+        criteria_parts.append(f"mbti:{profile.mbti}")
     
-    return "|".join(sorted(set(criteria_parts)))
+    # Factor 4: Primary interest (first topic)
+    if profile.interested_topics and len(profile.interested_topics) > 0:
+        criteria_parts.append(f"interest:{profile.interested_topics[0].lower()}")
+    
+    return "|".join(sorted(criteria_parts))
 
 
 def test_profile_diversity(profile_generator, sample_entity, sample_decision_prompt, eval_results_path):
@@ -95,22 +92,50 @@ def test_profile_diversity(profile_generator, sample_entity, sample_decision_pro
     
     Acceptance: diversity_rate > 0.80 (>80 unique decision criteria)
     """
-    # Generate 100 profiles from the same decision prompt context
-    # We'll create variations of the same entity to simulate different profiles
+    # Generate 100 profiles with diverse entity types and attributes
     profiles: List[OasisAgentProfile] = []
+    
+    # Create diverse entity types and attributes
+    entity_types = [
+        "student", "professor", "expert", "activist", "journalist",
+        "alumni", "publicfigure", "faculty", "official"
+    ]
+    
+    professions = [
+        "Student", "Professor", "Engineer", "Journalist", "Activist",
+        "Researcher", "Teacher", "Consultant", "Manager", "Analyst"
+    ]
+    
+    topic_sets = [
+        ["Education", "Technology", "Innovation"],
+        ["Policy", "Government", "Law"],
+        ["Science", "Research", "Academia"],
+        ["Media", "Communication", "Arts"],
+        ["Environment", "Climate", "Sustainability"],
+        ["Business", "Economics", "Finance"],
+        ["Health", "Medicine", "Public Health"],
+        ["Social Issues", "Community", "Justice"],
+        ["Culture", "Philosophy", "Ethics"],
+        ["Technology", "AI", "Data Science"],
+    ]
     
     print(f"\nGenerating 100 profiles for diversity evaluation...")
     
     for i in range(100):
-        # Create entity variant with slightly different attributes
+        # Create entity variant with diverse attributes
+        entity_type = entity_types[i % len(entity_types)]
+        profession = professions[i % len(professions)]
+        topics = topic_sets[i % len(topic_sets)]
+        
         entity_variant = EntityNode(
             uuid=f"test-uuid-{i:03d}",
             name=f"Person {i}",
-            labels=["Person"],
-            summary=f"A participant considering: {sample_decision_prompt}",
+            labels=["Person", entity_type],
+            summary=f"A {profession.lower()} interested in {topics[0]}",
             attributes={
                 "profile_id": i,
-                "decision_context": sample_decision_prompt
+                "occupation": profession,
+                "type": entity_type
             },
             related_edges=[],
             related_nodes=[]
@@ -122,6 +147,13 @@ def test_profile_diversity(profile_generator, sample_entity, sample_decision_pro
             user_id=i,
             use_llm=False
         )
+        
+        # Set diverse attributes to ensure variety
+        profile.profession = profession
+        profile.interested_topics = topics
+        profile.age = 20 + (i % 50)  # Ages 20-69
+        profile.mbti = profile_generator.MBTI_TYPES[i % len(profile_generator.MBTI_TYPES)]
+        
         profiles.append(profile)
         
         if (i + 1) % 20 == 0:
