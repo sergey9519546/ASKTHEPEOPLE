@@ -120,10 +120,12 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   buildGraph,
+  generateOntology,
   getGraphData,
   getProject,
   getTaskStatus,
 } from "../api/graph";
+import { getPendingUpload, clearPendingUpload } from "../store/pendingUpload.js";
 import GraphPanel from "../components/GraphPanel.vue";
 
 const route = useRoute();
@@ -141,6 +143,7 @@ const projectData = ref(null);
 const graphData = ref(null);
 const buildProgress = ref(null);
 const graphLoading = ref(false);
+const loading = ref(false);
 const error = ref("");
 const isFullScreen = ref(false);
 
@@ -166,11 +169,154 @@ const goToNextStep = () => {
 };
 
 let pollTimer = null;
+let ontologyPollTimer = null;
+
 const initProject = async () => {
+  // Check if we have pending upload from Home.vue
+  const pending = getPendingUpload();
+  
+  if (pending.isPending && currentProjectId.value === 'new') {
+    // Clear FIRST to prevent race conditions (double-click protection)
+    clearPendingUpload();
+    // We have files to upload - generate ontology first
+    await uploadAndGenerateOntology(pending);
+    return;
+  }
+  
+  // Otherwise, load existing project
   const result = await getProject(currentProjectId.value);
   if (result.success) {
     projectData.value = result.data;
-    startGraphBuild();
+    
+    // Check project status
+    if (result.data.status === 'CREATED') {
+      // Project exists but ontology not generated yet
+      error.value = "Ontology generation is pending. Please wait.";
+      return;
+    }
+    
+    if (result.data.status === 'ONTOLOGY_GENERATED') {
+      // Ontology is ready, start graph build
+      startGraphBuild();
+    } else if (result.data.status === 'GRAPH_BUILDING') {
+      // Graph build already in progress
+      if (result.data.graph_build_task_id) {
+        pollTaskStatus(result.data.graph_build_task_id);
+      }
+    } else if (result.data.status === 'GRAPH_COMPLETED') {
+      // Graph is ready
+      currentPhase.value = 2;
+      loadGraphData();
+    }
+  }
+};
+
+const uploadAndGenerateOntology = async (pending) => {
+  loading.value = true;
+  error.value = "";
+  try {
+    // Build FormData with files and requirements
+    const formData = new FormData();
+    pending.files.forEach(file => formData.append('files', file));
+    formData.append('simulation_requirement', pending.simulationRequirement);
+    formData.append('project_name', pending.projectName || 'Unnamed Project');
+    if (pending.additionalContext) {
+      formData.append('additional_context', pending.additionalContext);
+    }
+    formData.append('intended_use', 'exploratory');
+    formData.append('use_policy_acknowledged', pending.usePolicyAcknowledged ? 'true' : 'false');
+    
+    buildProgress.value = {
+      progress: 5,
+      message: "Uploading files and generating ontology..."
+    };
+    
+    // Call the API
+    const result = await generateOntology(formData);
+    
+    if (result.success) {
+      const projectId = result.data.project_id || result.data.data?.project_id;
+      const taskId = result.data.task_id || result.data.data?.task_id;
+      
+      if (!projectId || !taskId) {
+        throw new Error("Server did not return project_id or task_id");
+      }
+      
+      // Update URL with actual project ID
+      if (projectId !== currentProjectId.value) {
+        router.replace({ 
+          name: 'Process', 
+          params: { projectId }
+        });
+      }
+      
+      // Poll for ontology completion
+      pollOntologyTask(taskId);
+    } else {
+      const errorMsg = result.error || "Failed to generate ontology";
+      error.value = errorMsg;
+      loading.value = false;
+      buildProgress.value = null;
+    }
+  } catch (err) {
+    // Categorize errors for better user feedback
+    let errorMsg = "Failed to upload files";
+    if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+      errorMsg = "Upload timed out. Please check your connection and try again.";
+    } else if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+      errorMsg = "Network error. Please check your internet connection.";
+    } else if (err.response?.status === 413) {
+      errorMsg = "Files are too large. Please reduce file size and try again.";
+    } else if (err.response?.status === 400) {
+      errorMsg = err.response?.data?.error || "Invalid files or form data.";
+    } else if (err.message) {
+      errorMsg = err.message;
+    }
+    
+    error.value = errorMsg;
+    loading.value = false;
+    buildProgress.value = null;
+  }
+};
+
+const pollOntologyTask = (taskId) => {
+  ontologyPollTimer = setInterval(async () => {
+    const result = await getTaskStatus(taskId);
+    if (result.success) {
+      const task = result.data;
+      buildProgress.value = {
+        progress: Math.min(task.progress ?? 10, 50),
+        message: task.message || "Generating ontology..."
+      };
+      
+      if (task.status === 'completed') {
+        stopOntologyPolling();
+        buildProgress.value = {
+          progress: 50,
+          message: "Ontology generated. Starting graph build..."
+        };
+        
+        // Reload project to get updated data
+        const projectResult = await getProject(currentProjectId.value);
+        if (projectResult.success) {
+          projectData.value = projectResult.data;
+          loading.value = false;
+          // Now start graph build
+          startGraphBuild();
+        }
+      } else if (task.status === 'failed') {
+        stopOntologyPolling();
+        error.value = task.error || "Ontology generation failed";
+        loading.value = false;
+      }
+    }
+  }, 2000);
+};
+
+const stopOntologyPolling = () => {
+  if (ontologyPollTimer) {
+    clearInterval(ontologyPollTimer);
+    ontologyPollTimer = null;
   }
 };
 
@@ -217,7 +363,13 @@ const loadGraphData = async () => {
 const toggleFullScreen = () => (isFullScreen.value = !isFullScreen.value);
 
 onMounted(initProject);
-onUnmounted(() => pollTimer && clearInterval(pollTimer));
+onUnmounted(() => {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+  stopOntologyPolling();
+});
 </script>
 
 <style scoped>
