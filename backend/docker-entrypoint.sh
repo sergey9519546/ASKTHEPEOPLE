@@ -25,4 +25,11 @@ if ! gosu app test -w "$uploads_dir"; then
   exit 1
 fi
 
+# Allow per-service start command override via env var.
+# The worker service sets START_COMMAND=celery...; the web service leaves it
+# unset and falls through to the Dockerfile CMD (gunicorn).
+if [ -n "${START_COMMAND:-}" ]; then
+  exec gosu app sh -c "$START_COMMAND"
+fi
+
 exec gosu app "$@"
