@@ -5,13 +5,13 @@ builder = "DOCKERFILE"
 # Web service: uses default Dockerfile discovery (finds Dockerfile).
 # Worker service: sets RAILWAY_DOCKERFILE_PATH=Dockerfile.worker.
 watchPatterns = [
-  "/backend/**",
-  "/frontend/**",
-  "/Dockerfile",
-  "/Dockerfile.worker",
-  "/.dockerignore",
-  "/LICENSE",
-  "/railway.toml",
+  "backend/**",
+  "frontend/**",
+  "Dockerfile",
+  "Dockerfile.worker",
+  ".dockerignore",
+  "LICENSE",
+  "railway.toml",
 ]
 
 [deploy]
