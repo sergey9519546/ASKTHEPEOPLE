@@ -344,7 +344,14 @@ class SimulationConfigGenerator:
             all_agent_configs.extend(batch_configs)
         
         reasoning_parts.append(f"AgentConfigs: successfully generated {len(all_agent_configs)}")
-        
+
+        # ========== Population-level diffusion classification ==========
+        # Must run after all agents exist — the Rogers distribution is a
+        # population property, not a per-agent calculation.
+        all_agent_configs = self._apply_diffusion_classification(
+            all_agent_configs, canonical_agents or []
+        )
+
         # ========== Assign initial post publishers ==========
         logger.info("Assigning suitable publisher agents to initial posts...")
         event_config = self._assign_initial_post_agents(event_config, all_agent_configs)
@@ -1201,7 +1208,129 @@ Return JSON format (no markdown):
             configs.append(config)
         
         return configs
-    
+
+    def _apply_diffusion_classification(
+        self,
+        agent_configs: List["AgentActivityConfig"],
+        canonical_agents: List[Dict[str, Any]],
+    ) -> List["AgentActivityConfig"]:
+        """
+        Apply Rogers' adopter-category classification to agent configs.
+
+        This is a population-level step that MUST run after all individual
+        agent configs exist. The Rogers distribution (2.5% innovators,
+        13.5% early adopters, 34%/34% majorities, 16% laggards) is a
+        population property — classifying agents one at a time cannot
+        reproduce it. Rank-and-slice on innovativeness scores gives the
+        correct distribution for any population size (diffusion_model.py:
+        classify_population uses the Hare largest-remainder method).
+
+        Effect: adds a small, bounded modulation to novelty_seeking and
+        response_delay. Innovators get a higher novelty_seeking and respond
+        sooner; laggards get a lower score and respond later. The modulation
+        is deliberately narrow so it perturbs rather than dominates.
+
+        Fails open: any error leaves all configs unchanged, and a missing
+        big_five simply contributes to the neutral-score population.
+        """
+        if not agent_configs:
+            return agent_configs
+
+        try:
+            from .big_five import BigFive
+            from .diffusion_model import (
+                AdopterCategory,
+                classify_population,
+                thresholds_from_categories,
+            )
+
+            # Build persona dicts for diffusion_model — it accepts plain dicts
+            # and uses "big_five" or "innovativeness_score" if present.
+            persona_by_id: Dict[int, Dict[str, Any]] = {}
+            for canon in canonical_agents:
+                agent_id = canon.get("agent_id")
+                if agent_id is None:
+                    continue
+                bf = canon.get("big_five")
+                if bf:
+                    try:
+                        traits = BigFive.from_dict(bf)
+                        score = traits.openness if traits else 50.0
+                    except (ValueError, TypeError):
+                        score = 50.0
+                else:
+                    score = 50.0
+                persona_by_id[agent_id] = {"id": agent_id, "innovativeness_score": score}
+
+            # classify_population needs positional persona dicts keyed by
+            # something the model uses. We use the score directly.
+            all_personas = {
+                cfg.agent_id: persona_by_id.get(cfg.agent_id, {"id": cfg.agent_id})
+                for cfg in agent_configs
+            }
+
+            category_map = classify_population(
+                personas=all_personas,
+                key=lambda p: p.get("innovativeness_score", 50.0),
+                id_key=lambda p: p.get("id"),
+            )
+
+            # Modulation table. ASSUMPTION: deltas are design choices, kept
+            # deliberately narrow so category is a nudge, not a takeover.
+            # Innovators / Early Adopters receive a small upward push;
+            # Laggards receive a small downward push.
+            _novelty_delta = {
+                AdopterCategory.INNOVATOR: +0.15,
+                AdopterCategory.EARLY_ADOPTER: +0.08,
+                AdopterCategory.EARLY_MAJORITY: +0.02,
+                AdopterCategory.LATE_MAJORITY: -0.02,
+                AdopterCategory.LAGGARD: -0.08,
+            }
+            _delay_factor = {
+                AdopterCategory.INNOVATOR: 0.70,
+                AdopterCategory.EARLY_ADOPTER: 0.85,
+                AdopterCategory.EARLY_MAJORITY: 1.00,
+                AdopterCategory.LATE_MAJORITY: 1.20,
+                AdopterCategory.LAGGARD: 1.50,
+            }
+
+            enriched: List["AgentActivityConfig"] = []
+            for cfg in agent_configs:
+                cat = category_map.get(cfg.agent_id)
+                if cat is None:
+                    enriched.append(cfg)
+                    continue
+
+                new_novelty = max(0.05, min(0.95,
+                    cfg.novelty_seeking + _novelty_delta.get(cat, 0.0)
+                ))
+                factor = _delay_factor.get(cat, 1.0)
+                new_delay_min = max(1, round(cfg.response_delay_min * factor))
+                new_delay_max = max(new_delay_min + 1, round(cfg.response_delay_max * factor))
+
+                # dataclasses are frozen-ish but not frozen; mutate in place
+                # rather than reconstructing (avoids copying every field).
+                cfg.novelty_seeking = round(new_novelty, 4)
+                cfg.response_delay_min = new_delay_min
+                cfg.response_delay_max = new_delay_max
+                enriched.append(cfg)
+
+            counts = {}
+            for cat in category_map.values():
+                counts[cat.name] = counts.get(cat.name, 0) + 1
+            logger.info(
+                "Diffusion classification applied: %s",
+                ", ".join(f"{k}={v}" for k, v in sorted(counts.items())),
+            )
+            return enriched
+
+        except Exception as exc:
+            logger.warning(
+                "Diffusion classification skipped (leaves configs unchanged): %s",
+                exc,
+            )
+            return agent_configs
+
     def _generate_agent_config_by_rule(self, entity: EntityNode) -> Dict[str, Any]:
         """Generate a neutral fictional config without role-based stereotypes."""
         role_info = normalize_entity_type(entity.get_entity_type())
