@@ -88,7 +88,10 @@ def test_prepare_artifacts_and_exact_oasis_exports(tmp_path):
     with open(export_info["reddit_path"], "r", encoding="utf-8") as handle:
         reddit_profiles = json.load(handle)
     assert reddit_profiles[0]["realname"] == "Alice"
-    assert reddit_profiles[0]["persona"] == "Detailed private persona"
+    # Persona now includes constraint framing (student role → limited resources).
+    # The base persona is still there, plus the structural constraint text.
+    assert "Detailed private persona" in reddit_profiles[0]["persona"]
+    assert "[Scenario assumption" in reddit_profiles[0]["persona"]
     assert "profession" in reddit_profiles[0]
 
     canonical = build_canonical_agents(entities, profiles)

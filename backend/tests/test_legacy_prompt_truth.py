@@ -286,6 +286,10 @@ def test_agent_controls_are_neutral_without_explicit_source_constraints():
 
     left = configs[0]
     right = configs[1]
+    # Most behavioral fields remain neutral when no source constraints exist.
+    # EXCEPTION: influence_weight is now modulated by entity role (constraint
+    # engine wiring) — institutions/officials/media amplify more than individuals.
+    # This is deterministic and role-derived, not an LLM guess.
     behavioral_fields = (
         "activity_level",
         "posts_per_hour",
@@ -295,7 +299,7 @@ def test_agent_controls_are_neutral_without_explicit_source_constraints():
         "response_delay_max",
         "sentiment_bias",
         "stance",
-        "influence_weight",
+        # "influence_weight",  # now varies by role (constraint wiring)
         "reaction_style",
         "conflict_tolerance",
         "authority_sensitivity",
@@ -363,7 +367,9 @@ def test_unverified_llm_behavioral_overrides_are_machine_neutralized():
     assert config.response_delay_max == 60
     assert config.sentiment_bias == 0.0
     assert config.stance == "neutral"
-    assert config.influence_weight == 1.0
+    # influence_weight now varies by entity role (constraint engine wiring).
+    # GovernmentAgency → normalized_role=government → weight=1.40
+    assert config.influence_weight == 1.4  # was 1.0 before constraint wiring
     assert config.reaction_style == "measured"
     assert config.conflict_tolerance == 0.45
     assert config.authority_sensitivity == 0.4
