@@ -260,7 +260,8 @@ class ArchetypeEngine:
         Generate `count` variant profiles derived from base_profile.
 
         Each variant is a shallow copy with stochastic numeric variation.
-        Textual fields (persona, bio, mbti, etc.) are copied verbatim.
+        Textual fields (persona, bio, mbti, etc.) are copied verbatim;
+        Big Five scores are jittered so clones differ in personality.
         """
         variants: List[OasisAgentProfile] = []
         for n in range(count):
@@ -300,6 +301,16 @@ class ArchetypeEngine:
                 else None
             )
 
+            # Jitter personality so clones are similar individuals rather than
+            # identical copies. Preserves None when the archetype has no traits;
+            # never fabricate a personality that was not derived from source.
+            base_traits = base_profile.traits
+            big_five = (
+                base_traits.jitter(rng=random).to_dict()
+                if base_traits is not None
+                else None
+            )
+
             variants.append(
                 OasisAgentProfile(
                     user_id=user_id,
@@ -314,6 +325,7 @@ class ArchetypeEngine:
                     age=age,
                     gender=base_profile.gender,
                     mbti=base_profile.mbti,
+                    big_five=big_five,
                     country=base_profile.country,
                     profession=base_profile.profession,
                     interested_topics=list(base_profile.interested_topics or []),

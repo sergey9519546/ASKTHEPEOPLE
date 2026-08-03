@@ -45,7 +45,16 @@ class OasisAgentProfile:
     # Extra persona info
     age: Optional[int] = None
     gender: Optional[str] = None
+    # MBTI is retained ONLY for OASIS interop: the installed package indexes
+    # profile["other_info"]["mbti"] unconditionally (oasis/social_agent/
+    # agents_generator.py:461) and interpolates it into the agent system prompt
+    # (oasis/social_platform/config/user.py:97), so a missing key raises
+    # KeyError mid-run. Big Five below is the substantive representation; when
+    # traits are present the code is derived from them rather than assigned.
     mbti: Optional[str] = None
+    # Five Factor Model scores, 0-100. See app/services/big_five.py for why the
+    # Five Factor Model is preferred over MBTI for behavioural coupling.
+    big_five: Optional[Dict[str, float]] = None
     country: Optional[str] = None
     profession: Optional[str] = None
     interested_topics: List[str] = field(default_factory=list)
@@ -55,7 +64,30 @@ class OasisAgentProfile:
     source_entity_type: Optional[str] = None
     
     created_at: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
-    
+
+    @property
+    def traits(self):
+        """Big Five scores as a BigFive instance, or None when unset."""
+        from .big_five import BigFive
+
+        return BigFive.from_dict(self.big_five)
+
+    def effective_mbti(self) -> str:
+        """
+        The MBTI code to hand to OASIS.
+
+        Derived from Big Five when traits exist, so the interop value stays
+        consistent with the substantive personality representation. Falls back
+        to a stored code, then to the neutral engine placeholder. Never returns
+        None: OASIS raises KeyError on a missing "mbti".
+        """
+        from .big_five import to_mbti_code
+
+        traits = self.traits
+        if traits is not None:
+            return to_mbti_code(traits)
+        return self.mbti or "ISTJ"
+
     def to_reddit_format(self) -> Dict[str, Any]:
         """Convert to Reddit platform format."""
         profile = {
@@ -65,7 +97,7 @@ class OasisAgentProfile:
             "persona": (self.persona or self.bio or self.name).replace("\n", " ").replace("\r", " "),
             "age": self.age if self.age else 30,
             "gender": self.gender if self.gender else "other",
-            "mbti": self.mbti if self.mbti else "ISTJ",
+            "mbti": self.effective_mbti(),
             "country": self.country if self.country else "Unknown",
         }
 
@@ -103,6 +135,7 @@ class OasisAgentProfile:
             "age": self.age,
             "gender": self.gender,
             "mbti": self.mbti,
+            "big_five": self.big_five,
             "country": self.country,
             "profession": self.profession,
             "interested_topics": self.interested_topics,
