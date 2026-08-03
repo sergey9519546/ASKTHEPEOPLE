@@ -9,6 +9,7 @@
     <router-view />
     <ToastContainer />
     <ProjectLinks />
+    <CommandPalette v-if="!accessRequired && !hasCrashed" />
   </div>
   <AccessKeyGate v-if="accessRequired && !hasCrashed" />
 
@@ -45,6 +46,7 @@
 <script setup>
 import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 import AccessKeyGate from "./components/AccessKeyGate.vue";
+import CommandPalette from "./components/CommandPalette.vue";
 import ProjectLinks from "./components/ProjectLinks.vue";
 import ToastContainer from "./components/ToastContainer.vue";
 import { accessRequired } from "./composables/useAccessKey.js";

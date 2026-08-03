@@ -35,7 +35,7 @@
         <button class="nav-tab" type="button" @click="scrollToSection('validate')">
           Validate with people
         </button>
-        <button class="settings-button" type="button" aria-label="Open model settings" @click="showSettings = true">
+        <button class="settings-button" type="button" aria-label="Open model settings" @click="openSettings()">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"></path>
           </svg>
@@ -357,7 +357,7 @@
       </div>
     </footer>
 
-    <SettingsModal v-if="showSettings" @close="showSettings = false" />
+    <SettingsModal v-if="settingsOpen" @close="closeSettings()" />
   </div>
 </template>
 
@@ -368,11 +368,15 @@ import { getTemplates } from "../api/graph";
 import { getSimulationHistory } from "../api/simulation";
 import SettingsModal from "../components/SettingsModal.vue";
 import TruthRail from "../components/TruthRail.vue";
+import {
+  closeSettings,
+  openSettings,
+  settingsOpen,
+} from "../composables/useCommandPalette.js";
 import { setPendingUpload } from "../store/pendingUpload.js";
 import { savedRunDestination } from "../utils/workflow.js";
 
 const router = useRouter();
-const showSettings = ref(false);
 const formData = ref({
   simulationRequirement: "",
   projectName: "",

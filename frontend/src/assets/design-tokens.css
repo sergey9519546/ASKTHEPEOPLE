@@ -38,7 +38,47 @@
      compatibility while rendering it in the civic sans family. */
   --font-mono: "Barlow", "Arial Narrow", Arial, sans-serif;
   --font-serif: var(--font-display);
+
+  /* Spacing scale — 4px base unit at a 16px root. Replaces the ad hoc
+     0.45/0.55/0.62/0.7/0.8rem values scattered through the components. */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* Type scale. Body sits at 15px so dense workflow copy stays legible
+     without the console feel; the hero is capped at 72px because the prior
+     clamp reached 91px and dominated the composition. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-md: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-3xl: clamp(2.25rem, 2.5vw, 3rem);
+  --text-hero: clamp(3.5rem, 4vw, 4.5rem);
+
+  /* Motion. Three tiers: instant for focus/hover feedback, quick for
+     controls, deliberate for panels and route transitions. */
+  --duration-instant: 60ms;
+  --duration-quick: 120ms;
+  --duration-base: 200ms;
+  --duration-deliberate: 280ms;
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-quick: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* Layering. Documented so new overlays stop guessing z-index values.
+     grain 20 / toast 24 / crash 26 are pre-existing and preserved. */
+  --z-grain: 20;
+  --z-toast: 24;
+  --z-palette: 25;
+  --z-crash: 26;
 
   /* Legacy component aliases */
   --bg-void: var(--ink);
@@ -178,11 +218,13 @@ button,
   font-size: 0.8rem;
   font-weight: 650;
   line-height: 1.2;
+  /* Hover feedback belongs in the quick tier. At 240ms the press felt
+     detached from the click. */
   transition:
-    color 240ms var(--ease-out),
-    background-color 240ms var(--ease-out),
-    border-color 240ms var(--ease-out),
-    transform 240ms var(--ease-out);
+    color var(--duration-quick) var(--ease-quick),
+    background-color var(--duration-quick) var(--ease-quick),
+    border-color var(--duration-quick) var(--ease-quick),
+    transform var(--duration-quick) var(--ease-quick);
 }
 
 button:hover,
