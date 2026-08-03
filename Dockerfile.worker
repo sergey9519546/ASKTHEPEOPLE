@@ -56,13 +56,12 @@ RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
       /app/backend/uploads \
       /app/backend/uploads/simulations \
       /app/backend/logs \
-    && chmod 0755 /usr/local/bin/askthepeople-entrypoint \
-    && chmod 0755 /app/backend/scripts/worker_wrapper.sh
+    && chmod 0755 /usr/local/bin/askthepeople-entrypoint
 
-EXPOSE 5001
+EXPOSE 8080
 STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/usr/local/bin/askthepeople-entrypoint"]
 
-# Wrapper script starts health server in background, then execs Celery
-CMD ["/app/backend/scripts/worker_wrapper.sh"]
+# Celery worker with embedded health server thread
+CMD ["python", "-m", "app.workers.celery_worker"]
