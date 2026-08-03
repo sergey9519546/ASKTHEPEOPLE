@@ -250,7 +250,8 @@ def optimize_interview_prompt(prompt: str, bypass: bool = False) -> str:
 
 # ============== Entity Reading Interfaces ==============
 
-@simulation_bp.route('/entities/<graph_id>', methods=['GET'])
+# MOVED TO routes/entity_routes.py
+# @simulation_bp.route('/entities/<graph_id>', methods=['GET'])
 def get_graph_entities(graph_id: str):
     """
     Get all entities in the graph (filtered)
@@ -299,7 +300,8 @@ def get_graph_entities(graph_id: str):
         }), 500
 
 
-@simulation_bp.route('/entities/<graph_id>/<entity_uuid>', methods=['GET'])
+# MOVED TO routes/entity_routes.py
+# @simulation_bp.route('/entities/<graph_id>/<entity_uuid>', methods=['GET'])
 def get_entity_detail(graph_id: str, entity_uuid: str):
     """Get detailed information for a single entity"""
     try:
@@ -336,7 +338,8 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
         }), 500
 
 
-@simulation_bp.route('/entities/<graph_id>/by-type/<entity_type>', methods=['GET'])
+# MOVED TO routes/entity_routes.py
+# @simulation_bp.route('/entities/<graph_id>/by-type/<entity_type>', methods=['GET'])
 def get_entities_by_type(graph_id: str, entity_type: str):
     """Get all entities of a specified type"""
     try:
@@ -378,7 +381,8 @@ def get_entities_by_type(graph_id: str, entity_type: str):
 
 # ============== Simulation Management Interfaces ==============
 
-@simulation_bp.route('/create', methods=['POST'])
+# MOVED TO routes/prep_routes.py
+# @simulation_bp.route('/create', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
 def create_simulation():
     """
@@ -585,7 +589,8 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         return False, {"reason": f"Failed to read state file: {str(e)}"}
 
 
-@simulation_bp.route('/prepare', methods=['POST'])
+# MOVED TO routes/prep_routes.py
+# @simulation_bp.route('/prepare', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def prepare_simulation():
     """
@@ -802,7 +807,8 @@ def prepare_simulation():
         }), 500
 
 
-@simulation_bp.route('/prepare/status', methods=['POST'])
+# MOVED TO routes/prep_routes.py
+# @simulation_bp.route('/prepare/status', methods=['POST'])
 def get_prepare_status():
     """
     Query preparation task progress
@@ -1497,7 +1503,8 @@ def get_simulation_config(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/<simulation_id>/preflight', methods=['GET'])
+# MOVED TO routes/prep_routes.py
+# @simulation_bp.route('/<simulation_id>/preflight', methods=['GET'])
 def get_simulation_preflight(simulation_id: str):
     try:
         manager = SimulationManager()
@@ -1520,7 +1527,8 @@ def get_simulation_preflight(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/<simulation_id>/diagnostics', methods=['GET'])
+# MOVED TO routes/prep_routes.py
+# @simulation_bp.route('/<simulation_id>/diagnostics', methods=['GET'])
 def get_simulation_diagnostics(simulation_id: str):
     try:
         manager = SimulationManager()
@@ -1570,7 +1578,8 @@ def search_simulation_observations(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/<simulation_id>/config/download', methods=['GET'])
+# MOVED TO routes/export_routes.py
+# @simulation_bp.route('/<simulation_id>/config/download', methods=['GET'])
 def download_simulation_config(simulation_id: str):
     """Download simulation configuration file"""
     try:
@@ -1609,7 +1618,8 @@ def download_simulation_config(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/script/<script_name>/download', methods=['GET'])
+# MOVED TO routes/export_routes.py
+# @simulation_bp.route('/script/<script_name>/download', methods=['GET'])
 def download_simulation_script(script_name: str):
     """
     Download simulation run script file (generic script, located in backend/scripts/)
@@ -1663,7 +1673,8 @@ def download_simulation_script(script_name: str):
 
 # ============== Profile Generation Interface (standalone) ==============
 
-@simulation_bp.route('/generate-profiles', methods=['POST'])
+# MOVED TO routes/prep_routes.py
+# @simulation_bp.route('/generate-profiles', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
 def generate_profiles():
     """
@@ -1741,7 +1752,8 @@ def generate_profiles():
 
 # ============== Simulation Run Control Interface ==============
 
-@simulation_bp.route('/start', methods=['POST'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/start', methods=['POST'])
 def start_simulation():
     """
     Start running simulation
@@ -2008,7 +2020,8 @@ def start_simulation():
         }), 500
 
 
-@simulation_bp.route('/<simulation_id>/inject', methods=['POST'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/<simulation_id>/inject', methods=['POST'])
 def inject_simulation_event(simulation_id: str):
     """Publish real-time scenario injection intervention payload to Redis Pub/Sub.
 
@@ -2156,7 +2169,8 @@ def compare_simulations_route():
         }), 500
 
 
-@simulation_bp.route('/stop', methods=['POST'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/stop', methods=['POST'])
 def stop_simulation():
     """
     Stop simulation
@@ -2218,7 +2232,8 @@ def stop_simulation():
 
 # ============== Real-time status monitoring interface ==============
 
-@simulation_bp.route('/<simulation_id>/run-status', methods=['GET'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/<simulation_id>/run-status', methods=['GET'])
 def get_run_status(simulation_id: str):
     """
     Get simulation run real-time status (for frontend polling)
@@ -2278,7 +2293,8 @@ def get_run_status(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/<simulation_id>/status', methods=['GET'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/<simulation_id>/status', methods=['GET'])
 def get_simulation_status(simulation_id: str):
     """
     Get simulation execution status from the process-local task and run state.
@@ -2331,7 +2347,8 @@ def get_simulation_status(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/task/<task_id>/status', methods=['GET'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/task/<task_id>/status', methods=['GET'])
 def get_task_status(task_id: str):
     """
     Get task status from the process-local task manager.
@@ -2828,8 +2845,10 @@ def get_simulation_comments(simulation_id: str):
 
 # ============== Generated Profile Follow-up Interface ==============
 
-@simulation_bp.route('/generated-response', methods=['POST'])
-@simulation_bp.route('/interview', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/generated-response', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/interview', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def interview_agent():
     """
@@ -2976,8 +2995,10 @@ def interview_agent():
         }), 500
 
 
-@simulation_bp.route('/generated-response/batch', methods=['POST'])
-@simulation_bp.route('/interview/batch', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/generated-response/batch', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/interview/batch', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def interview_agents_batch():
     """
@@ -3161,8 +3182,10 @@ def interview_agents_batch():
         }), 500
 
 
-@simulation_bp.route('/generated-response/all', methods=['POST'])
-@simulation_bp.route('/interview/all', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/generated-response/all', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/interview/all', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
 def interview_all_agents():
     """
@@ -3283,8 +3306,10 @@ def interview_all_agents():
         }), 500
 
 
-@simulation_bp.route('/generated-response/history', methods=['POST'])
-@simulation_bp.route('/interview/history', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/generated-response/history', methods=['POST'])
+# MOVED TO routes/interview_routes.py
+# @simulation_bp.route('/interview/history', methods=['POST'])
 def get_interview_history():
     """
     Get saved fictional generated-profile follow-up records.
@@ -3357,7 +3382,8 @@ def get_interview_history():
         }), 500
 
 
-@simulation_bp.route('/env-status', methods=['POST'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/env-status', methods=['POST'])
 def get_env_status():
     """
     Get simulation environment status
@@ -3425,7 +3451,8 @@ def get_env_status():
         }), 500
 
 
-@simulation_bp.route('/close-env', methods=['POST'])
+# MOVED TO routes/execution_routes.py
+# @simulation_bp.route('/close-env', methods=['POST'])
 def close_simulation_env():
     """
     Close simulation environment
@@ -3539,8 +3566,10 @@ def get_simulation_opinions(simulation_id: str):
         }), 500
 
 
-@simulation_bp.route('/<simulation_id>/export/generated-responses', methods=['POST'])
-@simulation_bp.route('/<simulation_id>/export/survey', methods=['POST'])
+# MOVED TO routes/export_routes.py
+# @simulation_bp.route('/<simulation_id>/export/generated-responses', methods=['POST'])
+# MOVED TO routes/export_routes.py
+# @simulation_bp.route('/<simulation_id>/export/survey', methods=['POST'])
 def export_survey_csv(simulation_id: str):
     """
     Export model-generated profile responses as CSV.

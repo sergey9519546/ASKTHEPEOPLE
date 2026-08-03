@@ -50,3 +50,4 @@ from . import report  # noqa: E402, F401
 from . import settings  # noqa: E402, F401
 from . import auth  # noqa: E402, F401
 from . import branching_routes  # noqa: E402, F401
+from . import routes  # noqa: E402, F401  # Decomposed simulation routes
