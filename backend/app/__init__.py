@@ -4,6 +4,7 @@ ASKTHEPEOPLE Backend - Flask Application Factory
 
 import json
 import os
+import re
 import threading
 import time
 import warnings
@@ -21,11 +22,70 @@ from .config import Config, credential_validation_error
 from .extensions import sock
 from .utils.logger import setup_logger, get_logger
 
+# Sentry SDK for error tracking
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.flask import FlaskIntegration
+    SENTRY_AVAILABLE = True
+except ImportError:
+    SENTRY_AVAILABLE = False
+
+
+def _scrub_pii_from_sentry(event, hint):
+    """
+    Scrub PII and secrets from Sentry events before sending.
+    Removes: emails, API keys, passwords, credit cards, SSN, bearer tokens.
+    """
+    def scrub_string(text):
+        if not isinstance(text, str):
+            return text
+        # Email addresses
+        text = re.sub(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', text)
+        # API keys (common patterns)
+        text = re.sub(r'\bsk-[A-Za-z0-9]{32,}\b', '[API_KEY]', text)
+        text = re.sub(r'\bgho_[A-Za-z0-9]{36,}\b', '[GITHUB_TOKEN]', text)
+        # Bearer tokens
+        text = re.sub(r'\bBearer\s+[A-Za-z0-9_\-\.]+', 'Bearer [TOKEN]', text)
+        # Credit card numbers (simple pattern)
+        text = re.sub(r'\b\d{4}[\s\-]?\d{4}[\s\-]?\d{4}[\s\-]?\d{4}\b', '[CREDIT_CARD]', text)
+        # SSN
+        text = re.sub(r'\b\d{3}-\d{2}-\d{4}\b', '[SSN]', text)
+        return text
+    
+    def scrub_dict(data):
+        if isinstance(data, dict):
+            for key in list(data.keys()):
+                # Remove values for sensitive keys
+                if key.lower() in ('password', 'secret', 'token', 'api_key', 'authorization'):
+                    data[key] = '[REDACTED]'
+                else:
+                    data[key] = scrub_dict(data[key])
+        elif isinstance(data, list):
+            return [scrub_dict(item) for item in data]
+        elif isinstance(data, str):
+            return scrub_string(data)
+        return data
+    
+    return scrub_dict(event)
+
 
 def create_app(config_class=Config):
     """Flask application factory function"""
     app = Flask(__name__)
     app.config.from_object(config_class)
+    
+    # Initialize Sentry for error tracking
+    if SENTRY_AVAILABLE and os.getenv('SENTRY_DSN'):
+        sentry_sdk.init(
+            dsn=os.getenv('SENTRY_DSN'),
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
+            environment=os.getenv('SENTRY_ENVIRONMENT', 'production'),
+            release=os.getenv('RAILWAY_GIT_COMMIT_SHA') or os.getenv('BUILD_REVISION'),
+            before_send=_scrub_pii_from_sentry,
+        )
+        logger = get_logger('askthepeople.sentry')
+        logger.info("Sentry error tracking initialized", extra={"privacy_safe": True})
 
     if app.config.get("REQUIRE_APP_AUTH"):
         token_error = credential_validation_error(

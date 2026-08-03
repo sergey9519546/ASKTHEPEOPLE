@@ -40,6 +40,11 @@ railway variables set LLM_BASE_URL="https://api.a6api.com/v1"
 # Zep Configuration (you'll need to provide your Zep API key)
 railway variables set ZEP_API_KEY="z_YOUR_ZEP_KEY_HERE"
 
+# Sentry Error Tracking (sign up at sentry.io for free tier)
+railway variables set SENTRY_DSN="https://YOUR_SENTRY_DSN@sentry.io/PROJECT_ID"
+railway variables set SENTRY_ENVIRONMENT="production"
+railway variables set SENTRY_TRACES_SAMPLE_RATE="0.1"  # 10% of transactions sampled
+
 # Authentication
 railway variables set REQUIRE_APP_AUTH="true"
 
@@ -48,6 +53,9 @@ railway variables set CORS_ORIGINS="https://askthepeople-production.up.railway.a
 
 # Trusted Hosts (Railway will provide these - update after first deploy)
 railway variables set TRUSTED_HOSTS="askthepeople-production.up.railway.app"
+
+# Database (PostgreSQL - Railway will provide this after adding PostgreSQL service)
+# railway variables set DATABASE_URL="postgresql+asyncpg://user:password@host:port/dbname"
 
 # Redis (optional - add Redis service first if needed)
 # railway variables set REDIS_URL="redis://default:password@host:port"
@@ -120,8 +128,60 @@ railway add redis
 1. **Never commit real secrets** - they're already in `.gitignore`
 2. **Rotate APP_TOKEN regularly** - it's your API auth token
 3. **Use Railway's secret management** - don't expose keys in logs
-4. **Monitor health endpoint** - `/health` shows storage_writable status
+4. **Monitor health endpoint** - `/health` shows component status
 5. **Set up alerts** - Railway can notify on deployment failures
+
+## Monitoring & Observability
+
+### Sentry Error Tracking
+
+1. **Sign up for Sentry** (free tier available):
+   - Visit https://sentry.io and create an account
+   - Create a new project (select "Flask" as the platform)
+   - Copy the DSN (Data Source Name)
+
+2. **Configure Sentry in Railway**:
+   ```bash
+   railway variables set SENTRY_DSN="https://YOUR_KEY@o123456.ingest.sentry.io/789012"
+   railway variables set SENTRY_ENVIRONMENT="production"
+   railway variables set SENTRY_TRACES_SAMPLE_RATE="0.1"
+   ```
+
+3. **What Sentry Tracks**:
+   - All unhandled exceptions with full stack traces
+   - Request context (URL, headers, method)
+   - User context (if available)
+   - PII is automatically scrubbed (emails, API keys, credit cards, SSN)
+   - Release tracking via git commit SHA
+
+### Health Check Monitoring
+
+The `/health` endpoint returns component status:
+
+```json
+{
+  "status": "ok",
+  "service": "ASKTHEPEOPLE Backend",
+  "revision": "abc123...",
+  "components": {
+    "storage": "ok",
+    "database": "ok",
+    "redis": "ok",
+    "celery": "ok"
+  }
+}
+```
+
+**Railway Health Check Configuration**:
+- Path: `/health`
+- Expected status: 200
+- Interval: 30 seconds
+- Timeout: 10 seconds
+
+**Readiness Probe**:
+- Path: `/health/readiness`
+- Checks all dependencies before accepting traffic
+- Returns 503 if not ready
 
 ## Troubleshooting
 
@@ -154,6 +214,10 @@ railway add redis
 | TRUSTED_HOSTS | Yes | your-domain.railway.app |
 | FLASK_ENV | Yes | production |
 | FLASK_DEBUG | Yes | false |
+| SENTRY_DSN | Recommended | https://key@sentry.io/project |
+| SENTRY_ENVIRONMENT | Optional | production |
+| SENTRY_TRACES_SAMPLE_RATE | Optional | 0.1 (10% sampling) |
+| DATABASE_URL | Optional | postgresql+asyncpg://... |
 | REDIS_URL | Optional | redis://... |
 | CELERY_BROKER_URL | Optional | (defaults to REDIS_URL) |
 
