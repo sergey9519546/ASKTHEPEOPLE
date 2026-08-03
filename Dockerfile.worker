@@ -41,7 +41,7 @@ ENV PATH="/app/backend/.venv/bin:$PATH" \
     FLASK_APP=backend/run.py \
     FLASK_DEBUG=false \
     BUILD_REVISION=${BUILD_REVISION} \
-    PORT=5001
+    PORT=8080
 
 COPY --from=backend-builder /app/backend/.venv /app/backend/.venv
 COPY backend/app/ /app/backend/app/
@@ -56,12 +56,16 @@ RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
       /app/backend/uploads \
       /app/backend/uploads/simulations \
       /app/backend/logs \
-    && chmod 0755 /usr/local/bin/askthepeople-entrypoint
+    && chmod 0755 /usr/local/bin/askthepeople-entrypoint \
+      /app/backend/scripts/worker_wrapper.sh
 
 EXPOSE 8080
 STOPSIGNAL SIGTERM
 
 ENTRYPOINT ["/usr/local/bin/askthepeople-entrypoint"]
 
-# Celery worker with embedded health server thread
-CMD ["python", "-m", "app.workers.celery_worker"]
+# The wrapper backgrounds the health HTTP server (Railway requires /health to
+# return 200; Celery serves no HTTP) then execs Celery from /app/backend so the
+# `app` package resolves. Railway's startCommand for this service is set to the
+# same path, so CMD and startCommand agree.
+CMD ["/app/backend/scripts/worker_wrapper.sh"]
