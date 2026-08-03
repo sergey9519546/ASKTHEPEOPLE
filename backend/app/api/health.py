@@ -11,6 +11,13 @@ health_bp = Blueprint('health', __name__)
 def health():
     """Liveness probe (existing behavior)"""
     upload_folder = os.path.abspath(current_app.config['UPLOAD_FOLDER'])
+    
+    # Ensure folder exists (create if needed for first-time startup)
+    try:
+        os.makedirs(upload_folder, exist_ok=True)
+    except (OSError, PermissionError):
+        pass  # If we can't create it, the next check will catch it
+    
     storage_writable = os.path.isdir(upload_folder) and os.access(
         upload_folder,
         os.W_OK,
@@ -29,9 +36,16 @@ def health():
 
 @health_bp.route('/readiness', methods=['GET'], strict_slashes=False)
 def readiness():
-    """Deep readiness probe checking storage writability, Redis connectivity (ping), and database status."""
-    # 1. Storage Writability
+    """Readiness probe (checks all dependencies)"""
+    # 1. Storage Readiness
     upload_folder = os.path.abspath(current_app.config['UPLOAD_FOLDER'])
+    
+    # Ensure folder exists (create if needed for first-time startup)
+    try:
+        os.makedirs(upload_folder, exist_ok=True)
+    except (OSError, PermissionError):
+        pass  # If we can't create it, the next check will catch it
+    
     storage_writable = os.path.isdir(upload_folder) and os.access(
         upload_folder,
         os.W_OK,

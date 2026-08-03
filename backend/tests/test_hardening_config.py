@@ -119,6 +119,7 @@ def test_railway_healthcheck_host_is_exactly_allowed(monkeypatch):
         APP_TOKEN = "private-access-key-7b9f3d2c8a6e4f10"
         CORS_ORIGINS = "https://app.example.test"
         TRUSTED_HOSTS = trusted_hosts
+        UPLOAD_FOLDER = "/tmp/test-uploads"  # Health check needs writable folder
 
     client = create_app(RailwayHealthConfig).test_client()
 
