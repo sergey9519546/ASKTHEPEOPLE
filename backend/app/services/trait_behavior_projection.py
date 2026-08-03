@@ -186,3 +186,139 @@ def controls_from_canonical_agent(agent: Optional[Dict[str, Any]]) -> Optional[D
     if traits is None:
         return None
     return derive_controls(traits)
+
+
+# ---------------------------------------------------------------------------
+# Prospect-theory persona framing
+# ---------------------------------------------------------------------------
+# This section produces a short, deterministic text fragment that describes
+# how an agent frames decisions under uncertainty, based on their trait-derived
+# Prospect Theory parameters. The fragment is appended to the persona string
+# before writing reddit_profiles.json so it reaches the OASIS system prompt.
+#
+# Why text, not a config field
+# ----------------------------
+# `stance` and `sentiment_bias` in AgentActivityConfig are not consumed by the
+# subprocess scripts — verified by grepping every reference in all three
+# run_*.py files. The agent system prompt (built by OASIS user.py:97 from
+# `profile["other_info"]["user_profile"]`) IS live. Enriching the persona text
+# is the correct integration point.
+#
+# Why deterministic
+# -----------------
+# A deterministic projection keeps this on the right side of the provenance
+# clamp. The same traits always produce the same text. No model call.
+#
+# Epistemic status
+# ----------------
+# The DIRECTIONS in the framing (neuroticism → loss sensitivity,
+# conscientiousness → deliberation, openness → probability calibration) are
+# supported by the trait literature. The specific THRESHOLDS and PHRASING are
+# ASSUMPTION and are clearly labelled as scenario assumptions in the output text.
+
+
+# Threshold above/below which a trait "moves" the framing
+_HIGH = 65.0
+_LOW  = 35.0
+
+# Canonical TK92 loss-aversion coefficient for reference
+_CANONICAL_LAMBDA = 2.25
+
+
+def prospect_framing_text(traits: BigFive) -> str:
+    """
+    Return a 1-3 sentence scenario-assumption fragment for the OASIS system prompt.
+
+    Describes how this agent frames decisions under uncertainty. The output is
+    deterministic: same traits → same text. Returns empty string for a neutral
+    trait vector so the persona is unchanged for unspecialised agents.
+
+    ASSUMPTION: thresholds (_HIGH/_LOW) and phrasing are design choices.
+    Only the directional links are literature-supported.
+    """
+    from .prospect_theory import params_from_big_five
+    from .big_five import TRAITS
+
+    # prospect_theory expects normalized [0,1] scores; BigFive uses [0,100]
+    params = params_from_big_five(
+        openness=traits.openness / 100.0,
+        conscientiousness=traits.conscientiousness / 100.0,
+        extraversion=traits.extraversion / 100.0,
+        agreeableness=traits.agreeableness / 100.0,
+        neuroticism=traits.neuroticism / 100.0,
+    )
+
+    fragments = []
+
+    # Loss aversion: driven by neuroticism. Only mention when clearly above/below neutral.
+    if traits.neuroticism >= _HIGH:
+        fragments.append(
+            f"In this scenario, losses weigh approximately "
+            f"{params.lambda_:.1f}× more heavily than equivalent gains; "
+            "decision-making tends to anchor on downside risk and status-quo preservation."
+        )
+    elif traits.neuroticism <= _LOW:
+        fragments.append(
+            f"In this scenario, potential gains are weighted roughly on par with losses "
+            f"(loss-aversion coefficient ≈ {params.lambda_:.1f}); "
+            "willing to accept symmetric risk for symmetric expected value."
+        )
+
+    # Probability calibration: openness affects gamma (weighting function curvature).
+    # High openness → gamma closer to 1 → less distortion of probabilities.
+    if traits.openness >= _HIGH:
+        fragments.append(
+            "Evaluates scenario likelihoods with relatively calibrated probability assessment; "
+            "less prone to overweighting rare catastrophes or underweighting likely outcomes."
+        )
+    elif traits.openness <= _LOW:
+        fragments.append(
+            "Tends to overweight small-probability scenarios (both opportunities and threats); "
+            "low-likelihood outcomes may receive disproportionate attention."
+        )
+
+    # Deliberation: conscientiousness affects decision speed and systematicity.
+    if traits.conscientiousness >= _HIGH:
+        fragments.append(
+            "Approaches decisions methodically; "
+            "evaluates trade-offs sequentially before committing to a position."
+        )
+    elif traits.conscientiousness <= _LOW:
+        fragments.append(
+            "Reaches positions quickly with limited sequential evaluation; "
+            "acts on initial framing rather than exhaustive trade-off analysis."
+        )
+
+    if not fragments:
+        return ""  # Neutral vector → no framing appended
+
+    # Prepend a single disclosure marker so the text is clearly labelled in
+    # any artifact or export rather than being mistaken for source fact.
+    return (
+        "[Scenario assumption — risk framing derived from personality projection] "
+        + " ".join(fragments)
+    )
+
+
+def persona_with_framing(internal_persona: str, agent: Optional[Dict[str, Any]]) -> str:
+    """
+    Return `internal_persona` augmented with a prospect-theory framing sentence,
+    or the original persona unchanged if no traits are available.
+
+    Safe to call on every agent: absent traits return the input unmodified.
+    """
+    if not agent:
+        return internal_persona
+    try:
+        traits = BigFive.from_dict(agent.get("big_five"))
+    except (ValueError, TypeError):
+        return internal_persona
+    if traits is None:
+        return internal_persona
+
+    framing = prospect_framing_text(traits)
+    if not framing:
+        return internal_persona
+
+    separator = "\n\n" if internal_persona and not internal_persona.endswith("\n") else ""
+    return f"{internal_persona}{separator}{framing}"

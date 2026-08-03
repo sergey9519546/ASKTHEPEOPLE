@@ -370,11 +370,22 @@ def canonical_to_twitter_rows(canonical_agents: Sequence[Dict[str, Any]]) -> lis
 def canonical_to_reddit_profiles(canonical_agents: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
     profiles = []
     for agent in canonical_agents:
+        # Append prospect-theory risk framing to the persona when traits exist.
+        # This reaches the OASIS agent system prompt via:
+        #   agents_generator.py  profile["other_info"]["user_profile"] = agent_info[i]["persona"]
+        #   user.py:97           description += f"...personality type of {mbti}..."
+        # Deterministic, no model call; absent traits leave persona unchanged.
+        try:
+            from .trait_behavior_projection import persona_with_framing
+            persona_text = persona_with_framing(agent["internal_persona"], agent)
+        except Exception:
+            persona_text = agent["internal_persona"]
+
         profile = {
             "realname": agent["display_name"],
             "username": agent["username"],
             "bio": agent["public_bio"],
-            "persona": agent["internal_persona"],
+            "persona": persona_text,
             "age": int(agent["age"]),
             "gender": _normalize_gender(agent.get("gender")),
             "mbti": agent["mbti"],
