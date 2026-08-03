@@ -145,6 +145,39 @@ class OasisAgentProfile:
         }
 
 
+class _TraitInferenceClient:
+    """
+    Adapts the OpenAI client to the minimal call surface trait_inference expects.
+
+    Kept deliberately thin so trait_inference stays provider-agnostic and
+    unit-testable with a fake. Temperature is 0 because span citation is an
+    extraction task, not a creative one — sampling would only make the model
+    more likely to paraphrase and fail verification.
+    """
+
+    def __init__(self, client, model_name: str):
+        self._client = client
+        self._model_name = model_name
+
+    def generate(self, prompt: str) -> str:
+        response = self._client.chat.completions.create(
+            model=self._model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You extract verbatim supporting quotations from a supplied "
+                        "document. Copy quoted spans character for character. Return "
+                        "only JSON."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0,
+        )
+        return response.choices[0].message.content or ""
+
+
 class OasisProfileGenerator:
     """
     OASIS Profile Generator.
@@ -299,6 +332,10 @@ class OasisProfileGenerator:
             
             if validation_result.passed:
                 logger.info(f"Profile validation passed for {name} (attempt {attempt + 1})")
+                # Attach span-verified personality, if the source supports any.
+                # Runs only after validation passes so a rejected profile never
+                # incurs the extra model call.
+                self._attach_inferred_traits(profile, entity, context)
                 return profile
             else:
                 # Log validation failure
@@ -961,6 +998,65 @@ IMPORTANT:
         """Set graph ID for Zep retrieval"""
         self.graph_id = graph_id
     
+    def _attach_inferred_traits(
+        self,
+        profile: "OasisAgentProfile",
+        entity: EntityNode,
+        context: str,
+    ) -> None:
+        """
+        Attach span-verified Big Five traits to a profile, if the source supports any.
+
+        Mutates `profile.big_five` in place, leaving it None when nothing is
+        verifiable. Never raises: trait inference is an enhancement, so any
+        failure must leave the profile usable and the run intact.
+
+        Gated by ENABLE_TRAIT_INFERENCE (default off) because it costs one extra
+        model call per profile. With the flag off, behaviour is byte-identical to
+        before this method existed.
+
+        The traits only reach engine controls if they pass the independent
+        mechanical span check in trait_inference — see
+        trait_behavior_projection for why that check is what allows a projection
+        past the behavioural clamp.
+        """
+        if not getattr(Config, "ENABLE_TRAIT_INFERENCE", False):
+            return
+
+        # The entity summary is the most trait-bearing text available; context
+        # adds retrieved graph records. Spans are verified against exactly this
+        # concatenation, so it must be what the model is shown.
+        source_text = "\n\n".join(
+            part for part in (entity.summary or "", context or "") if part.strip()
+        )
+        if not source_text.strip():
+            return
+
+        try:
+            from .trait_inference import infer_traits
+
+            result = infer_traits(
+                entity_name=profile.name,
+                source_text=source_text,
+                llm_client=_TraitInferenceClient(self.client, self.model_name),
+            )
+            if result.grounded and result.traits is not None:
+                profile.big_five = result.traits.to_dict()
+                logger.info(
+                    "Attached %d span-verified trait(s) to %s: %s",
+                    len(result.verified_traits),
+                    profile.name,
+                    ", ".join(sorted(result.verified_traits)),
+                )
+            else:
+                logger.debug(
+                    "No span-verified traits for %s (%s); neutral defaults retained",
+                    profile.name,
+                    result.failure_reason or "no_support_in_source",
+                )
+        except Exception as exc:  # noqa: BLE001 - enhancement must never break a run
+            logger.warning("Trait inference skipped for %s: %s", profile.name, exc)
+
     def generate_profiles_from_entities(
         self,
         entities: List[EntityNode],

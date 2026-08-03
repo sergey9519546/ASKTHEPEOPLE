@@ -148,6 +148,21 @@ class Config:
         'False' if DEBUG else 'True',
     ).lower() == 'true'
 
+    # Span-verified Big Five trait inference during profile generation.
+    #
+    # Off by default for two reasons: it costs one additional model call per
+    # generated profile, and it is the only path that can move engine
+    # behavioural controls off their neutral defaults. With this off, agent
+    # behaviour is identical to before the trait layer existed.
+    #
+    # When on, a trait is attached only if the model cites a verbatim span that
+    # is then confirmed by literal substring match against the supplied source
+    # (see services/trait_inference.py). Unverifiable claims are discarded, so
+    # enabling this cannot introduce ungrounded personality.
+    ENABLE_TRAIT_INFERENCE = os.environ.get(
+        'ENABLE_TRAIT_INFERENCE', 'False'
+    ).lower() == 'true'
+
     # Runtime provider settings are a privileged local-development control
     # plane, not a general application feature.  They are disabled unless an
     # operator opts in explicitly.  In production APP_TOKEN must also be set,
