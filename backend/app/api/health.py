@@ -4,6 +4,7 @@ Health & Readiness API Endpoints
 import os
 from flask import Blueprint, jsonify, current_app
 from redis import Redis
+from sqlalchemy import text
 
 health_bp = Blueprint('health', __name__)
 
@@ -11,15 +12,14 @@ health_bp = Blueprint('health', __name__)
 def check_database():
     """Check database connectivity (PostgreSQL or SQLite)"""
     try:
-        from app.db.database import get_db_session
-        # Try to create a session and execute a simple query
-        with get_db_session() as session:
-            # Simple query to check connection
-            session.execute("SELECT 1")
+        from app.db import get_engine
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
         return True
     except Exception:
         # Database not configured or not available
-        return True  # Don't fail health check if DB not set up yet
+        return False  # Report actual state instead of always True
 
 
 def check_redis():

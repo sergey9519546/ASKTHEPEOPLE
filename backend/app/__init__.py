@@ -157,20 +157,29 @@ def create_app(config_class=Config):
     # Initialise WebSocket extension (must happen before ws routes are registered/imported)
     sock.init_app(app)
     
-    # Initialize database connection (with graceful fallback)
+    # Initialize database connection (fail closed in production)
     try:
-        from .db.database import init_db
+        from .db import get_engine, init_db
         database_url = app.config.get('DATABASE_URL')
-        init_db(database_url)
+        engine = get_engine(database_url)
+        init_db(engine)
         if should_log_startup:
-            logger.info(f"Database initialized: {database_url.split('@')[-1] if '@' in database_url else 'local'}")
+            logger.info(f"Database initialized: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local'}")
     except Exception as db_error:
-        logger.warning(
-            f"Database initialization failed: {str(db_error)}. "
-            "Falling back to filesystem storage.",
-            extra={"privacy_safe": True}
-        )
-        # Application continues with filesystem-based storage
+        if app.config.get("ENV") == "production":
+            logger.critical(
+                f"Database initialization failed in production: {str(db_error)}. "
+                "Refusing to start. Check DATABASE_URL and connectivity.",
+                extra={"privacy_safe": True}
+            )
+            raise RuntimeError("Database required in production") from db_error
+        else:
+            logger.warning(
+                f"Database initialization failed in dev/test: {str(db_error)}. "
+                "Falling back to filesystem storage.",
+                extra={"privacy_safe": True}
+            )
+            # Fallback allowed in dev/test only
 
     # In-memory rate limiting is intentional while task and simulation state
     # constrain the application to one worker.
@@ -315,11 +324,13 @@ def create_app(config_class=Config):
 
     # Register blueprints
     from .api import auth_bp, graph_bp, simulation_bp, report_bp, settings_bp, health_bp
+    from .api.jobs import jobs_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
+    app.register_blueprint(jobs_bp)  # Already has /api/jobs prefix
     app.register_blueprint(health_bp, url_prefix='/health')
 
     # Register WebSocket routes (imported here so sock is already init'd)

@@ -153,19 +153,38 @@ class EvalResultsPlugin:
             if 'evals' in str(item.fspath)
         ]
         
+        # Filter outcomes to eval tests only
+        eval_test_ids = {item.nodeid for item in eval_tests}
+        eval_outcomes = {
+            nodeid: outcome
+            for nodeid, outcome in self.test_outcomes.items()
+            if nodeid in eval_test_ids
+        }
+        
         passed = sum(
-            1 for nodeid, outcome in self.test_outcomes.items()
+            1 for outcome in eval_outcomes.values()
             if outcome['outcome'] == 'passed'
         )
         failed = sum(
-            1 for nodeid, outcome in self.test_outcomes.items()
+            1 for outcome in eval_outcomes.values()
             if outcome['outcome'] == 'failed'
         )
+        skipped = sum(
+            1 for outcome in eval_outcomes.values()
+            if outcome['outcome'] == 'skipped'
+        )
+        
+        total = len(eval_test_ids)
+        
+        # Sanity check
+        if passed + failed + skipped != total:
+            print(f"\n\nWARNING: Eval count mismatch: {passed}+{failed}+{skipped} != {total}")
         
         self.results['_test_summary'] = {
-            'total_tests': len(eval_tests),
+            'total_tests': total,
             'passed': passed,
             'failed': failed,
+            'skipped': skipped,
             'exit_status': exitstatus,
         }
         
