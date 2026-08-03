@@ -157,29 +157,37 @@ def create_app(config_class=Config):
     # Initialise WebSocket extension (must happen before ws routes are registered/imported)
     sock.init_app(app)
     
-    # Initialize database connection (fail closed in production)
+    # Initialize database connection
+    # Fail-closed only when DATABASE_URL is explicitly configured but unreachable.
+    # No DATABASE_URL = intentional SQLite / filesystem mode (valid for current Railway setup).
     try:
         from .db import get_engine, init_db
         database_url = app.config.get('DATABASE_URL')
         engine = get_engine(database_url)
         init_db(engine)
         if should_log_startup:
-            logger.info(f"Database initialized: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local'}")
+            logger.info(f"Database initialized: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local SQLite'}")
     except Exception as db_error:
-        if app.config.get("ENV") == "production":
+        # Fail closed only when an explicit DATABASE_URL was set but is unreachable.
+        # Missing DATABASE_URL means SQLite/filesystem fallback is intended.
+        is_production_db_failure = (
+            app.config.get('DATABASE_URL')  # was explicitly configured
+            and os.environ.get('RAILWAY_ENVIRONMENT') == 'production'  # in production
+        )
+        if is_production_db_failure:
             logger.critical(
-                f"Database initialization failed in production: {str(db_error)}. "
+                f"DATABASE_URL is set but database is unreachable in production: {str(db_error)}. "
                 "Refusing to start. Check DATABASE_URL and connectivity.",
                 extra={"privacy_safe": True}
             )
-            raise RuntimeError("Database required in production") from db_error
+            raise RuntimeError("Configured database unreachable in production") from db_error
         else:
             logger.warning(
-                f"Database initialization failed in dev/test: {str(db_error)}. "
+                f"Database initialization failed: {str(db_error)}. "
                 "Falling back to filesystem storage.",
                 extra={"privacy_safe": True}
             )
-            # Fallback allowed in dev/test only
+            # Fallback to filesystem storage (SQLite / JSON)
 
     # In-memory rate limiting is intentional while task and simulation state
     # constrain the application to one worker.

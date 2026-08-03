@@ -27,7 +27,7 @@ dependencies = [
     "zep-cloud==3.13.0",
     # OASIS Social Media Simulation
     "camel-oasis==0.2.5",
-    "camel-ai==0.2.78",
+    "camel-ai==0.2.78",  # pinned: camel-oasis==0.2.5 requires exactly this version
     # OASIS imports torch directly from its recommendation engine; CPU build explicit
     "torch==2.13.0",
     # OASIS imports SentenceTransformer at module load
