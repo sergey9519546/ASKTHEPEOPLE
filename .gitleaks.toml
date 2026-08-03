@@ -30,14 +30,26 @@ description = "Detected a Zep API key assigned to application configuration."
 regex = '''(?i)\bZEP_API_KEY[\t ]*[=:][\t ]*["']?(z_[A-Za-z0-9._=-]{32,})'''
 secretGroup = 1
 
+    [[rules.allowlists]]
+    description = "Allow test fixtures and documentation examples"
+    paths = ['''^backend/tests/''', '''^docs/''', '''^README\.md$''', '''^\.env\.example$''']
+
 [[rules]]
 id = "brave-search-api-key-assignment"
 description = "Detected a Brave Search API key assigned to application configuration."
 regex = '''(?i)\bBRAVE_SEARCH_API_KEY[\t ]*[=:][\t ]*["']?(BSA_[A-Za-z0-9_-]{20,})'''
 secretGroup = 1
 
+    [[rules.allowlists]]
+    description = "Allow test fixtures and documentation examples"
+    paths = ['''^backend/tests/''', '''^docs/''', '''^README\.md$''', '''^\.env\.example$''']
+
 [[rules]]
 id = "openai-compatible-api-key-assignment"
 description = "Detected an OpenAI-compatible API key assigned to application configuration."
 regex = '''(?i)\bLLM_API_KEY[\t ]*[=:][\t ]*["']?(sk-[A-Za-z0-9_-]{40,})'''
 secretGroup = 1
+
+    [[rules.allowlists]]
+    description = "Allow test fixtures and documentation examples"
+    paths = ['''^backend/tests/''', '''^docs/''', '''^README\.md$''', '''^\.env\.example$''']

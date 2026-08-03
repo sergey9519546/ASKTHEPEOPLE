@@ -70,7 +70,7 @@ jobs:
           --requirement "${RUNNER_TEMP}/backend-audit.txt"
 
       - name: Install dependencies
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --group dev
 
       - name: Run tests
         env:
