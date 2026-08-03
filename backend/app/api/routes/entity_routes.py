@@ -4,6 +4,15 @@ Entity Query API Routes (Decomposed from simulation.py)
 
 from flask import jsonify, request
 from .. import simulation_bp
+from ..simulation import (
+    _with_profile_truth,
+    _with_config_truth,
+    _resolve_graph_memory_request,
+    _validate_prepare_controls,
+    optimize_interview_prompt,
+    _check_simulation_prepared,
+    _safe_sim_dir
+)
 from ...config import Config
 from ...services.claim_boundary import (
     graph_record_disclosure,
