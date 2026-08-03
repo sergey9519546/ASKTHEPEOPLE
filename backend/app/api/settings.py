@@ -322,6 +322,23 @@ def test_settings():
         if not isinstance(data, dict):
             raise SettingsValidationError("JSON object required")
 
+        target = data.get("target", "llm")
+        if target == "zep" or ("ZEP_API_KEY" in data and "LLM_API_KEY" not in data):
+            zep_key = _clean_value("ZEP_API_KEY", data.get("ZEP_API_KEY", Config.ZEP_API_KEY or ""))
+            if not zep_key:
+                raise SettingsValidationError("ZEP_API_KEY is required to test Zep connection")
+            from zep_cloud.client import Zep
+            zep_client = Zep(api_key=zep_key)
+            try:
+                zep_client.project.get()
+            except Exception as zep_exc:
+                logger.warning("Zep API test failed: %s", zep_exc)
+                raise SettingsValidationError(f"Zep connection test failed: {str(zep_exc)[:100]}")
+            return jsonify({
+                "success": True,
+                "message": "Zep API connection test succeeded",
+            })
+
         api_key = _clean_value("LLM_API_KEY", data.get("LLM_API_KEY", ""))
         base_url = _clean_value("LLM_BASE_URL", data.get("LLM_BASE_URL", ""))
         model = _clean_value("LLM_MODEL_NAME", data.get("LLM_MODEL_NAME", ""))
@@ -359,3 +376,4 @@ def test_settings():
             "success": False,
             "error": "connection_test_failed",
         }), 502
+

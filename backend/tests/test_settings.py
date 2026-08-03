@@ -148,17 +148,27 @@ def test_arbitrary_or_private_base_url_is_rejected(app, client):
 def test_connection_test_validates_inputs_after_explicit_enable(app, client):
     app.config["ALLOW_RUNTIME_SETTINGS"] = True
     response = client.post("/api/settings/test", json={
+        "LLM_API_KEY": "caller-key",
         "LLM_BASE_URL": "https://api.openai.com/v1",
     })
     assert response.status_code == 400
-    assert response.get_json()["success"] is False
+    assert "Model Name is required" in response.get_json()["error"]
+
+
+def test_zep_connection_test_validates_key(app, client, monkeypatch):
+    app.config["ALLOW_RUNTIME_SETTINGS"] = True
+    response = client.post("/api/settings/test", json={
+        "target": "zep",
+        "ZEP_API_KEY": "",
+    })
+    assert response.status_code == 400
+    assert "ZEP_API_KEY is required" in response.get_json()["error"]
 
 
 def test_production_runtime_settings_require_app_token(app, client):
-    app.config.update({
-        "DEBUG": False,
-        "APP_TOKEN": None,
-        "ALLOW_RUNTIME_SETTINGS": True,
-    })
-    response = client.post("/api/settings", json={"LLM_API_KEY": "new-key"})
-    assert response.status_code == 403
+    app.config["ALLOW_RUNTIME_SETTINGS"] = True
+    app.config["REQUIRE_APP_AUTH"] = True
+    app.config["APP_TOKEN"] = "valid-token-value-12345678901234567890"
+
+    response = client.get("/api/settings")
+    assert response.status_code == 401
