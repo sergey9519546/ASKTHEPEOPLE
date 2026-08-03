@@ -150,11 +150,15 @@ def test_task_list_route_accepts_task_manager_serialized_dtos(monkeypatch):
     with app.app_context():
         response = graph_api.list_tasks()
 
-    assert response.get_json() == {
-        "success": True,
-        "data": [{"task_id": "task-1", "status": "pending"}],
-        "count": 1,
-    }
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["count"] == 1
+    assert payload["data"][0]["task_id"] == "task-1"
+    # Truth contract metadata (Gate 1)
+    assert payload["human_respondent_count"] == 0
+    assert payload["output_origin"] == "synthetic"
+    assert payload["is_forecast"] is False
+    assert "generated_at" in payload
 
 
 def test_stop_simulation_terminates_runtime_and_releases_resources(

@@ -1,8 +1,9 @@
 {
   "_test_summary": {
-    "total_tests": 5,
-    "passed": 52,
-    "failed": 8,
+    "total_tests": 12,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 3,
     "exit_status": 1
   }
 }

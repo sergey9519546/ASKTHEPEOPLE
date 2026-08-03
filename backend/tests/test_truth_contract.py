@@ -249,10 +249,10 @@ class TestViewIntegration:
         assert "<TruthRail" in content
     
     def test_process_view_has_truth_rail(self):
-        """Verify Process.vue imports and uses TruthRail"""
+        """Verify MainView.vue (formerly Process.vue) imports and uses TruthRail"""
         view_path = os.path.join(
             os.path.dirname(__file__),
-            "../../frontend/src/views/Process.vue"
+            "../../frontend/src/views/MainView.vue"
         )
         
         with open(view_path, 'r', encoding='utf-8') as f:

@@ -4,6 +4,7 @@ status: "Reference"
 version: "1.0.0"
 owner: "askthepeople-frontend-steward"
 created: "2026-08-02"
+last_reviewed: "2026-08-03"
 applies_to: "frontend/src/assets/main.css, frontend/src/**/*.vue"
 ---
 

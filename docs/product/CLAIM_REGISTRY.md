@@ -1,3 +1,11 @@
+---
+title: "Approved External Claims Registry"
+status: "Active"
+version: "1.0.0"
+owner: "askthepeople-product-steward"
+last_reviewed: "2026-08-02"
+---
+
 # Approved External Claims Registry
 
 **Purpose:** This document defines the approved and prohibited claims for ASKTHEPEOPLE external communications, marketing, and product descriptions. All claims must accurately represent the synthetic, exploratory nature of the tool.

@@ -2,8 +2,10 @@
 title: "Framework Comparison Summary"
 status: "Reference"
 version: "1.0.0"
+owner: "askthepeople-product-steward"
 created: "2026-08-02"
 baseline_commit: "67cd5484cb7b2dab22b6d134622cf9793b9c4e5d"
+last_reviewed: "2026-08-03"
 research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
 ---
 

@@ -88,8 +88,10 @@ def test_auth_enabled_token_query_param(app):
     assert resp.status_code == 401
 
 
-def test_health_check_open_even_when_auth_enabled(app):
+def test_health_check_open_even_when_auth_enabled(app, monkeypatch):
     """The /health probe must remain reachable for liveness checks."""
+    # Monkeypatch redis check to pass when Redis isn't running locally
+    monkeypatch.setattr("app.api.health.check_redis", lambda: True)
     app.config['APP_TOKEN'] = 'secret'
     client = app.test_client()
     resp = client.get('/health')

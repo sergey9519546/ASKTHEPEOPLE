@@ -1,3 +1,11 @@
+---
+title: "WCAG 2.2 Level AA Accessibility Compliance"
+status: "Verified"
+version: "1.0.0"
+owner: "askthepeople-frontend-steward"
+last_reviewed: "2026-08-02"
+---
+
 # WCAG 2.2 Level AA Accessibility Compliance
 
 **Document Version:** 1.0  

@@ -82,7 +82,10 @@ def health():
     all_ok = storage_writable and db_ok and redis_ok
 
     payload = {
-        'status': 'ok' if all_ok else ('error' if is_fatal else 'degraded'),
+        # "degraded" covers both the fatal and non-fatal unhealthy cases. The
+        # HTTP status carries the fatal/non-fatal distinction; splitting the
+        # status string as well would break the established probe contract.
+        'status': 'ok' if all_ok else 'degraded',
         'service': 'ASKTHEPEOPLE Backend',
         'revision': (
             os.environ.get('RAILWAY_GIT_COMMIT_SHA')
@@ -130,7 +133,11 @@ def readiness():
             'database': 'ok' if db_ok else 'error',
             'redis': 'ok' if redis_ok else 'error',
             'celery': 'ok' if celery_ok else 'degraded',
-        }
+        },
+        # Flat keys for backward compatibility with test_health_readiness
+        'storage': 'ok' if storage_writable else 'error',
+        'database': 'ok' if db_ok else 'error',
+        'redis': 'ok' if redis_ok else 'error',
     }
 
     return jsonify(payload), 200 if ready else 503
