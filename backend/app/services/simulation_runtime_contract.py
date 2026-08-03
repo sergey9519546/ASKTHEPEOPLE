@@ -5,9 +5,10 @@ OASIS/CAMEL execution behavior.
 
 from __future__ import annotations
 
+import os
+import random
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
-import random
 
 from .camel_model_factory import create_camel_model, load_model_resolution
 from .claim_boundary import graph_record_disclosure
@@ -28,6 +29,24 @@ POST_EVENT_TYPES = {
     "inject_post",
 }
 FOLLOW_EVENT_TYPES = {"follow_wave"}
+
+__all__ = [
+    "POST_EVENT_TYPES",
+    "FOLLOW_EVENT_TYPES",
+    "REFLECTION_PROMPT",
+    "get_reflection_prompt",
+    "build_agent_name_lookup",
+    "create_actor_model_for_runtime",
+    "select_active_agent_ids",
+    "bootstrap_boost_agent_ids",
+    "scheduled_event_boost_agent_ids",
+    "apply_bootstrap_actions",
+    "apply_scheduled_events",
+    "apply_runtime_control",
+    "apply_reflection_round",
+    "apply_injected_events",
+]
+
 
 
 REFLECTION_PROMPT = """
@@ -750,3 +769,107 @@ async def apply_reflection_round(
              )
 
     return len(actions)
+
+
+async def apply_injected_events(
+    env: Any,
+    simulation_dir: str,
+    config: Dict[str, Any],
+    platform: str,
+    current_round: int,
+    events: Sequence[Dict[str, Any]],
+    agent_names: Dict[int, str],
+    manual_action_cls: Any,
+    action_type_cls: Any,
+    action_logger: Any = None,
+) -> int:
+    """Apply real-time scenario injection events to the active simulation environment."""
+    if not events:
+        return 0
+
+    applied_count = 0
+    injected_log = os.path.join(simulation_dir, "injected_events.jsonl")
+
+    for event in events:
+        event_type = str(event.get("event_type", "inject_event")).strip()
+        payload = event.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {"content": str(payload)}
+
+        timestamp = event.get("timestamp") or datetime.now().isoformat()
+        log_entry = {
+            "timestamp": timestamp,
+            "platform": platform,
+            "round_num": current_round,
+            "event_type": event_type,
+            "payload": payload,
+            "raw_data": event.get("raw_data", event),
+        }
+        append_jsonl(injected_log, log_entry)
+
+        from .simulation_observation_store import record_injected_event
+        record_injected_event(
+            simulation_dir=simulation_dir,
+            platform=platform,
+            round_num=current_round,
+            event_type=event_type,
+            payload=payload,
+            timestamp=timestamp,
+        )
+
+        if event_type in ("breaking_news", "inject_post", "post", "news", "topic_spike", "inject_event"):
+            content = payload.get("content") or payload.get("text") or payload.get("headline")
+            if not content and isinstance(event.get("raw_data"), dict):
+                content = event["raw_data"].get("content") or event["raw_data"].get("message")
+            if content:
+                poster_agent_id = payload.get("agent_id")
+                if poster_agent_id is None:
+                    target_ids = select_active_agent_ids(config, platform, (current_round % 24), current_round)
+                    poster_agent_id = target_ids[0] if target_ids else 0
+
+                specs = [{
+                    "event_type": event_type,
+                    "source_agent_id": poster_agent_id,
+                    "action_type": "CREATE_POST",
+                    "action_args": {"content": str(content)},
+                    "content": str(content),
+                    "metadata": {"injected": True, "event_payload": payload},
+                }]
+                applied = await _apply_specs(
+                    env=env,
+                    simulation_dir=simulation_dir,
+                    platform=platform,
+                    round_num=current_round,
+                    specs=specs,
+                    agent_names=agent_names,
+                    manual_action_cls=manual_action_cls,
+                    action_type_cls=action_type_cls,
+                    event_log_path=scheduled_events_path(simulation_dir),
+                    action_logger=action_logger,
+                )
+                applied_count += applied
+            else:
+                applied_count += 1
+        elif event_type in ("persona_modification", "persona_change", "dynamic_instruction"):
+            agent_id = payload.get("agent_id")
+            new_instruction = payload.get("instruction") or payload.get("persona") or payload.get("content")
+            if new_instruction and hasattr(env, "agent_graph"):
+                target_agents = []
+                if isinstance(agent_id, int):
+                    try:
+                        target_agents.append(env.agent_graph.get_agent(agent_id))
+                    except Exception:
+                        pass
+                else:
+                    for _, agent in env.agent_graph.get_agents():
+                        target_agents.append(agent)
+
+                for agent in target_agents:
+                    if hasattr(agent, "system_message") and hasattr(agent.system_message, "content"):
+                        agent.system_message.content += f"\n[Scenario Update]: {new_instruction}"
+            applied_count += 1
+        else:
+            applied_count += 1
+
+    return applied_count
+

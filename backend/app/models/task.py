@@ -218,7 +218,7 @@ class TaskManager:
         try:
             from ..celery_app import celery_app
             res = celery_app.AsyncResult(task_id)
-            if res and res.state:
+            if res and res.state and (res.state != 'PENDING' or res.info is not None):
                 state_map = {
                     "PENDING": TaskStatus.PENDING,
                     "STARTED": TaskStatus.PROCESSING,

@@ -62,6 +62,15 @@ _RUN_STATE_BASE = os.path.abspath(
 )
 
 
+# P0 path-escape fix (audit §5 P0). The platform identifier is a request-
+# controlled value; it MUST be parsed as a strict enum and resolved to a
+# fixed filename. Do NOT interpolate request text into a filename.
+ALLOWED_PLATFORMS = {
+    "reddit": "reddit_simulation.db",
+    "twitter": "twitter_simulation.db",
+}
+
+
 def _safe_sim_dir(simulation_id: str) -> str:
     """Resolve a validated simulation run-state directory (path-traversal safe).
 
@@ -615,9 +624,8 @@ def prepare_simulation():
             }
         }
     """
-    import threading
     import os
-    from ..models.task import TaskManager, TaskStatus
+    from ..models.task import TaskManager
     from ..config import Config
     
     try:
@@ -740,133 +748,41 @@ def prepare_simulation():
         # Update simulation state (including pre-fetched entity count)
         state.status = SimulationStatus.PREPARING
         manager._save_simulation_state(state)
-        
-        # Define background task
-        def run_prepare():
-            try:
-                task_manager.update_task(
-                    task_id,
-                    status=TaskStatus.PROCESSING,
-                    progress=0,
-                    message="Starting simulation environment preparation..."
-                )
-                
-                # Prepare simulation (with progress callback)
-                # Store stage progress details
-                stage_details = {}
-                
-                def progress_callback(stage, progress, message, **kwargs):
-                    # Calculate total progress
-                    stage_weights = {
-                        "reading": (0, 20),           # 0-20%
-                        "generating_profiles": (20, 70),  # 20-70%
-                        "generating_config": (70, 90),    # 70-90%
-                        "copying_scripts": (90, 100)       # 90-100%
-                    }
-                    
-                    start, end = stage_weights.get(stage, (0, 100))
-                    current_progress = int(start + (end - start) * progress / 100)
-                    
-                    # Build detailed progress info
-                    stage_names = {
-                        "reading": "Reading graph entities",
-                        "generating_profiles": "Generating Agent personas",
-                        "generating_config": "Generating simulation configuration",
-                        "copying_scripts": "Preparing simulation scripts"
-                    }
-                    
-                    stage_index = list(stage_weights.keys()).index(stage) + 1 if stage in stage_weights else 1
-                    total_stages = len(stage_weights)
-                    
-                    # Update stage details
-                    stage_details[stage] = {
-                        "stage_name": stage_names.get(stage, stage),
-                        "stage_progress": progress,
-                        "current": kwargs.get("current", 0),
-                        "total": kwargs.get("total", 0),
-                        "item_name": kwargs.get("item_name", "")
-                    }
-                    
-                    # Build detailed progress info
-                    progress_detail_data = {
-                        "current_stage": stage,
-                        "current_stage_name": stage_names.get(stage, stage),
-                        "stage_index": stage_index,
-                        "total_stages": total_stages,
-                        "stage_progress": progress,
-                        "current_item": stage_details[stage]["current"],
-                        "total_items": stage_details[stage]["total"],
-                        "item_description": message
-                    }
-                    
-                    # Build concise message
-                    if stage_details[stage]["total"] > 0:
-                        detailed_message = (
-                            f"[{stage_index}/{total_stages}] {stage_names.get(stage, stage)}: "
-                            f"{stage_details[stage]['current']}/{stage_details[stage]['total']} - {message}"
-                        )
-                    else:
-                        detailed_message = f"[{stage_index}/{total_stages}] {stage_names.get(stage, stage)}: {message}"
-                    
-                    task_manager.update_task(
-                        task_id,
-                        progress=current_progress,
-                        message=detailed_message,
-                        progress_detail=progress_detail_data
-                    )
-                
-                result_state = manager.prepare_simulation(
-                    simulation_id=simulation_id,
-                    simulation_requirement=simulation_requirement,
-                    document_text=document_text,
-                    defined_entity_types=entity_types_list,
-                    use_llm_for_profiles=use_llm_for_profiles,
-                    progress_callback=progress_callback,
-                    parallel_profile_count=parallel_profile_count,
-                    use_archetypes=use_archetypes,
-                    archetype_count=archetype_count,
-                    expansion_factor=expansion_factor,
-                )
-                
-                # Task completed
-                task_manager.complete_task(
-                    task_id,
-                    result=result_state.to_simple_dict()
-                )
-                
-            except Exception as e:
-                logger.error(f"Failed to prepare simulation: {str(e)}")
-                task_manager.fail_task(
-                    task_id,
-                    str(e),
-                    public_error="simulation_prepare_failed",
-                )
-                
-                # Update simulation status to failed
-                state = manager.get_simulation(simulation_id)
-                if state:
-                    state.status = SimulationStatus.FAILED
-                    state.error = (
-                        str(e) if Config.DEBUG else "simulation_prepare_failed"
-                    )
-                    manager._save_simulation_state(state)
-        
-        # Start background thread
-        thread = threading.Thread(target=run_prepare, daemon=True)
-        thread.start()
-        
-        return jsonify({
+
+        # P0 daemon-thread fix (audit §5 P0). The route enqueues work to
+        # a Celery worker and returns 202 Accepted. The route no longer
+        # creates a `threading.Thread(..., daemon=True)`; the work
+        # runs in a worker process that can survive a web restart.
+        # Full durable workflow (idempotency keys, leases, fencing
+        # tokens, heartbeats, cancellation, retry classification)
+        # lands with gate 2 in adr/ADR-0003-durable-run-orchestration.md.
+        from ..tasks.simulation_tasks import prepare_simulation_task
+
+        prepare_simulation_task.delay(
+            simulation_id=simulation_id,
+            task_id=task_id,
+            entity_types=entity_types_list,
+            use_llm_for_profiles=use_llm_for_profiles,
+            parallel_profile_count=parallel_profile_count,
+            use_archetypes=use_archetypes,
+            archetype_count=archetype_count,
+            expansion_factor=expansion_factor,
+            document_text=document_text,
+        )
+
+        response = jsonify({
             "success": True,
             "data": {
                 "simulation_id": simulation_id,
                 "task_id": task_id,
                 "status": "preparing",
-                "message": "Preparation task started, please check progress via /api/simulation/prepare/status",
+                "message": "Preparation task enqueued. Poll /api/simulation/prepare/status for progress.",
                 "already_prepared": False,
                 "expected_entities_count": state.entities_count,  # Expected total Agents
                 "entity_types": state.entity_types  # Entity types list
             }
         })
+        return response, 202, {"Location": f"/api/jobs/{task_id}"}
         
     except ValueError as e:
         return jsonify({
@@ -2091,23 +2007,65 @@ def start_simulation():
 
 @simulation_bp.route('/<simulation_id>/inject', methods=['POST'])
 def inject_simulation_event(simulation_id: str):
-    """Return the explicit capability contract for live event injection.
+    """Publish real-time scenario injection intervention payload to Redis Pub/Sub.
 
-    The subprocess runners currently poll their supported command queues only
-    after their scheduled rounds have finished, and do not apply an
-    ``inject_event`` command to later rounds. Queuing a command here would
-    therefore create a false success signal.
+    Publishes intervention payloads (breaking news, persona modifications, dynamic instructions)
+    to Redis Pub/Sub channel `simulation:<simulation_id>:events` for live ingestion by the simulation tick loop.
     """
-    return jsonify({
-        "success": False,
-        "error": (
-            "Live scenario changes are not supported in this runtime. "
-            "Start a new run with the changed condition instead."
-        ),
-        "code": "live_scenario_injection_unsupported",
-        "supported": False,
-        "simulation_id": simulation_id,
-    }), 501
+    try:
+        manager = SimulationManager()
+        state = manager.get_simulation(simulation_id)
+        if not state:
+            return jsonify({
+                "success": False,
+                "error": f"Simulation does not exist: {simulation_id}"
+            }), 404
+
+        data = request.get_json() or {}
+        event_type = data.get("event_type", "inject_event")
+        payload = data.get("payload", data.get("content", data))
+        timestamp = data.get("timestamp") or datetime.now().isoformat()
+
+        event_message = {
+            "simulation_id": simulation_id,
+            "event_type": event_type,
+            "payload": payload if isinstance(payload, dict) else {"content": payload},
+            "timestamp": timestamp,
+            "raw_data": data,
+        }
+
+        channel = f"simulation:{simulation_id}:events"
+        published_redis = False
+
+        try:
+            redis_url = Config.REDIS_URL
+            if redis_url and not redis_url.startswith("memory://"):
+                import redis
+                r = redis.from_url(redis_url, socket_timeout=1.0, socket_connect_timeout=1.0, decode_responses=True)
+                r.publish(channel, json.dumps(event_message))
+                published_redis = True
+        except Exception as e:
+            logger.warning(f"Redis publish failed for {channel}: {e}")
+
+        if not published_redis:
+            from ..services.simulation_observation_store import push_in_memory_event
+            push_in_memory_event(simulation_id, event_message)
+
+        return jsonify({
+            "success": True,
+            "message": "Scenario injection event published successfully",
+            "simulation_id": simulation_id,
+            "channel": channel,
+            "event": event_message,
+            "published_redis": published_redis,
+        }), 200
+    except Exception as e:
+        logger.error(f"Failed to inject simulation event for {simulation_id}: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }), 500
 
 
 @simulation_bp.route('/<simulation_id>/run-patterns', methods=['GET'])
@@ -2642,24 +2600,50 @@ def get_agent_stats(simulation_id: str):
 def get_simulation_posts(simulation_id: str):
     """
     Get posts in the simulation
-    
+
     Query parameters:
         platform: platform type (twitter/reddit)
         limit: return count (default 50)
         offset: offset
-    
+
     Returns post list (read from SQLite database)
     """
     try:
-        platform = request.args.get('platform', 'reddit')
-        limit = request.args.get('limit', 50, type=int)
-        offset = request.args.get('offset', 0, type=int)
-        
+        # P0 path-escape fix (audit §5 P0). Parse the platform as a strict
+        # enum and resolve to a fixed filename. Never interpolate request
+        # text into a path.
+        platform_param = request.args.get('platform', 'reddit')
+        if platform_param not in ALLOWED_PLATFORMS:
+            return jsonify({
+                "success": False,
+                "error": "invalid_platform",
+                "allowed": sorted(ALLOWED_PLATFORMS.keys()),
+            }), 422
+        platform = platform_param
+
+        # P1 input bounding (audit §5 P1). Bounded int parsing via the
+        # request parser + manual clamps as a second line of defense.
+        try:
+            limit = int(request.args.get('limit', 50))
+            offset = int(request.args.get('offset', 0))
+        except (TypeError, ValueError):
+            return jsonify({
+                "success": False,
+                "error": "invalid_limit_or_offset",
+            }), 422
+        if limit < 0 or offset < 0 or limit > 500:
+            return jsonify({
+                "success": False,
+                "error": "limit_out_of_range",
+                "limit_max": 500,
+            }), 422
+
         sim_dir = safe_join(_RUN_STATE_BASE, simulation_id)
 
-        db_file = f"{platform}_simulation.db"
+        # Fixed allowlist, not interpolation.
+        db_file = ALLOWED_PLATFORMS[platform]
         db_path = os.path.join(sim_dir, db_file)
-        
+
         if not os.path.exists(db_path):
             return jsonify({
                 "success": True,
@@ -2671,30 +2655,76 @@ def get_simulation_posts(simulation_id: str):
                 },
                 "disclosure": synthetic_output_disclosure(),
             })
-        
+
         import sqlite3
-        conn = sqlite3.connect(db_path)
+        # Read-only mode, bounded busy timeout. Distinguishes missing
+        # table, locked database, corrupt database, and query timeout
+        # (audit §5 P0 required correction).
+        db_uri = f"file:{db_path}?mode=ro"
+        try:
+            conn = sqlite3.connect(db_uri, uri=True, timeout=5.0)
+        except sqlite3.OperationalError as exc:
+            msg = str(exc).lower()
+            if "unable to open" in msg or "no such file" in msg:
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "platform": platform,
+                        "count": 0,
+                        "posts": [],
+                        "message": "Database does not exist, simulation may not have run yet"
+                    },
+                    "disclosure": synthetic_output_disclosure(),
+                })
+            if "database disk image is malformed" in msg:
+                logger.error("Posts sqlite is corrupt: %s", db_path)
+                return jsonify({"success": False, "error": "database_corrupt"}), 500
+            return jsonify({
+                "success": False,
+                "error": "database_unavailable",
+                "detail": str(exc),
+            }), 500
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         try:
-            cursor.execute("""
-                SELECT * FROM post 
-                ORDER BY created_at DESC 
-                LIMIT ? OFFSET ?
-            """, (limit, offset))
-            
-            posts = [dict(row) for row in cursor.fetchall()]
-            
-            cursor.execute("SELECT COUNT(*) FROM post")
-            total = cursor.fetchone()[0]
-            
-        except sqlite3.OperationalError:
-            posts = []
-            total = 0
-        
-        conn.close()
-        
+            try:
+                cursor.execute("""
+                    SELECT * FROM post
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                """, (limit, offset))
+
+                posts = [dict(row) for row in cursor.fetchall()]
+
+                cursor.execute("SELECT COUNT(*) FROM post")
+                total = cursor.fetchone()[0]
+            except sqlite3.OperationalError as exc:
+                msg = str(exc).lower()
+                if "no such table" in msg:
+                    # Missing table is not an error; the simulation may
+                    # not have produced any posts yet.
+                    posts = []
+                    total = 0
+                elif "database is locked" in msg:
+                    conn.close()
+                    return jsonify({"success": False, "error": "database_locked"}), 423
+                elif "database disk image is malformed" in msg:
+                    conn.close()
+                    return jsonify({"success": False, "error": "database_corrupt"}), 500
+                else:
+                    conn.close()
+                    return jsonify({
+                        "success": False,
+                        "error": "database_query_failed",
+                        "detail": str(exc),
+                    }), 500
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
         return jsonify({
             "success": True,
             "data": {
@@ -2705,7 +2735,7 @@ def get_simulation_posts(simulation_id: str):
             },
             "disclosure": synthetic_output_disclosure(),
         })
-        
+
     except SafePathError:
         return jsonify({"success": False, "error": "invalid_id"}), 400
     except Exception as e:

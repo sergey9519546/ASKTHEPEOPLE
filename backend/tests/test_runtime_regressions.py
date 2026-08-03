@@ -3,6 +3,7 @@
 import json
 import os
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from flask import Flask
 
@@ -278,8 +279,13 @@ def test_monitor_preserves_intentional_stop_for_nonzero_exit(
     assert monitored.completed_at
 
 
-def test_live_injection_returns_explicit_unsupported_contract():
+def test_live_injection_returns_pubsub_contract(monkeypatch):
     app = Flask(__name__)
+
+    mock_state = SimpleNamespace(simulation_id="sim-1", status="running", config={})
+    mock_mgr = MagicMock()
+    mock_mgr.get_simulation.return_value = mock_state
+    monkeypatch.setattr(simulation_api, "SimulationManager", lambda: mock_mgr)
 
     with app.test_request_context(
         json={"content": "Breaking update", "platform": "parallel"}
@@ -287,18 +293,11 @@ def test_live_injection_returns_explicit_unsupported_contract():
         response = simulation_api.inject_simulation_event("sim-1")
 
     body, status = response
-    assert status == 501
+    assert status == 200
     payload = body.get_json()
-    assert payload == {
-        "success": False,
-        "error": (
-            "Live scenario changes are not supported in this runtime. "
-            "Start a new run with the changed condition instead."
-        ),
-        "code": "live_scenario_injection_unsupported",
-        "supported": False,
-        "simulation_id": "sim-1",
-    }
+    assert payload["success"] is True
+    assert payload["simulation_id"] == "sim-1"
+    assert payload["channel"] == "simulation:sim-1:events"
 
 
 def test_saved_run_summary_exposes_resume_contract(monkeypatch):

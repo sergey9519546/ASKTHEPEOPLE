@@ -1,0 +1,147 @@
+name: Documentation system
+
+# Validates the production documentation system under docs/ on every push and
+# pull request that touches the doc tree, the validator, or the CI workflow
+# itself. Required per INTEGRATION_GUIDE.md §5 (CI enforcement of the
+# documentation contract).
+#
+# The doc system is normative: docs/product/PRODUCT_TRUTH_CONTRACT.md and the
+# 12 ADRs are the authority. A pull request that violates the structural
+# rules MUST be fixed before merge. A pull request that introduces prohibited
+# outcome language in user-facing copy MUST be fixed before merge.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "tools/validate_docs.py"
+      - ".github/workflows/docs.yml"
+      - "INTEGRATION_GUIDE.md"
+      - "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "tools/validate_docs.py"
+      - ".github/workflows/docs.yml"
+      - "INTEGRATION_GUIDE.md"
+      - "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md"
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate-doc-system:
+    name: Validate doc system
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11.15"
+
+      - name: Run docs validator
+        # Validates:
+        #   - all required normative documents exist
+        #   - UTF-8 + YAML front matter (title, status, version, owner, last_reviewed)
+        #   - exactly one H1 per modular doc; no heading-level jumps
+        #   - balanced fenced code blocks
+        #   - no TODO/FIXME/XXX/lorem/placeholder tokens
+        #   - all footnote refs and defs balance
+        #   - all relative links resolve and stay inside the repo
+        #   - ADR numbers are unique and every ADR is in the ADR index
+        #   - critical truth clauses present in PRODUCT_TRUTH_CONTRACT.md
+        #   - critical methodology clauses present in METHODOLOGY.md
+        # Scoped to docs/ only; archive/ is exempt.
+        run: python tools/validate_docs.py
+
+      - name: Check for naked ASKTHEPEOPLE wordmark
+        # The naked wordmark is prohibited outside a legal footer or
+        # trademark context. PRODUCT_TRUTH_CONTRACT.md and TERMINOLOGY.md
+        # both require the full brand unit (Synthetic Decision Explorer +
+        # tagline) whenever the product is named. This linter is a
+        # smoke test for blatant violations in user-facing copy under
+        # docs/product/, docs/design/, docs/release/, and the repo root.
+        # The check is intentionally narrow: a positive hit is a
+        # release-blocker; a miss is not a guarantee of compliance.
+        env:
+          PRODUCT_NAME: "ASKTHEPEOPLE"
+        run: |
+          set -e
+          # Allowlist: places where the wordmark alone is permitted.
+          ALLOWLIST_REGEX='(
+            ^docs/archive/
+            | /archive/
+            | LICENSE
+            | /LICENSES/
+            | README\.md
+            | INTEGRATION_GUIDE\.md
+            | ASKTHEPEOPLE_GODMODE_BUILDPLAN\.md
+            | THIRD_PARTY_NOTICES\.md
+            | PROVENANCE\.md
+            | docs/product/PRODUCT_TRUTH_CONTRACT\.md
+            | docs/product/TERMINOLOGY\.md
+            | docs/product/USE_POLICY\.md
+            | docs/architecture/adr/ADR-0001-product-category-and-truth-contract\.md
+          )'
+          # Scan product/, design/, release/ for the wordmark outside
+          # the three allowlisted product docs. Hits there mean the
+          # brand unit is missing in a user-facing surface.
+          HITS=$(grep -RIn --include="*.md" -E "\\b${PRODUCT_NAME}\\b" docs/ \
+            | grep -vE "${ALLOWLIST_REGEX}" \
+            || true)
+          if [ -n "${HITS}" ]; then
+            echo "Naked ASKTHEPEOPLE wordmark found in user-facing copy:"
+            echo "${HITS}"
+            echo
+            echo "Per PRODUCT_TRUTH_CONTRACT.md, the wordmark MUST be paired"
+            echo "with the 'SYNTHETIC DECISION EXPLORER' descriptor and the"
+            echo "tagline 'Explore assumptions before you ask. Validate with"
+            echo "people after.' See docs/product/TERMINOLOGY.md."
+            exit 1
+          fi
+
+      - name: Check for prohibited outcome language
+        # These phrases are prohibited in user-facing copy per
+        # PRODUCT_TRUTH_CONTRACT.md and ASKTHEPEOPLE_GODMODE_BUILDPLAN.md
+        # Part I §9. They imply a measurement, prediction, or
+        # representativeness claim that the product does not support.
+        # Scans docs/product/, docs/design/, docs/release/ (the
+        # user-facing surfaces) and the repo root README.
+        env:
+          PROHIBITED: "predict what people will do|predict public response|ask thousands of people instantly|know what people think|human-level accuracy|digital twin of (your|the) (audience|users|customers|people)|bias-free personas|scientifically proven (people |)simulation|representative synthetic sample|validate the decision (with|using) ASKTHEPEOPLE"
+        run: |
+          set -e
+          SCAN_PATHS=(
+            "README.md"
+            "docs/product/"
+            "docs/design/"
+            "docs/release/"
+          )
+          PATTERN="${PROHIBITED}"
+          HITS=$(grep -RInE "${PATTERN}" "${SCAN_PATHS[@]}" 2>/dev/null || true)
+          if [ -n "${HITS}" ]; then
+            echo "Prohibited outcome language found in user-facing copy:"
+            echo "${HITS}"
+            echo
+            echo "See docs/product/PRODUCT_TRUTH_CONTRACT.md and"
+            echo "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md Part I §9 'Prohibited"
+            echo "promises' for the full list. If a phrase is used in a"
+            echo "negation or qualification that is approved, move the"
+            # shellcheck disable=SC2016
+            echo "content under an explicit heading that is allowlisted in"
+            echo "tools/validate_docs.py or add a narrow exception here."
+            exit 1
+          fi

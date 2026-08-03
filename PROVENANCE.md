@@ -6,7 +6,7 @@ ASKTHEPEOPLE is an adaptation of
 [MiroFish](https://github.com/666ghj/MiroFish), created by 666ghj and its
 contributors. It is not an independently created codebase.
 
-The repository’s shared Git history begins with:
+The repository's shared Git history begins with:
 
 ```text
 38e3d05b1d33d13fcbadc83ec0c4bf84c878e828
@@ -17,6 +17,25 @@ Subject: Initial commit
 That commit hash and the following upstream history are present in the MiroFish
 repository. Later commits in this repository adapt, extend, rebrand, test, and
 operate the system as ASKTHEPEOPLE.
+
+## Current baseline
+
+The current implementation baseline is
+**`8b616dc7fa02eeed5ada8c51998d8b197be28f8d`** on the `main` branch,
+last reviewed 2026-07-29. The production documentation system under
+[`docs/`](docs/README.md) is the normative authority. The
+[`AGENTS.md`](AGENTS.md) is the operational contract for any AI agent
+working on this project, including the Mavis specialist team and any
+external runner.
+
+The baseline diverges from the doc-system baseline
+(`c33a6a9127fa0705cfff426053f54815f58b4755`) by 30+ commits. The
+divergence is recorded in
+[`docs/archive/legacy-2026-07-29/README.md`](docs/archive/legacy-2026-07-29/README.md)
+and must be expanded to a full per-aggregate census per
+[`docs/exec-plans/00-repository-census-and-governance.md`](docs/exec-plans/00-repository-census-and-governance.md)
+before any release claim cites the new authority docs as
+already-live.
 
 ## Relationship to MiroFish
 
@@ -45,6 +64,14 @@ The complete record is in Git. Broad areas of later work include:
 - Security and data-handling hardening
 - Container, CI/CD, Railway, Render, and Vercel configuration
 - Documentation and operating guidance
+- Production documentation system under `docs/` (12 ADRs, 48 modular
+  documents, validator, CI, archive) — see
+  [`docs/README.md`](docs/README.md)
+- Three P0 release-blocker fixes in
+  [`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md):
+  P0 path-escape in the posts endpoint, P0 daemon-thread in the
+  prepare route, and P0 prompt-prefixing in profile generation.
+  Recorded in [`docs/release/GATE_0_RELEASE_NOTES.md`](docs/release/GATE_0_RELEASE_NOTES.md)
 
 This list is a summary, not a substitute for commit history or a software bill
 of materials.

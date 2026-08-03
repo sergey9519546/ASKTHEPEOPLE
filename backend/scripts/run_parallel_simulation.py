@@ -156,8 +156,10 @@ def init_logging_for_simulation(simulation_dir: str):
 
 
 from action_logger import SimulationLogManager, PlatformActionLogger
+from app.config import Config
 from app.services.simulation_runtime_contract import (
     apply_bootstrap_actions,
+    apply_injected_events,
     apply_reflection_round,
     apply_scheduled_events,
     bootstrap_boost_agent_ids,
@@ -166,6 +168,52 @@ from app.services.simulation_runtime_contract import (
     scheduled_event_boost_agent_ids,
     select_active_agent_ids,
 )
+
+
+class RedisEventConsumer:
+    """Redis Pub/Sub subscriber for real-time scenario injection events with in-memory fallback."""
+
+    def __init__(self, simulation_id: str, redis_url: Optional[str] = None):
+        self.simulation_id = simulation_id
+        self.channel_name = f"simulation:{simulation_id}:events"
+        self.pubsub = None
+        self.redis_client = None
+        url = redis_url or getattr(Config, 'REDIS_URL', '')
+        try:
+            if url and not url.startswith("memory://"):
+                import redis
+                self.redis_client = redis.from_url(url, socket_timeout=1.0, socket_connect_timeout=1.0, decode_responses=True)
+                self.pubsub = self.redis_client.pubsub()
+                self.pubsub.subscribe(self.channel_name)
+        except Exception:
+            pass
+
+    def consume_events(self) -> List[Dict[str, Any]]:
+        events = []
+        if self.pubsub:
+            try:
+                while True:
+                    msg = self.pubsub.get_message(ignore_subscribe_messages=True, timeout=0.01)
+                    if not msg:
+                        break
+                    if isinstance(msg, dict) and msg.get("type") == "message":
+                        data_str = msg.get("data")
+                        if data_str:
+                            try:
+                                events.append(json.loads(data_str))
+                            except json.JSONDecodeError:
+                                pass
+            except Exception:
+                pass
+
+        try:
+            from app.services.simulation_observation_store import pop_in_memory_events
+            fallback_events = pop_in_memory_events(self.simulation_id)
+            events.extend(fallback_events)
+        except Exception:
+            pass
+
+        return events
 
 try:
     from camel.models import ModelFactory
@@ -1157,6 +1205,7 @@ async def run_twitter_simulation(
             log_info(f"Rounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
     
     start_time = datetime.now()
+    event_consumer = RedisEventConsumer(simulation_id=os.path.basename(simulation_dir))
     
     for round_num in range(total_rounds):
         # Check for shutdown signal
@@ -1172,6 +1221,21 @@ async def run_twitter_simulation(
         # Record round start regardless of active agents
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
+        
+        injected_events = event_consumer.consume_events()
+        if injected_events:
+            await apply_injected_events(
+                env=result.env,
+                simulation_dir=simulation_dir,
+                config=config,
+                platform="twitter",
+                current_round=round_num + 1,
+                events=injected_events,
+                agent_names=agent_names,
+                manual_action_cls=ManualAction,
+                action_type_cls=ActionType,
+                action_logger=action_logger,
+            )
         
         scheduled_count = await apply_scheduled_events(
             env=result.env,
@@ -1392,6 +1456,7 @@ async def run_reddit_simulation(
             log_info(f"Rounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
     
     start_time = datetime.now()
+    event_consumer = RedisEventConsumer(simulation_id=os.path.basename(simulation_dir))
     
     for round_num in range(total_rounds):
         # Check for shutdown signal
@@ -1407,6 +1472,21 @@ async def run_reddit_simulation(
         # Record round start regardless of active agents
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
+        
+        injected_events = event_consumer.consume_events()
+        if injected_events:
+            await apply_injected_events(
+                env=result.env,
+                simulation_dir=simulation_dir,
+                config=config,
+                platform="reddit",
+                current_round=round_num + 1,
+                events=injected_events,
+                agent_names=agent_names,
+                manual_action_cls=ManualAction,
+                action_type_cls=ActionType,
+                action_logger=action_logger,
+            )
         
         scheduled_count = await apply_scheduled_events(
             env=result.env,

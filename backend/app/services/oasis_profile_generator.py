@@ -503,59 +503,66 @@ class OasisProfileGenerator:
                 entity_name, entity_type, entity_summary, entity_attributes, context
             )
 
-        # Retry up to max_attempts times
+        # Retry up to max_attempts times. Each attempt uses the
+        # P0 prompt-prefixing structural contract (chat_with_role_contract):
+        # separate system + user roles, zero tools, structured output
+        # requested, deterministic truth + terminology validators run
+        # on the response, per-call record attached to the run manifest.
+        # The underlying LLMClient.chat() retries 3 times on transient
+        # provider errors; this loop adds another attempt at a lower
+        # temperature and falls back to rule-based on any contract
+        # violation.
+        from ..utils.llm_client import LLMClient  # local import for clarity
+
+        # Build the LLMClient on the fly if we don't already have one
+        # in the role contract path. The class is intentionally
+        # imported here (not at module top) to keep the dependency
+        # local to this call site.
+        llm_client = getattr(self, "_llm_client", None)
+        if llm_client is None:
+            llm_client = LLMClient()
+            self._llm_client = llm_client
+
         max_attempts = 3
         last_error = None
-        
+
         for attempt in range(max_attempts):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model_name,
-                    messages=[
-                        {"role": "system", "content": self._get_system_prompt(is_individual)},
-                        {"role": "user", "content": prompt}
-                    ],
-                    response_format={"type": "json_object"},
-                    temperature=0.7 - (attempt * 0.1)  # Lower temperature on each retry
+                contract_result = llm_client.chat_with_role_contract(
+                    system_prompt=self._get_system_prompt(is_individual),
+                    user_prompt=prompt,
+                    temperature=0.7 - (attempt * 0.1),
                 )
-                
-                content = response.choices[0].message.content
-                
-                # Check if output was truncated
-                finish_reason = response.choices[0].finish_reason
-                if finish_reason == 'length':
-                    logger.warning(f"LLM output truncated (attempt {attempt+1}), attempting fix...")
-                    content = self._fix_truncated_json(content)
-                
-                # Attempt JSON parse
-                try:
-                    result = json.loads(content)
-                    
-                    # Validate required fields
-                    if "bio" not in result or not result["bio"]:
-                        result["bio"] = entity_summary[:200] if entity_summary else f"{entity_type}: {entity_name}"
-                    if "persona" not in result or not result["persona"]:
-                        result["persona"] = entity_summary or f"{entity_name} is a {entity_type}."
-                    
-                    return result
-                    
-                except json.JSONDecodeError as je:
-                    logger.warning(f"JSON parse failed (attempt {attempt+1}): {str(je)[:80]}")
-                    
-                    # Attempt JSON repair
-                    result = self._try_fix_json(content, entity_name, entity_type, entity_summary)
-                    if result.get("_fixed"):
-                        del result["_fixed"]
-                        return result
-                    
-                    last_error = je
-                    
+                result = contract_result["data"]
+
+                # Record the per-call manifest on the profile for the
+                # gate-1 run manifest. Not yet persisted to the run
+                # manifest table; that lands with the canonical
+                # persistence layer in gate 3.
+                result["_prompt_record"] = {
+                    "model": contract_result["model"],
+                    "system_prompt_sha256": contract_result["system_prompt_sha256"],
+                    "user_prompt_sha256": contract_result["user_prompt_sha256"],
+                    "output_sha256": contract_result["output_sha256"],
+                    "tools_bound": contract_result["tools_bound"],
+                    "structured_output": contract_result["structured_output"],
+                    "truth_audit": contract_result["truth_audit"],
+                }
+
+                # Validate required fields.
+                if "bio" not in result or not result["bio"]:
+                    result["bio"] = entity_summary[:200] if entity_summary else f"{entity_type}: {entity_name}"
+                if "persona" not in result or not result["persona"]:
+                    result["persona"] = entity_summary or f"{entity_name} is a {entity_type}."
+
+                return result
+
             except Exception as e:
-                logger.warning(f"LLM call failed (attempt {attempt+1}): {str(e)[:80]}")
+                logger.warning(f"LLM call failed under role contract (attempt {attempt+1}): {str(e)[:80]}")
                 last_error = e
                 import time
-                time.sleep(1 * (attempt + 1))  # Exponential backoff
-        
+                time.sleep(1 * (attempt + 1))
+
         logger.warning(f"LLM persona generation failed after {max_attempts} attempts: {last_error}, falling back to rule-based")
         return self._generate_profile_rule_based(
             entity_name, entity_type, entity_summary, entity_attributes
