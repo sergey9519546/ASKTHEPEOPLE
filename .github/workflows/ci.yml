@@ -183,6 +183,8 @@ jobs:
             printf 'FLASK_DEBUG=false\n'
             printf 'CORS_ORIGINS=http://127.0.0.1:5001\n'
             printf 'TRUSTED_HOSTS=127.0.0.1,localhost\n'
+            printf 'LLM_API_KEY=build-validation-model-key\n'
+            printf 'ZEP_API_KEY=build-validation-zep-key\n'
           } > "$runtime_env"
           chmod 0600 "$runtime_env"
 
