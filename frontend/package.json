@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@axe-core/cli": "^4.12.1",
-    "@vitejs/plugin-vue": "^6.0.1",
+    "@vitejs/plugin-vue": "^6.0.8",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^26.0.0",
     "vite": "^7.2.4",
