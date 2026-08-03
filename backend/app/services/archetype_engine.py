@@ -277,10 +277,28 @@ class ArchetypeEngine:
             else:
                 age = 30
 
-            karma = int((base_profile.karma or 1000) * random.uniform(0.7, 1.3))
-            follower_count = int((base_profile.follower_count or 150) * random.uniform(0.7, 1.3))
-            friend_count = int((base_profile.friend_count or 100) * random.uniform(0.7, 1.3))
-            statuses_count = int((base_profile.statuses_count or 500) * random.uniform(0.7, 1.3))
+            # Only jitter if base value exists and is source-derived
+            # Don't fabricate counts from None
+            karma = (
+                int(base_profile.karma * random.uniform(0.7, 1.3))
+                if base_profile.karma is not None
+                else None
+            )
+            follower_count = (
+                int(base_profile.follower_count * random.uniform(0.7, 1.3))
+                if base_profile.follower_count is not None
+                else None
+            )
+            friend_count = (
+                int(base_profile.friend_count * random.uniform(0.7, 1.3))
+                if base_profile.friend_count is not None
+                else None
+            )
+            statuses_count = (
+                int(base_profile.statuses_count * random.uniform(0.7, 1.3))
+                if base_profile.statuses_count is not None
+                else None
+            )
 
             variants.append(
                 OasisAgentProfile(

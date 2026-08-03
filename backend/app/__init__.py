@@ -157,20 +157,37 @@ def create_app(config_class=Config):
     # Initialise WebSocket extension (must happen before ws routes are registered/imported)
     sock.init_app(app)
     
-    # Initialize database connection (with graceful fallback)
+    # Initialize database connection
+    # Fail-closed only when DATABASE_URL is explicitly configured but unreachable.
+    # No DATABASE_URL = intentional SQLite / filesystem mode (valid for current Railway setup).
     try:
-        from .db.database import init_db
+        from .db import get_engine, init_db
         database_url = app.config.get('DATABASE_URL')
-        init_db(database_url)
+        engine = get_engine(database_url)
+        init_db(engine)
         if should_log_startup:
-            logger.info(f"Database initialized: {database_url.split('@')[-1] if '@' in database_url else 'local'}")
+            logger.info(f"Database initialized: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local SQLite'}")
     except Exception as db_error:
-        logger.warning(
-            f"Database initialization failed: {str(db_error)}. "
-            "Falling back to filesystem storage.",
-            extra={"privacy_safe": True}
+        # Fail closed only when an explicit DATABASE_URL was set but is unreachable.
+        # Missing DATABASE_URL means SQLite/filesystem fallback is intended.
+        is_production_db_failure = (
+            app.config.get('DATABASE_URL')  # was explicitly configured
+            and os.environ.get('RAILWAY_ENVIRONMENT') == 'production'  # in production
         )
-        # Application continues with filesystem-based storage
+        if is_production_db_failure:
+            logger.critical(
+                f"DATABASE_URL is set but database is unreachable in production: {str(db_error)}. "
+                "Refusing to start. Check DATABASE_URL and connectivity.",
+                extra={"privacy_safe": True}
+            )
+            raise RuntimeError("Configured database unreachable in production") from db_error
+        else:
+            logger.warning(
+                f"Database initialization failed: {str(db_error)}. "
+                "Falling back to filesystem storage.",
+                extra={"privacy_safe": True}
+            )
+            # Fallback to filesystem storage (SQLite / JSON)
 
     # In-memory rate limiting is intentional while task and simulation state
     # constrain the application to one worker.
@@ -315,11 +332,13 @@ def create_app(config_class=Config):
 
     # Register blueprints
     from .api import auth_bp, graph_bp, simulation_bp, report_bp, settings_bp, health_bp
+    from .api.jobs import jobs_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
+    app.register_blueprint(jobs_bp)  # Already has /api/jobs prefix
     app.register_blueprint(health_bp, url_prefix='/health')
 
     # Register WebSocket routes (imported here so sock is already init'd)

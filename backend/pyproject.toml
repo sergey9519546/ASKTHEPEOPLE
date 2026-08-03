@@ -20,14 +20,14 @@ dependencies = [
     # Database
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
-    "psycopg2-binary>=2.9.9",
+    "psycopg[binary]>=3.2.0",  # PostgreSQL driver for SQLAlchemy 2 sync
     # LLM-Related
     "openai>=1.0.0",
     # Zep Cloud
     "zep-cloud==3.13.0",
     # OASIS Social Media Simulation
     "camel-oasis==0.2.5",
-    "camel-ai==0.2.78",
+    "camel-ai==0.2.78",  # pinned: camel-oasis==0.2.5 requires exactly this version
     # OASIS imports torch directly from its recommendation engine; CPU build explicit
     "torch==2.13.0",
     # OASIS imports SentenceTransformer at module load

@@ -34,13 +34,13 @@ class OasisAgentProfile:
     bio: str
     persona: str
     
-    # Reddit-style optional fields
-    karma: int = 1000
+    # Reddit-style optional fields (only if source-derived)
+    karma: Optional[int] = None
     
-    # Twitter-style optional fields
-    friend_count: int = 100
-    follower_count: int = 150
-    statuses_count: int = 500
+    # Twitter-style optional fields (only if source-derived)
+    friend_count: Optional[int] = None
+    follower_count: Optional[int] = None
+    statuses_count: Optional[int] = None
     
     # Extra persona info
     age: Optional[int] = None
@@ -247,10 +247,10 @@ class OasisProfileGenerator:
                 name=name,
                 bio=profile_data.get("bio", f"{entity_type}: {name}"),
                 persona=profile_data.get("persona", entity.summary or f"A {entity_type} named {name}."),
-                karma=profile_data.get("karma", random.randint(500, 5000)),
-                friend_count=profile_data.get("friend_count", random.randint(50, 500)),
-                follower_count=profile_data.get("follower_count", random.randint(100, 1000)),
-                statuses_count=profile_data.get("statuses_count", random.randint(100, 2000)),
+                karma=profile_data.get("karma"),  # None if not source-derived
+                friend_count=profile_data.get("friend_count"),
+                follower_count=profile_data.get("follower_count"),
+                statuses_count=profile_data.get("statuses_count"),
                 age=profile_data.get("age"),
                 gender=profile_data.get("gender"),
                 mbti=profile_data.get("mbti"),
@@ -991,10 +991,10 @@ IMPORTANT:
                             name=entry.get("name", ""),
                             bio=entry.get("bio", ""),
                             persona=entry.get("persona", ""),
-                            karma=entry.get("karma", 1000),
-                            friend_count=entry.get("friend_count", 100),
-                            follower_count=entry.get("follower_count", 150),
-                            statuses_count=entry.get("statuses_count", 500),
+                            karma=entry.get("karma"),
+                            friend_count=entry.get("friend_count"),
+                            follower_count=entry.get("follower_count"),
+                            statuses_count=entry.get("statuses_count"),
                             age=entry.get("age"),
                             gender=entry.get("gender"),
                             mbti=entry.get("mbti"),
