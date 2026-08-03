@@ -1177,6 +1177,18 @@ Return JSON format (no markdown):
                     control_basis,
                 )
 
+            # Role-based influence weight from constraint engine.
+            # Institutional actors (organizations, officials, media) have broader
+            # amplification capacity than isolated individuals. Deterministic,
+            # no model call. ASSUMPTION: multipliers in influence_weight_from_role
+            # are design choices; direction is defensible.
+            try:
+                from .trait_behavior_projection import influence_weight_from_role
+                role_info_for_constraint = normalize_entity_type(entity.get_entity_type())
+                constraint_influence = influence_weight_from_role(role_info_for_constraint)
+            except Exception:
+                constraint_influence = 1.0
+
             config = AgentActivityConfig(
                 agent_id=agent_id,
                 entity_uuid=entity.uuid,
@@ -1190,7 +1202,9 @@ Return JSON format (no markdown):
                 response_delay_max=cfg.get("response_delay_max", 60),
                 sentiment_bias=cfg.get("sentiment_bias", 0.0),
                 stance=cfg.get("stance", "neutral"),
-                influence_weight=cfg.get("influence_weight", 1.0),
+                # Trait projection overrides the cfg-level weight; constraint
+                # multiplier is applied on top (they compose multiplicatively).
+                influence_weight=round(cfg.get("influence_weight", 1.0) * constraint_influence, 4),
                 normalized_role=cfg.get("normalized_role", normalize_entity_type(entity.get_entity_type())["normalized_role"]),
                 reaction_style=cfg.get("reaction_style", "measured"),
                 conflict_tolerance=cfg.get("conflict_tolerance", 0.45),

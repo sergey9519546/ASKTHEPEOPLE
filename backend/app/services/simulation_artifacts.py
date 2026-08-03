@@ -370,14 +370,28 @@ def canonical_to_twitter_rows(canonical_agents: Sequence[Dict[str, Any]]) -> lis
 def canonical_to_reddit_profiles(canonical_agents: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
     profiles = []
     for agent in canonical_agents:
-        # Append prospect-theory risk framing to the persona when traits exist.
-        # This reaches the OASIS agent system prompt via:
+        # Layer 1: prospect-theory risk framing (from Big Five traits)
+        # Layer 2: structural constraint framing (from entity role type)
+        # Both reach the OASIS agent system prompt via:
         #   agents_generator.py  profile["other_info"]["user_profile"] = agent_info[i]["persona"]
-        #   user.py:97           description += f"...personality type of {mbti}..."
-        # Deterministic, no model call; absent traits leave persona unchanged.
+        # Deterministic, no model call; absent traits/roles leave persona unchanged.
         try:
-            from .trait_behavior_projection import persona_with_framing
+            from .trait_behavior_projection import (
+                persona_with_framing,
+                persona_with_constraint_framing,
+            )
             persona_text = persona_with_framing(agent["internal_persona"], agent)
+            # Pass the normalized role STRING directly — re-normalizing it
+            # round-trips through role_normalizer, which does not recognize
+            # normalized roles ("individual", "organization") as inputs and
+            # would silently degrade them to entity/unknown.
+            role_key = (
+                agent.get("source_entity_type_normalized")
+                or agent.get("source_entity_type_raw")
+                or agent.get("entity_type")
+                or "entity"
+            )
+            persona_text = persona_with_constraint_framing(persona_text, role_key)
         except Exception:
             persona_text = agent["internal_persona"]
 

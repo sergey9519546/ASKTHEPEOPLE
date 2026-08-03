@@ -158,8 +158,8 @@ class TestEndToEndIntegration:
         assert "losses weigh approximately" in persona_on_disk
         assert "2." in persona_on_disk  # lambda coefficient
 
-    def test_neutral_traits_leave_reddit_profile_unchanged(self):
-        """Neutral vector → persona on disk is identical to input."""
+    def test_neutral_traits_leave_prospect_framing_empty(self):
+        """Neutral vector → no PROSPECT framing (constraint framing may still apply)."""
         from app.services.oasis_profile_generator import OasisAgentProfile
         from app.services.simulation_artifacts import (
             build_canonical_agents,
@@ -178,14 +178,20 @@ class TestEndToEndIntegration:
         )
         entity = types.SimpleNamespace(
             uuid="u0", name="Neutral", summary="s", attributes={},
-            get_entity_type=lambda: "Person", related_edges=[], related_nodes=[]
+            get_entity_type=lambda: "Person",
+            related_edges=[], related_nodes=[],
         )
         canonical = build_canonical_agents([entity], [profile])
         tmpdir = tempfile.mkdtemp()
         write_exports_from_canonical(tmpdir, canonical)
 
         on_disk = json.load(open(os.path.join(tmpdir, "reddit_profiles.json"), encoding="utf-8"))
-        assert on_disk[0]["persona"] == original_persona
+        persona = on_disk[0]["persona"]
+        # Neutral traits → no prospect framing (loss aversion, probability weighting)
+        assert "losses weigh" not in persona
+        assert "probability" not in persona
+        # But constraint framing still applies based on entity type
+        assert "individual with limited discretionary" in persona or original_persona in persona
 
     def test_export_exception_does_not_crash_pipeline(self):
         """If framing fails, the pipeline must succeed with original persona."""

@@ -322,3 +322,187 @@ def persona_with_framing(internal_persona: str, agent: Optional[Dict[str, Any]])
 
     separator = "\n\n" if internal_persona and not internal_persona.endswith("\n") else ""
     return f"{internal_persona}{separator}{framing}"
+
+
+# ---------------------------------------------------------------------------
+# Constraint-based influence weight + persona framing
+# ---------------------------------------------------------------------------
+# The constraint_engine models what actors CAN do, not just what they want.
+# Here it drives two things:
+#
+#   1. influence_weight in AgentActivityConfig — institutional actors have
+#      more amplification capacity than isolated individuals.
+#
+#   2. A persona text fragment — describes what structural limits apply, so
+#      the OASIS system prompt captures resource and authority constraints.
+#
+# Both are derived deterministically from the entity role (no model call)
+# and fail open if the role is unknown or the constraint module is absent.
+#
+# ASSUMPTION: the influence_weight values by role are design choices. The
+# DIRECTION is defensible (institutions have more reach); the specific
+# multipliers are not empirical.
+
+
+# Influence weight by role family. 1.0 is the baseline for individuals.
+# ASSUMPTION: all multipliers are design choices, not measured values.
+# Keys cover BOTH normalized_role and role_family values produced by
+# role_normalizer.normalize_entity_type (verified empirically: individual,
+# academic, alumni, expert, official, student -> person family; organization,
+# institution, government -> institution family; journalist, media -> media;
+# community; entity).
+_INFLUENCE_BY_ROLE_FAMILY = {
+    # institutions / officials / media amplify more
+    "institution":    1.40,
+    "organization":   1.40,
+    "government":     1.40,
+    "official":       1.25,
+    "media":          1.35,
+    "journalist":     1.35,
+    "expert":         1.15,
+    "academic":       1.10,
+    "community":      1.10,
+    # individuals: baseline
+    "individual":     1.00,
+    "person":         1.00,
+    "alumni":         1.00,
+    "entity":         1.00,
+    "unknown":        1.00,
+    # constrained individual
+    "student":        0.90,
+}
+
+# Text fragments by role family for the persona constraint section.
+_CONSTRAINT_TEXT_BY_ROLE = {
+    "institution": (
+        "Operates with institutional resources (budget, staff, communications channels) "
+        "but is subject to formal accountability constraints — regulatory compliance, "
+        "public scrutiny, and board or governance approval for major positions."
+    ),
+    "organization": (
+        "Operates with organizational resources but is subject to formal accountability "
+        "constraints — regulatory compliance, public scrutiny, and governance approval "
+        "for major positions."
+    ),
+    "government": (
+        "Holds formal public authority with broad reach, but is bound by legal and "
+        "procedural constraints: actions require due process, are matters of public "
+        "record, and may be subject to challenge or appeal."
+    ),
+    "official": (
+        "Holds formal authority within its jurisdiction, which amplifies reach, "
+        "but is bound by legal and procedural constraints: actions require due process, "
+        "public record, and may be subject to challenge or appeal."
+    ),
+    "media": (
+        "Has broad distribution reach but operates under editorial constraints — "
+        "verification requirements, reputational risk from inaccuracy, and platform "
+        "or publication standards that shape what and how it can publish."
+    ),
+    "journalist": (
+        "Has publication reach but operates under editorial constraints — "
+        "verification requirements, reputational risk from inaccuracy, and "
+        "publication standards that shape what and how it can publish."
+    ),
+    "expert": (
+        "Carries credibility in a domain, which amplifies perceived authority, "
+        "but is constrained by professional norms: positions outside the domain "
+        "of expertise carry less weight and risk reputational cost."
+    ),
+    "academic": (
+        "Carries scholarly credibility that amplifies perceived authority, but is "
+        "constrained by academic norms — evidentiary standards and the reputational "
+        "cost of claims beyond established findings."
+    ),
+    "community": (
+        "Speaks with collective legitimacy but typically lacks formal authority or "
+        "large budgets; coordinated action requires voluntary participation and "
+        "consensus-building, and resource limits constrain what it can deliver."
+    ),
+    "student": (
+        "Operates with limited discretionary resources and institutional standing; "
+        "influence is largely informal and contingent on others' willingness to listen."
+    ),
+    "individual": (
+        "Operates as an individual with limited discretionary time, budget, "
+        "and information access. Actions that require significant resources, "
+        "coordination, or formal authority are likely out of reach."
+    ),
+    "person": (
+        "Operates as an individual with limited discretionary time, budget, "
+        "and information access. Actions that require significant resources, "
+        "coordination, or formal authority are likely out of reach."
+    ),
+}
+
+
+def influence_weight_from_role(role_info: Optional[Dict[str, Any]]) -> float:
+    """
+    Return an influence_weight multiplier based on role.
+
+    1.0 is the baseline. Institutional and media actors exceed it; individuals
+    stay at 1.0. Returns 1.0 (neutral) for absent or unknown roles.
+
+    Accepts either a raw normalize_entity_type() result (with normalized_role /
+    role_family keys) or a bare normalized_role string. ASSUMPTION: multipliers
+    are design choices; direction defensible.
+    """
+    normalized = _normalized_role_of(role_info)
+    if normalized in _INFLUENCE_BY_ROLE_FAMILY:
+        return _INFLUENCE_BY_ROLE_FAMILY[normalized]
+    family = _role_family_of(role_info)
+    return _INFLUENCE_BY_ROLE_FAMILY.get(family, 1.0)
+
+
+def constraint_framing_text(role_info: Optional[Dict[str, Any]]) -> str:
+    """
+    Return a 1-2 sentence scenario-assumption fragment describing structural
+    constraints for this entity type.
+
+    Returns empty string for unknown/missing roles so personas are unchanged.
+    Deterministic: same role_info → same text. No model call.
+
+    Accepts either a raw normalize_entity_type() result or a bare
+    normalized_role string (e.g. "individual", "organization", "government").
+    """
+    normalized = _normalized_role_of(role_info)
+    text = _CONSTRAINT_TEXT_BY_ROLE.get(normalized)
+    if text is None:
+        text = _CONSTRAINT_TEXT_BY_ROLE.get(_role_family_of(role_info), "")
+    if not text:
+        return ""
+    return f"[Scenario assumption — structural constraints for role type] {text}"
+
+
+def _normalized_role_of(role_info: Optional[Any]) -> str:
+    """Resolve the normalized role key, whether given a dict or a bare string."""
+    if isinstance(role_info, str):
+        return role_info
+    if not role_info:
+        return ""
+    return str(role_info.get("normalized_role", "") or "")
+
+
+def _role_family_of(role_info: Optional[Any]) -> str:
+    if isinstance(role_info, str):
+        # A bare string is already a normalized role; family lookup not needed.
+        return ""
+    if not role_info:
+        return "unknown"
+    return str(role_info.get("role_family", "unknown") or "unknown")
+
+
+def persona_with_constraint_framing(
+    internal_persona: str,
+    role_info: Optional[Dict[str, Any]],
+) -> str:
+    """
+    Return `internal_persona` augmented with a structural-constraint fragment.
+
+    Absent or unknown roles leave the persona unchanged.
+    """
+    framing = constraint_framing_text(role_info)
+    if not framing:
+        return internal_persona
+    separator = "\n\n" if internal_persona and not internal_persona.endswith("\n") else ""
+    return f"{internal_persona}{separator}{framing}"
