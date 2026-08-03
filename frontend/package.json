@@ -23,7 +23,7 @@
     "@axe-core/cli": "^4.12.1",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/test-utils": "^2.4.6",
-    "jsdom": "^26.0.0",
+    "jsdom": "^30.0.1",
     "vite": "^7.2.4",
     "vitest": "^3.0.0"
   },
