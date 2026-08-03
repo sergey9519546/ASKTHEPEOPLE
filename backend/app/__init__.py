@@ -333,12 +333,14 @@ def create_app(config_class=Config):
     # Register blueprints
     from .api import auth_bp, graph_bp, simulation_bp, report_bp, settings_bp, health_bp
     from .api.jobs import jobs_bp
+    from .api.sources import sources_bp
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(graph_bp, url_prefix='/api/graph')
     app.register_blueprint(simulation_bp, url_prefix='/api/simulation')
     app.register_blueprint(report_bp, url_prefix='/api/report')
     app.register_blueprint(settings_bp, url_prefix='/api/settings')
     app.register_blueprint(jobs_bp)  # Already has /api/jobs prefix
+    app.register_blueprint(sources_bp)  # Already has /api/sources prefix
     app.register_blueprint(health_bp, url_prefix='/health')
 
     # Register WebSocket routes (imported here so sock is already init'd)

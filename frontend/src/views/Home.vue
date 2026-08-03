@@ -139,6 +139,27 @@
                 </li>
               </ul>
             </div>
+
+            <!-- URL ingestion -->
+            <div class="url-ingestion">
+              <label for="source-urls">Or paste URLs (one per line)</label>
+              <textarea
+                id="source-urls"
+                v-model="urlInput"
+                placeholder="https://example.com/article&#10;https://example.com/research.pdf"
+                rows="3"
+                :disabled="fetchingUrls"
+              ></textarea>
+              <button
+                type="button"
+                class="fetch-urls-button"
+                :disabled="!urlInput.trim() || fetchingUrls || files.length >= 10"
+                @click="fetchUrls"
+              >
+                {{ fetchingUrls ? "Fetching..." : "Fetch URLs" }}
+              </button>
+              <p v-if="urlFetchError" class="url-error" role="alert">{{ urlFetchError }}</p>
+            </div>
           </div>
 
           <div class="composer-action">
@@ -395,6 +416,9 @@ const templatesError = ref("");
 const fileError = ref("");
 const questionError = ref("");
 const usePolicyAcknowledged = ref(false);
+const urlInput = ref("");
+const fetchingUrls = ref(false);
+const urlFetchError = ref("");
 const MAX_SOURCE_FILES = 10;
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 
@@ -502,6 +526,72 @@ const addFiles = (newFiles) => {
 
 const removeFile = (index) => {
   files.value.splice(index, 1);
+};
+
+const fetchUrls = async () => {
+  urlFetchError.value = "";
+  
+  const urls = urlInput.value
+    .split("\n")
+    .map((u) => u.trim())
+    .filter((u) => u.startsWith("http://") || u.startsWith("https://"));
+  
+  if (urls.length === 0) {
+    urlFetchError.value = "Enter at least one valid URL (must start with http:// or https://)";
+    return;
+  }
+  
+  if (urls.length > 10) {
+    urlFetchError.value = "Maximum 10 URLs at a time";
+    return;
+  }
+  
+  if (files.value.length + urls.length > MAX_SOURCE_FILES) {
+    urlFetchError.value = `Would exceed ${MAX_SOURCE_FILES} file limit (currently ${files.value.length} files)`;
+    return;
+  }
+  
+  fetchingUrls.value = true;
+  
+  try {
+    const response = await fetch("/api/sources/fetch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls }),
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      urlFetchError.value = data.error || "Failed to fetch URLs";
+      return;
+    }
+    
+    // Add fetched files to the files array
+    // Convert API response format to File-like objects
+    for (const fileData of data.files) {
+      // Create a synthetic File object that matches what file upload produces
+      const blob = new Blob([`Fetched from: ${fileData.source_url}`], { type: "text/plain" });
+      const file = new File([blob], fileData.name, { type: "text/plain" });
+      // Store the source URL as a property for later reference
+      file.sourceUrl = fileData.source_url;
+      files.value.push(file);
+    }
+    
+    // Clear input after successful fetch
+    urlInput.value = "";
+    
+    // Show errors for any failed URLs
+    if (data.errors && data.errors.length > 0) {
+      const failedCount = data.errors.length;
+      const successCount = data.files.length;
+      urlFetchError.value = `Fetched ${successCount} URL${successCount === 1 ? "" : "s"}. ${failedCount} failed.`;
+    }
+  } catch (error) {
+    urlFetchError.value = `Network error: ${error.message}`;
+  } finally {
+    fetchingUrls.value = false;
+  }
 };
 
 const handleDrop = (event) => {
@@ -1027,6 +1117,75 @@ fetchHistory();
 .source-files button:hover {
   background: transparent;
   color: var(--ink);
+}
+
+.url-ingestion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 0.8rem;
+  margin-top: 0.8rem;
+  border: 1px solid var(--line-light);
+  background: var(--paper-strong);
+}
+
+.url-ingestion label {
+  color: var(--ink);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.url-ingestion textarea {
+  min-height: 4rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line-dark);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.url-ingestion textarea:focus {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+}
+
+.url-ingestion textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.fetch-urls-button {
+  align-self: flex-start;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--line-dark);
+  background: var(--paper-strong);
+  color: var(--ink);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 120ms var(--ease-quick);
+}
+
+.fetch-urls-button:hover:not(:disabled) {
+  background: var(--signal-soft);
+  border-color: var(--ink);
+}
+
+.fetch-urls-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.url-error {
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  background: var(--error-soft);
+  color: var(--error-text);
+  font-size: 0.7rem;
+  line-height: 1.3;
 }
 
 .composer-action {
