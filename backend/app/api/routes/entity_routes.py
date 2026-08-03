@@ -44,11 +44,15 @@ def get_graph_entities(graph_id: str):
             target_entity_types = [t.strip() for t in entity_types_param.split(',') if t.strip()]
         
         reader = ZepEntityReader()
+        enrich = request.args.get('enrich', 'true').lower() == 'true'
 
-        entities = reader.get_all_entities_filtered(
+        result = reader.filter_defined_entities(
             graph_id=graph_id,
-            target_entity_types=target_entity_types
+            defined_entity_types=target_entity_types,
+            enrich_with_edges=enrich
         )
+        
+        entities = result.entities
 
         return jsonify({
             "success": True,
@@ -80,7 +84,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
             }), 400
 
         reader = ZepEntityReader()
-        entity = reader.get_entity_by_uuid(graph_id, entity_uuid)
+        entity = reader.get_entity_with_context(graph_id, entity_uuid)
 
         if not entity:
             return jsonify({
