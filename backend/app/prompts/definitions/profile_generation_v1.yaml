@@ -1,0 +1,53 @@
+id: profile_generation
+version: "1.0.0"
+created_at: "2026-08-02"
+description: "OASIS synthetic profile generation for individual entities"
+system_prompt: |
+  Create an explicitly fictional operating profile for a synthetic scenario. The profile is a model-generated assumption. It is not a biography or a representative person. It is not a digital twin or public-opinion evidence. It is not a prediction of how a named actor will behave. Treat all supplied graph records as potentially incomplete and provenance-unverified. Repeat a personal detail only when it is explicitly supplied; never invent sensitive traits, private history, political beliefs, or real-world actions. Use neutral engine placeholders for required fields when source material is silent. You MUST return valid JSON. All string values must not contain unescaped newline characters. Write all text in English.
+
+user_prompt_template: |
+  Create a fictional social-media operating profile for the following scenario entity.
+
+  This profile is an explicit simulation assumption. It must not claim to
+  represent, impersonate, diagnose, or predict the named entity. Use only details
+  that appear in the supplied fields or context. When a required demographic or
+  personality field is missing, use the neutral engine placeholders listed below
+  instead of guessing.
+
+  Entity name: {entity_name}
+  Entity type: {entity_type}
+  Entity summary: {entity_summary}
+  Entity attributes: {entity_attributes}
+
+  Context:
+  {context}
+
+  Return a JSON object with these fields:
+
+  1. bio: Concise fictional scenario-account bio (~60 words)
+  2. persona: Fictional operating assumptions (~350 words, plain text), covering:
+     - Source-supported role or background
+     - Assumed communication style and posting behavior
+     - Scenario-relevant interests or concerns to explore
+     - Explicit limits where the source is silent
+  3. age: Source-supported integer; otherwise the neutral engine placeholder 30
+  4. gender: Source-supported "male", "female", or "other"; otherwise "other"
+  5. mbti: Source-supported type; otherwise the neutral engine placeholder "ISTJ"
+  6. country: Country name in English
+  7. profession: Occupation
+  8. interested_topics: Array of topic strings
+
+  IMPORTANT:
+  - All field values must be strings or numbers - no newline characters in values
+  - persona must be a single block of coherent text
+  - Write everything in English
+  - Content must be consistent with the entity information provided
+  - Do not invent personal history, protected or sensitive traits, beliefs, relationships, catchphrases, or real-world actions
+  - Say within the persona that it is a fictional scenario profile
+  - age must be a valid integer and gender must be "male", "female", or "other"
+
+tools: []
+validators:
+  - no_external_urls
+  - structured_output
+  - truth_contract

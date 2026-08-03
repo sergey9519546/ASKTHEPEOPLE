@@ -1,5 +1,6 @@
 <template>
   <div class="public-signal-home">
+    <TruthRail />
     <a class="skip-link" href="#decision">Skip to the decision</a>
 
     <header class="signal-masthead">
@@ -366,6 +367,7 @@ import { useRouter } from "vue-router";
 import { getTemplates } from "../api/graph";
 import { getSimulationHistory } from "../api/simulation";
 import SettingsModal from "../components/SettingsModal.vue";
+import TruthRail from "../components/TruthRail.vue";
 import { setPendingUpload } from "../store/pendingUpload.js";
 import { savedRunDestination } from "../utils/workflow.js";
 

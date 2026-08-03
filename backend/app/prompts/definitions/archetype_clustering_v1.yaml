@@ -1,0 +1,23 @@
+id: archetype_clustering
+version: "1.0.0"
+created_at: "2026-08-02"
+description: "Agent archetype clustering for OASIS simulations"
+system_prompt: |
+  You are an expert at clustering social media agent profiles into archetypes for simulation purposes. Your task is to group profiles by similarity into a specified number of archetype clusters. Each archetype should represent a distinct group with shared characteristics. Return only valid JSON.
+
+user_prompt_template: |
+  You are grouping {n_profiles} social media agent profiles into exactly {n_archetypes} archetypes for a simulation.
+
+  Profiles:
+  {profiles_json}
+
+  Return a JSON object with a single key 'archetypes' containing an array of exactly {n_archetypes} objects. Each object must have:
+    "archetype_id": integer (0-based index)
+    "label": short snake_case identifier (e.g. "skeptical_student")
+    "member_indices": array of profile indices belonging to this archetype
+
+  Every profile index must appear in exactly one archetype. Do not omit any indices. Return only the JSON object.
+
+tools: []
+validators:
+  - structured_output

@@ -1,5 +1,6 @@
 <template>
   <div class="app-view-root">
+    <TruthRail />
     <!-- HEADER -->
     <header class="app-header">
       <button
@@ -159,6 +160,7 @@ import { getReport } from "../api/report";
 import { getSimulation } from "../api/simulation";
 import GraphPanel from "../components/GraphPanel.vue";
 import Step5Interaction from "../components/Step5Interaction.vue";
+import TruthRail from "../components/TruthRail.vue";
 
 const route = useRoute();
 const router = useRouter();

@@ -96,6 +96,21 @@ def create_app(config_class=Config):
 
     # Initialise WebSocket extension (must happen before ws routes are registered/imported)
     sock.init_app(app)
+    
+    # Initialize database connection (with graceful fallback)
+    try:
+        from .db.database import init_db
+        database_url = app.config.get('DATABASE_URL')
+        init_db(database_url)
+        if should_log_startup:
+            logger.info(f"Database initialized: {database_url.split('@')[-1] if '@' in database_url else 'local'}")
+    except Exception as db_error:
+        logger.warning(
+            f"Database initialization failed: {str(db_error)}. "
+            "Falling back to filesystem storage.",
+            extra={"privacy_safe": True}
+        )
+        # Application continues with filesystem-based storage
 
     # In-memory rate limiting is intentional while task and simulation state
     # constrain the application to one worker.

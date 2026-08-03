@@ -21,6 +21,7 @@ from ..services.claim_boundary import (
 from ..services.text_processor import TextProcessor
 from ..utils.file_parser import FileParser, FileParserLimitError
 from ..utils.logger import get_logger
+from ..utils.response import truth_metadata
 from ..utils.input_policy import (
     ADDITIONAL_CONTEXT_MAX,
     EXTRACTED_TEXT_CHARACTERS_MAX,

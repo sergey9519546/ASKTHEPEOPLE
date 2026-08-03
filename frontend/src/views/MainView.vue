@@ -1,5 +1,6 @@
 <template>
   <div class="main-view">
+    <TruthRail />
     <header class="app-header">
       <button class="header-left brand-home" type="button" @click="router.push('/')">
         <span class="brand">ASK THE PEOPLE</span>
@@ -165,6 +166,7 @@ import Step2EnvSetup from "../components/Step2EnvSetup.vue";
 import Step3Simulation from "../components/Step3Simulation.vue";
 import Step4Report from "../components/Step4Report.vue";
 import Step5Interaction from "../components/Step5Interaction.vue";
+import TruthRail from "../components/TruthRail.vue";
 import { clearPendingUpload, getPendingUpload } from "../store/pendingUpload";
 import { listSimulations } from "../api/simulation";
 import { deriveWorkflowStep } from "../utils/workflow.js";

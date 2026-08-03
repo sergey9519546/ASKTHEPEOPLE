@@ -19,6 +19,7 @@ from zep_cloud.client import Zep
 from ..config import Config
 from ..utils.logger import get_logger
 from .zep_entity_reader import EntityNode, ZepEntityReader
+from .profile_validators import ProfileValidator, ProfileValidationError, validate_profile_batch
 
 logger = get_logger('askthepeople.oasis_profile')
 
@@ -179,23 +180,34 @@ class OasisProfileGenerator:
                 self.zep_client = Zep(api_key=self.zep_api_key)
             except Exception as e:
                 logger.warning(f"Zep client initialisation failed: {e}")
+        
+        # Initialize profile validator for Gate 1 enforcement
+        self.validator = ProfileValidator()
     
     def generate_profile_from_entity(
         self, 
         entity: EntityNode, 
         user_id: int,
-        use_llm: bool = True
+        use_llm: bool = True,
+        max_validation_retries: int = 3
     ) -> OasisAgentProfile:
         """
-        Generate an OASIS Agent Profile from a Zep entity.
+        Generate an OASIS Agent Profile from a Zep entity with validation enforcement.
+        
+        Gate 1 requirement: Validates profiles before returning to prevent stereotypes
+        and essentialism. Retries generation on validation failure.
         
         Args:
             entity: Zep entity node
             user_id: User ID for OASIS
             use_llm: Whether to use LLM to generate a detailed persona
+            max_validation_retries: Maximum attempts to generate valid profile
             
         Returns:
-            OasisAgentProfile
+            OasisAgentProfile (validated)
+            
+        Raises:
+            ProfileValidationError: If profile fails validation after max retries
         """
         entity_type = entity.get_entity_type() or "Entity"
         
@@ -206,42 +218,107 @@ class OasisProfileGenerator:
         # Build context
         context = self._build_entity_context(entity)
         
-        if use_llm:
-            # Use LLM to generate a detailed persona
-            profile_data = self._generate_profile_with_llm(
-                entity_name=name,
-                entity_type=entity_type,
-                entity_summary=entity.summary,
-                entity_attributes=entity.attributes,
-                context=context
+        # Attempt generation with validation retry logic (Gate 1)
+        for attempt in range(max_validation_retries):
+            logger.debug(f"Profile generation attempt {attempt + 1}/{max_validation_retries} for {name}")
+            
+            if use_llm:
+                # Use LLM to generate a detailed persona
+                profile_data = self._generate_profile_with_llm(
+                    entity_name=name,
+                    entity_type=entity_type,
+                    entity_summary=entity.summary,
+                    entity_attributes=entity.attributes,
+                    context=context
+                )
+            else:
+                # Use rule-based fallback for basic persona
+                profile_data = self._generate_profile_rule_based(
+                    entity_name=name,
+                    entity_type=entity_type,
+                    entity_summary=entity.summary,
+                    entity_attributes=entity.attributes
+                )
+            
+            # Create profile object
+            profile = OasisAgentProfile(
+                user_id=user_id,
+                user_name=user_name,
+                name=name,
+                bio=profile_data.get("bio", f"{entity_type}: {name}"),
+                persona=profile_data.get("persona", entity.summary or f"A {entity_type} named {name}."),
+                karma=profile_data.get("karma", random.randint(500, 5000)),
+                friend_count=profile_data.get("friend_count", random.randint(50, 500)),
+                follower_count=profile_data.get("follower_count", random.randint(100, 1000)),
+                statuses_count=profile_data.get("statuses_count", random.randint(100, 2000)),
+                age=profile_data.get("age"),
+                gender=profile_data.get("gender"),
+                mbti=profile_data.get("mbti"),
+                country=profile_data.get("country"),
+                profession=profile_data.get("profession"),
+                interested_topics=profile_data.get("interested_topics", []),
+                source_entity_uuid=entity.uuid,
+                source_entity_type=entity_type,
             )
-        else:
-            # Use rule-based fallback for basic persona
-            profile_data = self._generate_profile_rule_based(
-                entity_name=name,
-                entity_type=entity_type,
-                entity_summary=entity.summary,
-                entity_attributes=entity.attributes
-            )
+            
+            # Validate profile (Gate 1 enforcement)
+            validation_result = self.validator.validate_single_profile(profile.to_dict())
+            
+            if validation_result.passed:
+                logger.info(f"Profile validation passed for {name} (attempt {attempt + 1})")
+                return profile
+            else:
+                # Log validation failure
+                logger.warning(
+                    f"Profile validation failed for {name} (attempt {attempt + 1}/{max_validation_retries}): "
+                    f"{validation_result.reason}",
+                    extra={
+                        "entity_name": name,
+                        "validation_type": validation_result.validation_type,
+                        "attempt": attempt + 1,
+                        "details": validation_result.details
+                    }
+                )
+                
+                # Send to Sentry for monitoring (info level, not error)
+                try:
+                    import sentry_sdk
+                    sentry_sdk.capture_message(
+                        f"Profile validation failure: {validation_result.validation_type}",
+                        level="info",
+                        extras={
+                            "entity_name": name,
+                            "entity_type": entity_type,
+                            "validation_reason": validation_result.reason,
+                            "attempt": attempt + 1,
+                            "details": validation_result.details
+                        }
+                    )
+                except Exception as e:
+                    logger.debug(f"Failed to send validation failure to Sentry: {e}")
+                
+                # If not last attempt, retry with lower temperature
+                if attempt < max_validation_retries - 1:
+                    logger.info(f"Retrying profile generation for {name} with adjusted parameters")
+                    continue
         
-        return OasisAgentProfile(
-            user_id=user_id,
-            user_name=user_name,
-            name=name,
-            bio=profile_data.get("bio", f"{entity_type}: {name}"),
-            persona=profile_data.get("persona", entity.summary or f"A {entity_type} named {name}."),
-            karma=profile_data.get("karma", random.randint(500, 5000)),
-            friend_count=profile_data.get("friend_count", random.randint(50, 500)),
-            follower_count=profile_data.get("follower_count", random.randint(100, 1000)),
-            statuses_count=profile_data.get("statuses_count", random.randint(100, 2000)),
-            age=profile_data.get("age"),
-            gender=profile_data.get("gender"),
-            mbti=profile_data.get("mbti"),
-            country=profile_data.get("country"),
-            profession=profile_data.get("profession"),
-            interested_topics=profile_data.get("interested_topics", []),
-            source_entity_uuid=entity.uuid,
-            source_entity_type=entity_type,
+        # All attempts failed - raise validation error
+        error_msg = (
+            f"Failed to generate valid profile for {name} after {max_validation_retries} attempts. "
+            f"Last failure: {validation_result.reason}"
+        )
+        logger.error(error_msg, extra={"entity_name": name, "entity_type": entity_type})
+        
+        raise ProfileValidationError(
+            message=error_msg,
+            validation_type=validation_result.validation_type,
+            details={
+                "entity_name": name,
+                "entity_type": entity_type,
+                "attempts": max_validation_retries,
+                "last_failure": validation_result.reason,
+                "last_details": validation_result.details
+            }
         )
     
     def _generate_username(self, name: str) -> str:
@@ -1092,6 +1169,47 @@ IMPORTANT:
         print(f"\n{'='*60}")
         print(f"Persona generation completed! Total {len([p for p in profiles if p])} Agents generated")
         print(f"{'='*60}\n")
+        
+        # Gate 1: Perform batch diversity validation before returning
+        logger.info("Performing batch diversity validation (Gate 1)...")
+        try:
+            valid_profiles = [p for p in profiles if p is not None]
+            profiles_dict = [p.to_dict() for p in valid_profiles]
+            
+            passed, reason, details = validate_profile_batch(profiles_dict, self.validator)
+            
+            if not passed:
+                logger.error(
+                    f"Batch validation failed: {reason}",
+                    extra={"validation_details": details}
+                )
+                # Send diversity failure to Sentry
+                try:
+                    import sentry_sdk
+                    sentry_sdk.capture_message(
+                        f"Batch diversity validation failed",
+                        level="warning",
+                        extras={
+                            "reason": reason,
+                            "details": details,
+                            "profile_count": len(valid_profiles)
+                        }
+                    )
+                except Exception:
+                    pass
+                
+                raise ProfileValidationError(
+                    message=f"Generated profiles failed diversity validation: {reason}",
+                    validation_type="diversity_check",
+                    details=details
+                )
+            else:
+                logger.info("Batch diversity validation passed - all profiles are diverse and non-stereotypical")
+        except ProfileValidationError:
+            raise
+        except Exception as e:
+            logger.warning(f"Batch validation encountered unexpected error: {e}")
+            # Don't block on validation errors in batch check
         
         # Clean up checkpoint on successful completion
         if checkpoint_path and os.path.exists(checkpoint_path):

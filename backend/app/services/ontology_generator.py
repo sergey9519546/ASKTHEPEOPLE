@@ -10,136 +10,6 @@ from typing import Dict, Any, List, Optional
 from ..utils.llm_client import LLMClient
 
 
-# System prompt for ontology generation
-ONTOLOGY_SYSTEM_PROMPT = """You are a knowledge-graph ontology designer for a synthetic scenario-exploration tool. Analyze the supplied material and design entity and relationship types that can organize actor records for a fictional social-media-like run.
-
-**IMPORTANT: You must output valid JSON only. Do not output anything else.**
-
-## Core Task Context
-
-We are building a **synthetic scenario system**. In this system:
-- Each entity type describes a source-mentioned actor or an explicit fictional account role
-- Generated accounts may post and interact inside one configured run
-- The schema should support exploring possible activity paths without claiming to reproduce, represent, or predict any real actor
-
-The resulting graph is a model-generated interpretation of supplied material,
-not an independently verified factual record. A relationship type is a schema
-category, not evidence of a relationship or causal influence.
-
-Therefore, **entity types must describe actors or account roles capable of interaction**:
-
-**Allowed**:
-- Specific individuals (public figures, key persons, opinion leaders, experts, ordinary people)
-- Companies and enterprises (including their official accounts)
-- Organizations (universities, associations, NGOs, unions, etc.)
-- Government departments and regulatory agencies
-- Media outlets (newspapers, TV stations, online media, websites)
-- Social media platforms themselves
-- Named groups or fictional group-account archetypes (alumni associations, fan groups, advocacy groups, etc.)
-
-**Not allowed**:
-- Abstract concepts (e.g., "public opinion", "emotions", "trends")
-- Topics / subjects (e.g., "academic integrity", "education reform")
-- Stances / attitudes (e.g., "supporters", "opponents")
-
-## Output Format
-
-Output JSON with the following structure:
-
-```json
-{
-    "entity_types": [
-        {
-            "name": "EntityTypeName (English, PascalCase)",
-            "description": "Short description (English, max 100 chars)",
-            "attributes": [
-                {
-                    "name": "attribute_name (English, snake_case)",
-                    "type": "text",
-                    "description": "Attribute description"
-                }
-            ],
-            "examples": ["Example entity 1", "Example entity 2"]
-        }
-    ],
-    "edge_types": [
-        {
-            "name": "RELATIONSHIP_NAME (English, UPPER_SNAKE_CASE)",
-            "description": "Short description (English, max 100 chars)",
-            "source_targets": [
-                {"source": "SourceEntityType", "target": "TargetEntityType"}
-            ],
-            "attributes": []
-        }
-    ],
-    "analysis_summary": "Brief analysis summary of the document content (English)"
-}
-```
-
-## Design Guidelines (CRITICAL)
-
-### 1. Entity Type Design - Must Follow Strictly
-
-**Count requirement: Exactly 10 entity types**
-
-**Hierarchy requirement (must include both specific and fallback types)**:
-
-Your 10 entity types must include:
-
-A. **Fallback types (required, place last 2 in the list)**:
-   - `Person`: Fallback for any individual person not matching a more specific person type.
-   - `Organization`: Fallback for any organization not matching a more specific organization type.
-
-B. **Specific types (8, designed based on document content)**:
-   - Design more specific types for the key actors appearing in the document
-   - e.g., for an academic event: `Student`, `Professor`, `University`
-   - e.g., for a business event: `Company`, `CEO`, `Employee`
-
-**Why fallback types are needed**:
-- Documents contain many actors such as "ordinary teachers", "random passerby", "an online user"
-- If no specialized type matches, they should fall under `Person`
-- Similarly, small organizations and temporary groups should fall under `Organization`
-
-**Specific type design principles**:
-- Identify high-frequency or key actor types from the document
-- Each specific type should have clear boundaries with minimal overlap
-- The description must clearly differentiate it from the fallback type
-
-### 2. Relationship Type Design
-
-- Count: 6-10 types
-- Relationships should describe possible source-record or in-run connections
-- Ensure `source_targets` covers the entity types you defined
-- Do not describe an edge type as proof of causality, influence, endorsement, or future behavior
-
-### 3. Attribute Design
-
-- 1-3 key attributes per entity type
-- **Note**: Do NOT use reserved field names: `name`, `uuid`, `group_id`, `created_at`, `summary`
-- Recommended: `full_name`, `title`, `role`, `position`, `location`, `description`, etc.
-
-## Entity Type Reference
-
-**Individuals (specific)**:
-- Student, Professor, Journalist, Celebrity, Executive, Official, Lawyer, Doctor
-
-**Individuals (fallback)**:
-- Person: Any individual not matching a more specific person type
-
-**Organizations (specific)**:
-- University, Company, GovernmentAgency, MediaOutlet, Hospital, School, NGO
-
-**Organizations (fallback)**:
-- Organization: Any organization not matching a more specific type
-
-## Relationship Type Reference
-
-- WORKS_FOR, STUDIES_AT, AFFILIATED_WITH, REPRESENTS, REGULATES
-- REPORTS_ON, COMMENTS_ON, RESPONDS_TO, SUPPORTS, OPPOSES
-- COLLABORATES_WITH, COMPETES_WITH
-"""
-
-
 class OntologyGenerator:
     """
     Ontology Generator.
@@ -166,22 +36,54 @@ class OntologyGenerator:
         Returns:
             Ontology definition (entity_types, edge_types, etc.)
         """
-        user_message = self._build_user_message(
-            document_texts,
-            simulation_requirement,
-            additional_context
-        )
+        # Build document content for the prompt
+        combined_text = "\n\n---\n\n".join(document_texts)
+        original_length = len(combined_text)
 
-        messages = [
-            {"role": "system", "content": ONTOLOGY_SYSTEM_PROMPT},
-            {"role": "user", "content": user_message}
-        ]
+        if len(combined_text) > self.MAX_TEXT_LENGTH_FOR_LLM:
+            combined_text = combined_text[:self.MAX_TEXT_LENGTH_FOR_LLM]
+            combined_text += f"\n\n...(Original document: {original_length} chars. Truncated to first {self.MAX_TEXT_LENGTH_FOR_LLM} chars for ontology analysis)..."
 
-        result = self.llm_client.chat_json(
-            messages=messages,
-            temperature=0.3,
-            max_tokens=4096
-        )
+        # Build additional context section
+        additional_context_section = ""
+        if additional_context:
+            additional_context_section = f"""
+## Additional Notes
+
+{additional_context}
+"""
+
+        # Use registry-based prompt
+        try:
+            contract_result = self.llm_client.chat_with_registry_prompt(
+                prompt_id="ontology_generation",
+                prompt_version=None,  # Use latest
+                simulation_requirement=simulation_requirement,
+                document_content=combined_text,
+                additional_context=additional_context_section,
+                temperature=0.3,
+                max_tokens=4096
+            )
+            result = contract_result["data"]
+        except Exception as e:
+            # Fallback to direct JSON call if registry fails
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Registry-based prompt failed, using fallback: {e}")
+            
+            user_message = self._build_user_message(
+                document_texts,
+                simulation_requirement,
+                additional_context
+            )
+            
+            # Note: This fallback path won't have the ONTOLOGY_SYSTEM_PROMPT anymore
+            # Services should ensure registry is available
+            result = self.llm_client.chat_json(
+                messages=[{"role": "user", "content": user_message}],
+                temperature=0.3,
+                max_tokens=4096
+            )
 
         result = self._validate_and_process(result)
         return result

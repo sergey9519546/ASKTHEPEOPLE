@@ -10,10 +10,14 @@ from typing import Optional, Dict, Any, List
 from openai import OpenAI
 
 from ..config import Config
+from ..prompts.registry import PromptRegistry
 
 
 class LLMClient:
     """LLM Client"""
+    
+    # Shared prompt registry instance
+    _registry: Optional[PromptRegistry] = None
 
     def __init__(
         self,
@@ -46,6 +50,21 @@ class LLMClient:
             base_url=self.base_url,
             timeout=self.timeout,
         )
+        
+        # Initialize prompt registry lazily
+        if LLMClient._registry is None:
+            try:
+                LLMClient._registry = PromptRegistry()
+            except Exception as e:
+                # Log warning but allow client to work without registry
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Failed to initialize prompt registry: {e}")
+    
+    @property
+    def registry(self) -> Optional[PromptRegistry]:
+        """Access the shared prompt registry."""
+        return LLMClient._registry
 
     def chat(
         self,
@@ -140,6 +159,73 @@ class LLMClient:
         except json.JSONDecodeError:
             raise ValueError(f"Invalid JSON format returned from LLM: {cleaned_response}")
 
+    def chat_with_registry_prompt(
+        self,
+        prompt_id: str,
+        prompt_version: Optional[str] = None,
+        context_prompts: Optional[List[str]] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+        complexity: str = "complex",
+        **template_vars
+    ) -> Dict[str, Any]:
+        """
+        Send a chat request using a registered prompt from the registry.
+        
+        Args:
+            prompt_id: The prompt ID from the registry
+            prompt_version: Optional version (uses latest if None)
+            context_prompts: Optional context messages
+            temperature: Temperature parameter
+            max_tokens: Maximum tokens
+            complexity: Task complexity
+            **template_vars: Variables to format the user prompt template
+        
+        Returns:
+            Result dict with data, model, and audit metadata including prompt_id, 
+            prompt_version, and prompt_sha256
+        """
+        if not self.registry:
+            raise ValueError(
+                "Prompt registry not initialized. Cannot use registry-based prompts."
+            )
+        
+        # Get prompt from registry
+        prompt = self.registry.get_prompt(prompt_id, prompt_version)
+        version = prompt["version"]
+        
+        # Get system prompt
+        system_prompt = prompt.get("system_prompt", "")
+        
+        # Format user prompt template
+        user_prompt_template = prompt.get("user_prompt_template", "")
+        try:
+            user_prompt = user_prompt_template.format(**template_vars)
+        except KeyError as e:
+            raise ValueError(
+                f"Missing required variable {e} for prompt '{prompt_id}' v{version}"
+            ) from e
+        
+        # Get SHA256 hash
+        prompt_sha256 = self.registry.get_sha256(prompt_id, version)
+        
+        # Call with role contract
+        result = self.chat_with_role_contract(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            context_prompts=context_prompts,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            complexity=complexity,
+        )
+        
+        # Add registry metadata
+        result["prompt_id"] = prompt_id
+        result["prompt_version"] = version
+        result["prompt_sha256"] = prompt_sha256
+        
+        return result
+    
     def chat_with_role_contract(
         self,
         system_prompt: str,

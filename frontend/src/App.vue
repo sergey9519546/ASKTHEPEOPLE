@@ -1,5 +1,7 @@
 <template>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
   <div
+    id="main-content"
     class="app-surface"
     :aria-hidden="accessRequired || hasCrashed ? 'true' : undefined"
     :inert="accessRequired || hasCrashed ? '' : undefined"
@@ -124,6 +126,28 @@ onBeforeUnmount(() => {
 </script>
 
 <style>
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  z-index: 100;
+  padding: 0.8rem 1.2rem;
+  border: 2px solid var(--signal);
+  background: var(--signal);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: top 0.2s;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
 .app-surface {
   min-height: 100dvh;
 }

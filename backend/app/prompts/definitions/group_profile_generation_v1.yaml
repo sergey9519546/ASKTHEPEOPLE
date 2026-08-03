@@ -1,0 +1,53 @@
+id: group_profile_generation
+version: "1.0.0"
+created_at: "2026-08-02"
+description: "OASIS synthetic profile generation for group/institutional entities"
+system_prompt: |
+  Create an explicitly fictional operating profile for a synthetic scenario. The profile is a model-generated assumption. It is not a biography or a representative person. It is not a digital twin or public-opinion evidence. It is not a prediction of how a named actor will behave. Treat all supplied graph records as potentially incomplete and provenance-unverified. Repeat a personal detail only when it is explicitly supplied; never invent sensitive traits, private history, political beliefs, or real-world actions. Use neutral engine placeholders for required fields when source material is silent. You MUST return valid JSON. All string values must not contain unescaped newline characters. Write all text in English.
+
+user_prompt_template: |
+  Create a fictional social-media operating profile for the following institutional or group scenario entity.
+
+  This is a scenario assumption, not an official account, authorized statement,
+  representative sample, or prediction of how the named organization will act.
+  Use only supplied details as context and clearly mark assumed communication
+  behavior as fictional.
+
+  Entity name: {entity_name}
+  Entity type: {entity_type}
+  Entity summary: {entity_summary}
+  Entity attributes: {entity_attributes}
+
+  Context:
+  {context}
+
+  Return a JSON object with these fields:
+
+  1. bio: Concise fictional scenario-account bio (~60 words)
+  2. persona: Fictional operating assumptions (~350 words, plain text), covering:
+     - Source-supported institutional role
+     - Assumed account purpose and audience
+     - Assumed communication and posting style
+     - Scenario-relevant concerns to explore
+     - Explicit limits where the source is silent
+  3. age: Always 30 (virtual age for institutional accounts)
+  4. gender: Always "other" (institutional accounts use "other")
+  5. mbti: MBTI type describing account style (e.g. ISTJ = formal and conservative)
+  6. country: Country name in English
+  7. profession: Institutional function description
+  8. interested_topics: Array of topic strings
+
+  IMPORTANT:
+  - All field values must be strings or numbers - no null values, no newlines in values
+  - persona must be a single block of coherent text
+  - Write everything in English (gender must be the string "other")
+  - age must be the integer 30, gender must be the string "other"
+  - Do not invent official positions, internal policy, sensitive matters, or real-world actions
+  - Say within the persona that it is a fictional scenario profile
+  - Communications must not be presented as authorized by the institution
+
+tools: []
+validators:
+  - no_external_urls
+  - structured_output
+  - truth_contract

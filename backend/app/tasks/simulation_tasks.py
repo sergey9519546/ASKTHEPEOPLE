@@ -290,11 +290,28 @@ def prepare_simulation_task(
             f"Celery task prepare_simulation_task failed: {exc}",
             exc_info=True,
         )
+        
+        # Check if this is a ProfileValidationError (Gate 1 requirement)
+        from ..services.profile_validators import ProfileValidationError
+        
+        if isinstance(exc, ProfileValidationError):
+            # Handle validation errors with user-friendly message
+            public_error = "Unable to generate diverse profiles. Please try again or modify your decision parameters."
+            logger.warning(
+                f"Profile validation failed for simulation {simulation_id}: {exc.validation_type}",
+                extra={
+                    "validation_type": exc.validation_type,
+                    "details": exc.details
+                }
+            )
+        else:
+            public_error = "simulation_prepare_failed"
+        
         if effective_task_id:
             task_manager.fail_task(
                 effective_task_id,
                 str(exc),
-                public_error="simulation_prepare_failed",
+                public_error=public_error,
             )
         # Mirror the in-process failure path: mark the simulation
         # state as FAILED so the GET endpoints can surface it.
@@ -304,7 +321,7 @@ def prepare_simulation_task(
             if state:
                 state.status = SimulationManager.SimulationStatus.FAILED
                 state.error = (
-                    str(exc) if Config.DEBUG else "simulation_prepare_failed"
+                    str(exc) if Config.DEBUG else public_error
                 )
                 manager._save_simulation_state(state)
         except Exception:

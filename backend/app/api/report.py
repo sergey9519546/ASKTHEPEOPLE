@@ -27,6 +27,7 @@ from ..services.zep_tools import ZepToolsService
 from ..models.project import ProjectManager
 from ..models.task import TaskManager, TaskStatus
 from ..utils.logger import get_logger
+from ..utils.response import truth_metadata
 from ..utils.safe_path import SafePathError
 from ..utils.input_policy import (
     CHAT_MESSAGE_MAX,
@@ -349,6 +350,7 @@ def get_report_evidence(report_id: str):
                 "evidence": evidence
             },
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
 
     except SafePathError:
@@ -394,6 +396,7 @@ def get_report(report_id: str):
             "success": True,
             "data": report.to_dict(),
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
 
     except SafePathError:
@@ -437,6 +440,7 @@ def get_report_by_simulation(simulation_id: str):
             "data": report.to_dict(),
             "has_report": True,
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
         
     except Exception as e:

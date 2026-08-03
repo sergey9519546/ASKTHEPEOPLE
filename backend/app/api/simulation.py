@@ -29,6 +29,7 @@ from ..services.claim_boundary import (
 )
 from ..services.zep_tools import ZepToolsService
 from ..utils.logger import get_logger
+from ..utils.response import truth_metadata
 from ..utils.input_policy import (
     ARCHETYPE_COUNT_MAX,
     ARCHETYPE_EXPANSION_MAX,
@@ -286,6 +287,7 @@ def get_graph_entities(graph_id: str):
             "success": True,
             "data": payload,
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
         
     except Exception as e:
@@ -322,6 +324,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
             "success": True,
             "data": payload,
             "disclosure": synthetic_output_disclosure(),
+            **truth_metadata()
         })
         
     except Exception as e:

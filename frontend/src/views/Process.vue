@@ -1,5 +1,6 @@
 <template>
   <div class="app-process-root">
+    <TruthRail />
     <!-- TOP BAR -->
     <nav class="app-header">
       <div class="header-left" @click="goHome">
@@ -127,6 +128,7 @@ import {
 } from "../api/graph";
 import { getPendingUpload, clearPendingUpload } from "../store/pendingUpload.js";
 import GraphPanel from "../components/GraphPanel.vue";
+import TruthRail from "../components/TruthRail.vue";
 
 const route = useRoute();
 const router = useRouter();
