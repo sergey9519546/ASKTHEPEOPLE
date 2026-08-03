@@ -220,7 +220,7 @@ describe("early journey source contracts", () => {
   it("separates uploaded source material from evidence and nested controls", () => {
     const home = readFileSync(resolve("src/views/Home.vue"), "utf8");
 
-    expect(home).toContain("Source material in");
+    expect(home).toContain("Source material (optional)");
     expect(home).not.toContain("<strong>Evidence in</strong>");
     expect(home).toContain('class="source-material"');
     expect(home).toContain('class="source-dropzone"');

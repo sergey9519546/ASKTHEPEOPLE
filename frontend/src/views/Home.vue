@@ -116,7 +116,7 @@
                 <path d="M8 3h11l6 6v20H8zM19 3v7h6M12 16h9M12 21h9"></path>
               </svg>
               <div>
-                <strong>{{ files.length ? "Add more source material" : "Add source material" }}</strong>
+                <strong>{{ files.length ? "Add more source material" : "Add source material (optional)" }}</strong>
                 <span>PDF, Markdown, or TXT · 10 files / 50 MB maximum</span>
               </div>
             </button>
@@ -193,8 +193,8 @@
               <svg viewBox="0 0 32 32" aria-hidden="true">
                 <path d="M8 3h11l6 6v20H8zM19 3v7h6M12 16h9M12 21h9"></path>
               </svg>
-              <strong>Source material in</strong>
-              <span>Your documents shape the starting conditions.</span>
+              <strong>Source material (optional)</strong>
+              <span>Upload files to ground personas in specific context, or skip to explore with just your decision.</span>
             </div>
           </article>
 
@@ -401,7 +401,6 @@ const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
 const canSubmit = computed(
   () =>
     formData.value.simulationRequirement.trim().length >= 12 &&
-    files.value.length > 0 &&
     usePolicyAcknowledged.value,
 );
 
@@ -410,9 +409,7 @@ const submissionRequirements = computed(() => {
   if (formData.value.simulationRequirement.trim().length < 12) {
     requirements.push("a specific decision");
   }
-  if (files.value.length === 0) {
-    requirements.push("source material");
-  }
+  // Source material is now optional — removed from requirements
   if (!usePolicyAcknowledged.value) {
     requirements.push("the use-policy check");
   }
