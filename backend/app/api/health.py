@@ -141,3 +141,4 @@ def readiness():
     }
 
     return jsonify(payload), 200 if ready else 503
+# Health endpoint with component status
