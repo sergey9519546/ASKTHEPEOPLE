@@ -1998,7 +1998,7 @@ class ReportAgent:
             report.status = ReportStatus.COMPLETED
             report.completed_at = datetime.now().isoformat()
 
-            simulation_dir = os.path.join(Config.UPLOAD_FOLDER, "simulations", self.simulation_id)
+            simulation_dir = safe_join(Config.OASIS_SIMULATION_DATA_DIR, self.simulation_id)
             report_dir = ReportManager._get_report_folder(report_id)
             if os.path.isdir(simulation_dir):
                 with self._generation_write_guard():

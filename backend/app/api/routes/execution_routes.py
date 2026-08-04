@@ -260,7 +260,7 @@ def start_simulation():
         celery_dispatched = False
         try:
             from ...tasks.simulation_tasks import run_simulation_task
-            async_res = run_simulation_task.delay(
+            run_simulation_task.delay(
                 simulation_id=simulation_id,
                 platform=platform,
                 max_rounds=max_rounds,
@@ -273,8 +273,9 @@ def start_simulation():
                 task_id=task_id,
                 config_path=config_path,
             )
-            if async_res and getattr(async_res, 'id', None):
-                task_id = async_res.id
+            # Keep the TaskManager id as the client-facing handle. The Celery
+            # result id is not known to TaskManager, so returning it would make
+            # GET /api/simulation/task/<task_id>/status 404.
             celery_dispatched = True
         except Exception as celery_err:
             logger.warning(f"Celery dispatch unavailable or failed, falling back to direct runner: {celery_err}")
