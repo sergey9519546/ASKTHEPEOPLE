@@ -3,11 +3,10 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from flask import Flask
 
 from app import create_app
 from app.api import graph as graph_api
-from app.api import simulation as simulation_api
+from app.api.routes import prep_routes
 from app.config import Config
 from app.models.project import ProjectManager
 from app.models.task import TaskManager, TaskStatus
@@ -171,7 +170,10 @@ def test_prepare_rejects_unbounded_request_controls(api_client, payload):
     }
 
 
-def test_prepare_rejects_graphs_with_too_many_profile_entities(monkeypatch):
+def test_prepare_rejects_graphs_with_too_many_profile_entities(
+    api_client,
+    monkeypatch,
+):
     state = SimpleNamespace(
         simulation_id="sim-1",
         project_id="project-1",
@@ -190,31 +192,32 @@ def test_prepare_rejects_graphs_with_too_many_profile_entities(monkeypatch):
                 entity_types={"Person"},
             )
 
-    monkeypatch.setattr(simulation_api, "SimulationManager", FakeManager)
-    monkeypatch.setattr(simulation_api, "ZepEntityReader", FakeReader)
+    monkeypatch.setattr(prep_routes, "SimulationManager", FakeManager)
+    monkeypatch.setattr(prep_routes, "ZepEntityReader", FakeReader)
     monkeypatch.setattr(
-        simulation_api,
+        prep_routes,
         "_check_simulation_prepared",
         lambda _simulation_id: (False, {}),
     )
     monkeypatch.setattr(
-        simulation_api.ProjectManager,
+        prep_routes.ProjectManager,
         "get_project",
         lambda _project_id: SimpleNamespace(
             simulation_requirement="What paths could follow?"
         ),
     )
     monkeypatch.setattr(
-        simulation_api.ProjectManager,
+        prep_routes.ProjectManager,
         "get_extracted_text",
         lambda _project_id: "Source",
     )
 
-    app = Flask(__name__)
-    with app.test_request_context(json={"simulation_id": "sim-1"}):
-        response, status = simulation_api.prepare_simulation()
+    response = api_client.post(
+        "/api/simulation/prepare",
+        json={"simulation_id": "sim-1"},
+    )
 
-    assert status == 400
+    assert response.status_code == 400
     assert response.get_json()["error"] == "entity_count_out_of_range"
 
 
