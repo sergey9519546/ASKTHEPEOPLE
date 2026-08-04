@@ -180,12 +180,18 @@ class EvalResultsPlugin:
         if passed + failed + skipped != total:
             print(f"\n\nWARNING: Eval count mismatch: {passed}+{failed}+{skipped} != {total}")
         
+        # `exit_status` describes the EVAL subset, so it stays consistent with
+        # the counts beside it. pytest's `exitstatus` covers the whole session:
+        # in a full-suite run an unrelated failure anywhere would record
+        # "failed: 0, exit_status: 1" here, which reads as a broken eval suite.
+        # The session status is still recorded, under its own name.
         self.results['_test_summary'] = {
             'total_tests': total,
             'passed': passed,
             'failed': failed,
             'skipped': skipped,
-            'exit_status': exitstatus,
+            'exit_status': 0 if failed == 0 else 1,
+            'session_exit_status': int(exitstatus),
         }
         
         # Save results

@@ -139,25 +139,26 @@ class SimulationManager:
     4. Prepare all files needed for preset scripts
     """
     
-    # Simulation data storage directory
-    SIMULATION_DATA_DIR = os.path.join(
-        os.path.dirname(__file__), 
-        '../../uploads/simulations'
-    )
-    
+    @staticmethod
+    def _base_dir() -> str:
+        """Configured root for simulation run-state. Single source of truth."""
+        from ..config import Config
+        return Config.OASIS_SIMULATION_DATA_DIR
+
     def __init__(self):
-        # Ensure directory exists
-        os.makedirs(self.SIMULATION_DATA_DIR, exist_ok=True)
-        
+        # Ensure the *configured* directory exists. Creating a hardcoded
+        # repo-relative path here instead would defeat OASIS_SIMULATION_DATA_DIR
+        # and raise OSError on a read-only image, which is exactly the
+        # deployment the setting exists for.
+        os.makedirs(self._base_dir(), exist_ok=True)
+
         # In-memory Simulation Status cache
         self._simulations: Dict[str, SimulationState] = {}
-    
+
     def _get_simulation_dir(self, simulation_id: str) -> str:
         """Get simulation data directory"""
         from ..utils.safe_path import safe_join
-        from ..config import Config
-        base_dir = getattr(Config, "OASIS_SIMULATION_DATA_DIR", self.SIMULATION_DATA_DIR)
-        sim_dir = safe_join(base_dir, simulation_id)
+        sim_dir = safe_join(self._base_dir(), simulation_id)
         os.makedirs(sim_dir, exist_ok=True)
         return sim_dir
     
@@ -559,9 +560,8 @@ class SimulationManager:
         """List all simulations"""
         simulations = []
         
-        from ..config import Config
         from ..utils.safe_path import safe_join, SafePathError
-        base_dir = getattr(Config, "OASIS_SIMULATION_DATA_DIR", self.SIMULATION_DATA_DIR)
+        base_dir = self._base_dir()
         if os.path.exists(base_dir):
             for sim_id in os.listdir(base_dir):
                 # Skip hidden files (e.g. .DS_Store) and non-directory files

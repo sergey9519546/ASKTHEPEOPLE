@@ -9,10 +9,13 @@ import json
 import os
 from typing import Any, Dict, Sequence
 
+from ..utils.logger import get_logger
 from .claim_boundary import graph_record_disclosure
 from .oasis_profile_generator import OasisAgentProfile
 from .role_normalizer import build_entity_type_registry, normalize_entity_type
 from .zep_entity_reader import EntityNode
+
+logger = get_logger('askthepeople.services.simulation_artifacts')
 
 
 CANONICAL_AGENTS_FILENAME = "agent_profiles.canonical.json"
@@ -352,15 +355,62 @@ def save_prepare_artifacts(
     }
 
 
+def framed_persona(agent: Dict[str, Any]) -> str:
+    """Persona text with both behavioural framing layers applied.
+
+    Layer 1: prospect-theory risk framing (from Big Five traits)
+    Layer 2: structural constraint framing (from entity role type)
+
+    Both reach the OASIS agent system prompt via:
+      agents_generator.py  profile["other_info"]["user_profile"] = agent_info[i]["persona"]
+    Deterministic, no model call; absent traits/roles leave the persona unchanged.
+
+    Shared by the twitter and reddit writers on purpose: the same entity must
+    carry the same framing on both platforms, or a cross-platform comparison
+    measures the writer rather than the scenario.
+    """
+    base = agent["internal_persona"]
+    try:
+        from .trait_behavior_projection import (
+            persona_with_framing,
+            persona_with_constraint_framing,
+        )
+        persona_text = persona_with_framing(base, agent)
+        # Pass the normalized role STRING directly — re-normalizing it
+        # round-trips through role_normalizer, which does not recognize
+        # normalized roles ("individual", "organization") as inputs and
+        # would silently degrade them to entity/unknown.
+        role_key = (
+            agent.get("source_entity_type_normalized")
+            or agent.get("source_entity_type_raw")
+            or agent.get("entity_type")
+            or "entity"
+        )
+        return persona_with_constraint_framing(persona_text, role_key)
+    except Exception as exc:
+        # Fail open, but never silently: an unlogged fallback here is
+        # indistinguishable from the feature working with nothing to add.
+        logger.warning(
+            "Persona framing skipped for agent %s; raw persona used: %s",
+            agent.get("agent_id"),
+            exc,
+        )
+        return base
+
+
 def canonical_to_twitter_rows(canonical_agents: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
     rows = []
     for agent in canonical_agents:
+        # twitter_profiles.csv is a single-line-per-field format and
+        # internal_persona is newline-stripped upstream, so the framing's
+        # paragraph breaks are collapsed rather than written into the CSV.
+        user_char = " ".join(framed_persona(agent).split())
         rows.append(
             {
                 "user_id": agent["agent_id"],
                 "name": agent["display_name"],
                 "username": agent["username"],
-                "user_char": agent["internal_persona"],
+                "user_char": user_char,
                 "description": agent["public_bio"],
             }
         )
@@ -370,30 +420,7 @@ def canonical_to_twitter_rows(canonical_agents: Sequence[Dict[str, Any]]) -> lis
 def canonical_to_reddit_profiles(canonical_agents: Sequence[Dict[str, Any]]) -> list[Dict[str, Any]]:
     profiles = []
     for agent in canonical_agents:
-        # Layer 1: prospect-theory risk framing (from Big Five traits)
-        # Layer 2: structural constraint framing (from entity role type)
-        # Both reach the OASIS agent system prompt via:
-        #   agents_generator.py  profile["other_info"]["user_profile"] = agent_info[i]["persona"]
-        # Deterministic, no model call; absent traits/roles leave persona unchanged.
-        try:
-            from .trait_behavior_projection import (
-                persona_with_framing,
-                persona_with_constraint_framing,
-            )
-            persona_text = persona_with_framing(agent["internal_persona"], agent)
-            # Pass the normalized role STRING directly — re-normalizing it
-            # round-trips through role_normalizer, which does not recognize
-            # normalized roles ("individual", "organization") as inputs and
-            # would silently degrade them to entity/unknown.
-            role_key = (
-                agent.get("source_entity_type_normalized")
-                or agent.get("source_entity_type_raw")
-                or agent.get("entity_type")
-                or "entity"
-            )
-            persona_text = persona_with_constraint_framing(persona_text, role_key)
-        except Exception:
-            persona_text = agent["internal_persona"]
+        persona_text = framed_persona(agent)
 
         profile = {
             "realname": agent["display_name"],

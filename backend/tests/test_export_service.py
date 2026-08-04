@@ -3,7 +3,7 @@ import io
 from types import SimpleNamespace
 
 from app import create_app
-from app.api import simulation as simulation_api
+from app.api.routes import export_routes
 from app.config import Config
 from app.services.export_service import CSVExporter, ExecutiveExporter
 
@@ -125,8 +125,10 @@ def test_survey_export_marks_answers_as_model_generated():
 
 
 def test_generated_response_export_uses_truthful_route_and_filename(monkeypatch):
+    # /export/generated-responses is served by app.api.routes.export_routes,
+    # which resolves ZepToolsService from its own module globals.
     monkeypatch.setattr(
-        simulation_api,
+        export_routes,
         "ZepToolsService",
         lambda: SimpleNamespace(),
     )

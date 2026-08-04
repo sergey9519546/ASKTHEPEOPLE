@@ -18,6 +18,7 @@ from typing import Dict, List, Optional
 from urllib.parse import urlparse
 
 from app.utils.logger import get_logger
+from app.utils.safe_url import SafeUrlError, assert_public_http_url, build_safe_opener
 
 logger = get_logger(__name__)
 
@@ -191,38 +192,48 @@ def fetch_with_custom_extractor(url: str) -> Dict[str, any]:
     Works best for simple HTML pages and plain text content.
     """
     try:
-        # Validate URL
-        parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https"):
-            return {"success": False, "error": "Only HTTP/HTTPS URLs supported"}
-        
+        # SSRF guard: rejects non-HTTP schemes, embedded credentials, and any
+        # host resolving to a non-public address.
+        assert_public_http_url(url)
+
         # Create request with headers to avoid bot detection
         req = urllib.request.Request(
             url,
             headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/pdf,text/*"}
         )
-        
-        # Fetch with timeout
-        with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as response:
+
+        # Fetch with timeout, through an opener that re-validates each redirect
+        # target — urlopen follows redirects, so an entry-point check alone is
+        # bypassed by a public URL that 302s to an internal address.
+        opener = build_safe_opener()
+        with opener.open(req, timeout=REQUEST_TIMEOUT) as response:
             content_type = response.headers.get("Content-Type", "").lower()
             content_length = response.headers.get("Content-Length")
-            
-            # Check size before reading
-            if content_length and int(content_length) > MAX_CONTENT_SIZE:
-                return {
-                    "success": False,
-                    "error": f"Content too large ({int(content_length)} bytes, max {MAX_CONTENT_SIZE})"
-                }
-            
-            # Read content
-            raw_content = response.read()
-            
+
+            # Check size before reading. Advisory only: the header is absent on
+            # chunked responses and a hostile origin can simply lie.
+            if content_length:
+                try:
+                    declared = int(content_length)
+                except ValueError:
+                    declared = 0
+                if declared > MAX_CONTENT_SIZE:
+                    return {
+                        "success": False,
+                        "error": f"Content too large ({declared} bytes, max {MAX_CONTENT_SIZE})"
+                    }
+
+            # Read one byte past the limit rather than to EOF, so an origin that
+            # omits or understates Content-Length cannot stream unbounded data
+            # into memory before the size check runs.
+            raw_content = response.read(MAX_CONTENT_SIZE + 1)
+
             if len(raw_content) > MAX_CONTENT_SIZE:
                 return {
                     "success": False,
-                    "error": f"Content too large ({len(raw_content)} bytes)"
+                    "error": f"Content too large (exceeds {MAX_CONTENT_SIZE} bytes)"
                 }
-            
+
             # Extract text based on content type
             if "html" in content_type:
                 text_content = extract_text_from_html(raw_content)
@@ -245,6 +256,8 @@ def fetch_with_custom_extractor(url: str) -> Dict[str, any]:
                 "method": "custom_extractor"
             }
     
+    except SafeUrlError as e:
+        return {"success": False, "error": str(e)}
     except urllib.error.HTTPError as e:
         return {"success": False, "error": f"HTTP {e.code}: {e.reason}"}
     except urllib.error.URLError as e:
@@ -268,6 +281,16 @@ def fetch_url_content(url: str) -> Dict[str, any]:
     Returns:
         Dict with keys: success (bool), content (str), error (str), size (int), method (str)
     """
+    # SSRF guard ahead of tier selection, so the check cannot be skipped by a
+    # future caller reaching a tier directly. Tiers 1 and 2 hand the URL to a
+    # third party rather than fetching it here, but an internal address is not a
+    # legitimate ingestion target through any tier.
+    try:
+        assert_public_http_url(url)
+    except SafeUrlError as exc:
+        logger.warning("Refused to fetch URL: %s", exc)
+        return {"success": False, "error": str(exc)}
+
     # Tier 1: Firecrawl (if API key available)
     if FIRECRAWL_API_KEY:
         logger.info(f"Trying Firecrawl for {url}")

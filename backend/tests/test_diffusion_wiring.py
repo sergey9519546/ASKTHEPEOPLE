@@ -146,36 +146,64 @@ class TestDiffusionFailsOpen:
     def test_empty_configs_returns_empty(self):
         assert _gen()._apply_diffusion_classification([], []) == []
 
-    def test_no_canonical_agents_still_classifies_with_neutral_scores(self):
-        """Without trait data agents get neutral scores (50.0) and are still classified.
-        
-        This is correct behavior: diffusion classification still assigns categories
-        even without Big Five data — it just uses equal scores, so the assignment
-        is determined by position rather than personality. The key property is that
-        all_valid novelty values are returned, not that they're unchanged.
+    def test_no_canonical_agents_leaves_every_control_untouched(self):
+        """No traits anywhere means nothing to rank, so nothing may be modulated.
+
+        Classifying a population whose scores are all identical does not
+        classify anything: classify_population breaks ties on str(agent_id), so
+        the categories would be decided by agent numbering. Skipping keeps the
+        documented invariant that a run without trait inference uses the
+        neutral defaults exactly.
         """
         configs = [_config(0, novelty=0.45), _config(1, novelty=0.45)]
         result = _gen()._apply_diffusion_classification(configs, [])
         assert len(result) == 2
         for c in result:
-            assert 0.05 <= c.novelty_seeking <= 0.95
-            assert c.response_delay_min >= 1
-            assert c.response_delay_max > c.response_delay_min
+            assert c.novelty_seeking == pytest.approx(0.45)
+            assert c.response_delay_min == 5
+            assert c.response_delay_max == 60
 
-    def test_missing_big_five_gets_neutral_score_not_error(self):
-        """Agents without traits use 50.0 (neutral) as innovativeness score."""
+    def test_missing_big_five_leaves_controls_untouched(self):
+        """Canonical agents present but carrying no traits: still nothing to rank."""
         n = 20
         configs = [_config(i) for i in range(n)]
         canons = [{"agent_id": i} for i in range(n)]  # no big_five key
         result = _gen()._apply_diffusion_classification(configs, canons)
-        assert len(result) == n  # didn't crash
+        assert len(result) == n
+        for c in result:
+            assert c.novelty_seeking == pytest.approx(0.45)
+            assert c.response_delay_max == 60
 
-    def test_malformed_big_five_uses_neutral_not_exception(self):
+    def test_malformed_big_five_leaves_controls_untouched(self):
+        """Out-of-range traits are rejected, which is indistinguishable from absent."""
         n = 20
         configs = [_config(i) for i in range(n)]
         canons = [{"agent_id": i, "big_five": {"openness": 9999.9}} for i in range(n)]
         result = _gen()._apply_diffusion_classification(configs, canons)
         assert len(result) == n
+        for c in result:
+            assert c.novelty_seeking == pytest.approx(0.45)
+            assert c.response_delay_max == 60
+
+    def test_agent_numbering_never_decides_category(self):
+        """Identical traits must not produce different controls per agent.
+
+        Regression guard for the tie-break path: with a constant score,
+        classify_population orders by str(agent_id), which puts "10" ahead of
+        "9". If that ever reaches the controls, agent 9 becomes a laggard and
+        agent 10 an early adopter purely because of how they are numbered.
+        """
+        n = 20
+        configs = [_config(i) for i in range(n)]
+        canons = [_bf_canon(i, 50.0) for i in range(n)]  # every agent identical
+        result = _gen()._apply_diffusion_classification(configs, canons)
+
+        assert len({c.novelty_seeking for c in result}) == 1, (
+            "identical traits produced different novelty_seeking values"
+        )
+        assert len({c.response_delay_max for c in result}) == 1, (
+            "identical traits produced different response delays"
+        )
 
     def test_import_error_degrades_gracefully(self, monkeypatch):
         """If diffusion_model is unavailable, configs must be returned unchanged."""
@@ -187,19 +215,22 @@ class TestDiffusionFailsOpen:
             return real_import(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", blocked)
-        configs = [_config(0, novelty=0.45)]
-        result = _gen()._apply_diffusion_classification(configs, [])
+        configs = [_config(0, novelty=0.45), _config(1, novelty=0.45)]
+        # Two distinct trait vectors, so the unrankable-population skip cannot
+        # be what saves this.
+        canons = [_bf_canon(0, 90.0), _bf_canon(1, 10.0)]
+        result = _gen()._apply_diffusion_classification(configs, canons)
         assert result[0].novelty_seeking == pytest.approx(0.45)
 
     def test_classification_exception_degrades_gracefully(self, monkeypatch):
         """Any unexpected error in classification must not crash a run."""
-        import app.services.simulation_config_generator as mod
         monkeypatch.setattr(
             "app.services.diffusion_model.classify_population",
             lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
         )
-        configs = [_config(0, novelty=0.45)]
-        result = _gen()._apply_diffusion_classification(configs, [])
+        configs = [_config(0, novelty=0.45), _config(1, novelty=0.45)]
+        canons = [_bf_canon(0, 90.0), _bf_canon(1, 10.0)]
+        result = _gen()._apply_diffusion_classification(configs, canons)
         assert result[0].novelty_seeking == pytest.approx(0.45)
 
 

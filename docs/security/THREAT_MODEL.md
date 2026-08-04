@@ -458,10 +458,10 @@ outer security boundary:
   `RATELIMIT_STORAGE_URI` — see
   [`api/__init__.py:41-47`](../../backend/app/api/__init__.py:41).
 
-### P0 — Unvalidated `platform` path component in the posts endpoint
+### P0 — Unvalidated `platform` path component in the posts endpoint — CURRENT (fixed, gate 0)
 
-[`api/simulation.py`](../../backend/app/api/simulation.py) accepts
-`platform` as a request-controlled value and interpolates it into a
+The finding was that [`api/simulation.py`](../../backend/app/api/simulation.py)
+accepted `platform` as a request-controlled value and interpolated it into a
 filename:
 
 ```python
@@ -469,17 +469,20 @@ platform = request.args.get("platform", "reddit")
 db_file = f"{platform}_simulation.db"
 ```
 
-This MUST be replaced with a fixed allowlist (`reddit`,
-`twitter`) and the SQLite opened read-only. The fix is gate 0,
-owned by `askthepeople-security-reviewer`. Tracked in
+The posts and comments endpoints now resolve `platform` through the fixed
+`ALLOWED_PLATFORMS` allowlist (`reddit`, `twitter`), answer `422` for anything
+else, route `simulation_id` through `safe_join` via `_safe_sim_dir`, and open
+SQLite read-only (`file:{db_path}?mode=ro`). Tracked in
 [`adr/ADR-0005-zero-trust-source-ingestion.md`](../architecture/adr/ADR-0005-zero-trust-source-ingestion.md).
 
-### P0 — Preparation runs in a local daemon thread
+### P0 — Preparation runs in a local daemon thread — CURRENT (fixed, gate 0)
 
-The preparation endpoint in
-[`api/simulation.py`](../../backend/app/api/simulation.py) creates a
-`threading.Thread(..., daemon=True)`. The web route MUST enqueue
-work and return. The fix is gate 2 in
+The preparation endpoint used to create a `threading.Thread(..., daemon=True)`.
+It now lives in
+[`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) and
+enqueues `prepare_simulation_task` via Celery, returning `202 Accepted`. The
+remaining durable-workflow work (idempotency keys, leases, fencing tokens,
+cancellation) is gate 2 in
 [`adr/ADR-0003-durable-run-orchestration.md`](../architecture/adr/ADR-0003-durable-run-orchestration.md).
 
 ### P0 — Prompt prefixing is not a security boundary

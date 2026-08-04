@@ -87,11 +87,15 @@ contract. Use this file as the shared contract instead.
 3. **Run the validator before claiming a doc change is complete.**
    `python tools/validate_docs.py` MUST pass with zero errors and zero
    warnings. CI will block the PR otherwise.
-4. **Do not add code to `backend/app/api/simulation.py`.** The 3,526-line
-   controller is to be decomposed into per-resource route modules under
-   `backend/app/api/<resource>/`. Adding lines to the monolith is the
-   central design error identified in the audit. See
-   [`docs/architecture/index.md`](docs/architecture/index.md) §"HTTP layer".
+4. **Do not add code to `backend/app/api/simulation.py`.** New handlers go in
+   the per-resource modules under `backend/app/api/routes/`, which is what
+   `api/__init__.py` registers. The controller is down to ~1,600 lines and now
+   holds only the read-oriented routes that have not been moved yet, plus the
+   helpers every `routes/` module imports. It previously also carried
+   undecorated copies of all 24 handlers `routes/` serves: unreachable, kept in
+   sync by hand, and called directly by tests, so a safety assertion could pass
+   against code that never answered a request. Do not reintroduce that pattern.
+   See [`docs/architecture/index.md`](docs/architecture/index.md) §"HTTP layer".
 5. **No threads or subprocesses from a route.** Long-running work goes
    through the job system (see `app/tasks/simulation_tasks.py` and ADR 0003).
 6. **No client-supplied data in canonical server-side records.** Exports
@@ -110,7 +114,13 @@ contract. Use this file as the shared contract instead.
 - Backend tests: `cd backend && .\.venv\Scripts\pytest`
 - Frontend tests: `cd frontend && npm run test` (Vitest)
 - Docs validator: `python tools/validate_docs.py`
-- Backend lint: `cd backend && .\.venv\Scripts\ruff check .`
+- Backend lint: `cd backend && uvx ruff check .` — ruff is deliberately not in
+  `backend/pyproject.toml`, so `.\.venv\Scripts\ruff` does not exist; adding it
+  would require relocking, and `uv sync --frozen` in `Dockerfile` /
+  `Dockerfile.worker` fails on a lock that does not match. The repo-wide
+  baseline is **not** ruff-clean (~2,000 findings against ruff's defaults, no
+  `[tool.ruff]` config), so this is advisory: lint the files you touched, not
+  the tree.
 - Frontend lint: `cd frontend && npm run lint`
 - Full local verify: `npm run verify` (per repo `package.json`)
 
@@ -132,15 +142,18 @@ contract. Use this file as the shared contract instead.
 
 ## What is not yet implemented (the gap to the target)
 
-The integration audit identifies six release gates. None of them are
-complete. The Mavis team's job is to drive them. CURRENT vs TARGET is
-recorded per gate in [`docs/architecture/index.md`](docs/architecture/index.md).
+The integration audit identifies six release gates. None are complete, but
+four are now partially landed — the table below had recorded all six as
+NOT STARTED long after work shipped against them, which made it useless for
+picking the next checkpoint. CURRENT vs TARGET is recorded per gate in
+[`docs/architecture/index.md`](docs/architecture/index.md); the "landed"
+column here cites the code so the claim can be checked rather than trusted.
 
-| Gate | Theme | Owner | Status |
-|---|---|---|---|
-| 0 | Immediate correctness and security | `askthepeople-security-reviewer` | NOT STARTED |
-| 1 | Typed API boundary | `askthepeople-architect` | NOT STARTED |
-| 2 | Durable workflows | `askthepeople-orchestration-engineer` | NOT STARTED |
-| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | NOT STARTED |
-| 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED |
-| 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | NOT STARTED |
+| Gate | Theme | Owner | Status | Landed so far |
+|---|---|---|---|---|
+| 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL | Path-escape defense (`backend/app/utils/safe_path.py`), SSRF defense on source ingestion (`backend/app/utils/safe_url.py`), bearer auth on `/api/*` and signed WebSocket tickets (`backend/app/__init__.py`, `backend/app/api/ws.py`), fail-closed `SECRET_KEY`/`APP_TOKEN` and production CORS refusal (`backend/app/config.py`), 5xx traceback scrubbing (`backend/app/__init__.py`). Remaining: full threat-model coverage per `docs/security/THREAT_MODEL.md` |
+| 1 | Typed API boundary | `askthepeople-architect` | PARTIAL | Route decomposition into `backend/app/api/routes/` is under way; `backend/app/api/simulation.py` still holds the read-oriented routes. Remaining: the typed boundary itself — there is no `app/application/` or `app/domain/` package and no request/response schema layer |
+| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL | Routes enqueue to Celery and return 202 instead of spawning daemon threads (`backend/app/api/routes/prep_routes.py`, `backend/app/tasks/simulation_tasks.py`); task state is shared through Redis with atomic updates (`backend/app/models/task.py`). Remaining: leases, fencing tokens, heartbeats, idempotency keys and retry classification per ADR 0003 |
+| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL | Alembic is initialised with an initial revision (`backend/alembic.ini`, `backend/migrations/versions/`) and `tenant_id` exists in `backend/app/db/schema.py`. Remaining: object storage, outbox events, immutable artifacts, and tenant isolation enforced at the query layer |
+| 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED | — |
+| 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL | Behavioural model layer exists under `backend/app/services/`; `big_five`, `prospect_theory` and `diffusion_model` are wired into profile generation and agent controls. Remaining: `constraint_engine`, `game_theory` and `calibration_metrics` have no production importer yet |

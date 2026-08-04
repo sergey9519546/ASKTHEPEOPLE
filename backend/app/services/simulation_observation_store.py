@@ -64,10 +64,12 @@ def get_observation_db_journal_mode(simulation_dir: str) -> str:
     if not os.path.exists(db_path):
         return ""
     conn = _connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA journal_mode;")
-    row = cursor.fetchone()
-    conn.close()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode;")
+        row = cursor.fetchone()
+    finally:
+        conn.close()
     return str(row[0]).lower() if row else ""
 
 

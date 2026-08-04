@@ -247,19 +247,16 @@ class SimulationRunner:
     4. Support pause/stop/resume operations
     """
     
-    # Run state storage directory
-    RUN_STATE_DIR = os.path.join(
-        os.path.dirname(__file__),
-        '../../uploads/simulations'
-    )
-
     @classmethod
     def _get_run_state_dir(cls, simulation_id: str) -> str:
-        """Validate and resolve a simulation run-state directory (path-traversal safe)."""
+        """Validate and resolve a simulation run-state directory (path-traversal safe).
+
+        Config.OASIS_SIMULATION_DATA_DIR is the only source for the base path;
+        patch that (not a class attribute) to relocate run-state.
+        """
         from ..utils.safe_path import safe_join
         from ..config import Config
-        base_dir = getattr(Config, "OASIS_SIMULATION_DATA_DIR", cls.RUN_STATE_DIR)
-        return safe_join(base_dir, simulation_id)
+        return safe_join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
 
     # Scripts directory
     SCRIPTS_DIR = os.path.join(

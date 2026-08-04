@@ -9,6 +9,7 @@ from werkzeug.exceptions import BadRequest
 
 from app.services.url_fetcher import fetch_and_store_urls
 from app.utils.logger import get_logger
+from app.utils.safe_url import SafeUrlError, assert_public_http_url
 
 logger = get_logger(__name__)
 
@@ -59,14 +60,18 @@ def fetch_urls():
                 "error": "Maximum 10 URLs per request"
             }), 400
         
-        # Validate URL format
+        # Validate URL format and refuse anything that points back into the
+        # deployment's own network (SSRF). Rejected at the boundary so a bad URL
+        # never reaches the fetcher; url_fetcher re-checks for defence in depth.
         valid_urls = []
         for url in urls:
             url = str(url).strip()
-            if not url.startswith(("http://", "https://")):
+            try:
+                assert_public_http_url(url)
+            except SafeUrlError as exc:
                 return jsonify({
                     "success": False,
-                    "error": f"Invalid URL (must start with http:// or https://): {url}"
+                    "error": f"Invalid URL: {exc}"
                 }), 400
             valid_urls.append(url)
         

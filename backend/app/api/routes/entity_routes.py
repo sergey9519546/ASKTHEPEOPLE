@@ -4,15 +4,6 @@ Entity Query API Routes (Decomposed from simulation.py)
 
 from flask import jsonify, request
 from .. import simulation_bp
-from ..simulation import (
-    _with_profile_truth,
-    _with_config_truth,
-    _resolve_graph_memory_request,
-    _validate_prepare_controls,
-    optimize_interview_prompt,
-    _check_simulation_prepared,
-    _safe_sim_dir
-)
 from ...config import Config
 from ...services.claim_boundary import (
     graph_record_disclosure,
@@ -20,6 +11,7 @@ from ...services.claim_boundary import (
 )
 from ...services.zep_entity_reader import ZepEntityReader
 from ...utils.logger import get_logger
+from ...utils.response import truth_metadata
 
 logger = get_logger('askthepeople.api.routes.entity')
 
@@ -63,6 +55,7 @@ def get_graph_entities(graph_id: str):
             },
             "disclosure": synthetic_output_disclosure(),
             "record_provenance": graph_record_disclosure(),
+            **truth_metadata(),
         })
 
     except Exception as e:
@@ -97,6 +90,7 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
             "data": entity,
             "disclosure": synthetic_output_disclosure(),
             "record_provenance": graph_record_disclosure(),
+            **truth_metadata(),
         })
 
     except Exception as e:
@@ -130,6 +124,10 @@ def get_entities_by_type(graph_id: str, entity_type: str):
             },
             "disclosure": synthetic_output_disclosure(),
             "record_provenance": graph_record_disclosure(),
+            # This sibling never carried truth_metadata, even before the
+            # decomposition. It returns the same class of graph records as the
+            # two routes above, so it carries the same contract.
+            **truth_metadata(),
         })
 
     except Exception as e:

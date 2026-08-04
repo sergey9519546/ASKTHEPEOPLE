@@ -43,7 +43,7 @@ limiter = Limiter(
     default_limits=[Config.RATELIMIT_DEFAULT],
     # Liveness/static delivery must never consume the API abuse budget.
     default_limits_exempt_when=lambda: not request.path.startswith("/api/"),
-    storage_uri=getattr(Config, 'RATELIMIT_STORAGE_URI', 'memory://'),
+    storage_uri=Config.RATELIMIT_STORAGE_URI,
 )
 
 from . import graph  # noqa: E402, F401

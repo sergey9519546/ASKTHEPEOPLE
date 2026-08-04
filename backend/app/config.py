@@ -202,9 +202,15 @@ class Config:
     
     # File Upload Configuration
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10MB (Security: P0 file upload limit)
-    UPLOAD_FOLDER = os.environ.get(
-        'UPLOAD_FOLDER',
-        os.path.abspath(os.path.join(os.path.dirname(__file__), '../uploads'))
+    # abspath wraps the *resolved* value, not just the default: an operator
+    # supplying a relative UPLOAD_FOLDER would otherwise leave every storage
+    # path relative to the process cwd, which differs between the web process
+    # and the worker and makes safe_join's containment check cwd-dependent.
+    UPLOAD_FOLDER = os.path.abspath(
+        os.environ.get(
+            'UPLOAD_FOLDER',
+            os.path.join(os.path.dirname(__file__), '../uploads'),
+        )
     )
     ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown'}
     
@@ -214,9 +220,14 @@ class Config:
     
     # OASIS Simulation Configuration
     OASIS_DEFAULT_MAX_ROUNDS = int(os.environ.get('OASIS_DEFAULT_MAX_ROUNDS', '10'))
-    OASIS_SIMULATION_DATA_DIR = os.environ.get(
-        'OASIS_SIMULATION_DATA_DIR',
-        os.path.abspath(os.path.join(os.path.dirname(__file__), '../uploads/simulations'))
+    # Defaults *under* UPLOAD_FOLDER rather than recomputing the repo-relative
+    # path, so relocating storage with UPLOAD_FOLDER alone moves simulation
+    # run-state with it. Setting this explicitly still overrides.
+    OASIS_SIMULATION_DATA_DIR = os.path.abspath(
+        os.environ.get(
+            'OASIS_SIMULATION_DATA_DIR',
+            os.path.join(UPLOAD_FOLDER, 'simulations'),
+        )
     )
     # OASIS Platform Available Actions Configuration
     OASIS_TWITTER_ACTIONS = [

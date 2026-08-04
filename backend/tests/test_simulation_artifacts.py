@@ -82,7 +82,11 @@ def test_prepare_artifacts_and_exact_oasis_exports(tmp_path):
     with open(export_info["twitter_path"], "r", encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[0]["user_id"] == "0"
-    assert rows[0]["user_char"] == "Detailed private persona"
+    # Same framing as the reddit persona below — both platforms must describe
+    # the same entity the same way. Kept on one line for the CSV format.
+    assert "Detailed private persona" in rows[0]["user_char"]
+    assert "[Scenario assumption" in rows[0]["user_char"]
+    assert "\n" not in rows[0]["user_char"]
     assert list(rows[0].keys()) == ["user_id", "name", "username", "user_char", "description"]
 
     with open(export_info["reddit_path"], "r", encoding="utf-8") as handle:

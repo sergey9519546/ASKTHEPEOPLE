@@ -10,6 +10,10 @@ import sys
 import os
 import json
 from datetime import datetime
+from types import SimpleNamespace
+from unittest import mock
+
+from flask import Flask
 
 # Add backend directory to path for direct module imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -83,20 +87,52 @@ class TestAPIMetadataIntegration:
         assert "**truth_metadata()" in content, \
             "report.py does not use truth_metadata in responses"
     
-    def test_simulation_api_imports_truth_metadata(self):
-        """Verify simulation.py imports truth_metadata"""
-        api_path = os.path.join(
-            os.path.dirname(__file__),
-            "../app/api/simulation.py"
-        )
-        
-        with open(api_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        assert "from ..utils.response import truth_metadata" in content, \
-            "simulation.py does not import truth_metadata"
-        assert "**truth_metadata()" in content, \
-            "simulation.py does not use truth_metadata in responses"
+    def test_simulation_api_entity_routes_return_truth_metadata(self):
+        """The entity endpoints must attach truth metadata to their responses.
+
+        Asserted against the live handlers rather than a source grep of one
+        file. The previous version grepped app/api/simulation.py, which kept
+        undecorated copies of these handlers alongside the registered ones in
+        app/api/routes/. The copies carried `**truth_metadata()` and the
+        registered handlers did not, so the contract was reported as met by
+        code that never answered a request.
+        """
+        from app.api.routes import entity_routes
+
+        called = {}
+
+        def fake_truth_metadata():
+            called["hit"] = called.get("hit", 0) + 1
+            return {"truth_metadata": "present"}
+
+        class FakeReader:
+            def filter_defined_entities(self, **_kwargs):
+                return SimpleNamespace(entities=[])
+
+            def get_entity_with_context(self, *_args):
+                return {"uuid": "e1"}
+
+            def get_entities_by_type(self, *_args):
+                return []
+
+        app = Flask(__name__)
+        with mock.patch.object(entity_routes, "truth_metadata", fake_truth_metadata), \
+                mock.patch.object(entity_routes, "ZepEntityReader", FakeReader), \
+                mock.patch.object(entity_routes.Config, "ZEP_API_KEY", "test-key"):
+            handlers = [
+                lambda: entity_routes.get_graph_entities("g1"),
+                lambda: entity_routes.get_entity_detail("g1", "e1"),
+                lambda: entity_routes.get_entities_by_type("g1", "Person"),
+            ]
+            for handler in handlers:
+                with app.test_request_context():
+                    payload = handler().get_json()
+                assert payload["success"] is True
+                assert payload.get("truth_metadata") == "present", (
+                    "entity route response is missing truth metadata"
+                )
+
+        assert called["hit"] == 3
     
     def test_graph_api_imports_truth_metadata(self):
         """Verify graph.py imports truth_metadata"""

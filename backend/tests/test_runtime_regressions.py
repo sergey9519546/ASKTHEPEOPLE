@@ -9,6 +9,7 @@ from flask import Flask
 
 from app.api import graph as graph_api
 from app.api import simulation as simulation_api
+from app.api.routes import execution_routes
 from app.services.graph_builder import GraphBuilderService
 from app.services.oasis_profile_generator import OasisProfileGenerator
 from app.services.simulation_config_generator import SimulationConfigGenerator
@@ -293,12 +294,14 @@ def test_live_injection_returns_pubsub_contract(monkeypatch):
     mock_state = SimpleNamespace(simulation_id="sim-1", status="running", config={})
     mock_mgr = MagicMock()
     mock_mgr.get_simulation.return_value = mock_state
-    monkeypatch.setattr(simulation_api, "SimulationManager", lambda: mock_mgr)
+    # execution_routes owns the registered /<id>/inject handler; the copy in
+    # api/simulation.py is undecorated and never serves a request.
+    monkeypatch.setattr(execution_routes, "SimulationManager", lambda: mock_mgr)
 
     with app.test_request_context(
         json={"content": "Breaking update", "platform": "parallel"}
     ):
-        response = simulation_api.inject_simulation_event("sim-1")
+        response = execution_routes.inject_simulation_event("sim-1")
 
     body, status = response
     assert status == 200
