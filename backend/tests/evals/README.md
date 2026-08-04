@@ -92,10 +92,16 @@ After running the suite, results are saved to `backend/tests/evals/results.json`
     "total_tests": 12,
     "passed": 9,
     "failed": 0,
-    "exit_status": 0
+    "skipped": 3,
+    "exit_status": 0,
+    "session_exit_status": 0
   }
 }
 ```
+
+`exit_status` reflects the eval subset only (`0` unless an eval test failed).
+`session_exit_status` is pytest's status for the whole run, so it can be `1`
+because of an unrelated failure elsewhere while the evals themselves passed.
 
 ## Acceptance Criteria
 

@@ -237,7 +237,6 @@ def prospect_framing_text(traits: BigFive) -> str:
     Only the directional links are literature-supported.
     """
     from .prospect_theory import params_from_big_five
-    from .big_five import TRAITS
 
     # prospect_theory expects normalized [0,1] scores; BigFive uses [0,100]
     params = params_from_big_five(

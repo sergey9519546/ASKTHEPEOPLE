@@ -214,9 +214,12 @@ class Config:
     
     # OASIS Simulation Configuration
     OASIS_DEFAULT_MAX_ROUNDS = int(os.environ.get('OASIS_DEFAULT_MAX_ROUNDS', '10'))
+    # Defaults *under* UPLOAD_FOLDER rather than recomputing the repo-relative
+    # path, so relocating storage with UPLOAD_FOLDER alone moves simulation
+    # run-state with it. Setting this explicitly still overrides.
     OASIS_SIMULATION_DATA_DIR = os.environ.get(
         'OASIS_SIMULATION_DATA_DIR',
-        os.path.abspath(os.path.join(os.path.dirname(__file__), '../uploads/simulations'))
+        os.path.join(UPLOAD_FOLDER, 'simulations')
     )
     # OASIS Platform Available Actions Configuration
     OASIS_TWITTER_ACTIONS = [

@@ -393,7 +393,8 @@ the canonical persistence layer per
 
 The current application does not have a run-cancellation or export-
 revocation endpoint. Stop is a route flag
-(`stop_simulation` in [`api/simulation.py`](../../backend/app/api/simulation.py))
+(`stop_simulation` in
+[`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py))
 that sets the simulation to "paused" in the audit's terminology, and
 `close_environment` is a separate route. The current state is the
 audit-flagged contradictory lifecycle semantics. The durable workflow that

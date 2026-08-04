@@ -97,8 +97,11 @@ any work in any plan begins.
   [`backend/app/__init__.py:25`](../../backend/app/__init__.py:25).
 - The Flask blueprint registration:
   [`backend/app/api/__init__.py:13-17`](../../backend/app/api/__init__.py:13).
-- The 3,526-line monolith:
-  [`backend/app/api/simulation.py`](../../backend/app/api/simulation.py).
+- The partially decomposed simulation controller:
+  [`backend/app/api/simulation.py`](../../backend/app/api/simulation.py)
+  (read routes + shared helpers) and
+  [`backend/app/api/routes/`](../../backend/app/api/routes/)
+  (write/lifecycle handlers).
 - The model layer:
   [`backend/app/models/project.py:18-310`](../../backend/app/models/project.py),
   [`backend/app/models/task.py:21-387`](../../backend/app/models/task.py).

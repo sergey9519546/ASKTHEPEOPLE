@@ -133,13 +133,13 @@ previous workflow code/release set; persisted event history remains readable.
 
 **Audit relevance:** The audit P0 daemon-thread finding and the P1 process-local runtime ownership are the persistent work of this plan. Gate 2.
 
-**Current state:** Celery is wired (backend/app/celery_app.py, backend/app/tasks/simulation_tasks.py:16) but the preparation endpoint in api/simulation.py still creates a daemon thread. Idempotency keys, leases, fencing tokens, and push-based event delivery are NOT IMPLEMENTED.
+**Current state:** Celery is wired (backend/app/celery_app.py, backend/app/tasks/simulation_tasks.py:16) and the preparation endpoint (backend/app/api/routes/prep_routes.py) now enqueues `prepare_simulation_task` and returns 202 rather than creating a daemon thread — that P0 is closed. Idempotency keys, leases, fencing tokens, and push-based event delivery are still NOT IMPLEMENTED.
 
 **Key file:line references:**
 
 - `backend/app/celery_app.py:1 (Celery config)`
 - `backend/app/tasks/simulation_tasks.py:16 (run_simulation_task)`
-- `backend/app/api/simulation.py (daemon-thread prep endpoint, audit P0)`
+- `backend/app/api/routes/prep_routes.py (prep endpoint; daemon thread replaced by Celery dispatch)`
 - `backend/app/services/simulation_manager.py:1 (26 KB manager)`
 
 The numbered implementation steps in this plan are NOT STARTED at the

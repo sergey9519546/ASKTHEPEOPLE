@@ -94,13 +94,30 @@ directories, and build exports.
 |---|---|---|---:|---|
 | `/api/auth` | `auth_bp` | [`api/auth.py`](../../backend/app/api/auth.py) | 1 KB | CURRENT |
 | `/api/graph` | `graph_bp` | [`api/graph.py`](../../backend/app/api/graph.py) | 29 KB | CURRENT |
-| `/api/simulation` | `simulation_bp` | [`api/simulation.py`](../../backend/app/api/simulation.py) | 130 KB | **PARTIAL** — release-blocker; see audit §5 P0/P1 cluster |
+| `/api/simulation` | `simulation_bp` | [`api/simulation.py`](../../backend/app/api/simulation.py) + [`api/routes/`](../../backend/app/api/routes/) | ~1.6 kloc + ~2.3 kloc | **PARTIAL** — write/lifecycle handlers decomposed into `routes/`; read routes still in the controller |
 | `/api/report` | `report_bp` | [`api/report.py`](../../backend/app/api/report.py) | 48 KB | CURRENT (route layer) |
 | `/api/settings` | `settings_bp` | [`api/settings.py`](../../backend/app/api/settings.py) | 13 KB | CURRENT |
 | WebSocket | (none — registered in [`api/ws.py`](../../backend/app/api/ws.py)) | `api/ws.py` | 10 KB | CURRENT |
 
-`simulation_bp` is the 3,526-line, 54-function, 41-route controller identified
-by the integration audit. Decomposition is the
+`simulation_bp` was the 3,526-line, 54-function, 41-route controller identified
+by the integration audit. It is now split across six modules — still 41 route
+functions, but 24 of them have moved out:
+
+| Module | Route fns | Lines | Holds |
+|---|---:|---:|---|
+| [`api/simulation.py`](../../backend/app/api/simulation.py) | 17 | 1,596 | read routes + the helpers `routes/` imports |
+| [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 8 | 705 | start / stop / status / inject / env |
+| [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 557 | create / prepare / profiles / preflight |
+| [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 4 | 562 | generated-response routes |
+| [`api/routes/export_routes.py`](../../backend/app/api/routes/export_routes.py) | 3 | 176 | config / script / survey download |
+| [`api/routes/entity_routes.py`](../../backend/app/api/routes/entity_routes.py) | 3 | 138 | graph entity listing |
+
+Every module in `api/routes/` must be listed in that package's `__init__.py`.
+`entity_routes` was not, and the decorators it replaced were commented out in
+`api/simulation.py`, so `GET /api/simulation/entities/...` answered 404 from the
+decomposition commit until the import was restored.
+
+Completing the decomposition (moving the remaining read routes out) is the
 [`askthepeople-architect`](../..//README.md) agent's primary deliverable per
 [`docs/architecture/adr/ADR-0011-incremental-modernization-over-rewrite.md`](adr/ADR-0011-incremental-modernization-over-rewrite.md).
 
@@ -200,7 +217,7 @@ PENDING → PROCESSING → COMPLETED
 
 State machine is defined in
 [`services/simulation_runtime_contract.py`](../../backend/app/services/simulation_runtime_contract.py)
-and driven from [`api/simulation.py`](../../backend/app/api/simulation.py).
+and driven from [`api/routes/`](../../backend/app/api/routes/).
 The integration audit identified it as conflating preparation, simulation,
 runtime, environment, task, and report states (audit §5 P1 "Contradictory
 lifecycle semantics"). The target is the four independent state machines
@@ -236,8 +253,8 @@ recommends push-based event delivery.
 ### In-process daemon thread — CURRENT (gate 0 fix)
 
 The preparation endpoint
-[`api/simulation.py`](../../backend/app/api/simulation.py) used to create a
-`threading.Thread(..., daemon=True)` to run preparation work. This was the
+([`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py))
+used to create a `threading.Thread(..., daemon=True)` to run preparation work. This was the
 audit §5 P0 #2 finding. The route now enqueues
 `prepare_simulation_task` via Celery and returns
 **HTTP 202 Accepted** with `Location: /api/jobs/{task_id}`. The Celery task
@@ -279,7 +296,7 @@ with a persistent lease and heartbeat
 
 ### Live scenario injection — CURRENT
 
-[`POST /api/simulation/<id>/inject`](../../backend/app/api/simulation.py)
+[`POST /api/simulation/<id>/inject`](../../backend/app/api/routes/execution_routes.py)
 publishes real-time intervention payloads (breaking news, persona
 modifications, dynamic instructions) to the Redis Pub/Sub channel
 `simulation:<id>:events` and falls back to a process-local in-memory

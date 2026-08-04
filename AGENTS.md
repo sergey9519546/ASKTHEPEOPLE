@@ -87,11 +87,15 @@ contract. Use this file as the shared contract instead.
 3. **Run the validator before claiming a doc change is complete.**
    `python tools/validate_docs.py` MUST pass with zero errors and zero
    warnings. CI will block the PR otherwise.
-4. **Do not add code to `backend/app/api/simulation.py`.** The 3,526-line
-   controller is to be decomposed into per-resource route modules under
-   `backend/app/api/<resource>/`. Adding lines to the monolith is the
-   central design error identified in the audit. See
-   [`docs/architecture/index.md`](docs/architecture/index.md) §"HTTP layer".
+4. **Do not add code to `backend/app/api/simulation.py`.** New handlers go in
+   the per-resource modules under `backend/app/api/routes/`, which is what
+   `api/__init__.py` registers. The controller is down to ~1,600 lines and now
+   holds only the read-oriented routes that have not been moved yet, plus the
+   helpers every `routes/` module imports. It previously also carried
+   undecorated copies of all 24 handlers `routes/` serves: unreachable, kept in
+   sync by hand, and called directly by tests, so a safety assertion could pass
+   against code that never answered a request. Do not reintroduce that pattern.
+   See [`docs/architecture/index.md`](docs/architecture/index.md) §"HTTP layer".
 5. **No threads or subprocesses from a route.** Long-running work goes
    through the job system (see `app/tasks/simulation_tasks.py` and ADR 0003).
 6. **No client-supplied data in canonical server-side records.** Exports

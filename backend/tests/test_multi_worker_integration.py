@@ -10,10 +10,11 @@ Multi-worker integration test suite verifying end-to-end simulation lifecycle:
 8. Full end-to-end multi-worker simulation lifecycle integration.
 """
 
-import importlib
 import json
 import os
 import sqlite3
+import subprocess
+import sys
 import tempfile
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -30,6 +31,7 @@ from app.services.simulation_artifacts import canonical_agents_path
 from app.services.simulation_manager import SimulationManager, SimulationStatus
 from app.services.simulation_observation_store import (
     ensure_observation_store,
+    get_observation_db_journal_mode,
     observation_db_path,
     pop_in_memory_events,
     push_in_memory_event,
@@ -49,6 +51,21 @@ def configure_celery_eager(monkeypatch):
     """Enable Celery eager mode during integration tests."""
     monkeypatch.setattr(celery_app.conf, "task_always_eager", True)
     monkeypatch.setattr(celery_app.conf, "task_eager_propagates", True)
+
+
+@pytest.fixture(autouse=True)
+def isolate_simulation_storage(monkeypatch, tmp_path):
+    """Point every storage resolver at tmp_path for the whole module.
+
+    These tests drive real routes and the eager Celery task, and several code
+    paths (SimulationManager.__init__, ensure_observation_store) create
+    directories as a side effect. Without this the suite writes simulation
+    directories into the repository's own backend/uploads/simulations.
+    """
+    storage_root = tmp_path / "simulations"
+    storage_root.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(storage_root))
+    return storage_root
 
 
 @pytest.fixture
@@ -191,22 +208,16 @@ def test_live_pubsub_scenario_injection_during_tick(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_persistent_observation_store_wal_mode_post_completion(tmp_path, monkeypatch):
+async def test_persistent_observation_store_wal_mode_post_completion(isolate_simulation_storage):
     """Verify isolated per-simulation SQLite store operates in WAL mode and persists data post-completion."""
-    sim_dir = str(tmp_path / "sim_wal_persistence_test")
-    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path))
+    sim_dir = str(isolate_simulation_storage / "sim_wal_persistence_test")
 
     # Initialize store
     db_path = ensure_observation_store(sim_dir)
     assert os.path.exists(db_path)
 
-    # Confirm WAL mode on initialization
-    conn_init = sqlite3.connect(db_path)
-    cursor_init = conn_init.cursor()
-    cursor_init.execute("PRAGMA journal_mode;")
-    journal_mode_init = cursor_init.fetchone()[0]
-    conn_init.close()
-    assert journal_mode_init.lower() == "wal"
+    # Confirm WAL mode on initialization, via the production helper
+    assert get_observation_db_journal_mode(sim_dir) == "wal"
 
     # Populate canonical agents and simulation artifacts
     agents_file = os.path.join(sim_dir, "agent_profiles.canonical.json")
@@ -268,12 +279,10 @@ async def test_persistent_observation_store_wal_mode_post_completion(tmp_path, m
     assert synced_db_path == db_path
 
     # Verify persistent SQLite data in WAL mode post-completion
+    assert get_observation_db_journal_mode(sim_dir) == "wal"
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-
-    cursor.execute("PRAGMA journal_mode;")
-    mode_post = cursor.fetchone()[0]
-    assert mode_post.lower() == "wal"
 
     cursor.execute("SELECT count(*) FROM agent_index;")
     assert cursor.fetchone()[0] == 2
@@ -304,11 +313,10 @@ async def test_persistent_observation_store_wal_mode_post_completion(tmp_path, m
     assert search_res["results"][0]["agent_name"] == "Citizen_Alpha"
 
 
-def test_multi_worker_e2e_simulation_lifecycle(client, tmp_path, monkeypatch):
+def test_multi_worker_e2e_simulation_lifecycle(client, isolate_simulation_storage, monkeypatch):
     """Full end-to-end multi-worker integration test covering start -> status polling -> injection -> WAL persistence."""
     sim_id = "sim_e2e_multi_worker_lifecycle"
-    sim_dir = str(tmp_path / sim_id)
-    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path))
+    sim_dir = str(isolate_simulation_storage / sim_id)
     # Force the in-memory event transport; see the note in
     # test_live_pubsub_scenario_injection_during_tick.
     monkeypatch.setattr(Config, "REDIS_URL", "memory://")
@@ -372,41 +380,89 @@ def test_multi_worker_e2e_simulation_lifecycle(client, tmp_path, monkeypatch):
 
     # Step 4: Verify post-completion SQLite WAL store persistence
     synced_db = sync_observation_store(sim_dir, run_state={"simulation_id": sim_id, "status": "completed"})
+    assert get_observation_db_journal_mode(sim_dir) == "wal"
     conn = sqlite3.connect(synced_db)
     cursor = conn.cursor()
-    cursor.execute("PRAGMA journal_mode;")
-    assert cursor.fetchone()[0].lower() == "wal"
     cursor.execute("SELECT count(*) FROM agent_index;")
     assert cursor.fetchone()[0] == 1
     conn.close()
 
 
+FILE_ACCESS_ENDPOINTS = [
+    "/api/simulation/{id}/posts",
+    "/api/simulation/{id}/comments",
+    "/api/simulation/{id}/config/download",
+]
+
+
 def test_path_traversal_defense_on_file_access_endpoints(client):
-    """Verify path traversal attempts return HTTP 400 or block traversal safely on file access endpoints."""
-    traversal_attempts = [
-        "../evil_sim",
-        "../../etc/passwd",
+    """Traversal ids that reach the handler must be rejected by safe_join, specifically.
+
+    `status != 200` is not an adequate assertion here: a routing 404 or an
+    unhandled 500 would both satisfy it while proving nothing about the
+    defense. These ids survive URL routing as a single path segment, so the
+    handler runs and safe_join is what produces the 400.
+    """
+    handler_reaching_ids = [
         "..%252F..%252Fetc",
-        "/etc/passwd",
         r"C:\Windows\System32",
-    ]
-    endpoints = [
-        "/api/simulation/{id}/posts",
-        "/api/simulation/{id}/comments",
-        "/api/simulation/{id}/config/download",
+        "..",
     ]
 
-    for bad_id in traversal_attempts:
-        for endpoint_template in endpoints:
+    for bad_id in handler_reaching_ids:
+        for endpoint_template in FILE_ACCESS_ENDPOINTS:
             url = endpoint_template.format(id=bad_id)
             response = client.get(url)
-            # Response must NOT be 200 OK and must block traversal
-            assert response.status_code != 200, f"Endpoint {url} returned HTTP 200 for traversal attempt '{bad_id}'"
-            if response.status_code == 400:
-                data = response.get_json()
-                if data and isinstance(data, dict):
-                    assert data.get("success") is False
-                    assert data.get("error") in ("invalid_id", "invalid_path") or "error" in data
+            assert response.status_code == 400, (
+                f"{url} returned {response.status_code}, expected 400 from the "
+                f"safe_join rejection for id {bad_id!r}"
+            )
+            data = response.get_json()
+            assert data["success"] is False
+            assert data["error"] == "invalid_id"
+
+
+def test_traversal_rejection_is_the_defense_not_a_blanket_4xx(client):
+    """A well-formed id must reach the database lookup rather than being rejected.
+
+    Without this, the assertions above would still pass if the endpoints
+    rejected every request. This is what makes the 400 above attributable to
+    safe_join: same endpoint, same absent database, different id, different
+    status.
+    """
+    for endpoint_template in FILE_ACCESS_ENDPOINTS:
+        url = endpoint_template.format(id="sim_well_formed_but_absent")
+        response = client.get(url)
+        assert response.status_code != 400, (
+            f"{url} rejected a legitimate simulation id; the traversal test "
+            f"above would then pass for the wrong reason"
+        )
+
+
+def test_multi_segment_traversal_ids_are_stopped_by_routing(client):
+    """Ids containing separators never reach the handler; document that.
+
+    These produce paths that match no URL rule, so Werkzeug answers 404 before
+    any application code runs. They are worth keeping as a regression guard on
+    the URL map, but they exercise routing, not safe_join.
+    """
+    # Note the last one: a single-encoded %2F decodes to a separator before
+    # routing, so it becomes a multi-segment path too. Only the
+    # double-encoded %252F survives as one segment (covered above).
+    routing_stopped_ids = [
+        "../evil_sim",
+        "../../etc/passwd",
+        "/etc/passwd",
+        "sim..%2F..%2Fetc",
+    ]
+
+    for bad_id in routing_stopped_ids:
+        for endpoint_template in FILE_ACCESS_ENDPOINTS:
+            url = endpoint_template.format(id=bad_id)
+            response = client.get(url)
+            assert response.status_code == 404, (
+                f"{url} returned {response.status_code}; expected a routing 404"
+            )
 
 
 def test_safe_join_rejects_path_traversal_attempts():
@@ -433,32 +489,70 @@ def test_safe_join_rejects_path_traversal_attempts():
                 safe_join(base_dir, invalid_input)
 
 
-def test_configurable_persistent_storage_paths(monkeypatch, tmp_path):
-    """Test environment variable overrides for UPLOAD_FOLDER and OASIS_SIMULATION_DATA_DIR in Config."""
-    import app.config
+def _config_values_under_env(env_overrides):
+    """Import app.config in a clean subprocess and read back two paths.
 
+    Module-level env reads can only be re-exercised by a fresh interpreter.
+    importlib.reload() in-process would rebind app.config.Config to a new class
+    that no already-imported service holds a reference to, so asserting on it
+    would only prove that os.environ.get works.
+    """
+    env = dict(os.environ, **env_overrides)
+    env.pop("PYTHONPATH", None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import app.config as c;"
+            "print(c.Config.UPLOAD_FOLDER);"
+            "print(c.Config.OASIS_SIMULATION_DATA_DIR)",
+        ],
+        cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    upload, sim_data = result.stdout.strip().splitlines()[-2:]
+    return upload, sim_data
+
+
+def test_storage_env_vars_are_read_and_simulation_dir_follows_upload_folder(tmp_path):
+    """UPLOAD_FOLDER alone must relocate simulation state; the specific var still wins."""
     custom_upload = str(tmp_path / "custom_uploads_dir")
     custom_sim_data = str(tmp_path / "custom_simulations_dir")
 
-    # 1. Test environment variable overrides via importlib reload
-    monkeypatch.setenv("UPLOAD_FOLDER", custom_upload)
-    monkeypatch.setenv("OASIS_SIMULATION_DATA_DIR", custom_sim_data)
-    importlib.reload(app.config)
+    # UPLOAD_FOLDER alone relocates simulation run-state with it. Without this,
+    # an operator moving uploads to a persistent volume silently leaves every
+    # simulation directory on the ephemeral default.
+    upload, sim_data = _config_values_under_env({"UPLOAD_FOLDER": custom_upload})
+    assert upload == custom_upload
+    assert sim_data == os.path.join(custom_upload, "simulations")
 
-    assert app.config.Config.UPLOAD_FOLDER == custom_upload
-    assert app.config.Config.OASIS_SIMULATION_DATA_DIR == custom_sim_data
+    # The specific variable still overrides the derived default.
+    upload, sim_data = _config_values_under_env(
+        {"UPLOAD_FOLDER": custom_upload, "OASIS_SIMULATION_DATA_DIR": custom_sim_data}
+    )
+    assert upload == custom_upload
+    assert sim_data == custom_sim_data
 
-    # 2. Test monkeypatch.setattr directly on Config
-    override_upload = str(tmp_path / "override_upload")
-    override_sim = str(tmp_path / "override_sim")
-    monkeypatch.setattr(Config, "UPLOAD_FOLDER", override_upload)
-    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", override_sim)
 
-    assert Config.UPLOAD_FOLDER == override_upload
-    assert Config.OASIS_SIMULATION_DATA_DIR == override_sim
+def test_every_storage_resolver_honours_the_configured_directory(monkeypatch, tmp_path):
+    """Each independent path resolver must read Config, not a hardcoded default."""
+    from app.api.simulation import _safe_sim_dir
 
-    # 3. Clean up environment overrides and restore default config state
-    monkeypatch.delenv("UPLOAD_FOLDER", raising=False)
-    monkeypatch.delenv("OASIS_SIMULATION_DATA_DIR", raising=False)
-    importlib.reload(app.config)
+    custom = tmp_path / "relocated_simulations"
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(custom))
+    expected_root = os.path.realpath(str(custom))
+
+    assert SimulationRunner._get_run_state_dir("sim_x").startswith(expected_root)
+    assert _safe_sim_dir("sim_x").startswith(expected_root)
+
+    # Constructing the manager must create the *configured* root, not a
+    # repo-relative one — on a read-only image the latter raises OSError and
+    # takes every simulation route down with it.
+    manager = SimulationManager()
+    assert os.path.isdir(str(custom))
+    assert manager._get_simulation_dir("sim_x").startswith(expected_root)
 

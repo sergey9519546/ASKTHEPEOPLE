@@ -321,7 +321,7 @@ Simulation lifecycle — PARTIAL (audit P1 finding)
 ```
 
 Source: [`backend/app/services/simulation_runtime_contract.py`](../../backend/app/services/simulation_runtime_contract.py)
-and the routes in [`backend/app/api/simulation.py`](../../backend/app/api/simulation.py).
+and the routes in [`backend/app/api/routes/`](../../backend/app/api/routes/).
 The integration audit's P1 finding "Contradictory lifecycle semantics"
 identifies that **stop returns `STOPPED` but the manager state becomes
 `PAUSED`**, the **close route marks the simulation `COMPLETED` even when
@@ -378,7 +378,8 @@ which is the seed of idempotency. The route layer does not yet pass an
 
 ### Stop semantics — PARTIAL (audit P1)
 
-`stop_simulation` in [`api/simulation.py`](../../backend/app/api/simulation.py)
+`stop_simulation` in
+[`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py)
 sets the manager state to `PAUSED` even though the runtime is stopped.
 The audit requires that stop and the persisted state agree. The current
 implementation violates this. The fix is gate 1.

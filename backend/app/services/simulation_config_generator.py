@@ -1186,7 +1186,13 @@ Return JSON format (no markdown):
                 from .trait_behavior_projection import influence_weight_from_role
                 role_info_for_constraint = normalize_entity_type(entity.get_entity_type())
                 constraint_influence = influence_weight_from_role(role_info_for_constraint)
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "Constraint influence weight skipped for synthetic profile "
+                    "%s; neutral 1.0 retained: %s",
+                    agent_id,
+                    exc,
+                )
                 constraint_influence = 1.0
 
             config = AgentActivityConfig(
@@ -1202,8 +1208,10 @@ Return JSON format (no markdown):
                 response_delay_max=cfg.get("response_delay_max", 60),
                 sentiment_bias=cfg.get("sentiment_bias", 0.0),
                 stance=cfg.get("stance", "neutral"),
-                # Trait projection overrides the cfg-level weight; constraint
-                # multiplier is applied on top (they compose multiplicatively).
+                # The rule-based cfg supplies the 1.0 baseline (derive_controls
+                # produces no influence_weight), so this is the role multiplier
+                # applied to a neutral base. Written as a product so a future
+                # trait-derived weight composes here without another edit.
                 influence_weight=round(cfg.get("influence_weight", 1.0) * constraint_influence, 4),
                 normalized_role=cfg.get("normalized_role", normalize_entity_type(entity.get_entity_type())["normalized_role"]),
                 reaction_style=cfg.get("reaction_style", "measured"),
@@ -1244,50 +1252,67 @@ Return JSON format (no markdown):
         sooner; laggards get a lower score and respond later. The modulation
         is deliberately narrow so it perturbs rather than dominates.
 
-        Fails open: any error leaves all configs unchanged, and a missing
-        big_five simply contributes to the neutral-score population.
+        Requires at least two distinct source-derived trait vectors; see the
+        skip condition below for why an unrankable population is left alone
+        rather than classified. Absent that, every control keeps its neutral
+        default.
+
+        Fails open: any error leaves all configs unchanged.
         """
         if not agent_configs:
             return agent_configs
 
         try:
             from .big_five import BigFive
-            from .diffusion_model import (
-                AdopterCategory,
-                classify_population,
-                thresholds_from_categories,
-            )
+            from .diffusion_model import AdopterCategory, classify_population
 
-            # Build persona dicts for diffusion_model — it accepts plain dicts
-            # and uses "big_five" or "innovativeness_score" if present.
+            # Hand diffusion_model the traits themselves rather than a
+            # pre-computed score: its innovativeness_score() infers the trait
+            # scale population-wide, weights openness/extraversion/neuroticism,
+            # and falls back to a stable per-identity pseudo-score for agents
+            # with no usable signal. Passing key= would bypass all of that.
             persona_by_id: Dict[int, Dict[str, Any]] = {}
+            trait_signatures = set()
             for canon in canonical_agents:
                 agent_id = canon.get("agent_id")
                 if agent_id is None:
                     continue
-                bf = canon.get("big_five")
-                if bf:
+                persona: Dict[str, Any] = {"id": agent_id}
+                if canon.get("big_five"):
                     try:
-                        traits = BigFive.from_dict(bf)
-                        score = traits.openness if traits else 50.0
+                        traits = BigFive.from_dict(canon["big_five"])
                     except (ValueError, TypeError):
-                        score = 50.0
-                else:
-                    score = 50.0
-                persona_by_id[agent_id] = {"id": agent_id, "innovativeness_score": score}
+                        traits = None
+                    if traits is not None:
+                        persona["big_five"] = traits.to_dict()
+                        trait_signatures.add(tuple(sorted(persona["big_five"].items())))
+                persona_by_id[agent_id] = persona
 
-            # classify_population needs positional persona dicts keyed by
-            # something the model uses. We use the score directly.
+            # Ranking needs variance, not merely data. Fewer than two distinct
+            # trait vectors leaves nothing informative to rank: agents without
+            # traits score only a hash of their identity, and identical vectors
+            # tie. classify_population then falls back to its str(agent_id)
+            # tie-break, so the categories — and with them the novelty and delay
+            # deltas — would be decided by agent numbering, where "9" sorts
+            # behind "10". Skip instead, which keeps the documented invariant
+            # that a run without trait inference uses the neutral defaults
+            # exactly.
+            if len(trait_signatures) < 2:
+                logger.info(
+                    "Diffusion classification skipped: %d distinct trait "
+                    "vector(s) across %d agents is not rankable; neutral "
+                    "defaults retained",
+                    len(trait_signatures),
+                    len(agent_configs),
+                )
+                return agent_configs
+
             all_personas = {
                 cfg.agent_id: persona_by_id.get(cfg.agent_id, {"id": cfg.agent_id})
                 for cfg in agent_configs
             }
 
-            category_map = classify_population(
-                personas=all_personas,
-                key=lambda p: p.get("innovativeness_score", 50.0),
-                id_key=lambda p: p.get("id"),
-            )
+            category_map = classify_population(personas=all_personas)
 
             # Modulation table. ASSUMPTION: deltas are design choices, kept
             # deliberately narrow so category is a nudge, not a takeover.
@@ -1308,11 +1333,9 @@ Return JSON format (no markdown):
                 AdopterCategory.LAGGARD: 1.50,
             }
 
-            enriched: List["AgentActivityConfig"] = []
             for cfg in agent_configs:
                 cat = category_map.get(cfg.agent_id)
                 if cat is None:
-                    enriched.append(cfg)
                     continue
 
                 new_novelty = max(0.05, min(0.95,
@@ -1322,12 +1345,11 @@ Return JSON format (no markdown):
                 new_delay_min = max(1, round(cfg.response_delay_min * factor))
                 new_delay_max = max(new_delay_min + 1, round(cfg.response_delay_max * factor))
 
-                # dataclasses are frozen-ish but not frozen; mutate in place
+                # AgentActivityConfig is a non-frozen dataclass: mutate in place
                 # rather than reconstructing (avoids copying every field).
                 cfg.novelty_seeking = round(new_novelty, 4)
                 cfg.response_delay_min = new_delay_min
                 cfg.response_delay_max = new_delay_max
-                enriched.append(cfg)
 
             counts = {}
             for cat in category_map.values():
@@ -1336,7 +1358,7 @@ Return JSON format (no markdown):
                 "Diffusion classification applied: %s",
                 ", ".join(f"{k}={v}" for k, v in sorted(counts.items())),
             )
-            return enriched
+            return agent_configs
 
         except Exception as exc:
             logger.warning(

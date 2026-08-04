@@ -9,8 +9,8 @@ import pytest
 from flask import Flask
 
 from app import create_app
-from app.api import simulation as simulation_api
 from app.api.routes import execution_routes as execution_api
+from app.api.routes import prep_routes
 from app.celery_app import celery_app
 from app.models.task import TaskManager, TaskStatus, Task
 from app.services.simulation_manager import SimulationManager, SimulationStatus
@@ -193,8 +193,11 @@ def test_prepare_simulation_returns_202_and_enqueues_task(monkeypatch, api_clien
         error=None,
     )
     fake_prepare_info = {"already_prepared": False}
+    # prep_routes did `from ..simulation import _check_simulation_prepared`, so
+    # it holds its own reference; patching the name on app.api.simulation would
+    # leave the route calling the real helper.
     monkeypatch.setattr(
-        simulation_api, "_check_simulation_prepared", lambda sim_id: (False, fake_prepare_info)
+        prep_routes, "_check_simulation_prepared", lambda sim_id: (False, fake_prepare_info)
     )
     monkeypatch.setattr(
         SimulationManager, "get_simulation", lambda self, sim_id: fake_state
@@ -204,15 +207,17 @@ def test_prepare_simulation_returns_202_and_enqueues_task(monkeypatch, api_clien
     )
     fake_project = SimpleNamespace(simulation_requirement="a decision")
     monkeypatch.setattr(
-        "app.api.simulation.ProjectManager.get_project",
+        "app.api.routes.prep_routes.ProjectManager.get_project",
         lambda project_id: fake_project,
     )
-    # Skip the synchronous entity count read.
+    # Skip the synchronous entity count read. /prepare is served by
+    # app.api.routes.prep_routes, which resolves ZepEntityReader from its own
+    # module globals.
     class _FakeReader:
         def filter_defined_entities(self, **_):
             return SimpleNamespace(filtered_count=0, entity_types=[])
     monkeypatch.setattr(
-        simulation_api, "ZepEntityReader", _FakeReader
+        prep_routes, "ZepEntityReader", _FakeReader
     )
 
     response = api_client.post(

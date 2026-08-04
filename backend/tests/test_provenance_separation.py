@@ -5,6 +5,7 @@ import pytest
 from flask import Flask
 
 from app.api import simulation as simulation_api
+from app.api.routes import execution_routes
 from app.api.simulation import _resolve_graph_memory_request
 from app.config import Config
 from app.services.report_agent import ReportAgent
@@ -93,14 +94,17 @@ def test_start_route_defaults_to_observation_store_without_graph_write(monkeypat
                 }
             )
 
-    monkeypatch.setattr(simulation_api, "SimulationManager", FakeManager)
-    monkeypatch.setattr(simulation_api, "SimulationRunner", FakeRunner)
+    # execution_routes owns the registered /start handler. api/simulation.py
+    # still carries an undecorated copy of the same body; asserting against
+    # that one would prove nothing about what the API actually serves.
+    monkeypatch.setattr(execution_routes, "SimulationManager", FakeManager)
+    monkeypatch.setattr(execution_routes, "SimulationRunner", FakeRunner)
     app = Flask(__name__)
 
     with app.test_request_context(
         json={"simulation_id": "sim-1", "platform": "parallel"}
     ):
-        response = simulation_api.start_simulation()
+        response = execution_routes.start_simulation()
 
     payload = response.get_json()
     assert payload["success"] is True
@@ -136,8 +140,8 @@ def test_invalid_graph_write_request_has_no_force_restart_side_effects(monkeypat
         def cleanup_simulation_logs(_simulation_id):
             raise AssertionError("logs must not be removed")
 
-    monkeypatch.setattr(simulation_api, "SimulationManager", FakeManager)
-    monkeypatch.setattr(simulation_api, "SimulationRunner", NoSideEffectRunner)
+    monkeypatch.setattr(execution_routes, "SimulationManager", FakeManager)
+    monkeypatch.setattr(execution_routes, "SimulationRunner", NoSideEffectRunner)
     app = Flask(__name__)
 
     with app.test_request_context(
@@ -149,7 +153,7 @@ def test_invalid_graph_write_request_has_no_force_restart_side_effects(monkeypat
             "synthetic_graph_id": "separate-synthetic-graph",
         }
     ):
-        response, status = simulation_api.start_simulation()
+        response, status = execution_routes.start_simulation()
 
     assert status == 400
     assert "observation store" in response.get_json()["error"]
@@ -164,7 +168,13 @@ def test_runner_rejects_all_graph_writes_even_when_called_outside_api(
         "{}",
         encoding="utf-8",
     )
-    monkeypatch.setattr(SimulationRunner, "RUN_STATE_DIR", str(tmp_path))
+    # Run-state resolution reads Config, not a class attribute — patching
+    # SimulationRunner.RUN_STATE_DIR here would leave the runner writing into
+    # the real uploads directory if the guard below ever moved.
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path))
+    assert SimulationRunner._get_run_state_dir("sim-1").startswith(
+        str(tmp_path.resolve())
+    ), "test isolation is not in effect"
 
     with pytest.raises(ValueError, match="unsupported"):
         SimulationRunner.start_simulation(

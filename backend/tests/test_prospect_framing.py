@@ -8,12 +8,14 @@ Critical properties:
   4. Clearly labelled: output includes "[Scenario assumption" disclosure
   5. Trait-direction correct: neuroticism ↑ → loss aversion ↑ (literature-supported)
   6. Threshold-conditional: neutral traits → empty framing (no change)
+  7. Platform-symmetric: twitter and reddit writers apply the same framing
 """
 
 import json
 import os
 import tempfile
 import types
+from unittest.mock import patch
 
 import pytest
 
@@ -238,3 +240,91 @@ class TestProspectFramingProvenance:
         framing = prospect_framing_text(traits)
         assert "scenario" in framing.lower()
         assert "assumption" in framing.lower()
+
+
+class TestFramingReachesBothPlatforms:
+    """The default platform is "parallel", so both writers run in one job.
+
+    If only one of them applies the framing, a cross-platform comparison in a
+    report measures which writer produced the profile rather than anything
+    about the scenario.
+    """
+
+    @staticmethod
+    def _agent():
+        return {
+            "agent_id": 0,
+            "display_name": "Alice",
+            "username": "alice",
+            "public_bio": "bio",
+            "internal_persona": "Base persona.",
+            "age": 40,
+            "gender": "female",
+            "mbti": "INTJ",
+            "country": "US",
+            "source_entity_type_normalized": "organization",
+            "big_five": BigFive(
+                openness=90.0,
+                conscientiousness=80.0,
+                extraversion=20.0,
+                agreeableness=50.0,
+                neuroticism=80.0,
+            ).to_dict(),
+        }
+
+    def test_twitter_rows_carry_the_same_framing_as_reddit(self):
+        from app.services.simulation_artifacts import (
+            canonical_to_reddit_profiles,
+            canonical_to_twitter_rows,
+        )
+
+        agent = self._agent()
+        user_char = canonical_to_twitter_rows([agent])[0]["user_char"]
+        persona = canonical_to_reddit_profiles([agent])[0]["persona"]
+
+        for marker in ("losses weigh", "structural constraints for role type"):
+            assert marker in persona, f"reddit persona lost {marker!r}"
+            assert marker in user_char, f"twitter user_char is missing {marker!r}"
+
+    def test_twitter_user_char_stays_single_line(self):
+        """twitter_profiles.csv is a one-line-per-field format."""
+        from app.services.simulation_artifacts import canonical_to_twitter_rows
+
+        user_char = canonical_to_twitter_rows([self._agent()])[0]["user_char"]
+        assert "\n" not in user_char and "\r" not in user_char
+
+    def test_untraited_agent_is_unchanged_on_both_platforms(self):
+        from app.services.simulation_artifacts import (
+            canonical_to_reddit_profiles,
+            canonical_to_twitter_rows,
+        )
+
+        agent = self._agent()
+        agent["big_five"] = None
+        agent["source_entity_type_normalized"] = ""
+
+        assert canonical_to_twitter_rows([agent])[0]["user_char"] == "Base persona."
+        assert canonical_to_reddit_profiles([agent])[0]["persona"] == "Base persona."
+
+    def test_framing_failure_is_logged_not_silent(self, caplog):
+        """A dead framing path must be visible in the logs, not indistinguishable
+        from the feature having nothing to add."""
+        import logging
+
+        from app.services import simulation_artifacts
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError("projection unavailable")
+
+        agent = self._agent()
+        with caplog.at_level(logging.WARNING):
+            with patch(
+                "app.services.trait_behavior_projection.persona_with_framing",
+                boom,
+            ):
+                assert simulation_artifacts.framed_persona(agent) == "Base persona."
+
+        assert any(
+            "Persona framing skipped" in record.getMessage()
+            for record in caplog.records
+        ), "fallback to the raw persona was not logged"
