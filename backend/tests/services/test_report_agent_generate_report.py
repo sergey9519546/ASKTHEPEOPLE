@@ -111,10 +111,11 @@ class TestGenerateReport:
         mock_agent.plan_outline = MagicMock(side_effect=Exception("API Error"))
 
         # Both the stored error and the progress message are DEBUG-gated: with
-        # DEBUG off they collapse to a bare "Report generation failed". Pin it
-        # rather than inheriting whatever the ambient env happens to set.
-        with patch("app.services.report_agent.Config") as mock_config:
-            mock_config.DEBUG = True
+        # DEBUG off they collapse to a bare "Report generation failed". Pin the
+        # one attribute rather than inheriting whatever the ambient env sets --
+        # replacing all of Config turns UPLOAD_FOLDER into a mock, and the
+        # report logger then creates a literal backend/MagicMock/ directory.
+        with patch("app.services.report_agent.Config.DEBUG", True):
             report = mock_agent.generate_report(report_id="test_error_report")
 
         # Assertions
