@@ -492,7 +492,8 @@ class ZepGraphMemoryUpdater:
             x, y, z, reason = self.scorer.score_text(content)
             
             # Save to opinions.jsonl
-            simulation_dir = os.path.join(Config.OASIS_SIMULATION_DATA_DIR, self.simulation_id)
+            from ..utils.safe_path import safe_join
+            simulation_dir = safe_join(Config.OASIS_SIMULATION_DATA_DIR, self.simulation_id)
             if not os.path.exists(simulation_dir):
                 os.makedirs(simulation_dir, exist_ok=True)
                 

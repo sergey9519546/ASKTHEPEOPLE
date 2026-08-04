@@ -59,7 +59,7 @@ from ..utils.safe_path import safe_join, SafePathError
 # safe_join base for all user-supplied simulation_id values flowing into
 # filesystem/sqlite paths (path-traversal defense).
 _RUN_STATE_BASE = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '../../uploads/simulations')
+    getattr(Config, 'OASIS_SIMULATION_DATA_DIR', os.path.join(os.path.dirname(__file__), '../../uploads/simulations'))
 )
 
 
@@ -1945,7 +1945,7 @@ def start_simulation():
                 task_id=task_id,
                 config_path=config_path,
             )
-            if async_res and getattr(async_res, 'id', None):
+            if async_res and getattr(async_res, 'id', None) and not task_id:
                 task_id = async_res.id
             celery_dispatched = True
         except Exception as celery_err:
@@ -2658,7 +2658,7 @@ def get_simulation_posts(simulation_id: str):
                 "limit_max": 500,
             }), 422
 
-        sim_dir = safe_join(_RUN_STATE_BASE, simulation_id)
+        sim_dir = _safe_sim_dir(simulation_id)
 
         # Fixed allowlist, not interpolation.
         db_file = ALLOWED_PLATFORMS[platform]
@@ -2782,7 +2782,7 @@ def get_simulation_comments(simulation_id: str):
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
         
-        sim_dir = safe_join(_RUN_STATE_BASE, simulation_id)
+        sim_dir = _safe_sim_dir(simulation_id)
 
         db_path = os.path.join(sim_dir, "reddit_simulation.db")
         

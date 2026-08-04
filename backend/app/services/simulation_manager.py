@@ -155,7 +155,9 @@ class SimulationManager:
     def _get_simulation_dir(self, simulation_id: str) -> str:
         """Get simulation data directory"""
         from ..utils.safe_path import safe_join
-        sim_dir = safe_join(self.SIMULATION_DATA_DIR, simulation_id)
+        from ..config import Config
+        base_dir = getattr(Config, "OASIS_SIMULATION_DATA_DIR", self.SIMULATION_DATA_DIR)
+        sim_dir = safe_join(base_dir, simulation_id)
         os.makedirs(sim_dir, exist_ok=True)
         return sim_dir
     
@@ -557,11 +559,19 @@ class SimulationManager:
         """List all simulations"""
         simulations = []
         
-        if os.path.exists(self.SIMULATION_DATA_DIR):
-            for sim_id in os.listdir(self.SIMULATION_DATA_DIR):
+        from ..config import Config
+        from ..utils.safe_path import safe_join, SafePathError
+        base_dir = getattr(Config, "OASIS_SIMULATION_DATA_DIR", self.SIMULATION_DATA_DIR)
+        if os.path.exists(base_dir):
+            for sim_id in os.listdir(base_dir):
                 # Skip hidden files (e.g. .DS_Store) and non-directory files
-                sim_path = os.path.join(self.SIMULATION_DATA_DIR, sim_id)
-                if sim_id.startswith('.') or not os.path.isdir(sim_path):
+                if sim_id.startswith('.'):
+                    continue
+                try:
+                    sim_path = safe_join(base_dir, sim_id)
+                except SafePathError:
+                    continue
+                if not os.path.isdir(sim_path):
                     continue
                 
                 state = self._load_simulation_state(sim_id)

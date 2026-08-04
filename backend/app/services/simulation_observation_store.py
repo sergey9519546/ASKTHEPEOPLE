@@ -58,7 +58,21 @@ def _connect(path: str) -> sqlite3.Connection:
     return conn
 
 
+def get_observation_db_journal_mode(simulation_dir: str) -> str:
+    """Return the SQLite journal mode for the simulation's observation database."""
+    db_path = observation_db_path(simulation_dir)
+    if not os.path.exists(db_path):
+        return ""
+    conn = _connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA journal_mode;")
+    row = cursor.fetchone()
+    conn.close()
+    return str(row[0]).lower() if row else ""
+
+
 def ensure_observation_store(simulation_dir: str) -> str:
+    os.makedirs(simulation_dir, exist_ok=True)
     db_path = observation_db_path(simulation_dir)
     conn = _connect(db_path)
     cursor = conn.cursor()

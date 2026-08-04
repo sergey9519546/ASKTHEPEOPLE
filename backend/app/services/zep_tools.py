@@ -1683,10 +1683,9 @@ Return the list of sub-queries in JSON format."""
         import csv
         
         # Build persona file path
-        sim_dir = os.path.join(
-            os.path.dirname(__file__), 
-            f'../../uploads/simulations/{simulation_id}'
-        )
+        from ..config import Config
+        from ..utils.safe_path import safe_join
+        sim_dir = safe_join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
         
         profiles = []
         

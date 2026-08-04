@@ -257,7 +257,9 @@ class SimulationRunner:
     def _get_run_state_dir(cls, simulation_id: str) -> str:
         """Validate and resolve a simulation run-state directory (path-traversal safe)."""
         from ..utils.safe_path import safe_join
-        return safe_join(cls.RUN_STATE_DIR, simulation_id)
+        from ..config import Config
+        base_dir = getattr(Config, "OASIS_SIMULATION_DATA_DIR", cls.RUN_STATE_DIR)
+        return safe_join(base_dir, simulation_id)
 
     # Scripts directory
     SCRIPTS_DIR = os.path.join(

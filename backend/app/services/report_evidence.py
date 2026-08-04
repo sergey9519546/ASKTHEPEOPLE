@@ -69,8 +69,12 @@ def _evidence_metadata(source_type: str) -> Dict[str, Any]:
 
 
 def _connect(path: str) -> sqlite3.Connection:
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=30.0)
     conn.row_factory = sqlite3.Row
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+    except sqlite3.Error:
+        pass
     return conn
 
 
