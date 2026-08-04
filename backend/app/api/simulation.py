@@ -55,14 +55,6 @@ logger = get_logger('askthepeople.api.simulation')
 from ..utils.safe_path import safe_join, SafePathError
 
 
-# Base directory for simulation run-state data, computed once. Used as the
-# safe_join base for all user-supplied simulation_id values flowing into
-# filesystem/sqlite paths (path-traversal defense).
-_RUN_STATE_BASE = os.path.abspath(
-    getattr(Config, 'OASIS_SIMULATION_DATA_DIR', os.path.join(os.path.dirname(__file__), '../../uploads/simulations'))
-)
-
-
 # P0 path-escape fix (audit §5 P0). The platform identifier is a request-
 # controlled value; it MUST be parsed as a strict enum and resolved to a
 # fixed filename. Do NOT interpolate request text into a filename.
@@ -1932,7 +1924,7 @@ def start_simulation():
         celery_dispatched = False
         try:
             from ..tasks.simulation_tasks import run_simulation_task
-            async_res = run_simulation_task.delay(
+            run_simulation_task.delay(
                 simulation_id=simulation_id,
                 platform=platform,
                 max_rounds=max_rounds,
@@ -1945,8 +1937,9 @@ def start_simulation():
                 task_id=task_id,
                 config_path=config_path,
             )
-            if async_res and getattr(async_res, 'id', None) and not task_id:
-                task_id = async_res.id
+            # Keep the TaskManager id as the client-facing handle. The Celery
+            # result id is not known to TaskManager, so returning it would make
+            # GET /api/simulation/task/<task_id>/status 404.
             celery_dispatched = True
         except Exception as celery_err:
             logger.warning(f"Celery dispatch unavailable or failed, falling back to direct runner: {celery_err}")

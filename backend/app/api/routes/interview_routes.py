@@ -63,14 +63,6 @@ logger = get_logger('askthepeople.api.simulation')
 from ...utils.safe_path import safe_join, SafePathError
 
 
-# Base directory for simulation run-state data, computed once. Used as the
-# safe_join base for all user-supplied simulation_id values flowing into
-# filesystem/sqlite paths (path-traversal defense).
-_RUN_STATE_BASE = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '../../uploads/simulations')
-)
-
-
 # P0 path-escape fix (audit §5 P0). The platform identifier is a request-
 # controlled value; it MUST be parsed as a strict enum and resolved to a
 # fixed filename. Do NOT interpolate request text into a filename.

@@ -246,7 +246,12 @@ class Config:
     RATELIMIT_DEFAULT = os.environ.get('RATELIMIT_DEFAULT', '200 per day;50 per hour')
     RATELIMIT_LLM_HEAVY = os.environ.get('RATELIMIT_LLM_HEAVY', '10 per hour')
     RATELIMIT_LLM_MEDIUM = os.environ.get('RATELIMIT_LLM_MEDIUM', '20 per hour')
-    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', os.environ.get('REDIS_URL', 'memory://'))
+    # Explicit opt-in only. Defaulting this to REDIS_URL would silently move
+    # rate-limit storage off memory:// on every deployment that sets REDIS_URL
+    # for Celery, which (a) contradicts docs/security/THREAT_MODEL.md and
+    # (b) lets a Redis outage surface as 5xx on /api/* where memory:// could
+    # not. Operators running multiple web workers set this deliberately.
+    RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
 
     # Celery & Redis Configuration
     REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
