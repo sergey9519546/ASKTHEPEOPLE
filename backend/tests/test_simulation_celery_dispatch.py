@@ -10,6 +10,7 @@ from flask import Flask
 
 from app import create_app
 from app.api import simulation as simulation_api
+from app.api.routes import execution_routes as execution_api
 from app.celery_app import celery_app
 from app.models.task import TaskManager, TaskStatus, Task
 from app.services.simulation_manager import SimulationManager, SimulationStatus
@@ -63,8 +64,8 @@ def test_simulation_start_returns_202_accepted(api_client, monkeypatch):
         current_round=5,
     )
 
-    monkeypatch.setattr(simulation_api, "SimulationManager", FakeManager)
-    monkeypatch.setattr(simulation_api, "_check_simulation_prepared", lambda sid: (True, {}))
+    monkeypatch.setattr(execution_api, "SimulationManager", FakeManager)
+    monkeypatch.setattr(execution_api, "_check_simulation_prepared", lambda sid: (True, {}))
     monkeypatch.setattr(SimulationRunner, "start_simulation", lambda **kwargs: dummy_run_state)
     monkeypatch.setattr(SimulationRunner, "get_run_state", lambda sid: dummy_run_state)
 

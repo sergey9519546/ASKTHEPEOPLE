@@ -6,6 +6,7 @@ from app import create_app
 from app.api import graph as graph_api
 from app.api import report as report_api
 from app.api import simulation as simulation_api
+from app.api.routes import export_routes, prep_routes
 from app.config import Config
 from app.services.claim_boundary import (
     model_proposed_schema_disclosure,
@@ -314,7 +315,7 @@ def test_realtime_and_standalone_profile_apis_keep_fictional_metadata(
         entity_types={"Community"},
     )
     monkeypatch.setattr(
-        simulation_api,
+        prep_routes,
         "ZepEntityReader",
         lambda: SimpleNamespace(
             filter_defined_entities=lambda **_kwargs: filtered
@@ -327,7 +328,7 @@ def test_realtime_and_standalone_profile_apis_keep_fictional_metadata(
         }
     )
     monkeypatch.setattr(
-        simulation_api,
+        prep_routes,
         "OasisProfileGenerator",
         lambda: SimpleNamespace(
             generate_profiles_from_entities=lambda **_kwargs: [
@@ -480,13 +481,14 @@ def test_realtime_and_downloaded_configs_embed_truth_status(
         encoding="utf-8",
     )
     monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        simulation_api,
-        "SimulationManager",
-        lambda: SimpleNamespace(
-            _get_simulation_dir=lambda _simulation_id: str(simulation_dir)
-        ),
+    fake_manager = lambda: SimpleNamespace(
+        _get_simulation_dir=lambda _simulation_id: str(simulation_dir)
     )
+    # /config/realtime is still served from app.api.simulation; /config/download
+    # moved to app.api.routes.export_routes. Each resolves SimulationManager
+    # from its own module globals, so both need patching.
+    monkeypatch.setattr(simulation_api, "SimulationManager", fake_manager)
+    monkeypatch.setattr(export_routes, "SimulationManager", fake_manager)
 
     realtime = client.get("/api/simulation/sim_123/config/realtime")
     assert realtime.status_code == 200

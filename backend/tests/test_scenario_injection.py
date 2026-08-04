@@ -33,7 +33,7 @@ def test_inject_endpoint_returns_200_and_publishes_event(client):
     mock_state.status = "running"
     mock_state.config = {"name": "Test Simulation"}
 
-    with patch("app.api.simulation.SimulationManager") as mock_mgr_cls:
+    with patch("app.api.routes.execution_routes.SimulationManager") as mock_mgr_cls:
         mock_mgr = MagicMock()
         mock_mgr.get_simulation.return_value = mock_state
         mock_mgr_cls.return_value = mock_mgr
