@@ -197,3 +197,20 @@ and the six branches whose tests were salvaged into
 | `df638c3cbe410ab6dcc12c5a0e4bcc228ae2d775` | test-simulation-manager-error-handling-1821987149357393771 | Add error handling tests for prepare_simulation in SimulationManager |
 | `5226bb55c626fbcaaf252f1fa6364531f5438229` | test-zep-tools-fallback-17476684726937230036 | 🧪 Add edge case testing for _generate_sub_queries fallback |
 | `3053412e09e2f543f2f9ccf0d8a3a5032729d3ce` | tests-prepare-simulation-208751634195744843 | 🧹 [testing improvement] Add unit tests for prepare_simulation in SimulationManager |
+
+## Pushed during the cleanup
+
+The bot integrations are still running: these two were created while the
+deletion was in progress and are obsolete in the same two ways.
+
+| SHA | Branch | Subject |
+| --- | --- | --- |
+| `684a8dcee91949c5e751181dc025d9926819933d` | bolt-fix-date-sort-gc-overhead-360377683865982205 | ⚡ Bolt: Optimize date sorting to prevent GC overhead in OpinionMap |
+| `86fdd601662bbaa21f327268f70129c83378f4b0` | fix-simulation-runtime-agent-selection-7801603094212047095 | fix: correct platform matching logic for boosted agents |
+
+`OpinionMap.vue` already sorts with `localeCompare` over the raw timestamp
+strings and instantiates no `Date`, so the first proposes work that is done.
+The second is the boost-bypass behaviour change described above.
+
+Deleting these does not stop more from arriving; that needs the Bolt and Jules
+integrations turned off at the repository level.
