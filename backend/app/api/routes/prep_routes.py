@@ -330,7 +330,7 @@ def prepare_simulation():
         # Full durable workflow (idempotency keys, leases, fencing
         # tokens, heartbeats, cancellation, retry classification)
         # lands with gate 2 in adr/ADR-0003-durable-run-orchestration.md.
-        from ..tasks.simulation_tasks import prepare_simulation_task
+        from ...tasks.simulation_tasks import prepare_simulation_task
 
         prepare_simulation_task.delay(
             simulation_id=simulation_id,

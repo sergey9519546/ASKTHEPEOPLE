@@ -317,9 +317,12 @@ class TestDiversityChecks:
             },
             {
                 'bio': 'A policy analyst focused on healthcare',
+                # Reworded persona: not a byte-identical duplicate, but the same
+                # functional profile (profession, topics, decision criteria).
                 'persona': (
-                    'This is a fictional profile. Works on healthcare policy research, '
-                    'focusing on insurance models and access barriers. Analytical approach.'
+                    'This is a fictional profile. Their healthcare policy research '
+                    'examines insurance models and access barriers using an '
+                    'analytical approach.'
                 ),
                 'age': 55,  # Only age differs
                 'gender': 'female',  # Only gender differs
