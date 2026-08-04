@@ -21,9 +21,12 @@ from .health import health_bp
 # Module-level Limiter instance. Initialized against the Flask app inside
 # create_app() via `limiter.init_app(app)`. `default_limits` and `storage_uri`
 # are constructor arguments in flask-limiter; init_app() only takes the app.
-# In-memory storage is intentional while the application remains a
-# single-worker runtime. Blueprints import this directly so they can decorate
-# routes at definition time.
+# Storage defaults to in-memory, which is correct while the application remains
+# a single-worker runtime (Procfile pins --workers 1 because TaskManager state
+# is process-local). Operators scaling to multiple web workers must set
+# RATELIMIT_STORAGE_URI explicitly so counters are shared; it is deliberately
+# not derived from REDIS_URL. Blueprints import this directly so they can
+# decorate routes at definition time.
 def _rate_limit_key() -> str:
     """Return a verified client IP when running behind Railway's edge."""
     if current_app.config.get("TRUST_X_REAL_IP", False):

@@ -139,9 +139,16 @@ def test_redis_backed_task_status_polling(client):
     assert completed_data["data"]["progress"] == 100
 
 
-def test_live_pubsub_scenario_injection_during_tick(client):
+def test_live_pubsub_scenario_injection_during_tick(client, monkeypatch):
     """Verify scenario injection via Pub/Sub endpoint and consumption during tick execution."""
     sim_id = "sim_live_inject_tick_456"
+
+    # Pin the transport. The /inject endpoint only falls back to the in-memory
+    # queue when the Redis publish fails, and Config.REDIS_URL defaults to
+    # redis://localhost:6379/0 -- so on a host with a reachable Redis this test
+    # would publish to the real broker and the memory-transport consumer below
+    # would see nothing.
+    monkeypatch.setattr(Config, "REDIS_URL", "memory://")
 
     mock_state = MagicMock()
     mock_state.simulation_id = sim_id
@@ -302,6 +309,9 @@ def test_multi_worker_e2e_simulation_lifecycle(client, tmp_path, monkeypatch):
     sim_id = "sim_e2e_multi_worker_lifecycle"
     sim_dir = str(tmp_path / sim_id)
     monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path))
+    # Force the in-memory event transport; see the note in
+    # test_live_pubsub_scenario_injection_during_tick.
+    monkeypatch.setattr(Config, "REDIS_URL", "memory://")
 
     # Pre-create simulation dir and canonical agents
     os.makedirs(sim_dir, exist_ok=True)

@@ -453,9 +453,10 @@ outer security boundary:
   ([`app/__init__.py:254-261`](../../backend/app/__init__.py:254)).
 - No request body logging in any debug path
   ([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
-- Per-IP rate limiting via `flask-limiter`; storage is
-  `memory://` (single-worker only) — see
-  [`api/__init__.py:36-42`](../../backend/app/api/__init__.py:36).
+- Per-IP rate limiting via `flask-limiter`; storage defaults to
+  `memory://` (single-worker only) and is overridden solely by an explicit
+  `RATELIMIT_STORAGE_URI` — see
+  [`api/__init__.py:41-47`](../../backend/app/api/__init__.py:41).
 
 ### P0 — Unvalidated `platform` path component in the posts endpoint
 
