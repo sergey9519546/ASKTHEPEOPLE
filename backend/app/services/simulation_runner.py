@@ -536,6 +536,10 @@ class SimulationRunner:
         action_queue = Queue()
         cls._action_queues[simulation_id] = action_queue
         
+        # Bound before the try so the failure handler can tell "never opened"
+        # from "opened but not yet owned by cls._stdout_files".
+        main_log_file = None
+
         # Start simulation process
         try:
             # Command with full paths.
@@ -608,11 +612,19 @@ class SimulationRunner:
             logger.info(f"Simulation started successfully: {simulation_id}, pid={process.pid}, platform={platform}")
             
         except Exception as e:
+            # main_log_file is only handed to cls._stdout_files once Popen has
+            # succeeded, so a failure between opening it and registering it
+            # would otherwise leak the handle and leave the log locked.
+            if main_log_file is not None and simulation_id not in cls._stdout_files:
+                try:
+                    main_log_file.close()
+                except Exception:
+                    pass
             state.runner_status = RunnerStatus.FAILED
             state.error = str(e)
             cls._save_run_state(state)
             raise
-        
+
         return state
     
     @classmethod
