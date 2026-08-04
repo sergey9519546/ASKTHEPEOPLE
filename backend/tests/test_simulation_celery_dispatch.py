@@ -40,6 +40,27 @@ def test_celery_app_configuration():
     assert celery_app.conf.accept_content == ['json']
 
 
+def test_no_module_in_app_package_shadows_the_celery_distribution():
+    """`app/celery.py` must not come back.
+
+    It re-exported celery_app under a name that collides with the installed
+    distribution. Harmless while every entry point runs from backend/ — the
+    Procfile and worker_wrapper.sh both do — but the moment backend/app/ lands
+    on sys.path, `from celery import Celery` inside celery_app.py resolves to
+    that alias and imports itself.
+    """
+    import os
+    import celery as celery_distribution
+    import app as app_package
+
+    app_dir = os.path.dirname(os.path.abspath(app_package.__file__))
+    celery_file = os.path.abspath(celery_distribution.__file__)
+    assert not celery_file.startswith(app_dir + os.sep), (
+        f"`import celery` resolved inside the app package: {celery_file}"
+    )
+    assert not os.path.exists(os.path.join(app_dir, "celery.py"))
+
+
 def test_simulation_start_returns_202_accepted(api_client, monkeypatch):
     """Verify POST /api/simulation/start returns HTTP 202 Accepted with task metadata."""
     sim_id = "sim_test_202"

@@ -7,6 +7,7 @@ Distributed task state manager backed by Redis / Celery result backend.
 import uuid
 import json
 import threading
+import time
 from datetime import datetime
 from enum import Enum
 from typing import Dict, Any, Optional, List
@@ -17,6 +18,38 @@ from ..utils.logger import get_logger
 
 logger = get_logger('askthepeople.models.task')
 
+try:  # redis is optional: the in-memory path must import cleanly without it.
+    from redis.exceptions import WatchError
+except Exception:  # pragma: no cover - exercised only where redis is absent
+    class WatchError(Exception):
+        """Stand-in so the transaction retry compiles without redis installed."""
+
+# Task records expire from Redis after this long. The index that lists them is
+# pruned on the same horizon so it cannot outlive the records it points at.
+TASK_TTL_SECONDS = 86400
+
+# The index of live task ids. A sorted set scored by creation time, so expired
+# entries can be dropped by score without loading each record to check its age.
+TASK_INDEX_KEY = "tasks:index"
+
+# Superseded plain set. Retired on cleanup: it was written without a TTL and
+# with no way to prune members whose task record had already expired, so it grew
+# without bound. Kept named here only so the retirement is deliberate.
+_LEGACY_TASK_INDEX_KEY = "tasks:all"
+
+# How long to wait before re-probing Redis after a failed connection attempt.
+# A one-shot probe meant a single blip at startup left the process in-memory
+# only for its entire lifetime: the web process then never saw the worker's
+# progress updates and every status poll 404'd until restart.
+REDIS_RETRY_INTERVAL_SECONDS = 30.0
+
+# Bound on an optimistic-concurrency retry loop. Contention here is between at
+# most a handful of writers (one web process, --concurrency=2 workers), so the
+# loop settles well inside this.
+_MAX_UPDATE_ATTEMPTS = 5
+
+_TERMINAL_STATUSES = frozenset()  # populated below, after TaskStatus exists
+
 
 class TaskStatus(str, Enum):
     """Task Status Enum"""
@@ -24,6 +57,11 @@ class TaskStatus(str, Enum):
     PROCESSING = "processing"    # Processing
     COMPLETED = "completed"      # Completed
     FAILED = "failed"            # Failed
+
+
+# A task that has completed or failed is done. Later writes may still add
+# detail, but they must not move it back to pending/processing.
+_TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.FAILED})
 
 
 @dataclass
@@ -129,37 +167,90 @@ class TaskManager:
                     cls._instance._tasks: Dict[str, Task] = {}
                     cls._instance._task_lock = threading.Lock()
                     cls._instance._redis_client = None
-                    cls._instance._redis_checked = False
+                    cls._instance._redis_retry_at = 0.0
         return cls._instance
 
     def _get_redis(self):
-        """Get or initialize Redis client connection if configured."""
-        if not self._redis_checked:
-            import os
-            redis_url = os.environ.get('REDIS_URL') or getattr(Config, 'REDIS_URL', '') or getattr(Config, 'CELERY_BROKER_URL', '')
-            if redis_url and not redis_url.startswith('memory://'):
-                try:
-                    import redis
-                    r = redis.from_url(redis_url, socket_timeout=1.0, socket_connect_timeout=1.0, decode_responses=True)
-                    r.ping()
-                    self._redis_client = r
-                except Exception as e:
-                    logger.debug(f"Redis not available for TaskManager: {e}")
-                    self._redis_client = None
-            self._redis_checked = True
-        return self._redis_client
+        """Return a live Redis client, re-probing periodically after a failure.
+
+        Task state is shared between the web process and the Celery workers, so
+        losing Redis is not a cosmetic degradation: without it a task created by
+        the web process is invisible to the worker that runs it, and
+        ``GET /api/simulation/task/<id>/status`` answers 404 for the rest of the
+        process's life. The probe therefore retries on an interval instead of
+        latching off after one failed attempt.
+        """
+        if self._redis_client is not None:
+            return self._redis_client
+
+        now = time.monotonic()
+        if now < self._redis_retry_at:
+            return None
+
+        import os
+        redis_url = (
+            os.environ.get('REDIS_URL')
+            or getattr(Config, 'REDIS_URL', '')
+            or getattr(Config, 'CELERY_BROKER_URL', '')
+        )
+        if not redis_url or redis_url.startswith('memory://'):
+            # Deliberately unconfigured (local dev / tests): in-memory is the
+            # intended mode, so do not warn and do not re-probe on a hot path.
+            self._redis_retry_at = now + REDIS_RETRY_INTERVAL_SECONDS
+            return None
+
+        try:
+            import redis
+            client = redis.from_url(
+                redis_url,
+                socket_timeout=1.0,
+                socket_connect_timeout=1.0,
+                decode_responses=True,
+            )
+            client.ping()
+        except Exception as exc:
+            # Configured but unreachable is an operational fault, not a debug
+            # detail — cross-process task state is silently unavailable.
+            logger.warning(
+                "Redis configured but unreachable; task state is process-local "
+                "until it recovers (retrying in %.0fs): %s",
+                REDIS_RETRY_INTERVAL_SECONDS,
+                exc,
+            )
+            self._redis_client = None
+            self._redis_retry_at = now + REDIS_RETRY_INTERVAL_SECONDS
+            return None
+
+        self._redis_client = client
+        self._redis_retry_at = 0.0
+        return client
+
+    def _drop_redis(self, exc: Exception) -> None:
+        """Discard a client that failed mid-operation so the next call re-probes."""
+        logger.warning("Redis operation failed; falling back to process-local state: %s", exc)
+        self._redis_client = None
+        self._redis_retry_at = time.monotonic() + REDIS_RETRY_INTERVAL_SECONDS
+
+    @staticmethod
+    def _index_score(task: Task) -> float:
+        """Creation time as an epoch score for the task index."""
+        created = task.created_at
+        if isinstance(created, datetime):
+            return created.timestamp()
+        return time.time()
 
     def _save_to_redis(self, task: Task):
-        """Save task to Redis."""
+        """Write the task record and index it, in one round trip."""
         r = self._get_redis()
         if r is None:
             return
         try:
-            key = f"task:{task.task_id}"
-            r.set(key, json.dumps(task.to_dict()), ex=86400)
-            r.sadd("tasks:all", task.task_id)
+            pipe = r.pipeline()
+            pipe.set(f"task:{task.task_id}", json.dumps(task.to_dict()), ex=TASK_TTL_SECONDS)
+            pipe.zadd(TASK_INDEX_KEY, {task.task_id: self._index_score(task)})
+            pipe.execute()
         except Exception as e:
-            logger.debug(f"Failed to save task {task.task_id} to Redis: {e}")
+            self._drop_redis(e)
 
     def _load_from_redis(self, task_id: str) -> Optional[Task]:
         """Load task from Redis."""
@@ -171,7 +262,7 @@ class TaskManager:
             if val:
                 return Task.from_dict(json.loads(val))
         except Exception as e:
-            logger.debug(f"Failed to load task {task_id} from Redis: {e}")
+            self._drop_redis(e)
         return None
 
     def create_task(
@@ -260,46 +351,124 @@ class TaskManager:
         public_error: Optional[str] = None,
         progress_detail: Optional[Dict] = None
     ):
-        """Update task status in memory and Redis."""
-        task = self.get_task(task_id)
-        if task:
-            with self._task_lock:
-                task.updated_at = datetime.now()
-                if status is not None:
-                    task.status = status
-                if progress is not None:
-                    task.progress = progress
-                if message is not None:
-                    task.message = message
-                if result is not None:
-                    task.result = result
-                if error is not None:
-                    task.error = error
-                if public_error is not None:
-                    task.public_error = public_error
-                if progress_detail is not None:
-                    task.progress_detail = progress_detail
-                self._tasks[task_id] = task
-            self._save_to_redis(task)
-        else:
-            # If task doesn't exist yet, create it with given updates
-            now = datetime.now()
-            task = Task(
-                task_id=task_id,
-                task_type="unknown",
-                status=status or TaskStatus.PROCESSING,
-                created_at=now,
-                updated_at=now,
-                progress=progress or 0,
-                message=message or "",
-                result=result,
-                error=error,
-                public_error=public_error,
-                progress_detail=progress_detail or {},
+        """Apply a partial update to a task, atomically with respect to Redis.
+
+        Every field is optional and only supplied fields are written, so two
+        writers touching different fields of the same task both survive. The
+        previous implementation read the whole record, mutated it, and wrote it
+        back whole; with the web process and two worker processes all writing,
+        the slower writer's snapshot silently reverted the faster one's fields —
+        including reverting a COMPLETED task to PROCESSING, which strands the
+        client polling it.
+        """
+        changes = {
+            "status": status,
+            "progress": progress,
+            "message": message,
+            "result": result,
+            "error": error,
+            "public_error": public_error,
+            "progress_detail": progress_detail,
+        }
+        changes = {k: v for k, v in changes.items() if v is not None}
+
+        r = self._get_redis()
+        if r is not None:
+            task = self._update_in_redis(r, task_id, changes)
+            if task is not None:
+                with self._task_lock:
+                    self._tasks[task_id] = task
+                return
+
+        # No Redis (or it just dropped): process-local update. Correct for the
+        # single-process dev/test runtime; across processes the caller has
+        # already been warned by _get_redis / _drop_redis.
+        with self._task_lock:
+            task = self._tasks.get(task_id)
+            if task is None:
+                task = self._new_placeholder(task_id, changes)
+            else:
+                self._apply(task, changes)
+            self._tasks[task_id] = task
+        self._save_to_redis(task)
+
+    @staticmethod
+    def _apply(task: Task, changes: Dict[str, Any]) -> None:
+        """Write supplied fields onto `task`, refusing to un-finish it."""
+        new_status = changes.get("status")
+        if (
+            new_status is not None
+            and task.status in _TERMINAL_STATUSES
+            and new_status not in _TERMINAL_STATUSES
+        ):
+            # A late in-flight progress update must not resurrect a finished
+            # task. Its other fields still apply.
+            changes = {k: v for k, v in changes.items() if k != "status"}
+
+        for name, value in changes.items():
+            setattr(task, name, value)
+        task.updated_at = datetime.now()
+
+    @staticmethod
+    def _new_placeholder(task_id: str, changes: Dict[str, Any]) -> Task:
+        """Build a task for an id that has no record yet.
+
+        A worker can legitimately report progress for a task whose record has
+        already expired, so an update for an unknown id creates rather than
+        drops it.
+        """
+        now = datetime.now()
+        task = Task(
+            task_id=task_id,
+            task_type="unknown",
+            status=changes.get("status", TaskStatus.PROCESSING),
+            created_at=now,
+            updated_at=now,
+        )
+        for name, value in changes.items():
+            setattr(task, name, value)
+        return task
+
+    def _update_in_redis(
+        self, client, task_id: str, changes: Dict[str, Any]
+    ) -> Optional[Task]:
+        """Read-modify-write the record under WATCH; None if Redis is unusable.
+
+        WATCH/MULTI/EXEC turns the sequence into an optimistic transaction: if
+        another process writes the key between the read and the exec, EXEC fails
+        and the whole thing is retried against the newer value.
+        """
+        key = f"task:{task_id}"
+        try:
+            for _ in range(_MAX_UPDATE_ATTEMPTS):
+                with client.pipeline() as pipe:
+                    try:
+                        pipe.watch(key)
+                        raw = pipe.get(key)
+                        if raw:
+                            task = Task.from_dict(json.loads(raw))
+                            self._apply(task, changes)
+                        else:
+                            task = self._new_placeholder(task_id, changes)
+
+                        pipe.multi()
+                        pipe.set(key, json.dumps(task.to_dict()), ex=TASK_TTL_SECONDS)
+                        pipe.zadd(TASK_INDEX_KEY, {task_id: self._index_score(task)})
+                        pipe.execute()
+                        return task
+                    except WatchError:
+                        continue
+
+            logger.warning(
+                "Task %s update contended past %d attempts; retrying without "
+                "the transaction would risk losing a concurrent write",
+                task_id,
+                _MAX_UPDATE_ATTEMPTS,
             )
-            with self._task_lock:
-                self._tasks[task_id] = task
-            self._save_to_redis(task)
+            return None
+        except Exception as exc:
+            self._drop_redis(exc)
+            return None
     
     def complete_task(self, task_id: str, result: Dict):
         """Mark task as complete"""
@@ -330,18 +499,32 @@ class TaskManager:
     def list_tasks(self, task_type: Optional[str] = None) -> list:
         """List tasks from Redis and memory."""
         tasks_map = {}
-        
+
         # Load from Redis if available
         r = self._get_redis()
         if r:
             try:
-                task_ids = r.smembers("tasks:all")
-                for tid in task_ids:
-                    t = self._load_from_redis(tid)
-                    if t:
-                        tasks_map[tid] = t
+                task_ids = r.zrevrange(TASK_INDEX_KEY, 0, -1)
+                if task_ids:
+                    # One MGET rather than one GET per id: the index can hold a
+                    # day of tasks and this runs on an API request path.
+                    stale = []
+                    for tid, raw in zip(task_ids, r.mget(f"task:{t}" for t in task_ids)):
+                        if raw:
+                            try:
+                                tasks_map[tid] = Task.from_dict(json.loads(raw))
+                                continue
+                            except (ValueError, KeyError, TypeError) as exc:
+                                logger.warning("Discarding unreadable task %s: %s", tid, exc)
+                        # The record expired (or is corrupt) but the index still
+                        # points at it. Drop the pointer here as well as in
+                        # cleanup, so a process that never runs cleanup does not
+                        # accumulate dead ids.
+                        stale.append(tid)
+                    if stale:
+                        r.zrem(TASK_INDEX_KEY, *stale)
             except Exception as e:
-                logger.debug(f"Failed to list tasks from Redis: {e}")
+                self._drop_redis(e)
 
         # Merge with in-memory tasks
         with self._task_lock:
@@ -378,11 +561,30 @@ class TaskManager:
         r = self._get_redis()
         if r:
             try:
-                task_ids = r.smembers("tasks:all")
+                # Drop index entries older than the record TTL by score alone.
+                # These cannot be loaded any more, so age is the only usable
+                # signal — and it is the leak the old code could not close:
+                # it only removed ids whose record it could still read, which
+                # is exactly the set that had *not* expired.
+                r.zremrangebyscore(
+                    TASK_INDEX_KEY, "-inf", time.time() - TASK_TTL_SECONDS
+                )
+
+                # Then retire finished tasks that are past the caller's cutoff
+                # but still within the TTL.
+                task_ids = r.zrangebyscore(TASK_INDEX_KEY, "-inf", cutoff.timestamp())
                 for tid in task_ids:
                     t = self._load_from_redis(tid)
-                    if t and t.created_at < cutoff and t.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
+                    if t is None or (
+                        t.created_at < cutoff
+                        and t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED)
+                    ):
                         r.delete(f"task:{tid}")
-                        r.srem("tasks:all", tid)
+                        r.zrem(TASK_INDEX_KEY, tid)
+
+                # Retire the unbounded pre-index key if a previous release left
+                # one behind. Its members are ids only; the records they name
+                # are indexed independently above, so nothing is lost.
+                r.delete(_LEGACY_TASK_INDEX_KEY)
             except Exception as e:
-                logger.debug(f"Failed to cleanup old tasks in Redis: {e}")
+                self._drop_redis(e)

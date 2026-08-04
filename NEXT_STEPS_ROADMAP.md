@@ -20,13 +20,19 @@ flowchart TD
 
 Now that the backend supports scenario branching, dynamic topologies, and reflection streams, the frontend needs rich visual controls to surface these features to users.
 
+> [!IMPORTANT]
+> The frontend is **Vue 3 + Vite** (`frontend/src/**/*.vue`), not React. Library
+> suggestions below are framework-neutral or Vue-compatible for that reason; an
+> earlier revision of this document named React-only packages, which would have
+> sent the first implementer down a rewrite.
+
 ### 1. Counterfactual Scenario Branching UI
-- [ ] **Simulation Timeline & Tree View**: Build an interactive tree diagram (e.g. using `React Flow` or `D3.js`) representing simulation branches.
+- [ ] **Simulation Timeline & Tree View**: Build an interactive tree diagram (e.g. using `Vue Flow` or `D3.js`, both of which mount inside a Vue component) representing simulation branches.
 - [ ] **Fork Action Button**: Add a "Fork Simulation from Turn X" modal in the simulation execution view.
 - [ ] **Branch Comparison View**: Side-by-side metric comparison card allowing users to compare outcomes between Branch A (e.g. control) and Branch B (e.g. injected event).
 
 ### 2. Network Topology & Emergent Bubble Visualizer
-- [ ] **Live Agent Graph Canvas**: Render an interactive network graph of agents and edges using `Cytoscape.js` or `Force-Directed D3`.
+- [ ] **Live Agent Graph Canvas**: Render an interactive network graph of agents and edges using `Cytoscape.js` or `Force-Directed D3` (both are framework-agnostic; `frontend/src/components/GraphPanel.vue` is the existing mount point).
 - [ ] **Real-Time Edge Rewiring Animation**: Animate unfollow actions when homophily rewiring drops an edge between disagreeable peers.
 - [ ] **Community & Cluster Highlights**: Color-code agent nodes by their political/social stance to visually highlight emerging filter bubbles.
 
@@ -54,8 +60,8 @@ To validate the synthetic simulation against real-world opinion distributions wh
 Transitioning from local SQLite observation stores to production-grade scalable infrastructure.
 
 ### 1. Database Migrations (PostgreSQL + Alembic)
-- [ ] **Alembic Setup**: Initialize Alembic migration scripts for the SQLAlchemy models defined in `backend/app/db/schema.py`.
-- [ ] **Multi-Tenant Isolation**: Add `tenant_id` and `organization_id` foreign key constraints across `Simulation`, `Attempt`, and `Observation` tables.
+- [x] **Alembic Setup**: Initialized — see `backend/alembic.ini` and `backend/migrations/versions/384c98f88d53_initial_schema.py`.
+- [ ] **Multi-Tenant Isolation**: `tenant_id` exists in `backend/app/db/schema.py`; still to do is enforcing it at the query layer and adding `organization_id` foreign key constraints across `Simulation`, `Attempt`, and `Observation`.
 
 ### 2. Worker Scaling & Queue Monitoring
 - [ ] **Celery Flower Dashboard**: Add Flower container and configuration to `docker-compose.yml` for monitoring Celery background workers.
