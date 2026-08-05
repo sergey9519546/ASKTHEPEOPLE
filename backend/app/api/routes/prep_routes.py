@@ -275,7 +275,15 @@ def prepare_simulation():
         task_manager = TaskManager()
 
         # If a prepare for this key is already in flight, hand back that
-        # task_id and skip enqueueing a duplicate worker job.
+        # task_id and skip enqueueing a duplicate worker job. NOTE: there is a
+        # benign TOCTOU window between this find and create_task below — two
+        # concurrent requests with the same key could both see None here and
+        # both reach the enqueue step. create_task also dedupes under its lock,
+        # so they would share one task_id, but both would enqueue a worker job.
+        # This is safe today because the web runs as a single worker (Procfile
+        # --workers 1); the multi-worker case is the gate 2/4 blocker. Moving
+        # the dedup fully behind a single atomic create-or-return call is part
+        # of that work.
         already_in_flight_task_id = None
         if idempotency_key:
             already_in_flight_task_id = task_manager.find_in_flight_by_idempotency_key(

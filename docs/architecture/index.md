@@ -106,8 +106,8 @@ helper module only — no route decorators remain in it:
 
 | Module | Route fns | Lines | Holds |
 |---|---:|---:|---|
-| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 518 | shared helpers `routes/` imports (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`, `ALLOWED_PLATFORMS`) |
-| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 17 | 1,043 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
+| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 514 | shared helpers `routes/` imports (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`, `ALLOWED_PLATFORMS`) |
+| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 17 | 961 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
 | [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 8 | 705 | start / stop / status / inject / env |
 | [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 557 | create / prepare / profiles / preflight |
 | [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 4 | 562 | generated-response routes |
@@ -119,9 +119,11 @@ Every module in `api/routes/` must be listed in that package's `__init__.py`.
 out in `api/simulation.py`, so `GET /api/simulation/entities/...` answered 404
 from the decomposition commit until the import was restored.
 
-Residual route-layer debt: the `/posts` and `/comments` read handlers still
-open SQLite inline (`read_routes.py`); the contract wants these behind a
-reader service.
+The `/posts` and `/comments` read handlers dispatch to the
+[`services/simulation_activity_reader.py`](../../backend/app/services/simulation_activity_reader.py)
+service (read-only mode, typed `DatabaseUnavailable`/`Locked`/`Corrupt`
+exceptions) rather than opening SQLite inline, so the route layer now fully
+honors the auth → parse → authorize → dispatch → present contract.
 
 ### Authentication and security headers — CURRENT
 
@@ -359,7 +361,7 @@ in [`docs/exec-plans/`](../exec-plans/README.md):
 | Gate | Theme | Owner | Status |
 |---|---|---|---|
 | 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL — secrets hardened, MIME/magic-byte upload validation wired onto the live route, path-traversal/SSRF defenses, source-as-data prompt guard in place. Open P0s: multi-tenant isolation (deferred; needs a user-identity model), privacy/retention architecture, source-rights attestation. |
-| 1 | Typed API boundary | `askthepeople-architect` | CURRENT (decomposition) — `simulation.py` is now a 518-line helper module; all 41 routes live in `api/routes/` (prep, execution, interview, export, entity, read). No thread/subprocess/SQLite-directory-scan violations remain in routes. Residual: two read routes still open SQLite inline (to move behind a reader service). |
+| 1 | Typed API boundary | `askthepeople-architect` | CURRENT — `simulation.py` is now a 518-line helper module; all 41 routes live in `api/routes/` (prep, execution, interview, export, entity, read). No thread/subprocess/SQLite-directory-scan violations remain in routes; the `/posts` and `/comments` handlers now dispatch to a `simulation_activity_reader` service rather than opening SQLite inline. The typed request/response schema layer and `app/application/`+`app/domain/` packages remain gate 1 work. |
 | 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — the cleanup daemon thread is replaced by a Celery beat job; Celery tasks now classify exceptions and retry only transient failures with backoff; the prepare route accepts an `Idempotency-Key` that dedupes double-submits. Open: leases/fencing tokens, heartbeats, push-based (non-polling) event delivery, the four independent state machines, and the process-local `TaskManager`/`SimulationRunner` state that blocks multi-worker. |
 | 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL — atomic writes (`save_project`, `save_extracted_text`) and source sha256 hashing at ingest are in; run-artifact digests exist. Open: PostgreSQL/object-storage canonical store (schema is dead scaffolding), soft-delete/audit-log, provenance-edge write-time validation. |
 | 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED — observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting. Runbook and incident-response docs are concrete but the procedures are unimplemented. |

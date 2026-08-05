@@ -77,3 +77,65 @@ def test_unknown_error_defaults_to_non_retryable():
         pass
 
     assert _is_retryable_task_exception(Surprise("???")) is False
+
+
+# --------------------------------------------------------------------------- #
+# End-to-end retry wiring: the predicate alone isn't enough — the task bodies
+# must actually call self.retry() for transient errors and re-raise immediately
+# for deterministic ones. These exercise the real task decorator + retry path
+# in eager mode so a future change to the gating can't silently break it.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def eager_celery(monkeypatch):
+    """Run Celery tasks inline, propagating exceptions (incl. Retry)."""
+    from app.celery_app import celery_app
+    monkeypatch.setattr(celery_app.conf, "task_always_eager", True)
+    monkeypatch.setattr(celery_app.conf, "task_eager_propagates", True)
+    return celery_app
+
+
+def test_run_simulation_task_retries_on_transient_failure(eager_celery, monkeypatch):
+    """A transient failure (ConnectionError) must trigger self.retry, which in
+    eager mode raises celery.exceptions.Retry — not fail immediately."""
+    from celery.exceptions import Retry
+
+    # Force the runner to blow up with a transient error.
+    from app.services.simulation_runner import SimulationRunner
+    monkeypatch.setattr(
+        SimulationRunner,
+        "start_simulation",
+        lambda **_kw: (_ for _ in ()).throw(ConnectionError("broker reset")),
+    )
+
+    from app.tasks.simulation_tasks import run_simulation_task
+
+    with pytest.raises(Retry):
+        run_simulation_task.apply(
+            kwargs={"simulation_id": "sim_probe", "task_id": None}
+        ).get(propagate=True)
+
+
+def test_run_simulation_task_fails_immediately_on_deterministic_error(
+    eager_celery, monkeypatch
+):
+    """A deterministic failure (ValueError) must NOT retry — it re-raises the
+    original error so the user sees the real cause, not a backoff delay."""
+    from app.services.simulation_runner import SimulationRunner
+    from celery.exceptions import Retry
+
+    monkeypatch.setattr(
+        SimulationRunner,
+        "start_simulation",
+        lambda **_kw: (_ for _ in ()).throw(ValueError("bad simulation id")),
+    )
+
+    from app.tasks.simulation_tasks import run_simulation_task
+
+    with pytest.raises(ValueError, match="bad simulation id"):
+        run_simulation_task.apply(
+            kwargs={"simulation_id": "sim_probe", "task_id": None}
+        ).get(propagate=True)
+    # Sanity: Retry was not the raised type.
+
