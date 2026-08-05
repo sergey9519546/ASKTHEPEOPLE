@@ -73,7 +73,8 @@ Transitioning from local SQLite observation stores to production-grade scalable 
 
 ### 1. Synthetic Disclosure & Product Truth Verification
 - [ ] **Automated Copy Linter**: Ensure all newly generated UI views and export reports include non-causal disclosures ("synthetic exploration", "non-representative sample").
-- [ ] **CoT Scrubbing Verification**: Add integration tests verifying that raw Chain-of-Thought reasoning tags are scrubbed from all API responses and export bundles.
+- [x] **CoT Scrubbing Verification**: `strip_reasoning_scaffold()` in `backend/app/services/report_agent.py` runs at every section finalisation point and both `chat()` return paths; `backend/tests/test_reasoning_scrub.py` covers it. Scrubbing at the point section text is produced also covers the export bundles, which derive from that text. Two paths previously adopted the model response whole when the `Final Answer:` marker was absent, so the ReACT preamble became the published section.
+  - [ ] Remaining: an end-to-end assertion over a generated PDF/CSV/executive bundle, rather than over the section text they are built from.
 
 ---
 
@@ -81,3 +82,20 @@ Transitioning from local SQLite observation stores to production-grade scalable 
 
 > [!TIP]
 > **Recommended First Step**: Start with **Phase 1.1 & 1.2 (Frontend UI for Branching and Network Graph Visualizer)**. Surfacing the newly built backend capabilities in the Civic Wayfinding UI will immediately provide visual proof of the dynamic filter bubbles and counterfactual branching!
+
+> [!IMPORTANT]
+> **Phase 1.1 backend is ready; the UI has a prerequisite decision.**
+> `POST /api/simulation/<id>/fork` works and records lineage (`forked_from`,
+> `forked_at_turn`, `forked_at`), carried by `/api/simulation/list` and
+> `/history`, so a branch tree can be assembled from one request.
+> `frontend/src/api/simulation.js` already exports `forkSimulation()` — and
+> nothing calls it.
+>
+> There is currently **no live view listing past simulations**.
+> `frontend/src/components/HistoryDatabase.vue` is the only component that calls
+> `getSimulationHistory()`, and it is unreachable: nothing imports it, no route
+> in `frontend/src/router/index.js` renders it, and it is absent from the built
+> bundle. Before the tree view can be built, decide whether to wire that
+> component up (it exists and is styled) or replace it. The fork *action* also
+> needs a home; `Step5Interaction.vue` is the execution view but is ~82KB, which
+> cuts against the API decomposition work.
