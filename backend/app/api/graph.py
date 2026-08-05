@@ -20,6 +20,7 @@ from ..services.claim_boundary import (
 )
 from ..services.text_processor import TextProcessor
 from ..utils.file_parser import FileParser, FileParserLimitError
+from ..utils.file_security import validate_file_upload
 from ..utils.logger import get_logger
 from ..utils.response import truth_metadata
 from ..utils.input_policy import (
@@ -274,6 +275,20 @@ def generate_ontology():
 
         for file in uploaded_files:
             if file and file.filename and allowed_file(file.filename):
+                # P0 adversarial-upload defense (audit §5 P0). The extension
+                # allowlist above is a first line; validate_file_upload adds
+                # magic-byte / MIME / size / empty-file checks so a renamed
+                # payload cannot reach extraction or the LLM. This used to be
+                # dead code referenced only by tests; it is now on the live
+                # upload path.
+                is_valid, validation_error = validate_file_upload(file)
+                if not is_valid:
+                    ProjectManager.delete_project(project.project_id)
+                    return jsonify({
+                        "success": False,
+                        "error": "invalid_file",
+                        "message": validation_error,
+                    }), 400
                 file_info = ProjectManager.save_file_to_project(
                     project.project_id,
                     file,
