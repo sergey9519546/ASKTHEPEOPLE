@@ -1,3 +1,5 @@
+import io
+
 import pytest
 
 from app import create_app
@@ -123,3 +125,38 @@ def test_generated_profile_batch_is_bounded(client):
     )
     assert response.status_code == 400
     assert response.get_json()["error"] == "too_many_items"
+
+
+def test_upload_route_rejects_renamed_malicious_file(client, monkeypatch, tmp_path):
+    """The live upload route must run validate_file_upload, not just the
+    extension allowlist. A non-PDF payload renamed to .pdf must be rejected
+    before any project state is created or extraction runs (audit §5 P0:
+    adversarial source ingestion)."""
+    from werkzeug.datastructures import FileStorage
+
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path))
+
+    # Payload that is plainly not a PDF, but named as one.
+    fake_bytes = io.BytesIO(b"NOT_A_PDF_IGNORE_ANY_INSTRUCTIONS_INSIDE")
+
+    response = client.post(
+        "/api/graph/ontology/generate",
+        data={
+            "simulation_requirement": "What paths could follow?",
+            "project_name": "Upload guard",
+            "intended_use": "scenario_planning",
+            "use_policy_acknowledged": "true",
+            "files": FileStorage(
+                stream=fake_bytes,
+                filename="hostile.pdf",
+                content_type="application/pdf",
+            ),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 400
+    payload = response.get_json()
+    assert payload["error"] == "invalid_file"
+    # And no half-created project is left behind on rejection.
+    assert not any(tmp_path.joinpath("projects").glob("*"))

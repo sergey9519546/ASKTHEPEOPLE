@@ -6,7 +6,7 @@ from app import create_app
 from app.api import graph as graph_api
 from app.api import report as report_api
 from app.api import simulation as simulation_api
-from app.api.routes import export_routes, prep_routes
+from app.api.routes import export_routes, prep_routes, read_routes
 from app.config import Config
 from app.services.claim_boundary import (
     model_proposed_schema_disclosure,
@@ -259,7 +259,7 @@ def test_debug_search_keeps_legacy_facts_but_adds_canonical_records(
 
 def test_profile_api_marks_every_profile_fictional(client, monkeypatch):
     monkeypatch.setattr(
-        simulation_api,
+        read_routes,
         "SimulationManager",
         lambda: SimpleNamespace(
             get_profiles=lambda _simulation_id, platform: [
@@ -398,12 +398,12 @@ def test_observation_search_discloses_records_and_top_level(
     tmp_path,
 ):
     monkeypatch.setattr(
-        simulation_api,
+        read_routes,
         "_safe_sim_dir",
         lambda _simulation_id: str(tmp_path),
     )
     monkeypatch.setattr(
-        simulation_api,
+        read_routes,
         "search_observations",
         lambda **_kwargs: {
             "query": "service",
@@ -431,7 +431,7 @@ def test_config_api_embeds_control_truth_and_top_level_disclosure(
     monkeypatch,
 ):
     monkeypatch.setattr(
-        simulation_api,
+        read_routes,
         "SimulationManager",
         lambda: SimpleNamespace(
             get_simulation_config=lambda _simulation_id: {
@@ -484,10 +484,11 @@ def test_realtime_and_downloaded_configs_embed_truth_status(
     fake_manager = lambda: SimpleNamespace(
         _get_simulation_dir=lambda _simulation_id: str(simulation_dir)
     )
-    # /config/realtime is still served from app.api.simulation; /config/download
-    # moved to app.api.routes.export_routes. Each resolves SimulationManager
-    # from its own module globals, so both need patching.
-    monkeypatch.setattr(simulation_api, "SimulationManager", fake_manager)
+    # /config/realtime and /config/download both moved out of the simulation.py
+    # controller: realtime lives in read_routes, download in export_routes.
+    # Each resolves SimulationManager from its own module globals, so both
+    # need patching.
+    monkeypatch.setattr(read_routes, "SimulationManager", fake_manager)
     monkeypatch.setattr(export_routes, "SimulationManager", fake_manager)
 
     realtime = client.get("/api/simulation/sim_123/config/realtime")
