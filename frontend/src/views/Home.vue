@@ -311,7 +311,12 @@
               <span class="run-index">{{ String(index + 1).padStart(2, "0") }}</span>
               <span class="run-main">
                 <strong>{{ run.simulation_requirement || "Untitled decision" }}</strong>
-                <span>{{ formatDate(run.created_at) }}</span>
+                <span>
+                  {{ formatDate(run.created_at) }}
+                  <template v-if="run.forked_from">
+                    <span class="run-branch">{{ branchLabel(run) }}</span>
+                  </template>
+                </span>
               </span>
               <span class="run-status">{{
                 formatStatus(run.runner_status || run.status)
@@ -652,6 +657,18 @@ const formatDate = (value) => {
     day: "numeric",
     year: "numeric",
   }).format(date);
+};
+
+// Counterfactual branches carry forked_from / forked_at_turn from
+// /api/simulation/history. Phrased as provenance of a synthetic run — a branch
+// is another exploration, not an alternative outcome.
+const branchLabel = (run) => {
+  if (!run?.forked_from) return "";
+  const parent = String(run.forked_from).replace(/^sim_/, "").slice(0, 6).toUpperCase();
+  const turn = run.forked_at_turn;
+  return turn === null || turn === undefined
+    ? `Branched from ${parent}`
+    : `Branched from ${parent} at turn ${turn}`;
 };
 
 const formatStatus = (status) => {
@@ -1589,6 +1606,21 @@ fetchHistory();
   color: var(--ink-muted);
   font-size: 0.76rem;
   font-weight: 600;
+}
+
+/* `.run-main span` is display:block, so the branch marker is nested inside the
+   date line and set back to inline to sit beside it rather than push the row
+   taller. */
+.run-branch {
+  display: inline !important;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--line-light);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .run-skeletons,
