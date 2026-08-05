@@ -552,7 +552,7 @@ search. Vector IDs do not become provenance.
 
 This section maps every aggregate in this doc to the actual code under
 [`backend/app/`](../../backend/app/) and to the persisted state on disk
-under [`backend/uploads/`](../../backend/uploads/). Items are marked
+under `backend/uploads/`. Items are marked
 **CURRENT** (implemented and verified), **PARTIAL** (implemented but
 materially deficient against this doc), or **TARGET** (the doc is
 normative; the implementation has not reached it). See

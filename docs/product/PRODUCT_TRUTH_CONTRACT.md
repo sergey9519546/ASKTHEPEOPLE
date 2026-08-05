@@ -356,7 +356,7 @@ artifact. Multi-tenant isolation is **TARGET** and is the subject of
 The JSON envelope in "System-of-record fields" above is **not yet stored** on
 every run. The current canonical store for a run is the state JSON written by
 `SimulationManager` under
-[`backend/uploads/simulations/{simulation_id}/state.json`](../../backend/uploads/simulations)
+`backend/uploads/simulations/{simulation_id}/state.json`
 and the per-platform SQLite databases (`reddit_simulation.db`,
 `twitter_simulation.db`) read by the audit's P0 path-escape endpoint.
 

@@ -638,7 +638,7 @@ are CURRENT, PARTIAL, or TARGET.
   [`backend/app/__init__.py:300-303`](../../backend/app/__init__.py:300).
 - **Database and schema versions:** PostgreSQL is TARGET (gate 3);
   current canonical store is filesystem JSON +
-  [`backend/uploads/`](../../backend/uploads/).
+  `backend/uploads/`.
 - **Prompt, model, validator, and policy versions:** prompt registry
   is TARGET (gate 1); the doc set is the policy version
   (`docs/product/PRODUCT_TRUTH_CONTRACT.md`,

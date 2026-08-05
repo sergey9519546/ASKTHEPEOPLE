@@ -376,7 +376,7 @@ captured in the schema, and no provider/region attestation either.
 ## Enforcement architecture — PARTIAL (state and audit)
 
 The `state.json` per simulation
-([`backend/uploads/simulations/{simulation_id}/state.json`](../../backend/uploads/simulations))
+(`backend/uploads/simulations/{simulation_id}/state.json`)
 is not a database, has no constraints, no audit log, and no transactional
 boundary. The `TaskManager`
 ([`models/task.py:114`](../../backend/app/models/task.py:114)) records
