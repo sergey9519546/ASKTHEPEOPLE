@@ -546,10 +546,15 @@ class TaskManager:
         ]
     
     def cleanup_old_tasks(self, max_age_hours: int = 24):
-        """Clean up old tasks"""
+        """Retire stale completed/failed tasks from the in-memory dict and the
+        Redis index. Returns the number of in-process tasks retired.
+
+        Runs from a periodic Celery beat task (see ``cleanup_old_tasks_task``
+        in app.tasks.simulation_tasks) rather than the former daemon thread.
+        """
         from datetime import timedelta
         cutoff = datetime.now() - timedelta(hours=max_age_hours)
-        
+
         with self._task_lock:
             old_ids = [
                 tid for tid, task in self._tasks.items()
@@ -588,3 +593,5 @@ class TaskManager:
                 r.delete(_LEGACY_TASK_INDEX_KEY)
             except Exception as e:
                 self._drop_redis(e)
+
+        return len(old_ids)

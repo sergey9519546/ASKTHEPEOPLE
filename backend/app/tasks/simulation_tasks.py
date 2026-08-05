@@ -13,7 +13,76 @@ from ..utils.logger import get_logger
 logger = get_logger('askthepeople.tasks.simulation_tasks')
 
 
-@celery_app.task(name='tasks.run_simulation_task', bind=True)
+# Deterministic failure types that a retry can never fix. Retrying them only
+# burns the backoff budget and delays surfacing the real error to the user
+# (ADR-0003 retry classification; mirrors ZepToolsService._is_retryable at
+# services/zep_tools.py). These are imported lazily inside the predicate so a
+# missing/renamed module never breaks task dispatch.
+_DETERMINISTIC_ERROR_NAMES = {
+    "ProfileValidationError",
+    "InputPolicyError",
+    "ValueError",  # includes InputPolicyError; bad input won't change on retry
+    "KeyError",
+    "TypeError",
+    "AttributeError",
+    "FileNotFoundError",
+    "SafePathError",
+}
+
+
+def _is_retryable_task_exception(exc: BaseException) -> bool:
+    """Classify whether a Celery task exception is worth retrying.
+
+    Transient failures (connection resets, broker timeouts, 429/5xx from
+    upstream providers) plausibly succeed on a retry. Deterministic failures
+    (validation, input policy, missing files, bad arguments) will fail
+    identically on every attempt, so retrying only delays the user-visible
+    error.
+    """
+    # Explicit allowlist: only these are retried. Anything not here is final.
+    transient = (
+        ConnectionError,
+        TimeoutError,
+    )
+    if isinstance(exc, transient):
+        return True
+
+    # Connection-related exceptions from redis/requests/amqp often don't
+    # subclass ConnectionError; classify by name to catch them without
+    # importing every provider's exception hierarchy.
+    name = type(exc).__name__
+    if name in {"ConnectionError", "ConnectionResetError", "ConnectionRefusedError",
+                "ConnectTimeout", "ReadTimeout", "TimeoutError",
+                "BrokerConnectionError", "OperationalError"}:
+        return True
+
+    # HTTP-style upstream errors carrying a status code: retry 429 and 5xx.
+    status = getattr(exc, "status_code", None)
+    if status is not None:
+        return status == 429 or status >= 500
+
+    # Deterministic errors are explicitly final.
+    if name in _DETERMINISTIC_ERROR_NAMES:
+        return False
+
+    # Unknown errors default to non-retryable. This is the safe choice for a
+    # simulation pipeline: a surprise failure is more likely a bug than a
+    # transient blip, and silent retries can mask real issues (and spend
+    # budget). Operators who want a broader retry net can override the task
+    # decorator.
+    return False
+
+
+@celery_app.task(
+    name='tasks.run_simulation_task',
+    bind=True,
+    # Retry policy is applied explicitly inside the task body via self.retry(),
+    # gated by _is_retryable_task_exception — deterministic failures
+    # (validation, input policy, missing files) are not retried, only
+    # transient ones (connection/timeout/5xx). autoretry_for=(Exception,)
+    # would retry everything and mask real bugs, so it is deliberately not
+    # used here.
+)
 def run_simulation_task(
     self,
     simulation_id: str,
@@ -135,6 +204,15 @@ def run_simulation_task(
         }
 
     except Exception as exc:
+        # Retry classification (ADR-0003): only transient failures retry.
+        # Deterministic failures (validation, bad input) fail immediately so
+        # the user sees the real error instead of a backoff delay.
+        if _is_retryable_task_exception(exc) and self.request.retries < 3:
+            logger.warning(
+                "run_simulation_task hit transient error (attempt %s/3): %s",
+                self.request.retries + 1, exc,
+            )
+            raise self.retry(exc=exc, countdown=int(2 ** self.request.retries))
         logger.error(f"Celery task run_simulation_task failed: {exc}", exc_info=True)
         if effective_task_id:
             task_manager.fail_task(effective_task_id, error=str(exc))
@@ -159,7 +237,12 @@ _PREPARE_STAGE_NAMES = {
 }
 
 
-@celery_app.task(name='tasks.prepare_simulation_task', bind=True)
+@celery_app.task(
+    name='tasks.prepare_simulation_task',
+    bind=True,
+    # Retry applied explicitly in the body via self.retry(), gated by
+    # _is_retryable_task_exception — see run_simulation_task above.
+)
 def prepare_simulation_task(
     self,
     simulation_id: str,
@@ -286,14 +369,24 @@ def prepare_simulation_task(
             "status": "completed",
         }
     except Exception as exc:
+        # Retry classification (ADR-0003): transient failures only. A
+        # ProfileValidationError or other deterministic failure fails
+        # immediately so the user gets the real reason, not a backoff delay.
+        if _is_retryable_task_exception(exc) and self.request.retries < 3:
+            logger.warning(
+                "prepare_simulation_task hit transient error (attempt %s/3): %s",
+                self.request.retries + 1, exc,
+            )
+            raise self.retry(exc=exc, countdown=int(2 ** self.request.retries))
+
         logger.error(
             f"Celery task prepare_simulation_task failed: {exc}",
             exc_info=True,
         )
-        
+
         # Check if this is a ProfileValidationError (Gate 1 requirement)
         from ..services.profile_validators import ProfileValidationError
-        
+
         if isinstance(exc, ProfileValidationError):
             # Handle validation errors with user-friendly message
             public_error = "Unable to generate diverse profiles. Please try again or modify your decision parameters."
@@ -327,4 +420,28 @@ def prepare_simulation_task(
         except Exception:
             pass
         raise
+
+
+@celery_app.task(name='tasks.cleanup_old_tasks')
+def cleanup_old_tasks_task(max_age_hours: int = 24):
+    """Periodic Celery beat task that retires stale completed/failed tasks.
+
+    Replaces the `_task_cleanup_worker` daemon thread that used to be started
+    from `create_app()` (ADR-0003 §"the same pattern as the P0 finding and must
+    be replaced with a worker-owned job"). A periodic Celery task is the
+    durable equivalent: it runs on the worker process, survives a web restart,
+    and is visible to the job system instead of being an invisible background
+    thread. The beat schedule is registered in `celery_app.py`.
+    """
+    try:
+        removed = TaskManager().cleanup_old_tasks(max_age_hours=max_age_hours)
+        logger.info(
+            "cleanup_old_tasks_task: retired %s stale task(s)", removed
+        )
+        return {"success": True, "retired": removed}
+    except Exception as exc:
+        # A periodic cleanup failure must not crash the beat scheduler.
+        logger.error("cleanup_old_tasks_task failed: %s", exc, exc_info=True)
+        return {"success": False, "error": str(exc)}
+
 

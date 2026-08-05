@@ -39,6 +39,21 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     broker_connection_retry_on_startup=True,
+    # Periodic task schedule. The stale-task cleanup that used to run in a
+    # daemon thread inside create_app() is now a Celery beat job owned by the
+    # worker process (ADR-0003 §"same pattern as the P0 finding"). The
+    # beat_schedule is a class attribute on the celery app; assigning it via
+    # update() lets operators override it through celery_app.conf without
+    # editing source. To enable beat, run `celery -A app.celery_app beat`
+    # alongside the worker; in test/CI the cleanup task can be invoked
+    # directly via cleanup_old_tasks_task.delay/max_age_hours.
+    beat_schedule={
+        'cleanup-old-stale-tasks': {
+            'task': 'tasks.cleanup_old_tasks',
+            'schedule': 3600.0,  # hourly, matching the former thread interval
+            'kwargs': {'max_age_hours': 24},
+        },
+    },
 )
 
 if __name__ == '__main__':

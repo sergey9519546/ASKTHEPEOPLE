@@ -5,8 +5,6 @@ ASKTHEPEOPLE Backend - Flask Application Factory
 import json
 import os
 import re
-import threading
-import time
 import warnings
 import hmac
 
@@ -317,18 +315,12 @@ def create_app(config_class=Config):
                 pass
         return response
     
-    # Periodic cleanup of stale completed/failed tasks (prevents unbounded memory growth)
-    def _task_cleanup_worker():
-        from .models.task import TaskManager
-        while True:
-            time.sleep(3600)  # Every hour
-            try:
-                TaskManager().cleanup_old_tasks(max_age_hours=24)
-            except Exception:
-                pass
-
-    cleanup_thread = threading.Thread(target=_task_cleanup_worker, daemon=True, name="task-cleanup")
-    cleanup_thread.start()
+    # Stale-task cleanup now runs as a periodic Celery beat job
+    # (`tasks.cleanup_old_tasks`, registered in celery_app.py) instead of an
+    # in-process daemon thread. ADR-0003 §"the same pattern as the P0
+    # finding" flags this exact thread as a release-blocker: it is invisible
+    # to the job system, cannot survive a web restart, and does not exist on
+    # any worker process other than the web's. The beat task owns it now.
 
     # Register blueprints
     from .api import auth_bp, graph_bp, simulation_bp, report_bp, settings_bp, health_bp
