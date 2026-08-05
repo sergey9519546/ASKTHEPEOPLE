@@ -118,11 +118,28 @@ class EvalResultsPlugin:
         self.test_outcomes = {}
     
     def pytest_runtest_logreport(self, report):
-        """Collect test outcomes."""
+        """Collect test outcomes.
+
+        Records the definitive outcome per test. A test skipped during setup
+        never reaches ``when == "call"``, so we must capture the setup-phase
+        skip too — otherwise it lands in ``total`` (counted from session
+        items) but not in ``passed/failed/skipped`` (counted from call
+        outcomes), producing the contradictory ``passed + failed + skipped
+        != total`` the exec-plan 08 Fix 2 audit flagged. The rule: the last
+        non-passing setup/teardown outcome wins for that nodeid; a real
+        ``call`` outcome always supersedes a setup report.
+        """
         if report.when == "call":
             self.test_outcomes[report.nodeid] = {
                 "outcome": report.outcome,
                 "duration": report.duration,
+            }
+        elif report.skipped and report.nodeid not in self.test_outcomes:
+            # A skip in setup (e.g. a missing fixture) — record it so it is
+            # counted as skipped rather than dropped on the floor.
+            self.test_outcomes[report.nodeid] = {
+                "outcome": "skipped",
+                "duration": getattr(report, "duration", 0.0),
             }
     
     def pytest_sessionfinish(self, session, exitstatus):

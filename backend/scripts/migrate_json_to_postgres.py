@@ -1,30 +1,43 @@
 #!/usr/bin/env python
 """
-Data Migration Script: JSON to PostgreSQL
+Data Migration Script: JSON to PostgreSQL (NON-FUNCTIONAL DRAFT)
 
-This script migrates existing project data from filesystem JSON storage
-to PostgreSQL database using SQLAlchemy and Alembic.
+STATUS: This script is a non-working draft. It imports from
+`app.db.database` and `app.db.models.*`, which do not exist — only
+`app/db/schema.py` defines ORM models today. The migration logic below is
+kept as a reference skeleton for the real canonical-persistence migration
+that lands with gate 3 (ADR-0012). Until then, running this script fails
+fast at import time rather than silently corrupting data.
 
-Usage:
-    python scripts/migrate_json_to_postgres.py [--dry-run]
+Do NOT attempt to "fix" the imports by pointing them at app.db.schema: the
+schema there (UUIDv7 PKs, organization_id) is a different shape from what
+this draft assumes (Integer PKs, no tenant), so the row mappings below would
+be wrong. The real migration will be written against the gate-3 schema.
 """
 
-import asyncio
-import os
 import sys
-import json
-import argparse
-from pathlib import Path
-from datetime import datetime
+
+raise ImportError(
+    "migrate_json_to_postgres.py is a non-functional draft pending gate 3 "
+    "(ADR-0012 canonical persistence). See module docstring."
+)
+
+# The remainder is preserved as reference for the gate-3 migration author.
+import asyncio  # noqa: E402
+import os  # noqa: E402
+import json  # noqa: E402
+import argparse  # noqa: E402
+from pathlib import Path  # noqa: E402
+from datetime import datetime  # noqa: E402
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.config import Config
-from app.db.database import init_db, get_db_session
-from app.db.models.project import ProjectDB
-from app.db.models.source import SourceDB
-from app.models.project import ProjectManager, Project
+from app.config import Config  # noqa: E402
+from app.db.database import init_db, get_db_session  # noqa: E402  (gate-3)
+from app.db.models.project import ProjectDB  # noqa: E402  (gate-3)
+from app.db.models.source import SourceDB  # noqa: E402  (gate-3)
+from app.models.project import ProjectManager, Project  # noqa: E402
 
 
 async def migrate_project(project: Project, session, dry_run: bool = False):

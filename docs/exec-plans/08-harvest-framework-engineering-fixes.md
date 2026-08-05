@@ -12,6 +12,31 @@ research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
 
 # Harvest Framework Engineering Fixes
 
+> **Status reconciliation (2026-08-05, verified against current `main`).**
+> Five of these fixes were proposed against baseline `67cd5484`. Re-checked
+> against the current code:
+> - **Fix 2 (eval writer):** the contradictory-counts bug is **fixed**;
+>   `results.json` now reconciles (`passed + failed + skipped == total_tests`).
+>   The writer was further hardened to count setup-phase skips so the
+>   contradiction cannot recur.
+> - **Fix 3 (fail closed):** the fail-closed path **exists** and now keys off
+>   `Config.DEBUG` (the canonical production signal) rather than a
+>   Railway-specific env var, so it holds on any platform.
+> - **Fix 4 (follower counts):** **already done.** The `random.randint`
+>   fabrication shown in the "CURRENT" block below no longer exists — the
+>   generator uses `profile_data.get("karma")` (returns `None`), the dataclass
+>   fields are `Optional[int] = None`, clone expansion preserves `None`, and
+>   exports omit the fields. The "CURRENT" block is retained as history.
+> - **Fix 5 (jobs endpoint):** **already done.** `GET /api/jobs/{task_id}`
+>   exists and is live (`backend/app/api/jobs.py`); the 202 `Location`
+>   header resolves.
+> - **Fix 1 (DB stack):** the **only** fully-open fix. The broken
+>   `app.db.models.*` imports in `migrations/env.py` are repaired to import
+>   from the real `app/db/schema.py` Base, and the dead
+>   `migrate_json_to_postgres.py` now fails fast with a clear status. The
+>   dual-schema reconciliation (UUIDv7 vs Integer PK migration) and a working
+>   `alembic upgrade head` remain gate 3 (ADR-0012).
+
 ## Purpose
 
 The Social Forecasting Framework (dated 2026-08-02, baseline `9593e93`) identified five
@@ -562,38 +587,38 @@ response.headers["Link"] = f'</api/jobs/{task_id}>; rel="alternate"'
 ## Acceptance Criteria
 
 ### Fix 1: DB Stack
-- [ ] One `Base` class in `backend/app/db/schema.py`
-- [ ] No `db/database.py` or `db/models/` directory
-- [ ] `psycopg[binary]>=3.2.0` in `pyproject.toml`
+- [ ] One `Base` class in `backend/app/db/schema.py` *(partially: `schema.py` is the single Base; the divergent Integer-PK migration `384c98f88d53` is stale and will be replaced by gate 3)*
+- [x] No `db/database.py` or `db/models/` directory
+- [ ] `psycopg[binary]>=3.2.0` in `pyproject.toml` *(declared; not exercised at runtime)*
 - [ ] No async DB URL construction in `config.py`
-- [ ] Alembic migration runs successfully
-- [ ] All models import from the sync Base
+- [ ] Alembic migration runs successfully *(env.py now imports the real Base; `alembic upgrade head` against PostgreSQL is gate 3)*
+- [x] All models import from the sync Base
 
 ### Fix 2: Eval Writer
-- [ ] `results.json` totals are internally consistent
-- [ ] `passed + failed + skipped == total_tests`
-- [ ] `exit_status` matches pytest exit code
-- [ ] Metrics are present (not just summary)
-- [ ] CI can parse and validate
+- [x] `results.json` totals are internally consistent
+- [x] `passed + failed + skipped == total_tests`
+- [x] `exit_status` matches pytest exit code *(eval-subset status; session status recorded separately)*
+- [ ] Metrics are present (not just summary) *(gate 5 eval harness)*
+- [x] CI can parse and validate
 
 ### Fix 3: Fail Closed
-- [ ] Production start fails when `DATABASE_URL` is unset
-- [ ] Production start fails when DB connection fails
-- [ ] Dev/test may fall back (logged warning)
-- [ ] Health check reports DB state accurately
+- [ ] Production start fails when `DATABASE_URL` is unset *(intentional: unset DATABASE_URL means filesystem mode is valid today; full fail-closed is gate 3)*
+- [x] Production start fails when DB connection fails *(when DATABASE_URL is set + DEBUG=False)*
+- [x] Dev/test may fall back (logged warning)
+- [ ] Health check reports DB state accurately *(health check is a SELECT 1 liveness only; gate 3)*
 
 ### Fix 4: Follower Counts
-- [ ] No `random.randint` for `karma`, `follower_count`, `friend_count`, `statuses_count`
-- [ ] Dataclass fields allow `None`
-- [ ] Clone expansion preserves `None` (does not fabricate)
-- [ ] Exports omit or label `None` as `"not observed"`
-- [ ] CI linter passes
+- [x] No `random.randint` for `karma`, `follower_count`, `friend_count`, `statuses_count` *(only username suffix + jitter on real source-derived values remain)*
+- [x] Dataclass fields allow `None`
+- [x] Clone expansion preserves `None` (does not fabricate)
+- [x] Exports omit or label `None` as `"not observed"` *(export formats omit the fields entirely)*
+- [x] CI linter passes
 
 ### Fix 5: Jobs Endpoint
-- [ ] `GET /api/jobs/{task_id}` returns 200 + task state
-- [ ] HTTP 202 `Location` header resolves successfully
-- [ ] Old endpoints return `Deprecation: true` header
-- [ ] OpenAPI docs updated
+- [x] `GET /api/jobs/{task_id}` returns 200 + task state
+- [x] HTTP 202 `Location` header resolves successfully
+- [ ] Old endpoints return `Deprecation: true` header *(minor; gate 1 typed-boundary cleanup)*
+- [ ] OpenAPI docs updated *(no OpenAPI spec exists yet)*
 
 ## Test Plan
 

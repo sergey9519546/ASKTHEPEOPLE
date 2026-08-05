@@ -10,15 +10,14 @@ from alembic import context
 # Add parent directory to path to import app modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import the Base and all models
-from app.db.models import Base
-# Import all models to ensure they're registered with Base
-from app.db.models.project import ProjectDB
-from app.db.models.source import SourceDB
-from app.db.models.ontology import OntologyDB
-from app.db.models.graph import GraphDB
-from app.db.models.simulation import SimulationDB
-from app.db.models.report import ReportDB
+# Import the Base and all ORM models from the single canonical schema module.
+# The previous env.py imported from app.db.models.*, a package that never
+# existed (only a stale __pycache__/database.cpython-312.pyc remained),
+# which crashed alembic on import. app.db.schema is the real home of Base
+# and the Organization/Project/Simulation/AgentProfile/Attempt/Observation
+# models; importing it registers them with Base.metadata for autogenerate.
+from app.db.schema import Base  # noqa: F401  (registers models on import)
+import app.db.schema  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
