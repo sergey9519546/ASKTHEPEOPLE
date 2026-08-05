@@ -7,6 +7,8 @@ import os
 import json
 import uuid
 import shutil
+import hashlib
+import tempfile
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 from enum import Enum
@@ -129,7 +131,39 @@ class ProjectManager:
     def _get_project_text_path(cls, project_id: str) -> str:
         """Get extracted text storage path for project"""
         return os.path.join(cls._get_project_dir(project_id), 'extracted_text.txt')
-    
+
+    @staticmethod
+    def _atomic_write_text(path: str, text: str) -> None:
+        """Write text atomically: write to a temp file in the same directory,
+        fsync, then os.replace onto the final path.
+
+        A crash mid-write to `path` directly can leave a truncated/corrupt
+        canonical record (audit §5 P1 "Non-atomic file persistence").
+        os.replace is atomic on both POSIX and Windows, so a reader either
+        sees the complete previous record or the complete new one — never a
+        partial write. The temp file lives in the same directory so the
+        rename stays within one filesystem.
+        """
+        directory = os.path.dirname(path)
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=".tmp-", suffix=os.path.basename(path), dir=directory
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                f.write(text)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, path)
+        except BaseException:
+            # Best-effort cleanup of the orphaned temp file on any failure;
+            # the canonical record at `path` is untouched.
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
+
     @classmethod
     def create_project(cls, name: str = "Unnamed Project") -> Project:
         """
@@ -167,12 +201,11 @@ class ProjectManager:
     
     @classmethod
     def save_project(cls, project: Project) -> None:
-        """Save project metadata"""
+        """Save project metadata atomically (audit §5 P1 non-atomic write fix)."""
         project.updated_at = datetime.now().isoformat()
         meta_path = cls._get_project_meta_path(project.project_id)
-        
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(project.to_dict(), f, ensure_ascii=False, indent=2)
+        payload = json.dumps(project.to_dict(), ensure_ascii=False, indent=2)
+        cls._atomic_write_text(meta_path, payload)
     
     @classmethod
     def get_project(cls, project_id: str) -> Optional[Project]:
@@ -247,42 +280,52 @@ class ProjectManager:
     def save_file_to_project(cls, project_id: str, file_storage, original_filename: str) -> Dict[str, str]:
         """
         Save uploaded file to project directory
-        
+
+        Hashes the source bytes (sha256) at ingest so the canonical record
+        carries a content fingerprint usable by the export provenance layer
+        (ADR-0008). The hash is computed from the persisted file, so it
+        reflects exactly what is stored, not just what was streamed.
+
         Args:
             project_id: Project ID
             file_storage: Flask FileStorage object
             original_filename: Original filename
-            
+
         Returns:
-            File information dictionary {filename, path, size}
+            File information dictionary {filename, path, size, content_hash}
         """
         files_dir = cls._get_project_files_dir(project_id)
         os.makedirs(files_dir, exist_ok=True)
-        
+
         # Generate safe filename
         ext = os.path.splitext(original_filename)[1].lower()
         safe_filename = f"{uuid.uuid4().hex[:8]}{ext}"
         file_path = os.path.join(files_dir, safe_filename)
-        
+
         # Save file
         file_storage.save(file_path)
-        
-        # Get file size
+
+        # Get file size and sha256 of the persisted bytes.
         file_size = os.path.getsize(file_path)
-        
+        hasher = hashlib.sha256()
+        with open(file_path, "rb") as stored:
+            for chunk in iter(lambda: stored.read(65536), b""):
+                hasher.update(chunk)
+        content_hash = hasher.hexdigest()
+
         return {
             "original_filename": original_filename,
             "saved_filename": safe_filename,
             "path": file_path,
-            "size": file_size
+            "size": file_size,
+            "content_hash": content_hash,
         }
     
     @classmethod
     def save_extracted_text(cls, project_id: str, text: str) -> None:
-        """Save extracted text"""
+        """Save extracted text atomically (audit §5 P1 non-atomic write fix)."""
         text_path = cls._get_project_text_path(project_id)
-        with open(text_path, 'w', encoding='utf-8') as f:
-            f.write(text)
+        cls._atomic_write_text(text_path, text)
     
     @classmethod
     def get_extracted_text(cls, project_id: str) -> Optional[str]:

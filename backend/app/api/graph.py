@@ -296,7 +296,8 @@ def generate_ontology():
                 )
                 project.files.append({
                     "filename": file_info["original_filename"],
-                    "size": file_info["size"]
+                    "size": file_info["size"],
+                    "content_hash": file_info.get("content_hash"),
                 })
                 text_header = f"\n\n=== {file_info['original_filename']} ===\n"
                 remaining_characters = (
