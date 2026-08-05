@@ -106,7 +106,7 @@ helper module only — no route decorators remain in it:
 
 | Module | Route fns | Lines | Holds |
 |---|---:|---:|---|
-| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 514 | shared helpers `routes/` imports (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`, `ALLOWED_PLATFORMS`) |
+| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 508 | shared helpers `routes/` imports (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
 | [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 17 | 961 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
 | [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 8 | 705 | start / stop / status / inject / env |
 | [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 557 | create / prepare / profiles / preflight |

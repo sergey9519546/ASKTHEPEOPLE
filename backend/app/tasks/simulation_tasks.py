@@ -186,10 +186,12 @@ def run_simulation_task(
 
         final_state = SimulationRunner.get_run_state(simulation_id) or run_state
         if final_state.runner_status == RunnerStatus.FAILED:
-            err_msg = final_state.error or "Simulation execution failed"
-            if effective_task_id:
-                task_manager.fail_task(effective_task_id, error=err_msg)
-            raise RuntimeError(err_msg)
+            # Raise into the single except handler below, which calls
+            # fail_task once with the runner's specific error. Do NOT call
+            # fail_task here — that would double-fail the task and the second
+            # call (in the except) would clobber this specific message with a
+            # generic wrapper.
+            raise RuntimeError(final_state.error or "Simulation execution failed")
 
         result_dict = final_state.to_dict()
         if effective_task_id:

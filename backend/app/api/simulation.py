@@ -54,14 +54,6 @@ logger = get_logger('askthepeople.api.simulation')
 from ..utils.safe_path import safe_join, SafePathError
 
 
-# P0 path-escape fix (audit §5 P0). The platform identifier is a request-
-# controlled value; it MUST be parsed as a strict enum and resolved to a
-# fixed filename. Do NOT interpolate request text into a filename.
-ALLOWED_PLATFORMS = {
-    "reddit": "reddit_simulation.db",
-    "twitter": "twitter_simulation.db",
-}
-
 
 def _safe_sim_dir(simulation_id: str) -> str:
     """Resolve a validated simulation run-state directory (path-traversal safe).
@@ -510,5 +502,7 @@ def _enrich_simulation_summary(simulation, manager: SimulationManager):
 # opinions, and the list/get-status handlers above) now live in
 # `api/routes/read_routes.py`. They are registered through the same
 # `simulation_bp` and import the helpers in this module (`_safe_sim_dir`,
-# `_with_*_truth`, `_enrich_simulation_summary`, `_get_report_summary_for_*`,
-# `ALLOWED_PLATFORMS`). Edit that module for any read-route change.
+# `_with_*_truth`, `_enrich_simulation_summary`, `_get_report_summary_for_*`).
+# The platform allowlist they validate against lives in
+# `services/simulation_activity_reader.py` (the data layer). Edit the
+# read_routes module for any read-route change.

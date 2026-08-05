@@ -22,9 +22,14 @@ from ..utils.logger import get_logger
 logger = get_logger('askthepeople.services.activity_reader')
 
 
-# Fixed platform→filename map. The platform identifier is request-controlled,
-# so callers MUST resolve it through this allowlist rather than interpolating
-# request text into a path (audit §5 P0 path-escape fix).
+# Canonical platform→filename map (audit §5 P0 path-escape fix). The platform
+# identifier is request-controlled, so callers MUST resolve it through this
+# allowlist rather than interpolating request text into a path. This is the
+# single source of truth for the /posts read path: the route validates a
+# request platform against it, and read_posts indexes it. Defining it once
+# here removes a drift trap where the route accepts a platform the service
+# cannot resolve (KeyError → 500). Other route modules keep their own copies
+# for now; consolidating those is further gate-1 cleanup.
 ALLOWED_PLATFORMS = {
     "reddit": "reddit_simulation.db",
     "twitter": "twitter_simulation.db",
@@ -122,7 +127,12 @@ def read_comments(
     offset: int,
     post_id: Optional[str] = None,
 ) -> List[Dict]:
-    """Return comments (Reddit only). A missing database/table returns []."""
+    """Return comments (Reddit only).
+
+    A missing database or missing comment table returns [] (the simulation
+    may not have run or produced comments yet). A locked or corrupt database
+    raises DatabaseLocked / DatabaseCorrupt for the route to map to 423/500.
+    """
     db_path = os.path.join(sim_dir, "reddit_simulation.db")
     if not os.path.exists(db_path):
         return []
@@ -153,4 +163,9 @@ def read_comments(
             return []
         raise _classify_operational_error(exc) from exc
     finally:
-        conn.close()
+        # Guard the close so a close-time error cannot mask a typed reader
+        # exception raised above (matches read_posts' discipline).
+        try:
+            conn.close()
+        except Exception:  # pragma: no cover - best-effort close
+            pass

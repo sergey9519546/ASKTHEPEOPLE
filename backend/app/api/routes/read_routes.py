@@ -24,7 +24,6 @@ from werkzeug.utils import secure_filename
 
 from .. import simulation_bp
 from ..simulation import (
-    ALLOWED_PLATFORMS,
     _enrich_simulation_summary,
     _get_report_summary_for_simulation,
     _safe_sim_dir,
@@ -38,6 +37,7 @@ from ...services.claim_boundary import (
     fictional_profile_disclosure,
     synthetic_output_disclosure,
 )
+from ...services.simulation_activity_reader import ALLOWED_PLATFORMS
 from ...services.simulation_manager import SimulationManager, SimulationStatus
 from ...services.simulation_observation_store import search_observations
 from ...services.simulation_runner import RunnerStatus, SimulationRunner
@@ -880,8 +880,25 @@ def get_simulation_comments(simulation_id: str):
 
     try:
         post_id = request.args.get('post_id')
-        limit = request.args.get('limit', 50, type=int)
-        offset = request.args.get('offset', 0, type=int)
+
+        # P1 input bounding (audit §5 P1). Match /posts' discipline: a
+        # non-integer or out-of-range limit/offset is rejected rather than
+        # coerced. Without this, ?limit=abc yields None and SQLite reads it
+        # as LIMIT NULL (unbounded) — an unbounded-read path.
+        try:
+            limit = int(request.args.get('limit', 50))
+            offset = int(request.args.get('offset', 0))
+        except (TypeError, ValueError):
+            return jsonify({
+                "success": False,
+                "error": "invalid_limit_or_offset",
+            }), 422
+        if limit < 0 or offset < 0 or limit > 500:
+            return jsonify({
+                "success": False,
+                "error": "limit_out_of_range",
+                "limit_max": 500,
+            }), 422
 
         sim_dir = _safe_sim_dir(simulation_id)
 

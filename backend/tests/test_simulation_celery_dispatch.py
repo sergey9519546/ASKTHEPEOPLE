@@ -143,6 +143,57 @@ def test_run_simulation_task_executes_and_updates_task_manager(monkeypatch):
     assert updated_task.progress == 100
 
 
+def test_run_simulation_task_failed_runner_path_fails_once_with_specific_error(monkeypatch):
+    """When the runner reports FAILED, the task must be failed exactly once
+    with the runner's specific error — not double-failed with the second
+    call clobbering the first's message (regression: the FAILED path used
+    to call fail_task then raise into an except that called it again)."""
+    sim_id = "sim_failed_path"
+    task_id = "task_failed_once"
+    runner_error = "OASIS subprocess exited with code 137"
+
+    failed_state = SimulationRunState(
+        simulation_id=sim_id,
+        runner_status=RunnerStatus.FAILED,
+        total_rounds=3,
+        current_round=2,
+        started_at="2026-07-29T00:00:00",
+        error=runner_error,
+    )
+
+    monkeypatch.setattr(SimulationRunner, "start_simulation", lambda **kwargs: failed_state)
+    monkeypatch.setattr(SimulationRunner, "get_run_state", lambda sid: failed_state)
+
+    task_manager = TaskManager()
+    task_manager.create_task("simulation_run", metadata={"simulation_id": sim_id}, task_id=task_id)
+
+    # Spy on fail_task to count calls.
+    fail_calls = []
+    original_fail = task_manager.fail_task
+
+    def counting_fail(tid, error=None, **kwargs):
+        fail_calls.append((tid, error))
+        return original_fail(tid, error=error, **kwargs)
+
+    monkeypatch.setattr(task_manager, "fail_task", counting_fail)
+
+    # The FAILED-runner path raises RuntimeError (propagates in eager mode).
+    import pytest as _pytest
+    with _pytest.raises(RuntimeError, match="code 137"):
+        run_simulation_task.apply(
+            kwargs={"simulation_id": sim_id, "task_id": task_id, "platform": "parallel"}
+        )
+
+    # fail_task called exactly once (not twice), carrying the runner's error.
+    assert len(fail_calls) == 1, f"expected one fail_task call, got {len(fail_calls)}"
+    assert fail_calls[0][0] == task_id
+    assert fail_calls[0][1] == runner_error
+
+    failed = task_manager.get_task(task_id)
+    assert failed.status == TaskStatus.FAILED
+    assert failed.error == runner_error
+
+
 def test_task_manager_redis_and_memory_fallback():
     """Verify TaskManager creates, updates, and retrieves tasks correctly."""
     tm = TaskManager()
