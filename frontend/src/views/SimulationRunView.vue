@@ -93,6 +93,16 @@
               @add-log="addLog"
               @update-status="updateStatus"
             />
+
+            <!-- Offered once the run has stopped producing activity: branching
+                 mid-run would copy a moving target. -->
+            <ForkRunControl
+              v-if="canBranch"
+              class="wb-fork"
+              :simulationId="currentSimulationId"
+              :maxTurn="maxRounds"
+              @branched="handleBranched"
+            />
           </div>
         </div>
       </div>
@@ -111,6 +121,7 @@ import {
   getSimulation,
 } from "../api/simulation";
 import GraphPanel from "../components/GraphPanel.vue";
+import ForkRunControl from "../components/ForkRunControl.vue";
 import Step3Simulation from "../components/Step3Simulation.vue";
 
 const route = useRoute();
@@ -164,6 +175,16 @@ const statusText = computed(() => {
 });
 
 const isSimulating = computed(() => currentStatus.value === "processing");
+
+// Branching copies the run's state on disk, so it is only offered once the run
+// has stopped writing to it. A branch taken mid-run would copy a moving target.
+const canBranch = computed(() => currentStatus.value === "completed");
+
+const handleBranched = (branch) => {
+  addLog(
+    `Branch ${branch.new_simulation_id} created from turn ${branch.forked_at_turn}`,
+  );
+};
 
 const addLog = (msg) => {
   const time = new Date().toLocaleTimeString("en-US", {
