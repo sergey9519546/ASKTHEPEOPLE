@@ -928,6 +928,62 @@ REACT_UNUSED_TOOLS_HINT = "\n[HINT] You haven't used: {unused_list} yet; it's re
 
 REACT_FORCE_FINAL_MSG = "Tool call limit reached; please output Final Answer: and generate section content directly."
 
+
+# --- Reasoning scaffold scrubbing (ADRs 0004 / 0007 / 0010: no chain-of-thought
+# retention) -----------------------------------------------------------------
+#
+# Section text is normally taken from after the "Final Answer:" marker, which
+# leaves the ReACT preamble behind. Two paths adopt the model's response whole
+# when that marker is absent, and the prompt above asks the model for
+# "Thought (Thought)" and "Action" steps — so on those paths the reasoning
+# preamble became the published section, reaching full_report.md, GET
+# /api/report/<id>, the agent log and every export bundle.
+
+_REASONING_TAG_BLOCK = re.compile(
+    r"<\s*(thinking|think|reasoning|scratchpad|reflection)\b[^>]*>.*?<\s*/\s*\1\s*>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+_TOOL_CALL_BLOCK = re.compile(r"<\s*tool_call\s*>.*?<\s*/\s*tool_call\s*>", re.DOTALL | re.IGNORECASE)
+
+# Only matched at the start of a line, so prose like "**Action:** raise outreach"
+# (bold-wrapped) and mid-sentence uses are untouched.
+_REACT_SCAFFOLD_LINE = re.compile(
+    r"^\s*(?:Thought|Action\s+Input|Action|Observation)\s*:", re.IGNORECASE
+)
+
+
+def strip_reasoning_scaffold(text: Optional[str]) -> str:
+    """Remove model reasoning scaffolding from text bound for a report.
+
+    Deliberately conservative. Tagged reasoning blocks are unambiguous and are
+    removed wherever they appear. ReACT step lines are removed only as a
+    *leading* run, because "Action: ..." at the start of a line is also
+    plausible report prose further down a recommendations section, and dropping
+    real content is worse than leaving one stray line.
+    """
+    if not text:
+        return ""
+
+    cleaned = _REASONING_TAG_BLOCK.sub("", text)
+    cleaned = _TOOL_CALL_BLOCK.sub("", cleaned)
+
+    lines = cleaned.splitlines()
+    first_content = 0
+    for index, line in enumerate(lines):
+        if not line.strip() or _REACT_SCAFFOLD_LINE.match(line):
+            first_content = index + 1
+            continue
+        break
+
+    if first_content:
+        logger.warning(
+            "Stripped %d leading reasoning line(s) from generated section text",
+            first_content,
+        )
+
+    return "\n".join(lines[first_content:]).strip()
+
 # -- Chat prompt --
 
 CHAT_SYSTEM_PROMPT_TEMPLATE = """\
@@ -1643,7 +1699,9 @@ class ReportAgent:
                     continue
 
                 # Normal finish
-                final_answer = response.split("Final Answer:")[-1].strip()
+                final_answer = strip_reasoning_scaffold(
+                    response.split("Final Answer:")[-1]
+                )
                 logger.info(
                     "Report section %s generation complete (tool_calls=%s)",
                     section_index,
@@ -1752,7 +1810,9 @@ class ReportAgent:
                 section_index,
                 tool_calls_count,
             )
-            final_answer = response.strip()
+            # No "Final Answer:" marker, so the response still carries its ReACT
+            # preamble; scrub before it becomes the published section.
+            final_answer = strip_reasoning_scaffold(response)
 
             if self.report_logger:
                 self.report_logger.log_section_content(
@@ -1779,9 +1839,11 @@ class ReportAgent:
             logger.error(f"Section {section.title} forced closure LLM returned None, using default error message")
             final_answer = "(This section failed to generate: LLM returned empty response, please try again later)"
         elif "Final Answer:" in response:
-            final_answer = response.split("Final Answer:")[-1].strip()
+            final_answer = strip_reasoning_scaffold(response.split("Final Answer:")[-1])
         else:
-            final_answer = response
+            # Forced closure without the marker: the whole response, preamble
+            # included, used to be adopted as the section verbatim.
+            final_answer = strip_reasoning_scaffold(response)
         
         # Record section content generation complete log
         if self.report_logger:
@@ -2154,8 +2216,10 @@ class ReportAgent:
             
             if not tool_calls:
                 # No tool calls, return response directly
-                clean_response = re.sub(r'<tool_call>.*?</tool_call>', '', response, flags=re.DOTALL)
-                clean_response = re.sub(r'\[TOOL_CALL\].*?\)', '', clean_response)
+                clean_response = re.sub(r'\[TOOL_CALL\].*?\)', '', response)
+                # Also drops <tool_call> blocks and any tagged reasoning, which
+                # the previous tool-call-only regex left in the chat reply.
+                clean_response = strip_reasoning_scaffold(clean_response)
                 
                 retrieval_queries = [
                     tc.get("parameters", {}).get("query", "")
@@ -2194,8 +2258,8 @@ class ReportAgent:
         )
         
         # Clean response
-        clean_response = re.sub(r'<tool_call>.*?</tool_call>', '', final_response, flags=re.DOTALL)
-        clean_response = re.sub(r'\[TOOL_CALL\].*?\)', '', clean_response)
+        clean_response = re.sub(r'\[TOOL_CALL\].*?\)', '', final_response)
+        clean_response = strip_reasoning_scaffold(clean_response)
         
         retrieval_queries = [
             tc.get("parameters", {}).get("query", "")
