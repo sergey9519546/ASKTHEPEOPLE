@@ -122,6 +122,112 @@ def test_fork_does_not_hold_the_copied_database_open(store):
     os.rename(forked_db.with_suffix(".moved"), forked_db)
 
 
+# --------------------------------------------------------------------------- #
+# Branch lineage
+# --------------------------------------------------------------------------- #
+
+def _write_manager_state(store, sim_id="sim_real", **overrides):
+    payload = {
+        "simulation_id": sim_id,
+        "project_id": "proj_1",
+        "graph_id": "graph_1",
+        "status": "completed",
+        "current_round": 9,
+    }
+    payload.update(overrides)
+    (store / sim_id / "state.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_fork_records_its_parent_and_branch_point(store):
+    """Without this a fork is indistinguishable from an unrelated simulation.
+
+    The roadmap's branch tree cannot be assembled from the stored data unless
+    each fork records where it came from and at which turn.
+    """
+    _write_manager_state(store)
+
+    new_id = fork_simulation("sim_real", target_turn=4)
+
+    state = json.loads((store / new_id / "state.json").read_text(encoding="utf-8"))
+    assert state["forked_from"] == "sim_real"
+    assert state["forked_at_turn"] == 4
+    assert state["forked_at"]
+
+
+def test_fork_rewrites_the_copied_state_id(store):
+    """The copy used to keep the source's simulation_id on disk."""
+    _write_manager_state(store)
+
+    new_id = fork_simulation("sim_real", target_turn=4)
+
+    state = json.loads((store / new_id / "state.json").read_text(encoding="utf-8"))
+    assert state["simulation_id"] == new_id
+
+
+def test_fork_starts_the_branch_at_the_turn_it_branched_from(store):
+    _write_manager_state(store, current_round=9)
+
+    new_id = fork_simulation("sim_real", target_turn=4)
+
+    state = json.loads((store / new_id / "state.json").read_text(encoding="utf-8"))
+    assert state["current_round"] == 4
+
+
+def test_original_simulation_records_no_lineage(store):
+    """Originals must stay distinguishable from branches."""
+    _write_manager_state(store)
+
+    fork_simulation("sim_real", target_turn=4)
+
+    source = json.loads((store / "sim_real" / "state.json").read_text(encoding="utf-8"))
+    assert source.get("forked_from") is None
+
+
+def test_fork_without_manager_state_still_succeeds(store):
+    """A simulation can be forked before the manager has written state.json."""
+    assert not (store / "sim_real" / "state.json").exists()
+    assert fork_simulation("sim_real", target_turn=1)
+
+
+def test_corrupt_manager_state_does_not_leave_an_orphan(store):
+    _write_manager_state(store)
+    (store / "sim_real" / "state.json").write_text("not json", encoding="utf-8")
+    before = {p.name for p in store.iterdir()}
+
+    with pytest.raises(ForkError):
+        fork_simulation("sim_real", target_turn=1)
+
+    assert {p.name for p in store.iterdir()} == before
+
+
+def test_route_returns_lineage_in_the_creation_response(api_client, store):
+    _write_manager_state(store)
+
+    resp = api_client.post("/api/simulation/sim_real/fork", json={"target_turn": 4})
+
+    assert resp.status_code == 201
+    data = resp.get_json()["data"]
+    assert data["forked_from"] == "sim_real"
+    assert data["forked_at_turn"] == 4
+
+
+def test_simple_dict_carries_lineage_for_the_branch_tree():
+    """/api/simulation/list must expose lineage or the tree needs N requests."""
+    from app.services.simulation_manager import SimulationState
+
+    state = SimulationState(
+        simulation_id="child",
+        project_id="p",
+        graph_id="g",
+        forked_from="parent",
+        forked_at_turn=3,
+        forked_at="2026-08-04T00:00:00+00:00",
+    )
+    payload = state.to_simple_dict()
+    assert payload["forked_from"] == "parent"
+    assert payload["forked_at_turn"] == 3
+
+
 def test_corrupt_run_state_is_not_reported_as_not_found(store):
     """JSONDecodeError subclasses ValueError, which the route maps to 404.
 

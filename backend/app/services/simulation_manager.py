@@ -87,10 +87,18 @@ class SimulationState:
     # Timestamps
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
-    
+
     # Error information
     error: Optional[str] = None
-    
+
+    # Counterfactual branching lineage. Set only on simulations produced by
+    # POST /api/simulation/<id>/fork; None on originals. Without these a fork
+    # is indistinguishable from an unrelated simulation, so no branch tree can
+    # be assembled from the stored data.
+    forked_from: Optional[str] = None
+    forked_at_turn: Optional[int] = None
+    forked_at: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """Full status dictionary (for internal use)"""
         return {
@@ -111,8 +119,11 @@ class SimulationState:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "error": self.error,
+            "forked_from": self.forked_from,
+            "forked_at_turn": self.forked_at_turn,
+            "forked_at": self.forked_at,
         }
-    
+
     def to_simple_dict(self) -> Dict[str, Any]:
         """Simplified status dictionary (for API return)"""
         return {
@@ -125,6 +136,11 @@ class SimulationState:
             "entity_types": self.entity_types,
             "config_generated": self.config_generated,
             "error": self.error,
+            # Carried in the list payload so a client can build the branch tree
+            # from one request instead of fetching each simulation.
+            "forked_from": self.forked_from,
+            "forked_at_turn": self.forked_at_turn,
+            "forked_at": self.forked_at,
         }
 
 
@@ -206,6 +222,9 @@ class SimulationManager:
             created_at=data.get("created_at", datetime.now().isoformat()),
             updated_at=data.get("updated_at", datetime.now().isoformat()),
             error=data.get("error"),
+            forked_from=data.get("forked_from"),
+            forked_at_turn=data.get("forked_at_turn"),
+            forked_at=data.get("forked_at"),
         )
         
         self._simulations[simulation_id] = state

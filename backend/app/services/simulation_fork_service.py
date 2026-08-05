@@ -4,6 +4,7 @@ import os
 import shutil
 import sqlite3
 import uuid
+from datetime import UTC, datetime
 from typing import Optional
 
 from ..config import Config
@@ -60,12 +61,45 @@ def fork_simulation(
     # simulation.
     try:
         _rewrite_forked_state(new_dir, new_id, target_turn)
+        _record_lineage(new_dir, new_id, source_id, target_turn)
         _truncate_observations(new_dir, target_turn)
     except Exception:
         shutil.rmtree(new_dir, ignore_errors=True)
         raise
 
     return new_id
+
+
+def _record_lineage(new_dir: str, new_id: str, source_id: str, target_turn: int) -> None:
+    """Stamp the copied manager state with its own id and its parentage.
+
+    Two things were wrong with the copy before this. It kept the *source's*
+    simulation_id — harmless in practice only because _load_simulation_state
+    overrides that field from the id it was asked for, but wrong on disk. And
+    it recorded nothing about where it came from, so a fork was
+    indistinguishable from an unrelated simulation and no branch tree could be
+    assembled from the stored data.
+    """
+    state_path = os.path.join(new_dir, "state.json")
+    if not os.path.exists(state_path):
+        # A simulation can be forked before the manager has written state.
+        return
+
+    with open(state_path, "r", encoding="utf-8") as f:
+        try:
+            state = json.load(f)
+        except json.JSONDecodeError as exc:
+            raise ForkError(f"Simulation state is not valid JSON: {state_path}") from exc
+
+    state["simulation_id"] = new_id
+    state["forked_from"] = source_id
+    state["forked_at_turn"] = target_turn
+    state["forked_at"] = datetime.now(UTC).isoformat()
+    # The copy starts at the turn it branched from, not the parent's latest.
+    state["current_round"] = target_turn
+
+    with open(state_path, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
 
 
 def _rewrite_forked_state(new_dir: str, new_id: str, target_turn: int) -> None:

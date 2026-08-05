@@ -32,9 +32,13 @@ def api_fork_simulation(simulation_id):
     try:
         new_id = fork_simulation(simulation_id, target_turn)
         return jsonify({
-            "success": True, 
+            "success": True,
             "data": {
                 "new_simulation_id": new_id,
+                # Lineage in the creation response so a client can place the new
+                # branch in its tree without re-fetching the simulation list.
+                "forked_from": simulation_id,
+                "forked_at_turn": target_turn,
                 "message": f"Successfully forked simulation to {new_id} at round {target_turn}"
             }
         }), 201
