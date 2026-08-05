@@ -84,18 +84,21 @@ Transitioning from local SQLite observation stores to production-grade scalable 
 > **Recommended First Step**: Start with **Phase 1.1 & 1.2 (Frontend UI for Branching and Network Graph Visualizer)**. Surfacing the newly built backend capabilities in the Civic Wayfinding UI will immediately provide visual proof of the dynamic filter bubbles and counterfactual branching!
 
 > [!IMPORTANT]
-> **Phase 1.1 backend is ready; the UI has a prerequisite decision.**
-> `POST /api/simulation/<id>/fork` works and records lineage (`forked_from`,
-> `forked_at_turn`, `forked_at`), carried by `/api/simulation/list` and
-> `/history`, so a branch tree can be assembled from one request.
-> `frontend/src/api/simulation.js` already exports `forkSimulation()` — and
-> nothing calls it.
+> **Phase 1.1 status.** `POST /api/simulation/<id>/fork` works and records
+> lineage (`forked_from`, `forked_at_turn`, `forked_at`), carried by
+> `/api/simulation/list` and `/history`, so a branch tree can be assembled from
+> one request. The recent-runs list in `frontend/src/views/Home.vue` marks
+> branches with their parent and branch point.
 >
-> There is currently **no live view listing past simulations**.
-> `frontend/src/components/HistoryDatabase.vue` is the only component that calls
-> `getSimulationHistory()`, and it is unreachable: nothing imports it, no route
-> in `frontend/src/router/index.js` renders it, and it is absent from the built
-> bundle. Before the tree view can be built, decide whether to wire that
-> component up (it exists and is styled) or replace it. The fork *action* also
-> needs a home; `Step5Interaction.vue` is the execution view but is ~82KB, which
-> cuts against the API decomposition work.
+> Still to build: the **fork action** (`forkSimulation()` is exported from
+> `frontend/src/api/simulation.js` and still has no caller) and the **tree /
+> comparison views**. The fork action needs a home —`Step5Interaction.vue` is
+> the execution view but is ~82KB, which cuts against the API decomposition
+> work.
+>
+> Note for whoever builds the tree view: `frontend/src/components/HistoryDatabase.vue`
+> also lists runs and looks like the obvious place, but it is dead code. The
+> Direction C redesign (`d57898f`) removed `<HistoryDatabase borderless />` and
+> its import from `Home.vue` on purpose; nothing imports it now, no route
+> renders it, and it is absent from the built bundle. Reviving it would reverse
+> that design decision.
