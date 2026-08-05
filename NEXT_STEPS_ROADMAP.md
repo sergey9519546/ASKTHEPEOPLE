@@ -27,8 +27,8 @@ Now that the backend supports scenario branching, dynamic topologies, and reflec
 > sent the first implementer down a rewrite.
 
 ### 1. Counterfactual Scenario Branching UI
-- [ ] **Simulation Timeline & Tree View**: Build an interactive tree diagram (e.g. using `Vue Flow` or `D3.js`, both of which mount inside a Vue component) representing simulation branches.
-- [ ] **Fork Action Button**: Add a "Fork Simulation from Turn X" modal in the simulation execution view.
+- [ ] **Simulation Timeline & Tree View**: Build an interactive tree diagram (e.g. using `Vue Flow` or `D3.js`, both of which mount inside a Vue component) representing simulation branches. The data is ready: `/api/simulation/list` and `/history` carry `forked_from` and `forked_at_turn`, so the tree is assemblable from one request.
+- [x] **Fork Action Button**: `frontend/src/components/ForkRunControl.vue`, mounted in `SimulationRunView.vue` and shown once the run has stopped (branching mid-run would copy a directory the runner is still writing to). Branch provenance is shown on the recent-runs list in `Home.vue`.
 - [ ] **Branch Comparison View**: Side-by-side metric comparison card allowing users to compare outcomes between Branch A (e.g. control) and Branch B (e.g. injected event).
 
 ### 2. Network Topology & Emergent Bubble Visualizer
@@ -52,6 +52,26 @@ To validate the synthetic simulation against real-world opinion distributions wh
 
 ### 2. Multi-Model Comparison Testing
 - [ ] **Provider Benchmarking Harness**: Automated test suite comparing simulation outcomes when using OpenAI, Anthropic, or local open-weights models (via Ollama/vLLM) for the `complex` and `routine` tiers.
+
+---
+
+### 3. Behavioural modules awaiting a data seam
+
+Three modules under `backend/app/services/` are implemented and tested but have
+no production importer. Each is blocked on **inputs the product does not have**,
+not on plumbing — wiring them today would mean inventing the quantities they
+consume and then letting those invented numbers drive agent behaviour.
+
+| Module | Consumes | Why it is not wired |
+|---|---|---|
+| `constraint_engine.py` | `check_feasibility(actor, action)` — actors with typed, **numeric** capacities (budget, time, authority) and Actions with numeric requirements | Agent profiles carry persona text, Big Five traits and an entity role. There are no capacity figures. `trait_behavior_projection.py` already expresses role limits as prose, labelled "design choices, not measured values"; replacing that with invented numbers that gate behaviour would be a stronger claim on a weaker basis. Its real seam is an action-proposal loop where agents attempt actions and the engine gates them — a feature that does not exist yet. |
+| `game_theory.py` | `NormalFormGame` — explicit players, strategy sets and **payoff matrices** | No payoffs exist anywhere in the simulation. They would have to be authored per scenario, which is a methodology decision (ADR territory), not an integration. |
+| `calibration_metrics.py` | `brier_score`, `expected_calibration_error`, `auc_roc` — (probability, **realised outcome**) pairs | The product has no ground truth and says so: `claim_boundary.py` discloses `"forecast_status": "not a forecast"` and `"calibration": "not_calibrated"`. Publishing a Brier score would contradict the Product Truth Contract, which AGENTS.md rule 2 calls non-negotiable. Its seam is **Phase 2's benchmark work** below — real survey data (ANES, Pew) gives outcomes to score against, and only then is calibration a truthful claim. |
+
+Until then they are a staging area, not dead weight to delete: each has passing
+tests and a documented purpose. Deleting them loses that work; wiring them
+fabricates data. Both are product decisions, so this records the state rather
+than forcing one.
 
 ---
 
