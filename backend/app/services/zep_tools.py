@@ -516,17 +516,45 @@ class ZepToolsService:
             self._llm_client = LLMClient()
         return self._llm_client
     
+    @staticmethod
+    def _is_retryable(exc: Exception) -> bool:
+        """Whether retrying `exc` could plausibly succeed.
+
+        Zep's SDK raises ApiError carrying the HTTP status. A 401 from a wrong
+        ZEP_API_KEY or a 404 for a missing graph will fail identically on every
+        attempt, so retrying them only spends the backoff: with the defaults
+        that is 6s per call, and report generation makes many calls per section,
+        which turns a clear configuration error into apparent flakiness.
+
+        Anything without a status is a transport-level failure (timeout, reset
+        connection) and is worth retrying, as is 429.
+        """
+        status = getattr(exc, "status_code", None)
+        if status is None:
+            return True
+        if status == 429:
+            return True
+        return status >= 500
+
     def _call_with_retry(self, func, operation_name: str, max_retries: int = None):
         """API call with retry mechanism"""
         max_retries = max_retries or self.MAX_RETRIES
         last_exception = None
         delay = self.RETRY_DELAY
-        
+
         for attempt in range(max_retries):
             try:
                 return func()
             except Exception as e:
                 last_exception = e
+                if not self._is_retryable(e):
+                    logger.error(
+                        "Zep %s failed with a non-retryable error (status=%s): %s",
+                        operation_name,
+                        getattr(e, "status_code", None),
+                        str(e)[:200],
+                    )
+                    raise
                 if attempt < max_retries - 1:
                     logger.warning(
                         f"Zep {operation_name} attempt {attempt + 1} failed: {str(e)[:100]}, "
