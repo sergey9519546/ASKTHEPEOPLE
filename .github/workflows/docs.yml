@@ -130,8 +130,18 @@ jobs:
             "docs/design/"
             "docs/release/"
           )
+          # The documents that DEFINE the prohibition necessarily quote the
+          # phrases they ban: USE_POLICY.md carries the canonical list and
+          # PRODUCT_TRUTH_CONTRACT.md enumerates it again in its claim rules.
+          # Scanning them for the phrases they exist to prohibit is a false
+          # positive by construction, so they are exempted here exactly as they
+          # already are in the wordmark check above. Every other file under the
+          # scanned paths is still checked.
+          DEFINING_DOCS='^docs/product/(PRODUCT_TRUTH_CONTRACT|USE_POLICY|TERMINOLOGY)\.md:'
           PATTERN="${PROHIBITED}"
-          HITS=$(grep -RInE "${PATTERN}" "${SCAN_PATHS[@]}" 2>/dev/null || true)
+          HITS=$(grep -RInE "${PATTERN}" "${SCAN_PATHS[@]}" 2>/dev/null \
+            | grep -vE "${DEFINING_DOCS}" \
+            || true)
           if [ -n "${HITS}" ]; then
             echo "Prohibited outcome language found in user-facing copy:"
             echo "${HITS}"
