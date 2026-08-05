@@ -268,11 +268,18 @@ heartbeats, retry classification) is gate 2, owned by
 `askthepeople-orchestration-engineer`. See
 [`adr/ADR-0003-durable-run-orchestration.md`](adr/ADR-0003-durable-run-orchestration.md).
 
-### Hourly cleanup daemon thread — PARTIAL
+### Hourly cleanup daemon thread — CURRENT (gate 2 fix)
 
-[`_task_cleanup_worker`](../../backend/app/__init__.py:229) is started from
-`create_app()` and runs forever. It is another instance of the same
-in-process-thread pattern.
+The `_task_cleanup_worker` daemon thread that used to be started from
+`create_app()` is gone. Stale-task cleanup now runs as a periodic Celery
+beat job (`tasks.cleanup_old_tasks`, hourly, 24h cutoff) registered in
+[`celery_app.conf.beat_schedule`](../../backend/app/celery_app.py). This
+closes the second daemon-thread finding from ADR-0003 ("the same pattern as
+the P0 finding"). The Celery tasks also now classify exceptions and retry
+only transient failures (connection/timeout/5xx) with exponential backoff,
+and the prepare route accepts an `Idempotency-Key` header that dedupes
+double-submits. Full durable machinery (leases, fencing tokens, heartbeats,
+the four independent state machines) remains gate 2 work.
 
 ## Simulation runtime — CURRENT
 
@@ -353,7 +360,7 @@ in [`docs/exec-plans/`](../exec-plans/README.md):
 |---|---|---|---|
 | 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL — secrets hardened, MIME/magic-byte upload validation wired onto the live route, path-traversal/SSRF defenses, source-as-data prompt guard in place. Open P0s: multi-tenant isolation (deferred; needs a user-identity model), privacy/retention architecture, source-rights attestation. |
 | 1 | Typed API boundary | `askthepeople-architect` | CURRENT (decomposition) — `simulation.py` is now a 518-line helper module; all 41 routes live in `api/routes/` (prep, execution, interview, export, entity, read). No thread/subprocess/SQLite-directory-scan violations remain in routes. Residual: two read routes still open SQLite inline (to move behind a reader service). |
-| 2 | Durable workflows | `askthepeople-orchestration-engineer` | NOT STARTED — idempotency keys, leases/fencing, heartbeats, retry classification on Celery tasks, push-based delivery, the four independent state machines, and the cleanup-daemon-thread replacement are all open. The prep-route P0 (daemon thread) is closed. |
+| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — the cleanup daemon thread is replaced by a Celery beat job; Celery tasks now classify exceptions and retry only transient failures with backoff; the prepare route accepts an `Idempotency-Key` that dedupes double-submits. Open: leases/fencing tokens, heartbeats, push-based (non-polling) event delivery, the four independent state machines, and the process-local `TaskManager`/`SimulationRunner` state that blocks multi-worker. |
 | 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL — atomic writes (`save_project`, `save_extracted_text`) and source sha256 hashing at ingest are in; run-artifact digests exist. Open: PostgreSQL/object-storage canonical store (schema is dead scaffolding), soft-delete/audit-log, provenance-edge write-time validation. |
 | 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED — observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting. Runbook and incident-response docs are concrete but the procedures are unimplemented. |
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL — CoT scrubbing is IMPLEMENTED (ADR-0010); a versioned prompt registry and a single OpenAI-compatible adapter exist; a narrow eval suite passes in CI. Open: most prompts still inlined, model-release gating, failure-mode catalogue, adversarial/sensitivity evals. |

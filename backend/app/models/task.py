@@ -79,7 +79,8 @@ class Task:
     public_error: Optional[str] = None  # Stable client-safe error code
     metadata: Dict = field(default_factory=dict)  # Additional metadata
     progress_detail: Dict = field(default_factory=dict)  # Detailed progress information
-    
+    idempotency_key: Optional[str] = None  # ADR-0003: dedupes double-submits
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to an internal dictionary, including diagnostic details."""
         return {
@@ -95,6 +96,7 @@ class Task:
             "error": self.error,
             "public_error": self.public_error,
             "metadata": self.metadata,
+            "idempotency_key": self.idempotency_key,
         }
 
     def to_public_dict(self) -> Dict[str, Any]:
@@ -146,6 +148,7 @@ class Task:
             public_error=d.get("public_error"),
             metadata=d.get("metadata", {}),
             progress_detail=d.get("progress_detail", {}),
+            idempotency_key=d.get("idempotency_key"),
         )
 
 
@@ -270,25 +273,71 @@ class TaskManager:
         task_type: str,
         metadata: Optional[Dict] = None,
         task_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> str:
-        """Create and retain a task."""
+        """Create and retain a task.
+
+        If ``idempotency_key`` is supplied and an in-flight (PENDING or
+        PROCESSING) task already exists with the same key, that task's id is
+        returned instead of creating a new one. This dedupes double-submits
+        (network retry, double-click) per ADR-0003. A task that has reached a
+        terminal state (COMPLETED/FAILED) with the same key does NOT block a
+        fresh submission — the caller is explicitly re-running.
+        """
+        # Idempotency dedup: look for a matching in-flight task first.
+        if idempotency_key:
+            with self._task_lock:
+                for existing in self._tasks.values():
+                    if (
+                        existing.idempotency_key == idempotency_key
+                        and existing.status
+                        in (TaskStatus.PENDING, TaskStatus.PROCESSING)
+                    ):
+                        return existing.task_id
+
         task_id = task_id or str(uuid.uuid4())
         now = datetime.now()
-        
+
         task = Task(
             task_id=task_id,
             task_type=task_type,
             status=TaskStatus.PENDING,
             created_at=now,
             updated_at=now,
-            metadata=metadata or {}
+            metadata=metadata or {},
+            idempotency_key=idempotency_key,
         )
-        
+
         with self._task_lock:
             self._tasks[task_id] = task
         self._save_to_redis(task)
-        
+
         return task_id
+
+    def find_in_flight_by_idempotency_key(
+        self, idempotency_key: str
+    ) -> Optional[str]:
+        """Return the task_id of an in-flight (PENDING/PROCESSING) task carrying
+        ``idempotency_key``, or None.
+
+        Used by route handlers to decide whether a submission is a duplicate
+        of one already running, so they can skip enqueueing a second worker
+        job (ADR-0003 idempotency keys). Only the process-local dict is
+        consulted; cross-process dedup relies on the shared Redis snapshot
+        that ``_save_to_redis`` writes, which a sibling worker's TaskManager
+        loads on ``get_task``.
+        """
+        if not idempotency_key:
+            return None
+        with self._task_lock:
+            for task in self._tasks.values():
+                if (
+                    task.idempotency_key == idempotency_key
+                    and task.status
+                    in (TaskStatus.PENDING, TaskStatus.PROCESSING)
+                ):
+                    return task.task_id
+        return None
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """Get task from Redis, memory, or Celery backend."""

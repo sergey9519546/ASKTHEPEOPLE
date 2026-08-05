@@ -267,40 +267,51 @@ def prepare_simulation():
             logger.warning(f"Failed to synchronously get entity count (will retry in background task): {e}")
             # Failure does not affect subsequent steps as the background task will retry
         
-        # Create background task
+        # Create background task. An optional Idempotency-Key header dedupes
+        # double-submits (network retry, double-click): if a prepare task for
+        # this key is already in flight, its existing task_id is returned and
+        # no second task is enqueued (ADR-0003 idempotency keys).
+        idempotency_key = request.headers.get("Idempotency-Key") or None
         task_manager = TaskManager()
-        task_id = task_manager.create_task(
+
+        # If a prepare for this key is already in flight, hand back that
+        # task_id and skip enqueueing a duplicate worker job.
+        already_in_flight_task_id = None
+        if idempotency_key:
+            already_in_flight_task_id = task_manager.find_in_flight_by_idempotency_key(
+                idempotency_key
+            )
+
+        task_id = already_in_flight_task_id or task_manager.create_task(
             task_type="simulation_prepare",
             metadata={
                 "simulation_id": simulation_id,
                 "project_id": state.project_id
-            }
+            },
+            idempotency_key=idempotency_key,
         )
-        
+
         # Update simulation state (including pre-fetched entity count)
         state.status = SimulationStatus.PREPARING
         manager._save_simulation_state(state)
 
-        # P0 daemon-thread fix (audit §5 P0). The route enqueues work to
-        # a Celery worker and returns 202 Accepted. The route no longer
-        # creates a `threading.Thread(..., daemon=True)`; the work
-        # runs in a worker process that can survive a web restart.
-        # Full durable workflow (idempotency keys, leases, fencing
-        # tokens, heartbeats, cancellation, retry classification)
-        # lands with gate 2 in adr/ADR-0003-durable-run-orchestration.md.
-        from ...tasks.simulation_tasks import prepare_simulation_task
+        # Only enqueue the worker job for a genuinely new task. A deduped
+        # (already-in-flight) submission returns the existing task_id and
+        # does not start a second preparation run.
+        if not already_in_flight_task_id:
+            from ...tasks.simulation_tasks import prepare_simulation_task
 
-        prepare_simulation_task.delay(
-            simulation_id=simulation_id,
-            task_id=task_id,
-            entity_types=entity_types_list,
-            use_llm_for_profiles=use_llm_for_profiles,
-            parallel_profile_count=parallel_profile_count,
-            use_archetypes=use_archetypes,
-            archetype_count=archetype_count,
-            expansion_factor=expansion_factor,
-            document_text=document_text,
-        )
+            prepare_simulation_task.delay(
+                simulation_id=simulation_id,
+                task_id=task_id,
+                entity_types=entity_types_list,
+                use_llm_for_profiles=use_llm_for_profiles,
+                parallel_profile_count=parallel_profile_count,
+                use_archetypes=use_archetypes,
+                archetype_count=archetype_count,
+                expansion_factor=expansion_factor,
+                document_text=document_text,
+            )
 
         response = jsonify({
             "success": True,

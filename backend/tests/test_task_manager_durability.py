@@ -449,3 +449,57 @@ def test_cleanup_old_tasks_beat_schedule_registered():
     assert entry["schedule"] == 3600.0
     assert entry["kwargs"]["max_age_hours"] == 24
 
+
+def test_idempotency_key_dedupes_in_flight_submissions():
+    """A second create_task with the same idempotency_key while the first is
+    still in flight returns the first task's id — no duplicate task created
+    (ADR-0003)."""
+    manager = TaskManager()
+    manager._tasks.clear()
+
+    first = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-1",
+    )
+    # Still in flight (PENDING): second submission with the same key dedupes.
+    second = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-1",
+    )
+    assert second == first
+    # Only one task record exists.
+    assert len(manager._tasks) == 1
+
+    # find_in_flight_by_idempotency_key surfaces the same id.
+    found = manager.find_in_flight_by_idempotency_key("client-key-1")
+    assert found == first
+
+
+def test_idempotency_key_allows_resubmit_after_terminal():
+    """A task that reached COMPLETED does not block a fresh submission with
+    the same key — the caller is explicitly re-running."""
+    manager = TaskManager()
+    manager._tasks.clear()
+
+    first = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-2",
+    )
+    manager._tasks[first].status = TaskStatus.COMPLETED
+
+    second = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-2",
+    )
+    assert second != first
+    assert len(manager._tasks) == 2
+
+
+def test_find_in_flight_returns_none_for_unknown_or_missing_key():
+    manager = TaskManager()
+    manager._tasks.clear()
+    assert manager.find_in_flight_by_idempotency_key("nope") is None
+    assert manager.find_in_flight_by_idempotency_key("") is None
+    assert manager.find_in_flight_by_idempotency_key(None) is None
+
+
