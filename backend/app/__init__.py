@@ -166,11 +166,16 @@ def create_app(config_class=Config):
         if should_log_startup:
             logger.info(f"Database initialized: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local SQLite'}")
     except Exception as db_error:
-        # Fail closed only when an explicit DATABASE_URL was set but is unreachable.
-        # Missing DATABASE_URL means SQLite/filesystem fallback is intended.
+        # Fail closed when an explicit DATABASE_URL was set but is unreachable
+        # in production. Production is determined by Config.DEBUG (the same
+        # signal the rest of the security config uses), NOT by a
+        # Railway-specific env var — otherwise a misconfigured DATABASE_URL on
+        # any other platform (Render, Fly, AWS, container) would silently fall
+        # back to filesystem in production (exec-plan 08 Fix 3). Missing
+        # DATABASE_URL means SQLite/filesystem fallback is intended.
         is_production_db_failure = (
             app.config.get('DATABASE_URL')  # was explicitly configured
-            and os.environ.get('RAILWAY_ENVIRONMENT') == 'production'  # in production
+            and not Config.DEBUG  # production mode (FLASK_DEBUG != true)
         )
         if is_production_db_failure:
             logger.critical(
