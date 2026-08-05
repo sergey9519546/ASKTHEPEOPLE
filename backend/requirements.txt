@@ -3,11 +3,26 @@
 # ===========================================
 # Python 3.11+ required
 # Install: pip install -r requirements.txt
+# 
+# NOTE: This file is auto-generated from pyproject.toml.
+# For the complete dependency list including database, task queue,
+# and security packages, see backend/pyproject.toml
 # ===========================================
 
 # ============= Core Framework =============
 flask>=3.0.0
 flask-cors>=6.0.0
+flask-limiter>=3.5.0
+flask-sock>=0.7.0
+
+# ============= Background Tasks & Caching =============
+celery>=5.3.0
+redis>=5.0.0
+
+# ============= Database =============
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+psycopg[binary]>=3.2.0
 
 # ============= LLM =============
 # OpenAI SDK (unified OpenAI-compatible LLM calls)
@@ -23,9 +38,14 @@ camel-ai==0.2.78
 
 # ============= File Processing =============
 PyMuPDF>=1.24.0
+fpdf2>=2.7.9
 # Encoding detection (supports non-UTF-8 text files)
 charset-normalizer>=3.0.0
 chardet>=5.0.0
+
+# ============= Data & Graph Analysis =============
+pandas>=1.5.0
+networkx>=3.0
 
 # ============= Utilities =============
 # Environment variable loading
@@ -33,3 +53,9 @@ python-dotenv>=1.0.0
 
 # Data validation
 pydantic>=2.0.0
+
+# Production server
+gunicorn>=25.1.0
+
+# Error tracking
+sentry-sdk[flask]>=1.40.0

@@ -1,71 +1,39 @@
-# OS
-.DS_Store
-Thumbs.db
-
-# 环境变量（保护敏感信息）
-.env
-.env.local
-.env.*.local
-.env.development
-.env.test
-.env.production
-
-# Python
+```
+# Python cache files
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables
+.env
+
+# Database files
+*.db
+
+# Log files
+*.log
+logs/
+
+# Uploads and test results
+uploads/
+backend/tests/evals/results.json
+
+# Dependencies (if any virtual environments exist)
 .venv/
 venv/
-ENV/
-.eggs/
-*.egg-info/
-dist/
-build/
+env/
 
-# Node.js
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# IDE
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# 测试
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Test cache
 .pytest_cache/
-.coverage
-htmlcov/
-
-# Cursor
-.cursor/
-.claude/
-
-# Agent / IDE tooling state
-.agents/
-
-# Playwright CLI run artifacts
-.playwright-cli/
-**/.playwright-cli/
-output/
-
-# 文档与测试程序
-mydoc/
-mytest/
-
-# 日志文件
-backend/logs/
-*.log
-
-# 上传文件
-backend/uploads/
-
-# Docker 数据
-data/
-
-# SQLite databases
-*.db
+```

@@ -101,10 +101,12 @@ class TestExportDisclosures:
     
     def test_csv_export_has_disclosure_columns(self):
         """Test that CSV exports include disclosure metadata columns"""
-        from app.services.export_service import CSVExporter, ZepToolsService
+        from app.services.export_service import CSVExporter
+        from unittest.mock import Mock
         
         # Create a minimal CSV export
-        exporter = CSVExporter(ZepToolsService())
+        mock_zep_service = Mock()
+        exporter = CSVExporter(mock_zep_service)
         
         # Test with empty results
         csv_output = exporter.export_survey_results([])

@@ -1,0 +1,1429 @@
+Refused to fetch URL: Refusing to fetch a link-local address (cloud instance metadata range)
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+Created project: proj_a92aa8c8e1a0
+Refused to fetch URL: Refusing to fetch a link-local address (cloud instance metadata range)
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+Created project: proj_877a0e7a19d5
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+Created project: proj_b51dae652ba1
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Starting ontology generation task ===
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+=== Started building graph ===
+Configuration error: ['ZEP_API_KEY not configured']
+Redis configured but unreachable; task state is process-local until it recovers (retrying in 30s): Error 111 connecting to localhost:6379. Connection refused.
+Celery task run_simulation_task started: task_id=62edce58-440e-4e25-9f9f-64b40b94d38b, simulation_id=sim_test_202, platform=parallel
+Celery task run_simulation_task started: task_id=task_test_uuid_123, simulation_id=sim_task_test, platform=parallel
+Start processing /prepare request: simulation_id=sim_test_prepare, force_regenerate=False
+Simulation sim_test_prepare Preparation not complete, starting preparation task
+Failed to synchronously get entity count (will retry in background task): 'types.SimpleNamespace' object has no attribute 'graph_id'
+Span-verified 1/5 traits for Chair (openness)
+No trait survived span verification for Chair; neutral defaults retained
+Span-verified 1/5 traits for Chair (openness)
+No trait survived span verification for Chair; neutral defaults retained
+Span-verified 1/5 traits for Chair (openness)
+Span-verified 1/5 traits for Chair (openness)
+Trait inference model call failed for Chair: upstream 503
+Trait inference model call failed for Chair: llm_client exposes no known call method
+Span-verified 5/5 traits for Chair (agreeableness, conscientiousness, extraversion, neuroticism, openness)
+Span-verified 1/5 traits for Chair (openness)
+Span-verified 1/5 traits for Chair (openness)
+Span-verified 1/5 traits for Chair (openness)
+Trait inference model call failed for Chair: upstream 503
+Attached 1 span-verified trait(s) to Programme Lead: openness
+Trait inference skipped for Programme Lead: provider down
+Trait inference skipped for Programme Lead: simulated missing module
+Trait inference skipped for Programme Lead: bad
+Span-verified 1/5 traits for Programme Lead (openness)
+Attached 1 span-verified trait(s) to Programme Lead: openness
+No trait survived span verification for Programme Lead; neutral defaults retained
+Span-verified 1/5 traits for Programme Lead (extraversion)
+Attached 1 span-verified trait(s) to Programme Lead: extraversion
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 1 (basis=source_derived_trait_projection)
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 1 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 2 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 3 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 4 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 5 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 6 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 7 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 8 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 9 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 10 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 11 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 12 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 13 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 14 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 15 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 16 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 17 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 18 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 19 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 20 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 21 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 22 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 23 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 24 (basis=source_derived_trait_projection)
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 1 (basis=source_derived_trait_projection)
+Applied source-derived trait projection to synthetic profile 2 (basis=source_derived_trait_projection)
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Agent config batch LLM generation failed: LLM disabled in test, using rule-based generation
+Applied source-derived trait projection to synthetic profile 0 (basis=source_derived_trait_projection)
+Persona framing skipped for agent 0; raw persona used: projection unavailable
+Diffusion classification applied: EARLY_ADOPTER=5, EARLY_MAJORITY=14, INNOVATOR=1, LAGGARD=6, LATE_MAJORITY=14
+Diffusion classification applied: EARLY_ADOPTER=5, EARLY_MAJORITY=14, INNOVATOR=1, LAGGARD=6, LATE_MAJORITY=14
+Diffusion classification applied: EARLY_ADOPTER=5, EARLY_MAJORITY=14, INNOVATOR=1, LAGGARD=6, LATE_MAJORITY=14
+Diffusion classification applied: EARLY_ADOPTER=3, EARLY_MAJORITY=7, LAGGARD=3, LATE_MAJORITY=7
+Diffusion classification applied: EARLY_ADOPTER=3, EARLY_MAJORITY=7, LAGGARD=3, LATE_MAJORITY=7
+Diffusion classification skipped: 0 distinct trait vector(s) across 2 agents is not rankable; neutral defaults retained
+Diffusion classification skipped: 0 distinct trait vector(s) across 20 agents is not rankable; neutral defaults retained
+Diffusion classification skipped: 0 distinct trait vector(s) across 20 agents is not rankable; neutral defaults retained
+Diffusion classification skipped: 1 distinct trait vector(s) across 20 agents is not rankable; neutral defaults retained
+Diffusion classification skipped (leaves configs unchanged): module unavailable
+Diffusion classification skipped (leaves configs unchanged): boom
+Diffusion classification applied: EARLY_ADOPTER=3, EARLY_MAJORITY=7, LAGGARD=3, LATE_MAJORITY=7
+Diffusion classification applied: EARLY_ADOPTER=3, EARLY_MAJORITY=7, LAGGARD=3, LATE_MAJORITY=7
+Profile 1 failed validation: Profile contains stereotypical content: 'naturally emotional woman'
+Profile set failed diversity check: Duplicate persona detected (profiles 0 and 1)
+Repeated node cursor, stopping pagination at 4 nodes
+Edge count reached limit (3), stopping pagination for graph graph
+Start processing /prepare request: simulation_id=sim-1, force_regenerate=False
+Simulation sim-1 Preparation not complete, starting preparation task
+Synchronously get entity count: graph_id=source-graph
+=== Starting ontology generation task ===
+Created project: proj_bdc8abd867f6
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 4 leading reasoning line(s) from generated section text
+Stripped 1 leading reasoning line(s) from generated section text
+Stripped 2 leading reasoning line(s) from generated section text
+Stripped 2 leading reasoning line(s) from generated section text
+Cleaning up all simulation processes...
+Stopped all graph memory updaters
+Simulation process cleanup completed
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_report_123/outline.json
+Section saved: test_report_123/section_01.md
+Section saved: test_report_123/section_02.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_report_123
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: report_123456789012/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: report_123456789012
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_no_callback/outline.json
+Section saved: test_no_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_no_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_empty_outline/outline.json
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_empty_outline
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Outline saved to file: test_callback/outline.json
+Section saved: test_callback/section_01.md
+Skipping report evidence generation, simulation directory does not exist: /workspace/backend/uploads/simulations/test_sim
+Report generation complete: test_callback
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Report generation failed: API Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning failed: LLM Error
+ReportAgent initialized: graph_id=test_graph, simulation_id=test_sim
+Starting report outline planning...
+Outline planning complete: 5 sections
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Zep Graph Search (graph=test_graph) after 1 attempts and still failed: API Error
+Zep Search API failed, falling back to local search: API Error
+ZepToolsService initialization complete
+Graph search requested: graph_id=test_graph, query_characters=10
+Search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 2 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 1 facts, 1 entities, 1 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=10)
+Generated 1 sub-queries
+InsightForge completed: Found 2 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Failed to generate sub-queries: API Error, using fallback
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 0 sub-queries
+InsightForge completed: Found 1 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+InsightForge retrieval requested (query_characters=4)
+Generated 1 sub-queries
+InsightForge completed: Found 3 facts, 0 entities, 0 relationships
+ZepToolsService initialization complete
+Using local search (query_characters=10)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=14)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=15)
+Local search completed: Found 2 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search completed: Found 3 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=0)
+Local search completed: Found 0 relevant facts
+Using local search (query_characters=14)
+Local search completed: Found 0 relevant facts
+ZepToolsService initialization complete
+Using local search (query_characters=4)
+Local search failed: Database error
+==================================================
+ASKTHEPEOPLE Backend starting...
+==================================================
+Database initialized: local SQLite
+Simulation process cleanup function registered
+ASKTHEPEOPLE Backend started successfully

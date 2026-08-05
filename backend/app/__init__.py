@@ -161,12 +161,20 @@ def create_app(config_class=Config):
     # Fail-closed only when DATABASE_URL is explicitly configured but unreachable.
     # No DATABASE_URL = intentional SQLite / filesystem mode (valid for current Railway setup).
     try:
-        from .db import get_engine, init_db
+        from .db import get_engine, init_db, init_session_factory, close_db_session
         database_url = app.config.get('DATABASE_URL')
         engine = get_engine(database_url)
         init_db(engine)
+        # Initialize scoped session factory for thread-safe database access
+        init_session_factory(engine)
         if should_log_startup:
             logger.info(f"Database initialized: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local SQLite'}")
+        
+        # Register teardown handler to clean up database sessions
+        @app.teardown_appcontext
+        def shutdown_session(exception=None):
+            close_db_session(exception)
+            
     except Exception as db_error:
         # Fail closed only when an explicit DATABASE_URL was set but is unreachable.
         # Missing DATABASE_URL means SQLite/filesystem fallback is intended.

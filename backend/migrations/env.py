@@ -10,15 +10,17 @@ from alembic import context
 # Add parent directory to path to import app modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import the Base and all models
-from app.db.models import Base
+# Import the Base and all models - using the updated schema
+from app.db.schema import Base
 # Import all models to ensure they're registered with Base
-from app.db.models.project import ProjectDB
-from app.db.models.source import SourceDB
-from app.db.models.ontology import OntologyDB
-from app.db.models.graph import GraphDB
-from app.db.models.simulation import SimulationDB
-from app.db.models.report import ReportDB
+from app.db.schema import (
+    Project,
+    Graph,
+    Ontology,
+    Simulation,
+    Source,
+    Report,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

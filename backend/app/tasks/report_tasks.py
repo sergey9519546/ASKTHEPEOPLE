@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any
 from ..celery_app import celery_app
 from ..models.task import TaskManager, TaskStatus
 from ..services.report_agent import ReportAgent
+from ..services.report_generation_coordinator import report_generation_coordinator
 from ..utils.logger import get_logger
 
 logger = get_logger('askthepeople.tasks.report_tasks')
@@ -48,16 +49,36 @@ def generate_report_task(
         if not project:
             raise ValueError(f"Project {simulation.project_id} not found")
         
-        agent = ReportAgent(
-            graph_id=project.graph_id,
+        # Acquire a generation lease for cooperative cancellation and write locking
+        lease, existing_lease = report_generation_coordinator.acquire(
             simulation_id=simulation_id,
-            simulation_requirement=project.decision_text or "Analyze the simulation outcomes"
-        )
-
-        report_result = agent.generate_report(
             report_id=report_id,
-            generation_lease=None  # FIXME: lease should come from coordinator, not None
         )
+        if lease is None:
+            other_task = existing_lease.task_id or "unknown"
+            raise RuntimeError(
+                f"Report generation already in progress for simulation {simulation_id} "
+                f"(task {other_task}). Wait for it to complete or cancel it first."
+            )
+        
+        # Attach task_id to the lease for tracking
+        if effective_task_id:
+            lease.task_id = effective_task_id
+
+        try:
+            agent = ReportAgent(
+                graph_id=project.graph_id,
+                simulation_id=simulation_id,
+                simulation_requirement=project.decision_text or "Analyze the simulation outcomes"
+            )
+
+            report_result = agent.generate_report(
+                report_id=report_id,
+                generation_lease=lease
+            )
+        finally:
+            # Always release the lease when done (success or failure)
+            report_generation_coordinator.release(lease)
 
         if effective_task_id:
             task_manager.complete_task(

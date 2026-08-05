@@ -227,10 +227,47 @@ try:
         generate_reddit_agent_graph
     )
     from app.services.network_topology import apply_network_topology, apply_homophily_rewiring
+    CAMEL_OASIS_AVAILABLE = True
 except ImportError as e:
-    print(f"Error: Missing dependency {e}")
-    print("Please install: pip install oasis-ai camel-ai")
-    sys.exit(1)
+    print(f"Note: OASIS/CAMEL not installed ({e}). Simulation features disabled.")
+    print("Install with: pip install oasis-ai camel-ai")
+    CAMEL_OASIS_AVAILABLE = False
+    # Define stubs to prevent NameError in tests
+    class ActionType:
+        CREATE_POST = 'CREATE_POST'
+        LIKE_POST = 'LIKE_POST'
+        REPOST = 'REPOST'
+        FOLLOW = 'FOLLOW'
+        DO_NOTHING = 'DO_NOTHING'
+        QUOTE_POST = 'QUOTE_POST'
+        DISLIKE_POST = 'DISLIKE_POST'
+        CREATE_COMMENT = 'CREATE_COMMENT'
+        LIKE_COMMENT = 'LIKE_COMMENT'
+        DISLIKE_COMMENT = 'DISLIKE_COMMENT'
+        SEARCH_POSTS = 'SEARCH_POSTS'
+        SEARCH_USER = 'SEARCH_USER'
+        TREND = 'TREND'
+        REFRESH = 'REFRESH'
+        MUTE = 'MUTE'
+        INTERVIEW = 'INTERVIEW'
+    
+    class LLMAction:
+        pass
+    
+    class ManualAction:
+        pass
+    
+    def generate_twitter_agent_graph(*args, **kwargs):
+        raise RuntimeError("OASIS not installed")
+    
+    def generate_reddit_agent_graph(*args, **kwargs):
+        raise RuntimeError("OASIS not installed")
+    
+    def apply_network_topology(*args, **kwargs):
+        raise RuntimeError("OASIS not installed")
+    
+    def apply_homophily_rewiring(*args, **kwargs):
+        raise RuntimeError("OASIS not installed")
 
 
 # Available Twitter actions (excluding INTERVIEW, which is triggered manually via ManualAction)

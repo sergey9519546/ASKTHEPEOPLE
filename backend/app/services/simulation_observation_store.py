@@ -1,5 +1,15 @@
 """
 Observation store builder for simulation artifacts.
+
+SCALABILITY NOTE: The in-memory event queues (_IN_MEMORY_EVENT_QUEUES) are a
+fallback mechanism for single-worker deployments. In multi-worker setups with
+Redis/Celery, events should be persisted to the SQLite observation DB or Redis
+to survive worker restarts and enable cross-worker visibility.
+
+For production scaling beyond 1 web worker:
+- Events are written to SQLite observation DB (per simulation)
+- Consider migrating to Redis-backed event stream for high-throughput scenarios
+- See docs/deployment/CHECKLIST.md for scaling guidance
 """
 
 from __future__ import annotations
@@ -16,7 +26,16 @@ _EVENT_QUEUE_LOCK = threading.Lock()
 
 
 def push_in_memory_event(simulation_id: str, event_data: Dict[str, Any]) -> None:
-    """Push an injected event to the in-memory fallback event queue for simulation_id."""
+    """Push an injected event to the in-memory fallback event queue for simulation_id.
+    
+    WARNING: This is a single-worker fallback. Events stored here will be lost on:
+    - Worker restart
+    - Worker crash
+    - Horizontal scaling (other workers cannot access this memory)
+    
+    For production use, ensure events are also persisted to the SQLite observation
+    DB via sync_observation_store() or migrate to Redis-backed event streaming.
+    """
     with _EVENT_QUEUE_LOCK:
         if simulation_id not in _IN_MEMORY_EVENT_QUEUES:
             _IN_MEMORY_EVENT_QUEUES[simulation_id] = []
@@ -24,7 +43,11 @@ def push_in_memory_event(simulation_id: str, event_data: Dict[str, Any]) -> None
 
 
 def pop_in_memory_events(simulation_id: str) -> List[Dict[str, Any]]:
-    """Pop and return all pending in-memory injected events for simulation_id."""
+    """Pop and return all pending in-memory injected events for simulation_id.
+    
+    WARNING: Same limitations as push_in_memory_event(). This is a best-effort
+    retrieval mechanism for single-worker development environments.
+    """
     with _EVENT_QUEUE_LOCK:
         return _IN_MEMORY_EVENT_QUEUES.pop(simulation_id, [])
 

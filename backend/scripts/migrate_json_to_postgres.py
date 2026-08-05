@@ -21,9 +21,8 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.config import Config
-from app.db.database import init_db, get_db_session
-from app.db.models.project import ProjectDB
-from app.db.models.source import SourceDB
+from app.db import init_db, get_db_session
+from app.db.schema import Project as ProjectDB, Source as SourceDB
 from app.models.project import ProjectManager, Project
 
 
