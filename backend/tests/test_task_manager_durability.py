@@ -411,3 +411,95 @@ def test_round_trip_through_redis_preserves_fields(redis_manager):
     assert reloaded.metadata == {"simulation_id": "sim_1"}
     assert reloaded.progress_detail == {"stage": "profiles"}
     assert reloaded.progress == 33
+
+
+def test_cleanup_old_tasks_returns_retired_count():
+    """cleanup_old_tasks reports how many finished tasks it retired, so the
+    periodic beat job can log a meaningful number (ADR-0003 durable cleanup)."""
+    from datetime import datetime, timedelta
+
+    manager = TaskManager()
+    manager._tasks.clear()
+
+    # One stale completed task (older than the cutoff) and one fresh one.
+    stale = manager.create_task("old")
+    manager._tasks[stale].status = TaskStatus.COMPLETED
+    manager._tasks[stale].created_at = datetime.now() - timedelta(hours=48)
+
+    fresh = manager.create_task("fresh")
+    manager._tasks[fresh].status = TaskStatus.COMPLETED
+
+    removed = manager.cleanup_old_tasks(max_age_hours=24)
+    assert removed == 1
+    assert stale not in manager._tasks
+    assert fresh in manager._tasks
+
+
+def test_cleanup_old_tasks_beat_schedule_registered():
+    """The stale-task cleanup runs as a Celery beat job, not a daemon thread.
+    The beat schedule must be registered on the celery app so `celery beat`
+    actually fires it (ADR-0003)."""
+    from app.celery_app import celery_app
+
+    schedule = celery_app.conf.beat_schedule
+    assert "cleanup-old-stale-tasks" in schedule
+    entry = schedule["cleanup-old-stale-tasks"]
+    assert entry["task"] == "tasks.cleanup_old_tasks"
+    # Hourly cadence matches the former daemon-thread interval.
+    assert entry["schedule"] == 3600.0
+    assert entry["kwargs"]["max_age_hours"] == 24
+
+
+def test_idempotency_key_dedupes_in_flight_submissions():
+    """A second create_task with the same idempotency_key while the first is
+    still in flight returns the first task's id — no duplicate task created
+    (ADR-0003)."""
+    manager = TaskManager()
+    manager._tasks.clear()
+
+    first = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-1",
+    )
+    # Still in flight (PENDING): second submission with the same key dedupes.
+    second = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-1",
+    )
+    assert second == first
+    # Only one task record exists.
+    assert len(manager._tasks) == 1
+
+    # find_in_flight_by_idempotency_key surfaces the same id.
+    found = manager.find_in_flight_by_idempotency_key("client-key-1")
+    assert found == first
+
+
+def test_idempotency_key_allows_resubmit_after_terminal():
+    """A task that reached COMPLETED does not block a fresh submission with
+    the same key — the caller is explicitly re-running."""
+    manager = TaskManager()
+    manager._tasks.clear()
+
+    first = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-2",
+    )
+    manager._tasks[first].status = TaskStatus.COMPLETED
+
+    second = manager.create_task(
+        "simulation_prepare",
+        idempotency_key="client-key-2",
+    )
+    assert second != first
+    assert len(manager._tasks) == 2
+
+
+def test_find_in_flight_returns_none_for_unknown_or_missing_key():
+    manager = TaskManager()
+    manager._tasks.clear()
+    assert manager.find_in_flight_by_idempotency_key("nope") is None
+    assert manager.find_in_flight_by_idempotency_key("") is None
+    assert manager.find_in_flight_by_idempotency_key(None) is None
+
+

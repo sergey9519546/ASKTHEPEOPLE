@@ -779,8 +779,16 @@ def get_simulation_posts(simulation_id: str):
         limit: return count (default 50)
         offset: offset
 
-    Returns post list (read from SQLite database)
+    Returns post list (read from the simulation activity database via the
+    SimulationActivityReader service).
     """
+    from ...services.simulation_activity_reader import (
+        DatabaseCorrupt,
+        DatabaseLocked,
+        DatabaseUnavailable,
+        read_posts,
+    )
+
     try:
         # P0 path-escape fix (audit §5 P0). Parse the platform as a strict
         # enum and resolve to a fixed filename. Never interpolate request
@@ -813,11 +821,9 @@ def get_simulation_posts(simulation_id: str):
 
         sim_dir = _safe_sim_dir(simulation_id)
 
-        # Fixed allowlist, not interpolation.
-        db_file = ALLOWED_PLATFORMS[platform]
-        db_path = os.path.join(sim_dir, db_file)
-
-        if not os.path.exists(db_path):
+        try:
+            posts, total = read_posts(sim_dir, platform, limit, offset)
+        except DatabaseUnavailable:
             return jsonify({
                 "success": True,
                 "data": {
@@ -828,75 +834,10 @@ def get_simulation_posts(simulation_id: str):
                 },
                 "disclosure": synthetic_output_disclosure(),
             })
-
-        import sqlite3
-        # Read-only mode, bounded busy timeout. Distinguishes missing
-        # table, locked database, corrupt database, and query timeout
-        # (audit §5 P0 required correction).
-        db_uri = f"file:{db_path}?mode=ro"
-        try:
-            conn = sqlite3.connect(db_uri, uri=True, timeout=5.0)
-        except sqlite3.OperationalError as exc:
-            msg = str(exc).lower()
-            if "unable to open" in msg or "no such file" in msg:
-                return jsonify({
-                    "success": True,
-                    "data": {
-                        "platform": platform,
-                        "count": 0,
-                        "posts": [],
-                        "message": "Database does not exist, simulation may not have run yet"
-                    },
-                    "disclosure": synthetic_output_disclosure(),
-                })
-            if "database disk image is malformed" in msg:
-                logger.error("Posts sqlite is corrupt: %s", db_path)
-                return jsonify({"success": False, "error": "database_corrupt"}), 500
-            return jsonify({
-                "success": False,
-                "error": "database_unavailable",
-                "detail": str(exc),
-            }), 500
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        try:
-            try:
-                cursor.execute("""
-                    SELECT * FROM post
-                    ORDER BY created_at DESC
-                    LIMIT ? OFFSET ?
-                """, (limit, offset))
-
-                posts = [dict(row) for row in cursor.fetchall()]
-
-                cursor.execute("SELECT COUNT(*) FROM post")
-                total = cursor.fetchone()[0]
-            except sqlite3.OperationalError as exc:
-                msg = str(exc).lower()
-                if "no such table" in msg:
-                    # Missing table is not an error; the simulation may
-                    # not have produced any posts yet.
-                    posts = []
-                    total = 0
-                elif "database is locked" in msg:
-                    conn.close()
-                    return jsonify({"success": False, "error": "database_locked"}), 423
-                elif "database disk image is malformed" in msg:
-                    conn.close()
-                    return jsonify({"success": False, "error": "database_corrupt"}), 500
-                else:
-                    conn.close()
-                    return jsonify({
-                        "success": False,
-                        "error": "database_query_failed",
-                        "detail": str(exc),
-                    }), 500
-        finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
+        except DatabaseLocked:
+            return jsonify({"success": False, "error": "database_locked"}), 423
+        except DatabaseCorrupt:
+            return jsonify({"success": False, "error": "database_corrupt"}), 500
 
         return jsonify({
             "success": True,
@@ -930,6 +871,13 @@ def get_simulation_comments(simulation_id: str):
         limit: Return quantity
         offset: Offset
     """
+    from ...services.simulation_activity_reader import (
+        DatabaseCorrupt,
+        DatabaseLocked,
+        DatabaseUnavailable,
+        read_comments,
+    )
+
     try:
         post_id = request.args.get('post_id')
         limit = request.args.get('limit', 50, type=int)
@@ -937,44 +885,14 @@ def get_simulation_comments(simulation_id: str):
 
         sim_dir = _safe_sim_dir(simulation_id)
 
-        db_path = os.path.join(sim_dir, "reddit_simulation.db")
-
-        if not os.path.exists(db_path):
-            return jsonify({
-                "success": True,
-                "data": {
-                    "count": 0,
-                    "comments": []
-                },
-                "disclosure": synthetic_output_disclosure(),
-            })
-
-        import sqlite3
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
         try:
-            if post_id:
-                cursor.execute("""
-                    SELECT * FROM comment
-                    WHERE post_id = ?
-                    ORDER BY created_at DESC
-                    LIMIT ? OFFSET ?
-                """, (post_id, limit, offset))
-            else:
-                cursor.execute("""
-                    SELECT * FROM comment
-                    ORDER BY created_at DESC
-                    LIMIT ? OFFSET ?
-                """, (limit, offset))
-
-            comments = [dict(row) for row in cursor.fetchall()]
-
-        except sqlite3.OperationalError:
+            comments = read_comments(sim_dir, limit, offset, post_id=post_id)
+        except DatabaseUnavailable:
             comments = []
-
-        conn.close()
+        except DatabaseLocked:
+            return jsonify({"success": False, "error": "database_locked"}), 423
+        except DatabaseCorrupt:
+            return jsonify({"success": False, "error": "database_corrupt"}), 500
 
         return jsonify({
             "success": True,
