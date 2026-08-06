@@ -2,6 +2,8 @@
 
 import json
 import os
+
+import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -422,3 +424,119 @@ def test_running_saved_run_summary_resumes_run_without_report(monkeypatch):
     assert summary["report_id"] is None
     assert summary["workflow_step"] == 3
     assert summary["resume_target"] == "run"
+
+
+# --------------------------------------------------------------------------- #
+# P1 state-semantics regression: stop and close-env must persist a status that
+# agrees with the runner result (audit §5 P1 "Contradictory lifecycle
+# semantics"). The bugs: /stop set PAUSED while the runner reported STOPPED;
+# /close-env set COMPLETED even when the close failed.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def execution_client(monkeypatch):
+    """Minimal Flask app exposing the execution routes, with auth disabled."""
+    from app import create_app
+    from app.config import Config
+
+    monkeypatch.setattr(Config, "LLM_API_KEY", "test-key")
+    monkeypatch.setattr(Config, "APP_TOKEN", "test-app-token-32-characters-long")
+    app = create_app()
+    app.config.update(TESTING=True, APP_TOKEN=None)
+    return app.test_client()
+
+
+def _persisted_state_factory(status):
+    """A mutable stand-in for a SimulationState that the route can mutate + save."""
+    return SimpleNamespace(status=status)
+
+
+def test_stop_route_persists_stopped_not_paused(execution_client, monkeypatch):
+    """/stop must persist SimulationStatus.STOPPED when the runner reports
+    STOPPED — not PAUSED (audit P1). Regression: the old code set PAUSED."""
+    from app.services.simulation_manager import SimulationManager, SimulationStatus
+    from app.services.simulation_runner import RunnerStatus
+
+    stopped_run_state = SimpleNamespace(
+        runner_status=RunnerStatus.STOPPED,
+        to_dict=lambda: {"runner_status": "stopped"},
+    )
+    monkeypatch.setattr(
+        execution_routes.SimulationRunner,
+        "stop_simulation",
+        lambda simulation_id: stopped_run_state,
+    )
+
+    persisted = {"status": None}
+    fake_state = _persisted_state_factory(SimulationStatus.RUNNING)
+
+    def fake_save(self, state):
+        persisted["status"] = state.status
+
+    monkeypatch.setattr(SimulationManager, "get_simulation", lambda self, sid: fake_state)
+    monkeypatch.setattr(SimulationManager, "_save_simulation_state", fake_save)
+
+    resp = execution_client.post(
+        "/api/simulation/stop", json={"simulation_id": "sim_stop_p1"}
+    )
+    assert resp.status_code == 200
+    assert persisted["status"] == SimulationStatus.STOPPED
+    assert persisted["status"] != SimulationStatus.PAUSED
+
+
+def test_close_env_route_does_not_mark_completed_on_failure(execution_client, monkeypatch):
+    """/close-env must NOT set COMPLETED when close_simulation_env reports
+    failure (audit P1). Regression: the old code set COMPLETED unconditionally."""
+    from app.services.simulation_manager import SimulationManager, SimulationStatus
+
+    monkeypatch.setattr(
+        execution_routes.SimulationRunner,
+        "close_simulation_env",
+        lambda simulation_id, timeout: {"success": False, "error": "timeout"},
+    )
+
+    persisted = {"status": None}
+    # The run was STOPPED before the close attempt; a failed close must leave it.
+    fake_state = _persisted_state_factory(SimulationStatus.STOPPED)
+
+    def fake_save(self, state):
+        persisted["status"] = state.status
+
+    monkeypatch.setattr(SimulationManager, "get_simulation", lambda self, sid: fake_state)
+    monkeypatch.setattr(SimulationManager, "_save_simulation_state", fake_save)
+
+    resp = execution_client.post(
+        "/api/simulation/close-env", json={"simulation_id": "sim_close_fail"}
+    )
+    assert resp.status_code == 200
+    # The persisted status was never upgraded to COMPLETED.
+    assert persisted["status"] is None  # save was never called
+    assert fake_state.status == SimulationStatus.STOPPED
+
+
+def test_close_env_route_marks_completed_on_success(execution_client, monkeypatch):
+    """Positive control: a successful close DOES set COMPLETED."""
+    from app.services.simulation_manager import SimulationManager, SimulationStatus
+
+    monkeypatch.setattr(
+        execution_routes.SimulationRunner,
+        "close_simulation_env",
+        lambda simulation_id, timeout: {"success": True},
+    )
+
+    persisted = {"status": None}
+    fake_state = _persisted_state_factory(SimulationStatus.RUNNING)
+
+    def fake_save(self, state):
+        persisted["status"] = state.status
+
+    monkeypatch.setattr(SimulationManager, "get_simulation", lambda self, sid: fake_state)
+    monkeypatch.setattr(SimulationManager, "_save_simulation_state", fake_save)
+
+    resp = execution_client.post(
+        "/api/simulation/close-env", json={"simulation_id": "sim_close_ok"}
+    )
+    assert resp.status_code == 200
+    assert persisted["status"] == SimulationStatus.COMPLETED
+
