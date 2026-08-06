@@ -303,15 +303,17 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
         # Detailed logs
         logger.debug(f"Detect simulation preparation status: {simulation_id}, status={status}, config_generated={config_generated}")
         
-        # If config_generated=True and files exist, consider preparation complete
-        # The following statuses indicate preparation work is complete:
-        # - ready: Preparation complete, ready to run
-        # - preparing: Complete if config_generated=True
-        # - running: Running, preparation obviously complete
-        # - completed: Completed, preparation obviously complete
-        # - stopped: Stopped, preparation obviously complete
-        # - failed: Run failed (but preparation is complete)
-        prepared_statuses = ["ready", "preparing", "running", "completed", "stopped", "interrupted", "failed"]
+        # If config_generated=True and files exist, consider preparation complete.
+        # Audit P1 fix ("Contradictory lifecycle semantics"): the old list
+        # included "failed", which let /start re-launch a simulation whose run
+        # had failed. "failed" means the run broke — it is NOT proof that
+        # preparation is complete and runnable. Only genuinely prepared or
+        # post-run-success statuses qualify. ("preparing" qualifies only with
+        # config_generated=True below, covering the prepare-task-finished-but-
+        # status-unflipped race without the old read-side rewrite.)
+        prepared_statuses = [
+            "ready", "preparing", "running", "completed", "stopped", "interrupted",
+        ]
         preflight_file = os.path.join(simulation_dir, "preflight.json")
         preflight_passed = False
         if os.path.exists(preflight_file):
@@ -330,19 +332,14 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                     profiles_data = json.load(f)
                     profiles_count = len(profiles_data) if isinstance(profiles_data, list) else 0
             
-            # If status is preparing but file complete, auto-update status to ready
-            if status == "preparing":
-                try:
-                    state_data["status"] = "ready"
-                    from datetime import datetime
-                    state_data["updated_at"] = datetime.now().isoformat()
-                    with open(state_file, 'w', encoding='utf-8') as f:
-                        json.dump(state_data, f, ensure_ascii=False, indent=2)
-                    logger.info(f"Automatically update simulation status: {simulation_id} preparing -> ready")
-                    status = "ready"
-                except Exception as e:
-                    logger.warning(f"Failed to automatically update status: {e}")
-            
+            # Audit P1 fix: a status READ must not rewrite canonical state.
+            # The old code mutated state.json from "preparing" -> "ready" as a
+            # side effect of this check, which raced the prepare task writing
+            # the same file and could corrupt it under concurrent access. The
+            # check still returns is_prepared=True for a genuinely-complete-but-
+            # unflipped simulation; flipping the status is the prepare task's
+            # responsibility (SimulationManager.prepare_simulation sets READY).
+
             logger.info(f"Simulation {simulation_id} Detection result: Prepared (status={status}, config_generated={config_generated})")
             return True, {
                 "status": status,

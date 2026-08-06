@@ -323,14 +323,25 @@ Simulation lifecycle — PARTIAL (audit P1 finding)
 Source: [`backend/app/services/simulation_runtime_contract.py`](../../backend/app/services/simulation_runtime_contract.py)
 and the routes in [`backend/app/api/routes/`](../../backend/app/api/routes/).
 The integration audit's P1 finding "Contradictory lifecycle semantics"
-identifies that **stop returns `STOPPED` but the manager state becomes
-`PAUSED`**, the **close route marks the simulation `COMPLETED` even when
-the close result is failure**, the **preparation-check helper treats
-several terminal states as proof that preparation is ready**, and a
-**status read can rewrite `state.json` from `preparing` to `ready`**.
-The full text is in
+identified four contradictions. **Three are now fixed:**
+
+- **stop returns `STOPPED` but the manager state became `PAUSED`** — FIXED:
+  `/stop` maps the runner's terminal status to the persisted status (STOPPED).
+- **the close route marked the simulation `COMPLETED` even when the close
+  result was failure** — FIXED: `/close-env` sets COMPLETED only on success.
+- **the preparation-check helper treated `failed` (and other terminal states)
+  as proof that preparation was ready** — FIXED: `failed` is no longer in
+  `prepared_statuses`; only genuinely-prepared or post-run-success statuses
+  qualify.
+- **a status read rewrote `state.json` from `preparing` to `ready`** — FIXED:
+  `_check_simulation_prepared` no longer mutates canonical state; flipping to
+  READY is the prepare task's responsibility.
+
+The deeper P1 finding — the single conflated `SimulationStatus` enum
+conflating preparation/execution/environment/report/task state — remains
+TARGET; resolving it needs the four independent state machines (gate 2). The
+full audit text is in
 [`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §5 P1](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#5-release-blocking-findings).
-Resolving this finding is gate 1, owned by `askthepeople-architect`.
 
 ### Status of the target state machines
 
