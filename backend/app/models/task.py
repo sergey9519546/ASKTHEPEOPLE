@@ -16,6 +16,13 @@ from dataclasses import dataclass, field
 from ..config import Config
 from ..utils.logger import get_logger
 
+
+def _audit(**kwargs):
+    """Lazy import of audit_log.record_event to avoid a circular import
+    (services/__init__ eagerly imports graph_builder → models.task)."""
+    from ..services.audit_log import record_event
+    record_event(**kwargs)
+
 logger = get_logger('askthepeople.models.task')
 
 try:  # redis is optional: the in-memory path must import cleanly without it.
@@ -312,6 +319,12 @@ class TaskManager:
             self._tasks[task_id] = task
         self._save_to_redis(task)
 
+        _audit(
+            action="task.created",
+            entity_type="task",
+            entity_id=task_id,
+            after={"task_type": task_type, "status": TaskStatus.PENDING.value},
+        )
         return task_id
 
     def find_in_flight_by_idempotency_key(
@@ -441,6 +454,17 @@ class TaskManager:
             self._tasks[task_id] = task
         self._save_to_redis(task)
 
+    def _status_of(self, task_id: str) -> Optional[TaskStatus]:
+        """Best-effort read of a task's current status for audit diffing.
+        Returns None if the task isn't in this process's view."""
+        # Try the process-local dict first (fast path), then Redis.
+        with self._task_lock:
+            task = self._tasks.get(task_id)
+            if task is not None:
+                return task.status
+        loaded = self._load_from_redis(task_id)
+        return loaded.status if loaded is not None else None
+
     @staticmethod
     def _apply(task: Task, changes: Dict[str, Any]) -> None:
         """Write supplied fields onto `task`, refusing to un-finish it."""
@@ -521,6 +545,7 @@ class TaskManager:
     
     def complete_task(self, task_id: str, result: Dict):
         """Mark task as complete"""
+        prior = self._status_of(task_id)
         self.update_task(
             task_id,
             status=TaskStatus.COMPLETED,
@@ -528,7 +553,15 @@ class TaskManager:
             message="Task completed",
             result=result
         )
-    
+        if prior != TaskStatus.COMPLETED:
+            _audit(
+                action="task.completed",
+                entity_type="task",
+                entity_id=task_id,
+                before={"status": prior.value if prior else None},
+                after={"status": TaskStatus.COMPLETED.value},
+            )
+
     def fail_task(
         self,
         task_id: str,
@@ -537,6 +570,7 @@ class TaskManager:
         public_error: str = "task_failed",
     ):
         """Mark task as failed"""
+        prior = self._status_of(task_id)
         self.update_task(
             task_id,
             status=TaskStatus.FAILED,
@@ -544,6 +578,14 @@ class TaskManager:
             error=error,
             public_error=public_error,
         )
+        if prior != TaskStatus.FAILED:
+            _audit(
+                action="task.failed",
+                entity_type="task",
+                entity_id=task_id,
+                before={"status": prior.value if prior else None},
+                after={"status": TaskStatus.FAILED.value, "public_error": public_error},
+            )
     
     def list_tasks(self, task_type: Optional[str] = None) -> list:
         """List tasks from Redis and memory."""
