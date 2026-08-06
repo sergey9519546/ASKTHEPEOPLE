@@ -17,7 +17,7 @@ from ..simulation import (
 )
 from ...config import Config
 from ...services.simulation_manager import SimulationManager, SimulationStatus
-from ...services.simulation_runner import SimulationRunner
+from ...services.simulation_runner import SimulationRunner, RunnerStatus
 from ...services.claim_boundary import synthetic_output_disclosure
 from ...utils.logger import get_logger
 from ...utils.input_policy import (
@@ -340,12 +340,30 @@ def stop_simulation():
             }), 400
         
         run_state = SimulationRunner.stop_simulation(simulation_id)
-        
-        # Update simulation status
+
+        # Audit P1 fix ("Contradictory lifecycle semantics"): the persisted
+        # simulation status MUST agree with the runner status. The old code
+        # set PAUSED here even though the runner reports STOPPED, so the GET
+        # endpoints showed a "paused" simulation that had actually stopped.
+        # Map the runner's terminal status to the persisted SimulationStatus.
+        _RUNNER_TO_SIM_STATUS = {
+            RunnerStatus.STOPPED: SimulationStatus.STOPPED,
+            RunnerStatus.COMPLETED: SimulationStatus.COMPLETED,
+            RunnerStatus.FAILED: SimulationStatus.FAILED,
+            RunnerStatus.INTERRUPTED: SimulationStatus.INTERRUPTED,
+            # If the runner is somehow still mid-transition, an explicit stop
+            # request is a stop: record STOPPED, not PAUSED.
+            RunnerStatus.STOPPING: SimulationStatus.STOPPED,
+            RunnerStatus.RUNNING: SimulationStatus.STOPPED,
+            RunnerStatus.STARTING: SimulationStatus.STOPPED,
+            RunnerStatus.PAUSED: SimulationStatus.PAUSED,
+        }
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
         if state:
-            state.status = SimulationStatus.PAUSED
+            state.status = _RUNNER_TO_SIM_STATUS.get(
+                run_state.runner_status, SimulationStatus.STOPPED
+            )
             manager._save_simulation_state(state)
         
         return jsonify({
@@ -677,11 +695,17 @@ def close_simulation_env():
             simulation_id=simulation_id,
             timeout=timeout
         )
-        
-        # Update simulation status
+
+        # Audit P1 fix ("Contradictory lifecycle semantics"): only mark the
+        # simulation COMPLETED when the close actually succeeded. The old code
+        # set COMPLETED unconditionally, so a failed close looked identical to
+        # a successful one — the GET endpoints reported a "completed" run that
+        # had not in fact closed cleanly. On failure, leave the prior status
+        # (still RUNNING/STOPPED) so the discrepancy is visible; do not
+        # silently upgrade a failure to COMPLETED.
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
-        if state:
+        if state and result.get("success"):
             state.status = SimulationStatus.COMPLETED
             manager._save_simulation_state(state)
         

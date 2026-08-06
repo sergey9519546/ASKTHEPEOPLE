@@ -376,13 +376,23 @@ which is the seed of idempotency. The route layer does not yet pass an
 `Idempotency-Key` header. Tracked in
 [`docs/exec-plans/04-durable-orchestration-and-path-engine.md`](../exec-plans/04-durable-orchestration-and-path-engine.md).
 
-### Stop semantics — PARTIAL (audit P1)
+### Stop semantics — CURRENT (audit P1 fix)
 
-`stop_simulation` in
-[`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py)
-sets the manager state to `PAUSED` even though the runtime is stopped.
-The audit requires that stop and the persisted state agree. The current
-implementation violates this. The fix is gate 1.
+The two P1 contradictions in the stop/close lifecycle are fixed
+([`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py)):
+
+- `/stop` now maps the runner's terminal `RunnerStatus` to the persisted
+  `SimulationStatus`, so an explicit stop records `STOPPED`, not `PAUSED`.
+- `/close-env` now sets `COMPLETED` only when the close actually succeeded;
+  a failed close leaves the prior status visible instead of silently
+  upgrading a failure to `COMPLETED`.
+
+Regression tests pin both (route-level: stop-persists-stopped,
+close-env-no-complete-on-failure, close-env-complete-on-success).
+
+The deeper P1 finding — the single conflated `SimulationStatus` enum
+conflating preparation/execution/environment/report/task state — remains
+TARGET; resolving it needs the four independent state machines (gate 2).
 
 ### Run-stage attempt — TARGET
 
