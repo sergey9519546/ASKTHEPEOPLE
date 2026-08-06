@@ -17,6 +17,13 @@ from ..config import Config
 from ..utils.safe_path import safe_join, SafePathError
 
 
+def _audit(**kwargs):
+    """Lazy import of audit_log.record_event to avoid a circular import
+    (services/__init__ eagerly imports graph_builder → models.task → services)."""
+    from ..services.audit_log import record_event
+    record_event(**kwargs)
+
+
 class ProjectStatus(str, Enum):
     """Project Status"""
     CREATED = "created"              # Newly created, files uploaded
@@ -196,16 +203,50 @@ class ProjectManager:
         
         # Save project metadata
         cls.save_project(project)
-        
+
+        _audit(
+            action="project.created",
+            entity_type="project",
+            entity_id=project_id,
+            after={"name": name, "status": ProjectStatus.CREATED.value},
+        )
         return project
-    
+
     @classmethod
-    def save_project(cls, project: Project) -> None:
-        """Save project metadata atomically (audit §5 P1 non-atomic write fix)."""
+    def save_project(cls, project: Project, *, _audit_status_change: bool = True) -> None:
+        """Save project metadata atomically (audit §5 P1 non-atomic write fix).
+
+        Records an audit event only when the status actually changes (avoids
+        log spam from repeated saves that don't transition state).
+        """
+        prior_status: Optional[str] = None
+        if _audit_status_change:
+            existing = cls.get_project(project.project_id)
+            if existing is not None:
+                prior_status = (
+                    existing.status.value
+                    if isinstance(existing.status, ProjectStatus)
+                    else str(existing.status)
+                )
+
         project.updated_at = datetime.now().isoformat()
         meta_path = cls._get_project_meta_path(project.project_id)
         payload = json.dumps(project.to_dict(), ensure_ascii=False, indent=2)
         cls._atomic_write_text(meta_path, payload)
+
+        new_status = (
+            project.status.value
+            if isinstance(project.status, ProjectStatus)
+            else str(project.status)
+        )
+        if _audit_status_change and prior_status is not None and prior_status != new_status:
+            _audit(
+                action="project.status_changed",
+                entity_type="project",
+                entity_id=project.project_id,
+                before={"status": prior_status},
+                after={"status": new_status},
+            )
     
     @classmethod
     def get_project(cls, project_id: str) -> Optional[Project]:
@@ -261,18 +302,27 @@ class ProjectManager:
     def delete_project(cls, project_id: str) -> bool:
         """
         Delete project and all its files
-        
+
         Args:
             project_id: Project ID
-            
+
         Returns:
             True if successful
         """
         project_dir = cls._get_project_dir(project_id)
-        
+
         if not os.path.exists(project_dir):
             return False
-        
+
+        # Record the deletion BEFORE the rmtree so the audit event exists even
+        # if the removal itself fails partway (hard delete is destructive and
+        # non-recoverable — the audit trail is the only record left).
+        _audit(
+            action="project.deleted",
+            entity_type="project",
+            entity_id=project_id,
+            reason="hard_delete",
+        )
         shutil.rmtree(project_dir)
         return True
     

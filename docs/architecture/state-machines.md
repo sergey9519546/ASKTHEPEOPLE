@@ -400,8 +400,13 @@ canonical persistence layer in gate 3.
 
 ### Audit timeline — PARTIAL
 
-`TaskManager` records per-task status changes in memory and best-effort
-to Redis. There is no cross-aggregate audit log. The audit's P1 finding
-"Contradictory lifecycle semantics" requires that every transition
-records actor, reason, timestamp, prior version, and resulting version.
-The canonical audit log is **TARGET** and is part of gate 3.
+A cross-aggregate append-only audit log now exists
+([`services/audit_log.py`](../../backend/app/services/audit_log.py)): JSONL
+today (portable to a PostgreSQL `audit_events` table when gate 3 lands),
+recording `actor`/`reason`/`timestamp`/`before`/`after` per the P1
+requirement, with an incident-response read side (`find_events` /
+`find_affected_runs`). It is wired into project create/delete/status-change
+and task create/complete/fail transitions. Still TARGET: recording *every*
+state-machine transition (only the highest-value transitions are wired
+today), joining the event to the same transaction as the write (requires the
+PostgreSQL outbox), and using it for the admin-override expiry record.
