@@ -54,12 +54,19 @@ def test_record_event_writes_append_only_jsonl(isolated_audit):
         assert "before" in e and "after" in e
 
 
-def test_events_are_never_overwritten(isolated_audit):
-    """The log is append-only: there is no update/delete API exposed."""
-    audit_log.record_event(action="x", entity_type="t", entity_id="id1")
-    # No public function exists to modify or remove a recorded event.
-    public_api = [n for n in dir(audit_log) if not n.startswith("_") and n != "os"]
-    assert not any(n in public_api for n in ("update_event", "delete_event", "rewrite", "truncate"))
+def test_log_is_append_only_in_practice(isolated_audit):
+    """The log only ever grows: recording a second event does not rewrite or
+    truncate the first. This is a behavioral check (file grows, prior bytes
+    preserved), not just an API-surface check."""
+    audit_log.record_event(action="first", entity_type="t", entity_id="id1")
+    first_bytes = (isolated_audit / "audit" / "audit.log").read_bytes()
+
+    audit_log.record_event(action="second", entity_type="t", entity_id="id1")
+    full_bytes = (isolated_audit / "audit" / "audit.log").read_bytes()
+
+    # The first event's bytes are a prefix of the full file (append, not rewrite).
+    assert full_bytes.startswith(first_bytes)
+    assert len(full_bytes) > len(first_bytes)
 
 
 def test_record_event_never_raises_on_write_failure(monkeypatch, tmp_path):
@@ -93,6 +100,22 @@ def test_find_events_respects_limit(isolated_audit):
     assert len(audit_log.find_events(limit=2)) == 2
 
 
+def test_find_events_returns_newest_n_not_oldest_n(isolated_audit):
+    """Regression: find_events used to early-break at `limit`, returning the
+    OLDEST N matches reversed — the wrong end of the log for incident
+    response. It must scan the whole file and return the NEWEST N."""
+    for i in range(10):
+        audit_log.record_event(action="x", entity_type="t", entity_id="same")
+    newest_two = audit_log.find_events(entity_id="same", limit=2)
+    assert len(newest_two) == 2
+    # Newest-first, and these are events #9 and #8 (the last appended), not #0/#1.
+    # We can't read the index from the event (no counter), but we CAN prove the
+    # selection is the tail by checking that a limit=2 result is a suffix of the
+    # limit=10 result.
+    all_ten = audit_log.find_events(entity_id="same", limit=10)
+    assert all_ten[:2] == newest_two  # the newest 2 are the same regardless of limit
+
+
 def test_find_affected_runs(isolated_audit):
     """The incident-response convenience returns all events for one entity."""
     audit_log.record_event(action="simulation.status_changed", entity_type="simulation", entity_id="sim_1")
@@ -104,19 +127,43 @@ def test_find_affected_runs(isolated_audit):
     assert all(e["entity_id"] == "sim_1" for e in affected)
 
 
-def test_safe_summary_strips_oversized_values(isolated_audit):
-    """A caller cannot bloat the log with huge or non-serializable values."""
+def test_safe_summary_caps_lists_and_stringifies_objects(isolated_audit):
+    """_safe_summary caps lists to 20 items and stringifies non-primitive
+    objects — the actual transformations, not the str/int passthrough."""
+    import datetime
+
     audit_log.record_event(
         action="x",
         entity_type="t",
         entity_id="id1",
-        after={"big": "x" * 1000, "nested": {"deep": "y" * 500}},
+        after={
+            "long_list": list(range(25)),      # should cap to 20
+            "an_object": datetime.datetime(2026, 1, 1),  # not JSON-native → str()
+            "a_str": "kept",                    # passthrough
+            "an_int": 42,                       # passthrough
+        },
     )
     events = _read_raw(isolated_audit)
-    # big string is retained (str values aren't truncated by _safe_summary),
-    # but non-serializable types are stringified and lists are capped.
-    assert events[0]["after"]["big"] == "x" * 1000
-    assert events[0]["after"]["nested"]["deep"] == "y" * 500
+    after = events[0]["after"]
+    # List capped to 20, not the full 25.
+    assert len(after["long_list"]) == 20
+    # Non-serializable object stringified (and JSON-safe), not dropped.
+    assert isinstance(after["an_object"], str)
+    assert "2026" in after["an_object"]
+    # Primitives passthrough.
+    assert after["a_str"] == "kept"
+    assert after["an_int"] == 42
+
+
+def test_record_event_never_raises_on_non_serializable_payload(isolated_audit):
+    """A float('nan') survives _safe_summary (floats passthrough) but breaks
+    json.dumps — record_event must catch that and NOT raise (the 'never
+    raises' contract that models/task.py and models/project.py rely on)."""
+    # Must not raise ValueError despite nan being non-JSON-compliant.
+    audit_log.record_event(
+        action="x", entity_type="t", entity_id="id1",
+        after={"bad_float": float("nan")},
+    )
 
 
 def test_timestamps_are_iso8601_with_timezone(isolated_audit):

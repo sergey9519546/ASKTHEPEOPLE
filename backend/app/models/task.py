@@ -553,12 +553,15 @@ class TaskManager:
             message="Task completed",
             result=result
         )
-        if prior != TaskStatus.COMPLETED:
+        # Only audit a real transition. If prior is None the task never
+        # existed (update_task created a placeholder); auditing it would
+        # fabricate a transition event for a phantom entity.
+        if prior is not None and prior != TaskStatus.COMPLETED:
             _audit(
                 action="task.completed",
                 entity_type="task",
                 entity_id=task_id,
-                before={"status": prior.value if prior else None},
+                before={"status": prior.value},
                 after={"status": TaskStatus.COMPLETED.value},
             )
 
@@ -578,12 +581,14 @@ class TaskManager:
             error=error,
             public_error=public_error,
         )
-        if prior != TaskStatus.FAILED:
+        # Only audit a real transition for a task that actually existed
+        # (see complete_task above).
+        if prior is not None and prior != TaskStatus.FAILED:
             _audit(
                 action="task.failed",
                 entity_type="task",
                 entity_id=task_id,
-                before={"status": prior.value if prior else None},
+                before={"status": prior.value},
                 after={"status": TaskStatus.FAILED.value, "public_error": public_error},
             )
     

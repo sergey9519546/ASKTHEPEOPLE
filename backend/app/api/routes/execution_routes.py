@@ -33,12 +33,9 @@ logger = get_logger('askthepeople.api.simulation')
 
 
 # P0 path-escape fix (audit §5 P0). The platform identifier is a request-
-# controlled value; it MUST be parsed as a strict enum and resolved to a
-# fixed filename. Do NOT interpolate request text into a filename.
-ALLOWED_PLATFORMS = {
-    "reddit": "reddit_simulation.db",
-    "twitter": "twitter_simulation.db",
-}
+# Run-platform validation lives inline at the start route (the set includes
+# "parallel", which has no single db file). The platform→db-filename map for
+# the posts/comments reader lives in services/simulation_activity_reader.py.
 
 
 

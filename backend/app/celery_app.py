@@ -29,8 +29,6 @@ celery_app = Celery(
     ],
 )
 
-is_testing = os.environ.get('PYTEST_CURRENT_TEST') is not None or getattr(Config, 'TESTING', False)
-
 celery_app.conf.update(
     task_serializer='json',
     accept_content=['json'],

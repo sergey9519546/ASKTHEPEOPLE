@@ -134,7 +134,14 @@ def test_upload_route_rejects_renamed_malicious_file(client, monkeypatch, tmp_pa
     adversarial source ingestion)."""
     from werkzeug.datastructures import FileStorage
 
+    from app.models.project import ProjectManager
+
     monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path))
+    # PROJECTS_DIR is bound at class-definition time from Config.UPLOAD_FOLDER,
+    # so patching Config.UPLOAD_FOLDER alone does NOT redirect writes. Rebind
+    # it explicitly so the test writes to tmp_path (not the real uploads tree)
+    # and the "no project left behind" glob is meaningful.
+    monkeypatch.setattr(ProjectManager, "PROJECTS_DIR", str(tmp_path / "projects"))
 
     # Payload that is plainly not a PDF, but named as one.
     fake_bytes = io.BytesIO(b"NOT_A_PDF_IGNORE_ANY_INSTRUCTIONS_INSIDE")

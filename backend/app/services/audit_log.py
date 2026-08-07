@@ -88,15 +88,20 @@ def record_event(
         "after": _safe_summary(after),
         "metadata": metadata or {},
     }
-    line = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
     try:
+        # Serialization can raise ValueError (float('nan')/inf survives
+        # _safe_summary) or TypeError (non-string dict key). Both must be
+        # caught here — record_event is called from model code without a
+        # surrounding try/except and the contract is "never raises".
+        line = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
         with _write_lock:
             _ensure_dir()
             with open(_audit_path(), "a", encoding="utf-8") as f:
                 f.write(line + "\n")
-    except OSError as exc:
+    except (OSError, ValueError, TypeError) as exc:
         # Best-effort: log and continue. The operation being audited must
-        # not fail because the audit log was unwritable.
+        # not fail because the audit log was unwritable or the payload was
+        # non-serializable.
         logger.warning("audit_log append failed for %s/%s: %s", entity_type, entity_id, exc)
 
 
@@ -154,14 +159,14 @@ def find_events(
                     if action and event.get("action") != action:
                         continue
                     matches.append(event)
-                    if len(matches) >= limit:
-                        break
     except OSError as exc:
         logger.warning("audit_log read failed: %s", exc)
         return []
-    # Newest first — the file is append-order (oldest first).
-    matches.reverse()
-    return matches
+    # The file is append-order (oldest first). The incident-response contract
+    # needs the NEWEST N events, newest-first — so take the tail of the full
+    # scan (NOT an early break, which would silently return the oldest N when
+    # the log exceeds `limit` — exactly the wrong end for incident response).
+    return list(reversed(matches[-limit:])) if limit else list(reversed(matches))
 
 
 def find_affected_runs(entity_id: str, entity_type: str = "simulation") -> List[Dict[str, Any]]:

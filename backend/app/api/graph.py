@@ -5,7 +5,6 @@ Uses project context mechanism, server-side persistent state
 
 import os
 import traceback
-import threading
 from flask import request, jsonify
 
 from . import graph_bp

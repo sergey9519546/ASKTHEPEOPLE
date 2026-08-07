@@ -503,3 +503,22 @@ def test_find_in_flight_returns_none_for_unknown_or_missing_key():
     assert manager.find_in_flight_by_idempotency_key(None) is None
 
 
+def test_fail_task_does_not_audit_or_create_phantom_for_unknown_id(monkeypatch, tmp_path):
+    """Regression: fail_task/complete_task used to emit a transition audit event
+    (and update_task created a placeholder) for a task_id that never existed —
+    fabricating an event for a phantom entity. Only real transitions are audited."""
+    from app.config import Config
+    from app.services import audit_log
+
+    monkeypatch.setattr(Config, "UPLOAD_FOLDER", str(tmp_path))
+    manager = TaskManager()
+    manager._tasks.clear()
+
+    # Fail a task that was never created.
+    manager.fail_task("nonexistent_task_id", "ghost")
+
+    # No audit event should exist for a phantom task.
+    events = audit_log.find_events(entity_id="nonexistent_task_id")
+    assert events == [], f"phantom task should not be audited, got {events}"
+
+
