@@ -17,3 +17,4 @@ from . import entity_routes
 # the gate 1 decomposition (ADR-0011). The shared helpers they use stay in
 # simulation.py because the write/lifecycle modules import them from there.
 from . import read_routes
+from . import workspace_routes
