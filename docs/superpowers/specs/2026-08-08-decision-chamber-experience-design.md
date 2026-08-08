@@ -1,7 +1,7 @@
 ---
 title: "Decision Chamber Experience Design"
-status: "Approved design specification"
-version: "1.0.0"
+status: "Proposed / Revision Required"
+version: "1.0.1"
 owner: "Product Design + Frontend + Architecture"
 last_reviewed: "2026-08-08"
 review_cycle: "Per major experience change"
@@ -12,13 +12,19 @@ applies_to: "scenario preparation, execution, path exploration, decision brief, 
 
 # Decision Chamber Experience Design
 
-**Status:** APPROVED EXPERIENCE DIRECTION
+**Status:** PROPOSED / REVISION REQUIRED
 
 **Date:** 2026-08-08
 
 **Scope:** Scenario preparation, run, path exploration, decision brief, and human-research handoff
 
-**Visual reference:** `C:/Users/serge/OneDrive/Documents/ASKTHEPEOPLE DESIGN REFERENCE.png`
+**Visual reference:** [`docs/design/references/decision-chamber-paths-approved.png`](../../design/references/decision-chamber-paths-approved.png)
+
+The referenced image is the approved visual direction for the **Possible Paths**
+state only. It is not approval for the complete information architecture,
+runtime capabilities, data contracts, or institutional terminology proposed
+below. Those areas remain subject to product-truth, security, architecture,
+accessibility, and implementation review.
 
 ## 1. Decision
 
