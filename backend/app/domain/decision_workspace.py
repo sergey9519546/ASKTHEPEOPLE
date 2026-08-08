@@ -1,9 +1,12 @@
 """Typed product-truth and provenance contracts for decision workspaces."""
 
 from enum import Enum
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+_SERVER_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
 
 
 class EpistemicOrigin(str, Enum):
@@ -56,6 +59,37 @@ class TruthBundle(BaseModel):
         "external_to_synthetic_run"
     ] = "external_to_synthetic_run"
 
+    @field_validator("human_respondent_count", mode="before")
+    @classmethod
+    def require_exact_zero_integer(cls, value: object) -> object:
+        if type(value) is not int or value != 0:
+            raise ValueError("human_respondent_count_must_be_exact_zero_integer")
+        return value
+
+    @field_validator(
+        "is_forecast",
+        "is_public_opinion_measure",
+        "is_causal_evidence",
+        mode="before",
+    )
+    @classmethod
+    def require_exact_false_boolean(cls, value: object) -> object:
+        if type(value) is not bool or value is not False:
+            raise ValueError("truth_flag_must_be_exact_false_boolean")
+        return value
+
+    @field_validator(
+        "output_origin",
+        "source_role",
+        "human_validation_scope",
+        mode="before",
+    )
+    @classmethod
+    def require_string_primitive(cls, value: object) -> object:
+        if type(value) is not str:
+            raise ValueError("truth_string_must_be_exact_string")
+        return value
+
     @classmethod
     def synthetic(cls) -> "TruthBundle":
         return cls()
@@ -64,7 +98,11 @@ class TruthBundle(BaseModel):
 class PathStep(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    id: str = Field(min_length=1, max_length=128)
+    id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=_SERVER_ID_PATTERN,
+    )
     sequence: int = Field(ge=1)
     statement: str = Field(min_length=1, max_length=1200)
     origin: Literal[EpistemicOrigin.SYNTHETIC_GENERATED]
@@ -73,21 +111,45 @@ class PathStep(BaseModel):
 class PossiblePath(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    id: str = Field(min_length=1, max_length=128)
-    run_id: str = Field(min_length=1, max_length=128)
+    id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=_SERVER_ID_PATTERN,
+    )
+    run_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=_SERVER_ID_PATTERN,
+    )
     label: str = Field(pattern=r"^P-\d{2}$")
     branch_reason: str = Field(min_length=1, max_length=1200)
     origin: Literal[EpistemicOrigin.SYNTHETIC_GENERATED]
     steps: tuple[PathStep, ...] = Field(min_length=1)
     truth: TruthBundle = Field(default_factory=TruthBundle.synthetic)
 
+    @model_validator(mode="after")
+    def require_contiguous_step_sequence(self) -> Self:
+        actual = tuple(step.sequence for step in self.steps)
+        expected = tuple(range(1, len(self.steps) + 1))
+        if actual != expected:
+            raise ValueError("path_steps_must_be_contiguous_in_tuple_order")
+        return self
+
 
 class ProvenanceEdge(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    source_id: str = Field(min_length=1, max_length=128)
+    source_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=_SERVER_ID_PATTERN,
+    )
     source_role: EpistemicRole
-    target_id: str = Field(min_length=1, max_length=128)
+    target_id: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=_SERVER_ID_PATTERN,
+    )
     target_role: EpistemicRole
     relation: ProvenanceRelation
 

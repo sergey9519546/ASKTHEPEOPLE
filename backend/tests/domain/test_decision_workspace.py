@@ -1,5 +1,75 @@
+from itertools import product
+
 import pytest
 from pydantic import ValidationError
+
+from app.domain.decision_workspace import (
+    EpistemicRole,
+    ProvenanceEdge,
+    ProvenanceRelation,
+    ProvenanceViolation,
+    validate_provenance_edge,
+)
+
+
+ALLOWED_PROVENANCE_TRIPLES = (
+    (
+        EpistemicRole.SOURCE_ASSET,
+        ProvenanceRelation.CONTAINS,
+        EpistemicRole.SOURCE_SEGMENT,
+    ),
+    (
+        EpistemicRole.SOURCE_SEGMENT,
+        ProvenanceRelation.SUPPORTS,
+        EpistemicRole.STARTING_CONDITION,
+    ),
+    (
+        EpistemicRole.DECISION,
+        ProvenanceRelation.DECLARES,
+        EpistemicRole.ASSUMPTION,
+    ),
+    (
+        EpistemicRole.ASSUMPTION,
+        ProvenanceRelation.BRANCHES_TO,
+        EpistemicRole.POSSIBLE_PATH,
+    ),
+    (
+        EpistemicRole.UNCERTAINTY_STATE,
+        ProvenanceRelation.BRANCHES_TO,
+        EpistemicRole.POSSIBLE_PATH,
+    ),
+    (
+        EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.CONTAINS,
+        EpistemicRole.PATH_STEP,
+    ),
+    (
+        EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.SURFACES,
+        EpistemicRole.CONSIDERATION,
+    ),
+    (
+        EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.DISCONFIRMED_BY,
+        EpistemicRole.DISCONFIRMING_CONDITION,
+    ),
+    (
+        EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.VALIDATED_BY,
+        EpistemicRole.VALIDATION_QUESTION,
+    ),
+    (
+        EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.SUMMARIZED_BY,
+        EpistemicRole.BRIEF_STATEMENT,
+    ),
+)
+
+UNLISTED_PROVENANCE_TRIPLES = tuple(
+    triple
+    for triple in product(EpistemicRole, ProvenanceRelation, EpistemicRole)
+    if triple not in ALLOWED_PROVENANCE_TRIPLES
+)
 
 
 def test_synthetic_truth_bundle_serializes_to_locked_values() -> None:
@@ -37,6 +107,35 @@ def test_truth_bundle_rejects_overrides_of_locked_values(
         TruthBundle(**{field: override})
 
 
+@pytest.mark.parametrize(
+    ("field", "alias"),
+    [
+        ("human_respondent_count", False),
+        ("human_respondent_count", 0.0),
+        ("human_respondent_count", "0"),
+        *[
+            (field, alias)
+            for field in (
+                "is_forecast",
+                "is_public_opinion_measure",
+                "is_causal_evidence",
+            )
+            for alias in (0, 1, "false", "true")
+        ],
+        ("output_origin", b"synthetic"),
+        ("source_role", b"starting_conditions_only"),
+        ("human_validation_scope", b"external_to_synthetic_run"),
+    ],
+)
+def test_truth_bundle_rejects_coercion_and_equality_aliases(
+    field: str, alias: object
+) -> None:
+    from app.domain.decision_workspace import TruthBundle
+
+    with pytest.raises(ValidationError):
+        TruthBundle(**{field: alias})
+
+
 def test_source_segment_may_support_starting_condition() -> None:
     from app.domain.decision_workspace import (
         EpistemicRole,
@@ -54,6 +153,62 @@ def test_source_segment_may_support_starting_condition() -> None:
     )
 
     assert validate_provenance_edge(edge) is None
+
+
+@pytest.mark.parametrize(
+    ("source_role", "relation", "target_role"),
+    ALLOWED_PROVENANCE_TRIPLES,
+)
+def test_all_allowed_provenance_triples_pass(
+    source_role: EpistemicRole,
+    relation: ProvenanceRelation,
+    target_role: EpistemicRole,
+) -> None:
+    edge = ProvenanceEdge(
+        source_id="source-1",
+        source_role=source_role,
+        target_id="target-1",
+        target_role=target_role,
+        relation=relation,
+    )
+
+    assert validate_provenance_edge(edge) is None
+
+
+@pytest.mark.parametrize(
+    ("source_role", "relation", "target_role"),
+    UNLISTED_PROVENANCE_TRIPLES,
+)
+def test_cartesian_complement_of_provenance_triples_fails_closed(
+    source_role: EpistemicRole,
+    relation: ProvenanceRelation,
+    target_role: EpistemicRole,
+) -> None:
+    edge = ProvenanceEdge(
+        source_id="source-1",
+        source_role=source_role,
+        target_id="target-1",
+        target_role=target_role,
+        relation=relation,
+    )
+
+    expected_message = (
+        "source_to_path_forbidden"
+        if (
+            source_role,
+            relation,
+            target_role,
+        )
+        == (
+            EpistemicRole.SOURCE_SEGMENT,
+            ProvenanceRelation.SUPPORTS,
+            EpistemicRole.POSSIBLE_PATH,
+        )
+        else "provenance_edge_forbidden"
+    )
+
+    with pytest.raises(ProvenanceViolation, match=f"^{expected_message}$"):
+        validate_provenance_edge(edge)
 
 
 def test_source_segment_may_not_support_possible_path() -> None:
@@ -167,6 +322,60 @@ def test_possible_path_rejects_invalid_stable_ids(
             )
 
 
+@pytest.mark.parametrize(
+    "invalid_id",
+    [" ", "id with space", "id/slash", "id\x00control", "Ａ"],
+)
+@pytest.mark.parametrize(
+    "field", ["step_id", "path_id", "run_id", "source_id", "target_id"]
+)
+def test_server_ids_reject_non_canonical_shapes(field: str, invalid_id: str) -> None:
+    from app.domain.decision_workspace import (
+        EpistemicOrigin,
+        EpistemicRole,
+        PathStep,
+        PossiblePath,
+        ProvenanceEdge,
+        ProvenanceRelation,
+    )
+
+    step_data = {
+        "id": "step-1",
+        "sequence": 1,
+        "statement": "A plausible consequence is explored.",
+        "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+    }
+
+    with pytest.raises(ValidationError):
+        if field == "step_id":
+            PathStep(**{**step_data, "id": invalid_id})
+        elif field in {"path_id", "run_id"}:
+            path_field = "id" if field == "path_id" else "run_id"
+            PossiblePath(
+                **{
+                    "id": "path-1",
+                    "run_id": "run-1",
+                    "label": "P-01",
+                    "branch_reason": "A declared assumption creates this branch.",
+                    "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+                    path_field: invalid_id,
+                },
+                steps=(PathStep(**step_data),),
+            )
+        else:
+            edge_field = "source_id" if field == "source_id" else "target_id"
+            ProvenanceEdge(
+                **{
+                    "source_id": "segment-1",
+                    "source_role": EpistemicRole.SOURCE_SEGMENT,
+                    "target_id": "condition-1",
+                    "target_role": EpistemicRole.STARTING_CONDITION,
+                    "relation": ProvenanceRelation.SUPPORTS,
+                    edge_field: invalid_id,
+                }
+            )
+
+
 @pytest.mark.parametrize("invalid_label", ["P-1", "P-001", "PATH-01"])
 def test_possible_path_rejects_labels_outside_p_number_format(
     invalid_label: str,
@@ -214,6 +423,33 @@ def test_path_step_sequence_starts_at_one() -> None:
             sequence=0,
             statement="A plausible consequence is explored.",
             origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+        )
+
+
+@pytest.mark.parametrize("sequences", [(2, 1), (1, 1), (1, 3), (2,)])
+def test_possible_path_requires_contiguous_step_sequence_in_tuple_order(
+    sequences: tuple[int, ...],
+) -> None:
+    from app.domain.decision_workspace import EpistemicOrigin, PathStep, PossiblePath
+
+    steps = tuple(
+        PathStep(
+            id=f"step-{index}",
+            sequence=sequence,
+            statement=f"Synthetic step {index}.",
+            origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+        )
+        for index, sequence in enumerate(sequences, start=1)
+    )
+
+    with pytest.raises(ValidationError):
+        PossiblePath(
+            id="path-1",
+            run_id="run-1",
+            label="P-01",
+            branch_reason="A declared assumption creates this branch.",
+            origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+            steps=steps,
         )
 
 
