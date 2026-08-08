@@ -582,12 +582,18 @@ The exact operator-evidence mutability matrix is:
 | Table | Immutable after insert | Only authorized mutable fields |
 |---|---|---|
 | `schema_adoptions` | every column | none; append a new evidence row |
-| `backfill_batches` | `id`, input/legacy hashes, operator alias, tool version, `created_at` | status, bounded counts, evidence hash, `updated_at`, only through the closed batch transition trigger |
-| `legacy_project_bindings` | project/organization/workspace IDs, legacy alias, project/workspace/tree hashes, backfill batch ID, adoption time | status and reconciliation time, only `ADOPTED -> RECONCILED|CONFLICT`; both targets terminal |
-| `persistence_cutovers` | subsystem; once PREPARED, backfill ID, reconciliation hash, application/build revision and rollback boundary | state and activation actor/time, only `PREPARED -> ACTIVE -> ROLLED_FORWARD` |
+| `backfill_batches` | `id`, input/legacy hashes, operator alias, tool version, `created_at`, retention class/policy/start | status, bounded counts, evidence hash, `updated_at`, and one-way policy-derived `expires_at` shortening, only through the closed batch transition trigger |
+| `legacy_project_bindings` | project/organization/workspace IDs, legacy alias, project/workspace/tree hashes, backfill batch ID, adoption time, retention class/policy/start | status and reconciliation time, only `ADOPTED -> RECONCILED|CONFLICT` with both targets terminal; deletion state/time/failed-origin only through the exact deletion trigger; one-way policy-derived `expires_at` shortening |
+| `persistence_cutovers` | subsystem; once PREPARED, backfill ID, reconciliation hash, application/build revision, rollback boundary, retention class/policy/start | state and activation actor/time, only `PREPARED -> ACTIVE -> ROLLED_FORWARD`; one-way policy-derived `expires_at` shortening |
 
 Test 13 mutates every immutable column and every unlisted mutable column; the
 complete complement fails closed.
+
+The closed backfill graph is `DRY_RUN_VERIFIED -> APPLIED|FAILED` and
+`APPLIED -> RECONCILED|FAILED`; `RECONCILED` and `FAILED` are terminal. A retry
+creates a new batch. Policy-derived expiry may move only from null to the exact
+derived timestamp or to an earlier timestamp after a shortening policy event;
+it can never be extended or changed by an ordinary actor.
 
 Append-only is role-bounded rather than perpetual. Checkpoint 3A-2 creates the
 class/expiry partition topology and row-mutation trigger, but no application or

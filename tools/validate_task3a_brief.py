@@ -30,6 +30,9 @@ REQUIRED_LOCKS = (
     "7d2c1a9e4b60_core_tenancy_foundation.py",
     "a6150cf0e9d2_core_tenancy_rls_bootstrap.py",
     "test_audit_scope_type_reason_metadata_complement_and_row_immutability_are_closed",
+    "DRY_RUN_VERIFIED -> APPLIED|FAILED",
+    "deletion state/time/failed-origin only through the exact deletion trigger",
+    "one-way policy-derived `expires_at` shortening",
 )
 
 FORBIDDEN_LOCKS = (
