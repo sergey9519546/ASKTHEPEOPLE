@@ -428,6 +428,58 @@ def prepare_simulation_task(
         raise
 
 
+@celery_app.task(
+    name="tasks.finalize_decision_lens_preparation_task",
+    bind=True,
+)
+def finalize_decision_lens_preparation_task(
+    self,
+    simulation_id: str,
+    task_id: str,
+):
+    """Finalize an approved lens artifact outside the HTTP request process."""
+
+    from ..services.decision_lens_review_service import (
+        finalize_decision_lens_preparation,
+    )
+
+    task_manager = TaskManager()
+    effective_task_id = task_id or getattr(self.request, "id", None)
+    if effective_task_id:
+        task_manager.update_task(
+            effective_task_id,
+            status=TaskStatus.PROCESSING,
+            progress=10,
+            message="Finalizing approved decision lenses...",
+        )
+    try:
+        state = finalize_decision_lens_preparation(simulation_id)
+        result = state.to_simple_dict()
+        if effective_task_id:
+            task_manager.complete_task(effective_task_id, result=result)
+        return {
+            "success": True,
+            "simulation_id": simulation_id,
+            "task_id": effective_task_id,
+            "status": state.status.value,
+        }
+    except Exception as exc:
+        if _is_retryable_task_exception(exc) and self.request.retries < 3:
+            raise self.retry(exc=exc, countdown=int(2**self.request.retries))
+        public_error = getattr(
+            exc,
+            "code",
+            "decision_lens_finalization_failed",
+        )
+        if effective_task_id:
+            task_manager.fail_task(
+                effective_task_id,
+                str(exc),
+                public_error=public_error,
+            )
+        raise
+
+
 @celery_app.task(name='tasks.cleanup_old_tasks')
 def cleanup_old_tasks_task(max_age_hours: int = 24):
     """Periodic Celery beat task that retires stale completed/failed tasks.

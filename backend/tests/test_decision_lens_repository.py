@@ -129,7 +129,7 @@ def test_rejected_review_does_not_authorize_execution(tmp_path: Path) -> None:
 
     with pytest.raises(DecisionLensAdmissionError) as exc:
         repository.assert_execution_approved()
-    assert exc.value.code == "decision_lens_review_required"
+    assert exc.value.code == "decision_lens_review_rejected"
 
 
 def test_no_auth_review_cannot_authorize_production(tmp_path: Path) -> None:

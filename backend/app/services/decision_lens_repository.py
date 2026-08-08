@@ -269,7 +269,7 @@ class DecisionLensRepository:
         if review.overall_status != "approved":
             return DecisionLensReviewStatus(
                 approved=False,
-                code="decision_lens_review_required",
+                code="decision_lens_review_rejected",
                 remediation="revise_or_approve_decision_lenses",
                 artifact_id=artifact.artifact_id,
                 review_id=review.review_id,

@@ -18,3 +18,4 @@ from . import entity_routes
 # simulation.py because the write/lifecycle modules import them from there.
 from . import read_routes
 from . import workspace_routes
+from . import decision_lens_routes
