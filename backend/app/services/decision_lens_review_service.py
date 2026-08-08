@@ -261,12 +261,47 @@ def finalize_decision_lens_preparation(
     return state
 
 
-def _default_runtime_pipeline(**_kwargs: Any) -> Mapping[str, Any]:
-    """Fail closed until Task 5 installs the typed runtime-adapter pipeline."""
+def _default_runtime_pipeline(
+    *,
+    artifact: DecisionLensArtifactV1,
+    review: DecisionLensReviewV1,
+    simulation_dir: Path,
+    state: SimulationState,
+) -> Mapping[str, Any]:
+    from .decision_lens_runtime_adapter import build_runtime_adapters
+    from .simulation_artifacts import write_json
+    from .simulation_config_generator import SimulationConfigGenerator
+    from .simulation_preflight import run_preflight
 
-    raise DecisionLensFinalizationError(
-        "decision_lens_runtime_adapter_unavailable"
+    adapters = build_runtime_adapters(artifact, review)
+    write_json(
+        str(simulation_dir / "decision_lens_runtime.v1.json"),
+        {
+            "schema_version": "decision-lens-runtime/v1",
+            "source_artifact_sha256": artifact.artifact_sha256,
+            "source_review_sha256": review.review_sha256,
+            "adapters": [
+                adapter.model_dump(mode="json") for adapter in adapters
+            ],
+        },
     )
+    params = SimulationConfigGenerator.generate_from_decision_lenses(
+        simulation_id=state.simulation_id,
+        project_id=state.project_id,
+        graph_id=state.graph_id,
+        simulation_requirement="Approved functional decision-lens scenario.",
+        adapters=adapters,
+        enable_twitter=state.enable_twitter,
+        enable_reddit=state.enable_reddit,
+    )
+    (simulation_dir / "simulation_config.json").write_text(
+        params.to_json(),
+        encoding="utf-8",
+    )
+    return {
+        "preflight": run_preflight(str(simulation_dir)),
+        "config_reasoning": params.generation_reasoning,
+    }
 
 
 __all__ = [

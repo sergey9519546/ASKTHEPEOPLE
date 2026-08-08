@@ -13,6 +13,7 @@ Uses a step-by-step generation strategy to avoid failures from overly long outpu
 
 import json
 import math
+from collections.abc import Mapping, Sequence
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -28,8 +29,36 @@ from .claim_boundary import (
 from .role_normalizer import normalize_entity_type
 from .trait_behavior_projection import controls_from_canonical_agent
 from .zep_entity_reader import EntityNode, ZepEntityReader
+from .decision_lens_runtime_adapter import DecisionLensRuntimeAdapterV1
 
 logger = get_logger('askthepeople.simulation_config')
+
+
+class InertRuntimeControlError(ValueError):
+    def __init__(self, control: str):
+        self.code = "inert_runtime_control"
+        self.control = control
+        super().__init__(self.code)
+
+
+DECISION_LENS_CONFIG_CONSUMPTION = frozenset(
+    {
+        "time_config.total_simulation_hours",
+        "time_config.minutes_per_round",
+        "twitter_config.viral_threshold",
+        "reddit_config.viral_threshold",
+    }
+)
+
+_NEUTRAL_DEPRECATED_RUNTIME_CONTROLS = {
+    "use_archetypes": False,
+    "archetype_count": None,
+    "expansion_factor": None,
+    "role_multiplier": 1.0,
+    "age": None,
+    "gender": None,
+    "mbti": None,
+}
 
 @dataclass
 class AgentActivityConfig:
@@ -407,6 +436,185 @@ class SimulationConfigGenerator:
         logger.info(f"Simulation config generation complete: {len(params.agent_configs)} agent configs")
         
         return params
+
+    @classmethod
+    def generate_from_decision_lenses(
+        cls,
+        *,
+        simulation_id: str,
+        project_id: str,
+        graph_id: str,
+        simulation_requirement: str,
+        adapters: Sequence[DecisionLensRuntimeAdapterV1],
+        enable_twitter: bool = True,
+        enable_reddit: bool = True,
+        runtime_controls: Mapping[str, Any] | None = None,
+    ) -> SimulationParameters:
+        """Build neutral, deterministic controls from approved functional lenses."""
+
+        adapter_tuple = tuple(
+            DecisionLensRuntimeAdapterV1.model_validate(adapter)
+            for adapter in adapters
+        )
+        if not adapter_tuple:
+            raise ValueError("decision_lens_incomplete")
+        if tuple(adapter.agent_id for adapter in adapter_tuple) != tuple(
+            range(1, len(adapter_tuple) + 1)
+        ):
+            raise ValueError("decision_lens_adapter_ids_invalid")
+
+        controls = dict(runtime_controls or {})
+        omitted: list[str] = []
+        consumed: dict[str, Any] = {}
+        for key, value in controls.items():
+            if key in DECISION_LENS_CONFIG_CONSUMPTION:
+                consumed[key] = value
+                continue
+            if (
+                key in _NEUTRAL_DEPRECATED_RUNTIME_CONTROLS
+                and value == _NEUTRAL_DEPRECATED_RUNTIME_CONTROLS[key]
+            ):
+                omitted.append(key)
+                continue
+            raise InertRuntimeControlError(key)
+
+        agent_count = len(adapter_tuple)
+        time_config = TimeSimulationConfig(
+            total_simulation_hours=72,
+            minutes_per_round=60,
+            agents_per_hour_min=max(1, min(agent_count, 3)),
+            agents_per_hour_max=max(1, agent_count),
+            peak_hours=[],
+            peak_activity_multiplier=1.0,
+            off_peak_hours=[],
+            off_peak_activity_multiplier=1.0,
+            morning_hours=[],
+            morning_activity_multiplier=1.0,
+            work_hours=[],
+            work_activity_multiplier=1.0,
+        )
+        twitter_config = (
+            PlatformConfig(
+                platform="twitter",
+                recency_weight=1 / 3,
+                popularity_weight=1 / 3,
+                relevance_weight=1 / 3,
+                viral_threshold=10,
+                echo_chamber_strength=0.0,
+            )
+            if enable_twitter
+            else None
+        )
+        reddit_config = (
+            PlatformConfig(
+                platform="reddit",
+                recency_weight=1 / 3,
+                popularity_weight=1 / 3,
+                relevance_weight=1 / 3,
+                viral_threshold=10,
+                echo_chamber_strength=0.0,
+            )
+            if enable_reddit
+            else None
+        )
+        cls._apply_consumed_controls(
+            consumed,
+            time_config=time_config,
+            twitter_config=twitter_config,
+            reddit_config=reddit_config,
+        )
+
+        agent_configs = [
+            AgentActivityConfig(
+                agent_id=adapter.agent_id,
+                entity_uuid=adapter.lens_id,
+                entity_name=adapter.platform_name,
+                entity_type="decision_lens",
+                activity_level=0.5,
+                posts_per_hour=1.0,
+                comments_per_hour=1.0,
+                active_hours=list(range(24)),
+                response_delay_min=15,
+                response_delay_max=15,
+                sentiment_bias=0.0,
+                stance="neutral",
+                influence_weight=1.0,
+                normalized_role="decision_lens",
+                reaction_style="bounded_functional",
+                conflict_tolerance=0.5,
+                authority_sensitivity=0.5,
+                novelty_seeking=0.5,
+                platform_preference="both",
+                control_assumption_basis="approved_functional_lens_neutral_controls",
+                behavioral_override_applied=False,
+                measured_human_behavior=False,
+                human_respondents=0,
+                causal_evidence=False,
+            )
+            for adapter in adapter_tuple
+        ]
+        artifact_hashes = sorted(
+            {adapter.source_artifact_sha256 for adapter in adapter_tuple}
+        )
+        review_hashes = sorted(
+            {adapter.source_review_sha256 for adapter in adapter_tuple}
+        )
+        return SimulationParameters(
+            simulation_id=simulation_id,
+            project_id=project_id,
+            graph_id=graph_id,
+            simulation_requirement=simulation_requirement,
+            time_config=time_config,
+            agent_configs=agent_configs,
+            event_config=EventConfig(),
+            twitter_config=twitter_config,
+            reddit_config=reddit_config,
+            context_profile={
+                "adapter_version": "decision-lens-runtime/v1",
+                "source_artifact_sha256s": artifact_hashes,
+                "source_review_sha256s": review_hashes,
+                "omitted_deprecated_controls": sorted(omitted),
+                "human_respondents": 0,
+                "is_forecast": False,
+                "source_role": "starting_conditions_only",
+            },
+            network_bootstrap={
+                "enable_follow_bootstrap": False,
+                "role_bias_rules": {},
+                "relationship_affinity_rules": {},
+                "assumption_basis": "approved_functional_lens_neutral_controls",
+            },
+            event_schedule=[],
+            bootstrap_posts=[],
+            platform_profiles={
+                "twitter": {"enabled": enable_twitter},
+                "reddit": {"enabled": enable_reddit},
+            },
+            generation_reasoning=(
+                "Deterministic neutral configuration derived from approved "
+                "functional decision-lens adapters."
+            ),
+        )
+
+    @staticmethod
+    def _apply_consumed_controls(
+        controls: Mapping[str, Any],
+        *,
+        time_config: TimeSimulationConfig,
+        twitter_config: PlatformConfig | None,
+        reddit_config: PlatformConfig | None,
+    ) -> None:
+        integer_controls = {
+            "time_config.total_simulation_hours": (time_config, "total_simulation_hours", 1, 720),
+            "time_config.minutes_per_round": (time_config, "minutes_per_round", 1, 1440),
+            "twitter_config.viral_threshold": (twitter_config, "viral_threshold", 1, 100000),
+            "reddit_config.viral_threshold": (reddit_config, "viral_threshold", 1, 100000),
+        }
+        for key, value in controls.items():
+            target, attribute, minimum, maximum = integer_controls[key]
+            if target is None or type(value) is not int or not minimum <= value <= maximum:
+                raise InertRuntimeControlError(key)
+            setattr(target, attribute, value)
     
     def _build_context(
         self,

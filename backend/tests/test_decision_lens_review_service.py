@@ -216,3 +216,47 @@ def test_finalize_task_completes_task_record(monkeypatch) -> None:
     task = task_manager.get_task(task_id)
     assert task is not None
     assert task.status == TaskStatus.COMPLETED
+
+
+def test_default_finalization_writes_adapter_and_config(tmp_path, monkeypatch) -> None:
+    import json
+
+    from app.config import Config
+    from app.services import simulation_preflight
+    from app.services.decision_lens_review_service import (
+        DecisionLensReviewService,
+        finalize_decision_lens_preparation,
+    )
+
+    monkeypatch.setattr(Config, "OASIS_SIMULATION_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        simulation_preflight,
+        "run_preflight",
+        lambda _simulation_dir: {"status": "passed"},
+    )
+    manager = SimulationManager()
+    state = manager.create_simulation("project-default", "graph-default")
+    state.status = SimulationStatus.NEEDS_REVIEW
+    manager._save_simulation_state(state)
+    sim_dir = manager._get_simulation_dir(state.simulation_id)
+    repository = DecisionLensRepository(sim_dir)
+    seed_artifact(repository, state.simulation_id)
+    DecisionLensReviewService(sim_dir).submit_review(
+        reviewer_assertion="Scenario review lead",
+        authentication_strength="application_bearer_self_attested_reviewer",
+        dispositions=dispositions(),
+    )
+
+    result = finalize_decision_lens_preparation(
+        state.simulation_id,
+        manager=manager,
+    )
+
+    assert result.status == SimulationStatus.READY
+    runtime = json.loads(
+        (tmp_path / state.simulation_id / "decision_lens_runtime.v1.json")
+        .read_text(encoding="utf-8")
+    )
+    assert runtime["schema_version"] == "decision-lens-runtime/v1"
+    assert len(runtime["adapters"]) == 4
+    assert (tmp_path / state.simulation_id / "simulation_config.json").exists()
