@@ -428,6 +428,13 @@ backend/migrations/versions/7d2c1a9e4b60_core_tenancy_foundation.py
 down_revision = "384c98f88d53"
 ```
 
+Checkpoint 3A-2 owns this revision and freezes it when that checkpoint lands.
+It creates the foundation schema, tables, constraints, indexes, and
+immutability triggers only. It does not create database roles, bootstrap
+functions, RLS context-helper functions, grants to the application role, RLS
+policies, or RLS enablement. Those security objects belong to the separate
+immutable Checkpoint 3A-3 child revision specified in section 10.
+
 Create models in
 `backend/app/infrastructure/persistence/core_schema.py` with every table
 explicitly qualified by `schema="core"`. Do not add these tables to
@@ -439,11 +446,52 @@ them.
 The migration creates exactly these tables; later tasks add their own schema
 objects:
 
+Every one of the twelve tables stores these privacy-governance columns:
+
+```text
+retention_class varchar(64) not null
+retention_policy_version varchar(128) not null
+retention_started_at timestamptz not null
+expires_at timestamptz null
+```
+
+The eight customer-lifecycle deletion targets — `organizations`, `users`,
+`identity_subjects`, `workspaces`, `organization_memberships`,
+`workspace_memberships`, `projects`, and `legacy_project_bindings` — also
+store nullable `deletion_state varchar(32)` and
+`deletion_state_changed_at timestamptz`. Null means no accepted deletion
+request. Non-null values are closed to `REQUESTED`, `ELIGIBILITY_CHECK`,
+`LEGAL_HOLD`, `PURGING_PRIMARY`, `PURGING_PROVIDERS`, `PURGING_BACKUPS`,
+`COMPLETE`, and `FAILED`; database guards accept only the transitions in the
+normative deletion state machine and reject the complete Cartesian complement.
+
+The exact table-to-class map is:
+
+| Table | Allowed retention class |
+|---|---|
+| `core.organizations` | exactly `ACCOUNT_IDENTITY` |
+| `core.users` | exactly `ACCOUNT_IDENTITY` |
+| `core.identity_subjects` | exactly `ACCOUNT_IDENTITY` |
+| `core.workspaces` | exactly `PROJECT_STANDARD` |
+| `core.organization_memberships` | exactly `ACCOUNT_IDENTITY` |
+| `core.workspace_memberships` | exactly `ACCOUNT_IDENTITY` |
+| `core.projects` | exactly `PROJECT_STANDARD` |
+| `core.schema_adoptions` | exactly `AUDIT_LONG` |
+| `core.backfill_batches` | exactly `AUDIT_LONG` |
+| `core.legacy_project_bindings` | exactly `PROJECT_STANDARD` |
+| `core.persistence_cutovers` | exactly `AUDIT_LONG` |
+| `core.audit_events` | `AUDIT_LONG` or `DELETION_EVIDENCE_LONG`, selected per event purpose |
+
+No schema default may lengthen the server-derived organization/workspace
+policy. Audit events require non-null `expires_at`; active lifecycle rows may
+leave it null only while their documented lifecycle trigger has not occurred.
+Every expiry must be at or after `retention_started_at`.
+
 | Table | Required columns and constraints |
 |---|---|
 | `core.organizations` | `id uuid PK`, immutable `public_id varchar(128) UNIQUE`, `name varchar(255)`, `status ACTIVE\|SUSPENDED`, `default_region varchar(32)`, nullable policy-version strings, `row_version bigint >= 1`, UTC `created_at/updated_at`, nullable `created_by/updated_by`. |
 | `core.users` | `id uuid PK`, immutable `public_id varchar(128) UNIQUE`, nullable bounded `display_name`, `status ACTIVE\|DISABLED`, `row_version`, UTC timestamps. No password, token, or provider secret. |
-| `core.identity_subjects` | `id uuid PK`, `user_id` FK, bounded `issuer`, bounded `subject`, UTC `created_at`, `UNIQUE(issuer, subject)`. Revoke direct application-table access; resolve only through the exact-subject bootstrap function. |
+| `core.identity_subjects` | `id uuid PK`, `user_id` FK, nullable bounded `issuer` and `subject`, status ACTIVE\|REVOKED\|ANONYMIZED, nullable `revoked_at`, `revoked_by`, bounded `revocation_reason_code`, lowercase 64-hex `subject_tombstone_hmac`, bounded `tombstone_key_version`, UTC timestamps, and the retention/deletion fields above. `UNIQUE(issuer, subject)` covers retained raw pairs. Revoke direct application-table access; resolve only through the exact-subject bootstrap function. |
 | `core.workspaces` | `id uuid PK`, immutable `organization_id` FK, immutable `public_id UNIQUE`, `name`, `status ACTIVE\|SUSPENDED\|ARCHIVED`, nullable retention/policy versions, `row_version`, actor/timestamps, and `UNIQUE(organization_id, id)`. |
 | `core.organization_memberships` | composite PK `(organization_id, user_id)`, role check limited to OWNER\|ADMIN\|SECURITY, status ACTIVE\|SUSPENDED\|REVOKED, actor/timestamps, `row_version`. |
 | `core.workspace_memberships` | composite PK `(organization_id, workspace_id, user_id)`, role check over all six roles, status ACTIVE\|SUSPENDED\|REVOKED, actor/timestamps, `row_version`; composite FKs enforce the same organization and an organization membership. |
@@ -452,13 +500,32 @@ objects:
 | `core.backfill_batches` | `id uuid PK`, input-manifest SHA-256, legacy-root fingerprint, status DRY_RUN_VERIFIED\|APPLIED\|RECONCILED\|FAILED, counts, operator public alias, tool version, UTC timestamps, evidence SHA-256. Operator role only. |
 | `core.legacy_project_bindings` | `project_id PK/FK`, organization/workspace IDs, immutable legacy project alias, project JSON SHA-256, workspace-manifest SHA-256, bounded tree fingerprint, backfill batch ID, adoption/reconciliation timestamps, status ADOPTED\|RECONCILED\|CONFLICT, `UNIQUE(legacy_project_public_id)`. |
 | `core.persistence_cutovers` | `subsystem varchar(64) PK` fixed to `core_tenancy`, state PREPARED\|ACTIVE\|ROLLED_FORWARD, backfill batch ID, reconciliation evidence hash, application/build revision, activated by/time, rollback boundary. Operator role only. |
-| `core.audit_events` | `id uuid PK`, non-null organization ID, nullable workspace/project IDs, actor type/id, bounded event type and reason code, privacy-safe `metadata jsonb`, request ID, UTC `occurred_at`; append-only trigger rejects update/delete. |
+| `core.audit_events` | `id uuid PK`, non-null organization ID, nullable workspace/project IDs, actor type/id, bounded event type and reason code, closed privacy-safe `metadata jsonb`, request ID, UTC `occurred_at`, the required retention fields, and non-null `expires_at`; append-only trigger rejects row update/delete by ordinary roles. It is list-partitioned by the two allowed retention classes and range-subpartitioned by expiry bucket, with no default partition. |
 
 All SHA-256 columns are lowercase 64-character hex with database checks. All
 timestamps are `TIMESTAMPTZ`. All mutable foundation aggregates use optimistic
 concurrency. No table stores raw bearer tokens, OIDC claims, source text,
 decision text, prompts, model output, hidden reasoning, or unrestricted error
 strings.
+
+Identity-subject checks are fail closed:
+
+- `ACTIVE` requires raw issuer/subject, requires all revocation and tombstone
+  fields null, and is the only status the bootstrap resolver may authenticate;
+- `REVOKED` is immediately unusable, requires raw issuer/subject plus
+  `revoked_at`, `revoked_by`, and `revocation_reason_code`, and retains raw
+  values only for the approved recovery/hold window;
+- `ANONYMIZED` requires issuer/subject null, all revocation fields non-null,
+  and a keyed HMAC-SHA-256 tombstone and key version. The HMAC covers the
+  canonical length-prefixed `(issuer, subject)` pair under a dedicated key
+  stored outside PostgreSQL;
+- the tombstone is covered by `ACCOUNT_IDENTITY`, has bounded `expires_at`,
+  never exceeds the authorized deletion-evidence period without a reviewed
+  hold, and is never returned, logged, treated as a credential/public ID, or
+  used in analytics; and
+- restore, backfill, and OIDC claims cannot reverse revocation/anonymization or
+  silently recreate a tombstoned pair. Re-linking requires a later, separately
+  authorized identity-proofing command and append-only evidence.
 
 ### 9.2 Immutability and schema ownership
 
@@ -467,11 +534,26 @@ The migration also creates:
 - `core.reject_identity_or_scope_update()` and triggers on organization, user,
   workspace, and project physical/public identity and ownership columns;
 - `core.reject_audit_mutation()` on audit events;
-- `CHECK` constraints for aliases, states, roles, versions, and hashes;
+- `CHECK` constraints for aliases, states, roles, versions, hashes, exact
+  table/class mapping, expiry ordering, deletion-state vocabulary, and the
+  complete identity-subject lifecycle invariants;
 - only the indexes needed by exact identity, membership, scope, and audit
-  queries;
-- a non-login owner role for core objects, with application and operator roles
-  granted only their reviewed privileges.
+  queries.
+
+Append-only is role-bounded rather than perpetual. Checkpoint 3A-2 creates the
+class/expiry partition topology and row-mutation trigger, but no application or
+retention grant. Checkpoint 3A-3 creates the reviewed partition-expiry function
+and its least-privilege grant as described in section 10.3. No ordinary role
+may update/delete a live event, detach a partition, or bypass expiry/hold
+evidence.
+
+The migration creates no PostgreSQL role. Before Alembic connects,
+`deploy/postgres/core_roles.sql` must have provisioned the exact reviewed roles
+in section 10.1. The migration refuses to run if any role is absent, if
+`asktp_app` is privileged or can assume the owner role, or if the migration
+session cannot explicitly assume `asktp_core_owner`. It creates and owns every
+`core` object while that owner role is active and resets the role before the
+operator session returns.
 
 Application SQL always schema-qualifies core objects. No deployment changes the
 global `search_path` to make `core` shadow legacy `public` table names.
@@ -483,22 +565,51 @@ global `search_path` to make `core` shadow legacy `public` table names.
 Provision roles through an operator-owned SQL/IaC step, not web/worker startup:
 
 ```text
-asktp_core_owner     NOLOGIN, owns core objects
-asktp_migrator       LOGIN, may assume core owner only during reviewed migration
-asktp_app            LOGIN, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOBYPASSRLS
-asktp_backfill       LOGIN, temporary legacy-read/core-insert grants; revoked after cutover
-asktp_readonly       LOGIN, NOBYPASSRLS, scoped incident/read-replica access
+asktp_core_owner     NOLOGIN, NOINHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS
+asktp_migrator       LOGIN, NOINHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS; may SET ROLE asktp_core_owner only in a reviewed migration
+asktp_app            LOGIN, NOINHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS
+asktp_backfill       LOGIN, NOINHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS; temporary reviewed grants revoked after cutover
+asktp_readonly       LOGIN, NOINHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS; scoped incident/read-replica access
+asktp_retention      LOGIN, NOINHERIT, NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION, NOBYPASSRLS; execute-only audited partition expiry
 ```
 
+Checkpoint 3A-2 owns `deploy/postgres/core_roles.sql` as a prerequisite, not as
+an Alembic side effect. A cluster administrator applies the idempotent script
+before either core revision. The script creates or validates the six exact
+roles, grants only `asktp_migrator` the ability to assume
+`asktp_core_owner`, and refuses an existing role whose login, ownership,
+superuser, database-creation, role-creation, inheritance, or `BYPASSRLS`
+attributes exceed the contract. It does not create a database, schema, table,
+function, policy, application user mapping, or credential. Passwords and
+connection URLs are supplied by the deployment secret system, never embedded
+in the script. Checkpoint 3A-5 reuses and verifies this same checked-in script;
+it does not create an alternate role topology.
+
+`asktp_retention` has no membership in `asktp_core_owner`, no direct table or
+partition privilege, no ability to insert approval evidence, and no general
+function execution. Checkpoint 3A-3 grants it `EXECUTE` only on the bounded
+audit-partition expiry function. Its credential is exposed only to a manual,
+audited retention job after separate Privacy/Security approval evidence exists.
+
 The web and ordinary Celery worker receive only the `asktp_app` URL. They never
-receive `DATABASE_MIGRATION_URL` or backfill credentials. Tests query
-`pg_roles` and table ownership to prove `asktp_app` is not owner, superuser, or
-RLS-bypass.
+receive `DATABASE_MIGRATION_URL`, `DATABASE_ROLE_ADMIN_URL`,
+`DATABASE_RETENTION_URL`, or backfill credentials. Tests query `pg_roles`,
+role memberships, and table ownership to
+prove `asktp_app` is not owner, superuser, RLS-bypass, or able to assume the
+owner role.
 
 ### 10.2 Bootstrap resolution
 
 The application must identify a user and membership before tenant GUCs can be
-set. The migration creates two narrowly scoped `SECURITY DEFINER` functions:
+set. Checkpoint 3A-3 creates this immutable child revision:
+
+```text
+backend/migrations/versions/a6150cf0e9d2_core_tenancy_rls_bootstrap.py
+down_revision = "7d2c1a9e4b60"
+```
+
+The `a6150cf0e9d2` revision creates two narrowly scoped `SECURITY DEFINER`
+functions:
 
 ```sql
 core.resolve_oidc_subject(p_issuer text, p_subject text)
@@ -508,9 +619,12 @@ core.resolve_actor_project_scope(p_user_id uuid, p_project_public_id text)
 Both functions have `SET search_path = pg_catalog, core`, bounded inputs,
 explicit table qualification, no dynamic SQL, no content fields, and
 `REVOKE ALL ... FROM PUBLIC`. The application role receives only `EXECUTE`.
-The second returns a row only for active user, organization, organization
-membership, workspace, workspace membership, and project. Missing and
-wrong-tenant resources are indistinguishable.
+The first resolves only an exact raw issuer/subject row whose status is
+`ACTIVE`; `REVOKED`, `ANONYMIZED`, expired, or deletion-pending links always
+return no row, and the tombstone is never an authentication lookup result. The
+second returns a row only for active user, organization, organization
+membership, workspace, workspace membership, and project. Missing, revoked,
+expired, and wrong-tenant resources are indistinguishable.
 
 After bootstrap, every repository transaction executes parameterized:
 
@@ -527,10 +641,11 @@ physical ID.
 
 ### 10.3 Policies
 
-Enable and `FORCE ROW LEVEL SECURITY` on organizations, workspaces,
-organization memberships, workspace memberships, projects,
-legacy-project bindings, and audit events. Policies compare both
-`organization_id` and `workspace_id` where both exist. Users and identity
+The `a6150cf0e9d2` revision enables and `FORCE ROW LEVEL SECURITY` on
+organizations, workspaces, organization memberships, workspace memberships,
+projects, legacy-project bindings, and audit events. It owns all RLS helper
+functions, policies, revocations, and least-privilege grants. Policies compare
+both `organization_id` and `workspace_id` where both exist. Users and identity
 subjects are not generally selectable by `asktp_app`; the bootstrap function
 is their only authentication read boundary.
 
@@ -538,6 +653,57 @@ RLS policies use `current_setting('app.organization_id', true)` and
 `current_setting('app.workspace_id', true)` through non-throwing helper
 functions. A missing or malformed setting yields no row rather than a database
 error containing internals. `WITH CHECK` mirrors every `USING` predicate.
+
+The same `a6150cf0e9d2` revision creates one separately scoped retention
+function:
+
+```sql
+core.expire_audit_partition(
+    p_retention_class text,
+    p_expiry_bucket date,
+    p_approval_evidence_sha256 text
+)
+```
+
+It is `SECURITY DEFINER`, owned by `asktp_core_owner`, has
+`SET search_path = pg_catalog, core`, is revoked from `PUBLIC` and every role
+except execute-only `asktp_retention`, and accepts no caller-supplied relation
+name or SQL. It derives the partition from the closed class and canonical date
+bucket, then verifies its schema, parent, and bounds through `pg_catalog`.
+
+The function fails closed unless all of these facts hold in the same
+transaction:
+
+1. `session_user` is exactly `asktp_retention` and both class/hash inputs pass
+   closed validation;
+2. every row in the derived partition is past its policy-derived `expires_at`;
+3. an immutable `AUDIT_PARTITION_EXPIRY_APPROVED` event exists outside the
+   target partition and binds the class, bucket, evidence SHA-256, approver
+   aliases, approval time/expiry, and an exact zero-active-hold result;
+4. the approval remains unexpired, has not been consumed by a matching
+   completion event, and contains no customer content, identity subject,
+   membership list, raw path, credential, or approval artifact; and
+5. the completion event can be inserted into a different, current
+   `AUDIT_LONG` partition before the target partition is detached and dropped.
+
+Success records `AUDIT_PARTITION_EXPIRED` with the same evidence hash, bounded
+row count, class/bucket, and completion time, then removes the entire target
+partition. It never performs row-by-row mutation. Evidence contents stay in an
+encrypted operator store under their own approved class; the database keeps
+only the lowercase SHA-256 and bounded metadata.
+
+Task 3a does not implement legal-hold administration. Therefore a non-disposable
+environment cannot create `AUDIT_PARTITION_EXPIRY_APPROVED` until the later
+approved hold registry/workflow can produce the zero-hold evidence. The only
+Task 3a expiry success case is a disposable, non-customer rehearsal fixture;
+all other missing-hold-authority cases must fail closed. This preserves bounded
+expiry design without pretending that deletion/legal-hold operations are
+production-ready.
+
+Checkpoint 3A-3 may build `a6150cf0e9d2` incrementally under its ordered
+RED/GREEN tests, but it must be complete before the checkpoint commit and is
+immutable after that commit. It never edits `7d2c1a9e4b60`. A later change to
+functions, policies, or grants requires another reviewed child revision.
 
 ### 10.4 Repository contract
 
@@ -619,8 +785,11 @@ migration session is active, records server/application revision, and emits an
 evidence JSON whose SHA-256 is inserted into `core.schema_adoptions`. It never
 runs from Flask startup, a route, Celery, or a release health check.
 
-The child downgrade may remove an empty, never-cut-over core schema in a
-disposable rehearsal database. Once a backfill or cutover record exists,
+The `a6150cf0e9d2` downgrade may remove its functions, policies, revocations,
+and grants only in a disposable dark rehearsal with application access and all
+core feature flags disabled. The `7d2c1a9e4b60` downgrade may then remove an
+empty, never-cut-over core schema. Neither downgrade drops or alters the
+externally provisioned roles. Once a backfill or cutover record exists, either
 downgrade refuses and production uses a reviewed forward fix.
 
 ## 12. Operator-owned backfill
@@ -642,7 +811,8 @@ versioned operator manifest with:
   "schema_version": "core-tenancy-backfill/v1",
   "organization": {
     "public_id": "org_<32 lowercase hex>",
-    "name": "operator-approved bounded name"
+    "name": "operator-approved bounded name",
+    "retention_policy_version": "operator-approved policy version"
   },
   "users": [
     {
@@ -657,6 +827,7 @@ versioned operator manifest with:
       "project_public_id": "proj_existing",
       "workspace_public_id": "workspace_<32 lowercase hex>",
       "workspace_name": "operator-approved bounded name",
+      "retention_policy_version": "operator-approved policy version",
       "members": [
         {"user_public_id": "user_<32 lowercase hex>", "role": "OWNER"}
       ]
@@ -685,8 +856,10 @@ Backfill rules:
    not copy source bytes, extracted text, decision text, simulations, reports,
    or generated artifacts.
 5. Core organization, user, identity, membership, workspace, project, binding,
-   audit, and batch rows commit transactionally. Physical UUIDv7 IDs are new;
-   public aliases remain unchanged.
+   audit, and batch rows commit transactionally. Every row receives the exact
+   table-mapped retention class, policy version, start, and policy-derived
+   expiry; lifecycle deletion targets receive null deletion fields. Physical
+   UUIDv7 IDs are new; public aliases remain unchanged.
 6. Reapplying the identical manifest/root fingerprint is idempotent and returns
    the recorded result. Any changed mapping or legacy fingerprint conflicts;
    it never mutates aliases or ownership to make the rerun pass.
@@ -696,6 +869,11 @@ Backfill rules:
 8. After final reconciliation, revoke the temporary role and archive the
    encrypted operator manifest according to the approved security retention
    class.
+9. Before inserting an identity subject, the operator tool computes the
+   versioned HMAC for the exact length-prefixed issuer/subject pair inside the
+   protected process and refuses a matching unexpired tombstone. The key never
+   enters PostgreSQL, the manifest, logs, evidence, or application settings.
+   This check cannot reactivate, overwrite, or delete a tombstone.
 
 ## 13. Shadow comparison and cutover — no dual write, no fallback
 
@@ -795,21 +973,39 @@ Database settings:
 ```text
 DATABASE_URL=                  # asktp_app only
 DATABASE_MIGRATION_URL=        # operator/release job only; absent from web/worker
+DATABASE_ROLE_ADMIN_URL=       # one-shot role prerequisite only; absent from web/worker/migrator
+DATABASE_RETENTION_URL=        # manual audited expiry job only; absent from web/worker/migrator/backfill
 CORE_DATABASE_EXPECTED_ROLE=asktp_app
 CORE_DATABASE_STATEMENT_TIMEOUT_MS=5000
 CORE_DATABASE_LOCK_TIMEOUT_MS=2000
 ```
 
+Operator-only identity settings, absent from web, ordinary workers, migration,
+and retention jobs:
+
+```text
+IDENTITY_TOMBSTONE_HMAC_KEY=
+IDENTITY_TOMBSTONE_HMAC_KEY_VERSION=
+```
+
 Startup refuses these combinations:
 
 - core enabled without a PostgreSQL/psycopg URL;
-- `SHADOW` or `CANONICAL` unless the deployed revision contains
-  `7d2c1a9e4b60` in its ancestry and equals the release manifest's declared
-  compatible head;
+- core enabled unless the database revision exactly equals the release
+  manifest's declared compatible head. A 3A-2-only dark review manifest may
+  declare `7d2c1a9e4b60`; it cannot authorize application reads or writes;
+- `SHADOW` or `CANONICAL` unless the deployed revision contains both
+  `7d2c1a9e4b60` and `a6150cf0e9d2` in its ancestry and exactly equals the
+  release manifest's declared compatible head;
 - `SHADOW` with `BACKFILL` or `CANONICAL` application writes;
 - `CANONICAL` reads without a `PREPARED`/`ACTIVE` cutover record;
 - `CANONICAL` writes unless reads are canonical and legacy writes are false;
-- web/worker access to `DATABASE_MIGRATION_URL`;
+- web/worker access to `DATABASE_MIGRATION_URL` or
+  `DATABASE_ROLE_ADMIN_URL`, `DATABASE_RETENTION_URL`, or a tombstone key;
+- migration-job access to `DATABASE_ROLE_ADMIN_URL` after the role prerequisite
+  completes, or to retention/tombstone credentials at any time;
+- retention-job access to migration, role-admin, backfill, or tombstone
+  credentials;
 - the application database role owning core tables or having `BYPASSRLS`;
 - OIDC mode with missing/non-HTTPS issuer/JWKS, empty audience, or algorithms
   outside the allowlist;
@@ -832,8 +1028,10 @@ Required deployment work:
 1. provision encrypted PostgreSQL with backups/PITR suitable for the declared
    RPO/RTO and private service networking;
 2. require TLS and bounded connection/statement/lock timeouts;
-3. provision roles with the operator step and store URLs as separate Railway
-   secrets;
+3. apply the reviewed, idempotent `deploy/postgres/core_roles.sql` prerequisite,
+   verify its exact role attributes and assumption graph, and store URLs as
+   separate Railway secrets; remove the role-admin URL from the migration job
+   immediately after this prerequisite succeeds;
 4. expose `DATABASE_URL` to web and only workers that need scoped core reads;
 5. expose `DATABASE_MIGRATION_URL` only to a manual release/migration job;
 6. run fingerprint/adoption and migration before deploying any non-LEGACY read
@@ -845,6 +1043,15 @@ Required deployment work:
    to one release record;
 10. retain the single-web-worker warning: core tenancy does not fix the
     process-local simulation runner or make the overall app horizontally safe.
+
+`DATABASE_RETENTION_URL` is never a standing web/worker/release-job secret. It
+may be injected into a one-shot manual retention rehearsal only after the
+approval evidence is immutable, then is removed. Because Task 3a does not ship
+the legal-hold registry, that rehearsal uses a disposable non-customer database
+and cannot authorize production expiry. Restore evidence proves that identity
+and membership revocations/anonymizations, expired audit partitions, deletion
+obligations, and hold releases are replayed before service resumes; no revoked
+subject/membership resolves and no purged partition is reattached.
 
 Readiness returns only status codes, migration revision, and build revision. It
 does not return database hosts, role names, aliases, counts per customer, or
@@ -915,11 +1122,14 @@ production integration or promote the specification from PROPOSED.
 backend/app/infrastructure/__init__.py
 backend/app/infrastructure/persistence/__init__.py
 backend/app/infrastructure/persistence/core_schema.py
+deploy/postgres/core_roles.sql
 backend/migrations/versions/7d2c1a9e4b60_core_tenancy_foundation.py
 backend/migrations/fingerprints/384c98f88d53.json
 backend/tools/core_schema_fingerprint.py
 backend/tools/adopt_core_schema.py
+backend/tests/integration/test_core_roles_prerequisite.py
 backend/tests/integration/test_core_migration.py
+backend/tests/integration/test_core_retention_schema.py
 backend/tests/integration/test_core_schema_adoption.py
 ```
 
@@ -931,9 +1141,15 @@ and worker processes remain unable to receive that credential. Do not modify
 `384c98f88d53_initial_schema.py` or autogenerate from
 `backend/app/db/schema.py`.
 
-**Deliver:** clean/stamped/unversioned-exact upgrade paths, immutable baseline,
-core tables/constraints/triggers, schema adoption evidence, and guarded empty
-downgrade rehearsal.
+**Deliver:** an idempotent least-privilege role prerequisite; clean, stamped,
+and exact-unversioned upgrade paths; immutable baseline; the immutable
+schema-only `7d2c1a9e4b60` revision; core tables, constraints, indexes, and
+immutability triggers; the exact twelve-table retention mapping, identity-link
+lifecycle fields/checks, deletion-state complement, and audit class/expiry
+partition topology; schema-adoption evidence; and guarded empty downgrade
+rehearsal. This checkpoint stops at `7d2c1a9e4b60`, remains dark, grants no
+application or retention access, and creates no bootstrap, expiry, or RLS
+function/policy.
 
 ### Checkpoint 3A-3 — OIDC, ActorContext service, RLS, and repository
 
@@ -949,10 +1165,12 @@ backend/app/infrastructure/auth/oidc_authenticator.py
 backend/app/infrastructure/auth/legacy_dev_authenticator.py
 backend/app/infrastructure/persistence/core_session.py
 backend/app/infrastructure/persistence/postgres_tenancy_repository.py
+backend/migrations/versions/a6150cf0e9d2_core_tenancy_rls_bootstrap.py
 backend/tests/test_actor_context_service.py
 backend/tests/security/test_oidc_authenticator.py
 backend/tests/integration/test_core_rls.py
 backend/tests/integration/test_core_repository.py
+backend/tests/integration/test_core_retention.py
 ```
 
 **Modify:**
@@ -967,6 +1185,16 @@ backend/app/__init__.py
 
 The Flask change registers the opt-in ActorContext seam for future scoped
 routes; it does not mark all legacy routes OIDC-safe or globally multi-tenant.
+The `a6150cf0e9d2` revision has the exact parent `7d2c1a9e4b60`; it creates all
+bootstrap/helper functions, RLS enablement and forced policies, revocations,
+and application grants. It never alters the 3A-2 revision. A 3A-3 release
+manifest declares `a6150cf0e9d2` as its exact Alembic head. Even at that head,
+all application integration and rollout remain disabled until the later gates
+and evidence authorize them.
+The revision also creates the bounded audit-partition expiry function and
+grants only execute to `asktp_retention`; it does not implement a legal-hold or
+deletion administration workflow. The function therefore remains unavailable
+outside the exact disposable-rehearsal evidence gate in section 10.3.
 
 ### Checkpoint 3A-4 — operator backfill and shadow comparison
 
@@ -991,7 +1219,6 @@ Do not move simulation/report/source persistence in this checkpoint.
 **Create:**
 
 ```text
-deploy/postgres/core_roles.sql
 backend/tools/verify_core_deployment.py
 backend/tests/integration/test_core_deployment_contract.py
 ```
@@ -1003,6 +1230,11 @@ manual and noncanonical.
 **Deliver:** restored backup, migration rehearsal, RLS/role proof, backfill and
 shadow evidence, stable failure drill, rollback/forward-fix drill, and a release
 record that keeps general enablement disabled.
+Checkpoint 3A-5 consumes and re-verifies the 3A-2-owned
+`deploy/postgres/core_roles.sql`; it does not replace or broaden it.
+The restore drill must additionally prove revocation/anonymization and
+retention-ledger replay, tombstone non-disclosure, expired partition
+non-reattachment, and fail-closed behavior when zero-hold evidence is absent.
 
 ## 17. Strict one-test-at-a-time TDD order
 
@@ -1018,29 +1250,54 @@ Required order:
 3. `test_legacy_project_alias_is_preserved_but_invalid_alias_is_rejected`
 4. `test_role_policy_cartesian_matrix_is_closed`
 5. `test_actor_context_is_frozen_strict_and_server_scoped`
-6. `test_clean_postgres_upgrade_creates_only_expected_core_tables`
-7. `test_original_384c_migration_hash_is_unchanged`
-8. `test_exact_unversioned_384c_requires_explicit_fingerprint_adoption`
-9. `test_schema_mismatch_refuses_stamp_and_core_migration`
-10. `test_public_alias_and_scope_update_triggers_reject_mutation`
-11. `test_audit_event_update_and_delete_are_rejected`
-12. `test_oidc_rejects_wrong_issuer_audience_algorithm_expiry_and_signature`
-13. `test_oidc_claimed_scope_and_roles_are_ignored`
-14. `test_legacy_dev_adapter_is_impossible_in_production_or_railway`
-15. `test_inactive_membership_cannot_create_actor_context`
-16. `test_role_capabilities_are_derived_server_side`
-17. `test_app_role_is_not_owner_superuser_or_rls_bypass`
-18. `test_rls_blocks_cross_organization_and_cross_workspace_read_and_write`
-19. `test_connection_pool_reuse_does_not_leak_actor_scope`
-20. `test_scoped_repository_requires_actor_and_explicit_scope_predicates`
-21. `test_backfill_dry_run_is_required_and_apply_is_idempotent`
-22. `test_backfill_refuses_missing_or_mismatched_workspace_manifest`
-23. `test_backfill_never_copies_excluded_content_or_artifact_tables`
-24. `test_shadow_reads_canonical_but_never_writes_or_changes_response`
-25. `test_canonical_mode_never_reads_or_writes_legacy_on_core_failure`
-26. `test_invalid_flag_combinations_fail_application_startup`
-27. `test_web_and_worker_cannot_use_migration_credentials`
-28. `test_cutover_requires_reconciliation_and_prepared_record`
+6. `test_app_role_is_not_owner_superuser_or_rls_bypass`
+7. `test_core_roles_prerequisite_is_idempotent_and_has_only_reviewed_assumption_edges`
+8. `test_foundation_migration_refuses_missing_or_invalid_role_prerequisite`
+9. `test_clean_postgres_upgrade_creates_only_expected_core_tables`
+10. `test_original_384c_migration_hash_is_unchanged`
+11. `test_exact_unversioned_384c_requires_explicit_fingerprint_adoption`
+12. `test_schema_mismatch_refuses_stamp_and_core_migration`
+13. `test_public_alias_and_scope_update_triggers_reject_mutation`
+14. `test_all_twelve_foundation_tables_have_exact_retention_columns_and_class_checks`
+15. `test_deletion_state_vocabulary_and_cartesian_complement_are_closed`
+16. `test_identity_subject_lifecycle_fields_and_database_invariants_are_exact`
+17. `test_audit_events_are_partitioned_by_closed_class_and_expiry_without_default`
+18. `test_audit_event_update_and_delete_are_rejected`
+19. `test_oidc_rejects_wrong_issuer_audience_algorithm_expiry_and_signature`
+20. `test_oidc_claimed_scope_and_roles_are_ignored`
+21. `test_legacy_dev_adapter_is_impossible_in_production_or_railway`
+22. `test_rls_bootstrap_child_has_exact_parent_and_becomes_head`
+23. `test_bootstrap_functions_require_exact_subject_and_active_scope_membership`
+24. `test_revoked_anonymized_expired_or_deletion_pending_subject_never_authenticates`
+25. `test_inactive_membership_cannot_create_actor_context`
+26. `test_role_capabilities_are_derived_server_side`
+27. `test_rls_blocks_cross_organization_and_cross_workspace_read_and_write`
+28. `test_connection_pool_reuse_does_not_leak_actor_scope`
+29. `test_scoped_repository_requires_actor_and_explicit_scope_predicates`
+30. `test_retention_role_has_only_bounded_expiry_execute_and_no_table_or_owner_privilege`
+31. `test_audit_expiry_rejects_unknown_nonexpired_held_missing_expired_or_consumed_approval`
+32. `test_audit_expiry_purges_only_expired_unheld_partition_and_records_minimized_evidence`
+33. `test_backfill_dry_run_is_required_and_apply_is_idempotent`
+34. `test_backfill_refuses_missing_or_mismatched_workspace_manifest`
+35. `test_backfill_never_copies_excluded_content_or_artifact_tables`
+36. `test_backfill_refuses_unexpired_identity_subject_tombstone_match`
+37. `test_shadow_reads_canonical_but_never_writes_or_changes_response`
+38. `test_canonical_mode_never_reads_or_writes_legacy_on_core_failure`
+39. `test_invalid_flag_combinations_fail_application_startup`
+40. `test_web_worker_migrator_and_retention_jobs_cannot_receive_each_others_credentials`
+41. `test_cutover_requires_reconciliation_and_prepared_record`
+42. `test_restore_replays_revocation_anonymization_expiry_and_hold_release_before_startup`
+
+Tests 6–18 are the complete Checkpoint 3A-2 ledger. They provision and verify
+the role prerequisite first, then land and freeze `7d2c1a9e4b60` as the exact
+dark foundation head. No 3A-3 file exists during that checkpoint.
+
+Tests 19–32 are the Checkpoint 3A-3 ledger. Test 22 first observes the missing
+child revision and then creates the minimal `a6150cf0e9d2` lineage. Tests 23,
+27, 30, and 31 drive its bootstrap/expiry functions, grants/revocations, and RLS policies
+before the 3A-3 commit freezes that revision as the exact head. This in-progress
+construction never changes the already-landed `7d2c1a9e4b60` revision. Tests
+33–42 belong to the later checkpoints.
 
 Example commands from `backend/`:
 
@@ -1049,9 +1306,15 @@ Example commands from `backend/`:
 .\.venv\Scripts\pytest tests/integration/test_core_rls.py::test_rls_blocks_cross_organization_and_cross_workspace_read_and_write -q --basetemp=.pytest-tmp-task3a
 ```
 
-PostgreSQL integration tests read only `TEST_POSTGRES_URL`; they must not skip
-in CI or release verification. SQLite is not an acceptable substitute for
-migration, role, function, trigger, isolation, or connection-pool tests.
+PostgreSQL integration tests use four distinct credentials against the same
+disposable PostgreSQL 16+ database: `TEST_POSTGRES_ADMIN_URL` only for the role
+prerequisite fixture, `TEST_POSTGRES_MIGRATION_URL` only for Alembic/adoption,
+`TEST_POSTGRES_URL` only as the RLS-subject application role, and
+`TEST_POSTGRES_RETENTION_URL` only for the disposable expiry rehearsal. The
+admin URL is discarded before migration tests, and no fixture can read another
+role's credential. These tests must not skip in CI or release verification. SQLite is
+not an acceptable substitute for migration, role, function, trigger,
+isolation, or connection-pool tests.
 
 After the individual ledger is complete, run:
 
@@ -1059,7 +1322,7 @@ After the individual ledger is complete, run:
 cd backend
 .\.venv\Scripts\pytest tests/domain/test_identifiers.py tests/domain/test_authorization.py tests/domain/test_actor_context.py -q --basetemp=.pytest-tmp-task3a-domain
 .\.venv\Scripts\pytest tests/test_actor_context_service.py tests/security/test_oidc_authenticator.py tests/test_core_identity_router.py -q --basetemp=.pytest-tmp-task3a-services
-.\.venv\Scripts\pytest tests/integration/test_core_migration.py tests/integration/test_core_schema_adoption.py tests/integration/test_core_rls.py tests/integration/test_core_repository.py tests/integration/test_core_tenancy_backfill.py tests/integration/test_core_deployment_contract.py -q --basetemp=.pytest-tmp-task3a-postgres
+.\.venv\Scripts\pytest tests/integration/test_core_roles_prerequisite.py tests/integration/test_core_migration.py tests/integration/test_core_retention_schema.py tests/integration/test_core_schema_adoption.py tests/integration/test_core_rls.py tests/integration/test_core_repository.py tests/integration/test_core_retention.py tests/integration/test_core_tenancy_backfill.py tests/integration/test_core_deployment_contract.py -q --basetemp=.pytest-tmp-task3a-postgres
 .\.venv\Scripts\pytest tests/test_decision_workspace_api.py tests/domain/test_decision_workspace.py tests/test_api_schemas.py -q --basetemp=.pytest-tmp-task3a-regression
 ```
 
@@ -1067,7 +1330,7 @@ Then run touched-file lint, docs validation, and full repository verification:
 
 ```powershell
 cd backend
-uvx ruff check app/domain/identifiers.py app/domain/authorization.py app/domain/actor_context.py app/application/actor_context_service.py app/application/core_identity_router.py app/infrastructure tools tests/domain/test_identifiers.py tests/domain/test_authorization.py tests/domain/test_actor_context.py tests/test_actor_context_service.py tests/security/test_oidc_authenticator.py tests/integration/test_core_migration.py tests/integration/test_core_schema_adoption.py tests/integration/test_core_rls.py tests/integration/test_core_repository.py tests/integration/test_core_tenancy_backfill.py tests/integration/test_core_deployment_contract.py tests/test_core_identity_router.py
+uvx ruff check app/domain/identifiers.py app/domain/authorization.py app/domain/actor_context.py app/application/actor_context_service.py app/application/core_identity_router.py app/infrastructure migrations/versions/7d2c1a9e4b60_core_tenancy_foundation.py migrations/versions/a6150cf0e9d2_core_tenancy_rls_bootstrap.py tools tests/domain/test_identifiers.py tests/domain/test_authorization.py tests/domain/test_actor_context.py tests/test_actor_context_service.py tests/security/test_oidc_authenticator.py tests/integration/test_core_roles_prerequisite.py tests/integration/test_core_migration.py tests/integration/test_core_retention_schema.py tests/integration/test_core_schema_adoption.py tests/integration/test_core_rls.py tests/integration/test_core_repository.py tests/integration/test_core_retention.py tests/integration/test_core_tenancy_backfill.py tests/integration/test_core_deployment_contract.py tests/test_core_identity_router.py
 cd ..
 python tools/validate_docs.py
 npm run verify
@@ -1085,6 +1348,10 @@ Task 3a implementation may be marked complete only when:
   supported PostgreSQL;
 - UUIDv7, public alias immutability, role policy, ActorContext, RLS, bootstrap
   functions, repositories, connection reuse, and cross-tenant matrices pass;
+- all twelve foundation tables match the exact retention map, identity
+  revocation/anonymization invariants pass, audit expiry remains role-bounded
+  and evidence-gated, and restore replay cannot reactivate or reattach deleted
+  state;
 - OIDC validation is complete and the legacy adapter is impossible in
   production/Railway;
 - operator dry-run/apply/reconcile is idempotent and copies only foundation
@@ -1144,6 +1411,12 @@ Stop implementation or rollout on any:
 - shadow write, live dual write, or canonical-to-legacy fallback;
 - missing restore evidence or unrevoked backfill credential;
 - raw identity/membership data in logs, metrics, traces, or evidence;
+- missing/unknown retention metadata, a table/class mismatch, or an unguarded
+  deletion transition;
+- revoked/anonymized identity authentication, raw-subject retention past
+  expiry, tombstone disclosure/reversal, or restore-time reactivation;
+- row-by-row audit mutation, expiry of a nonexpired/held partition, missing or
+  replayed approval evidence, or standing retention credentials;
 - deployment that makes general product records appear canonical.
 
 ## 19. Implementation report
@@ -1155,11 +1428,14 @@ Write `.superpowers/sdd/task-3a-tenant-persistence-report.md` with:
 - the pre/post SHA-256 of `384c98f88d53_initial_schema.py`;
 - every individual RED/GREEN command and result in order;
 - PostgreSQL version, migration starting state, calculated schema fingerprint,
-  migration head, role/RLS checks, and downgrade/forward-fix evidence;
+  exact `7d2c1a9e4b60` and `a6150cf0e9d2` lineage/head evidence, role-prerequisite
+  and RLS checks, and downgrade/forward-fix evidence;
 - dry-run/apply/reconciliation evidence hashes without sensitive contents;
 - shadow mismatch totals and proof of zero shadow writes;
 - canonical failure/no-fallback evidence;
 - backup/restore, credential revocation, cutover/rollback, and release record;
+- twelve-table retention/class evidence, identity lifecycle/tombstone negative
+  tests, partition expiry/hold/approval evidence, and restore-replay results;
 - focused regressions, touched-file lint, docs validator, and `npm run verify`;
 - independent spec and quality review verdicts;
 - commit SHAs and any remaining honest production blocker.

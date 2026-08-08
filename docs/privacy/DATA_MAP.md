@@ -112,6 +112,51 @@ project-specific status section below remains controlling evidence.
 | Backfill batch/binding | input and legacy-tree hashes, counts, immutable public aliases, status/times, evidence hash | reconcile operator-approved legacy identity mapping | encrypted operator manifest stored outside ordinary logs; no source/decision/generated content copied |
 | Cutover/audit | subsystem, state, release/evidence hashes, bounded actor/reason/request metadata, time | accountable activation, rollback boundary, investigation | append-only; privacy-safe metadata only |
 
+Every canonical foundation row also carries the retention metadata required by
+[`RETENTION.md`](RETENTION.md): `retention_class`,
+`retention_policy_version`, `retention_started_at`, and nullable `expires_at`.
+Customer-lifecycle deletion targets additionally carry `deletion_state` and
+`deletion_state_changed_at`. The exact table-to-class mapping in that document
+is binding; a generic database default cannot lengthen an organization or
+workspace policy.
+
+### Foundation field map
+
+This field map is closed for the foundation migration. A new column or a new
+use of an existing column requires a data-map and retention review before it is
+collected.
+
+| Tables and exact field group | Privacy class | Purpose and owner | Retention/deletion boundary |
+|---|---|---|---|
+| All addressable records: physical `id`, immutable `public_id` | Business-confidential operational identifier | Identity/Persistence; relationships and stable references | Follows the table class; physical IDs never leave trusted persistence boundaries, and public aliases are omitted from ordinary telemetry. |
+| Workspace-owned records: `organization_id`, `workspace_id`, optional `project_id` | Business-confidential authorization scope | Identity/Security; tenant isolation | Follows the scoped parent; deletion evidence may retain only a non-customer scope digest when legally or operationally required. |
+| `organizations`: bounded `name`, `status`, `default_region`, policy-version fields | Business confidential; name may identify a sole trader | Customer administrator + Privacy; policy and residency boundary | `ACCOUNT_IDENTITY`; correctable, suspendable, and subject to organization deletion/hold. |
+| `users`: bounded `display_name`, `status` | Personal | Identity + Privacy; stable account and rights operations | `ACCOUNT_IDENTITY`; display name is correctable and removed or anonymized when the account no longer requires it. |
+| `identity_subjects`: exact `issuer`, exact opaque `subject`, `status`, `user_id`, revocation fields | Personal authentication-link data | Identity + Security; authenticate one existing user | `ACCOUNT_IDENTITY`; exact values exist only while active or in an approved recovery/hold window, then are crypto-shredded and replaced by the keyed tombstone described below. |
+| Organization/workspace memberships: role, status, actor/time, version | Personal/business-confidential access-control data | Organization/workspace administrator + Security | `ACCOUNT_IDENTITY`; revoked immediately for authorization, then retained only for the bounded authorization-audit period. |
+| `projects` and `legacy_project_bindings`: bounded name, legacy aliases, manifest/tree/content hashes | Customer confidential | Workspace owner + Persistence; preserve approved legacy mapping | `PROJECT_STANDARD`; purged or minimized with project deletion, never repurposed for analytics or tenant inference. |
+| `schema_adoptions`, `backfill_batches`, `persistence_cutovers`: revision, mode/state, counts, tool/build versions, database/manifest/evidence hashes, bounded operator alias/time | Security-confidential system lineage | Persistence/Release; prove migration and cutover integrity | `AUDIT_LONG`; no source/generated content, credentials, customer names, subjects, raw paths, URLs, or manifests. |
+| `audit_events`: scope IDs, actor type/ID, bounded event/reason code, request ID, allowlisted metadata, occurrence/expiry time | Security confidential; may include personal identifiers | Security/Privacy; investigation, rights and deletion proof | `AUDIT_LONG` by default; only minimized content-free deletion proof may use `DELETION_EVIDENCE_LONG`. Expired, unheld partitions are purged by the reviewed retention operator. |
+| All foundation rows: retention class/policy/start/expiry and deletion state/time where applicable | Governance metadata | Privacy + Data Governance; execute and prove lifecycle policy | Retained with the row; final evidence contains no deleted content and expires under its own declared class. |
+
+### Identity-subject revocation and tombstone
+
+`identity_subjects.status` is closed to `ACTIVE`, `REVOKED`, and
+`ANONYMIZED`. The authentication bootstrap accepts only `ACTIVE`. Revocation
+records `revoked_at`, `revoked_by`, and a bounded
+`revocation_reason_code`; it cannot be reversed by an OIDC claim, operator
+backfill, or database restore.
+
+After any approved recovery or legal/security-hold window, anonymization sets
+the raw `issuer` and `subject` to null and stores only
+`subject_tombstone_hmac` plus `tombstone_key_version`. The HMAC covers a
+canonical length-prefixed `(issuer, subject)` pair under a dedicated,
+versioned deletion key held outside PostgreSQL. The tombstone is queried only
+inside the identity-provisioning boundary to prevent silent recreation. It is
+never returned, logged, used for analytics, or accepted as authentication.
+Re-linking requires separate identity proof, Privacy/Security-authorized reason
+code, and an append-only audit event.
+
 Roles and capabilities are derived server-side from active memberships. OIDC
 claims authenticate only `(issuer, subject)` and never establish organization,
 workspace, project, role, or capability. Public aliases are operational
@@ -133,6 +178,12 @@ removing audit history. Status, retention, legal-hold, and account-rights
 workflows determine whether identity links are disabled, anonymized, retained,
 or deleted. Restore procedures must replay deletion obligations and must not
 re-activate revoked memberships or credentials.
+
+Append-only audit is role-bounded, not perpetual. Application and ordinary
+operator roles cannot update/delete live audit rows. A dedicated retention
+operator may purge only expired, unheld partitions under the evidence protocol
+in `RETENTION.md`. Raw identity, membership, alias, or customer-content fields
+must not be copied into deletion evidence.
 
 ## Data minimization
 
@@ -364,9 +415,13 @@ Before enabling a provider or region, record:
 
 - data inventory matches code, providers, and telemetry;
 - every field has purpose, class, owner, and retention;
+- every foundation column is covered by the closed field map and exact
+  table-to-class mapping;
 - no raw content appears in analytics by default;
 - provider transfers are documented and configurable;
 - access and deletion workflows are tested;
+- revocation, anonymization, tombstone non-disclosure, audit expiry, legal-hold
+  blocking, and restore replay are tested with negative cases;
 - sensitive-data warnings and blocks work;
 - privacy notices and contracts match actual behavior;
 - unresolved region/legal-basis/provider facts block production enablement.

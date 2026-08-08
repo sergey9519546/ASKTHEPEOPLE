@@ -73,8 +73,24 @@ created_at timestamptz not null default now(),
 created_by uuid,
 updated_at timestamptz not null default now(),
 updated_by uuid,
-version bigint not null default 1
+version bigint not null default 1,
+retention_class varchar(64) not null,
+retention_policy_version varchar(128) not null,
+retention_started_at timestamptz not null,
+expires_at timestamptz
 ```
+
+Every canonical table, including global identities, memberships, audit, and
+operator evidence, stores those four retention fields even when its documented
+scope/composite shape differs. Customer-lifecycle deletion targets also store
+nullable `deletion_state varchar(32)` and
+`deletion_state_changed_at timestamptz`; null means no accepted deletion
+request. The closed non-null values are `REQUESTED`, `ELIGIBILITY_CHECK`, `LEGAL_HOLD`,
+`PURGING_PRIMARY`, `PURGING_PROVIDERS`, `PURGING_BACKUPS`, `COMPLETE`, and
+`FAILED`, with only the transitions in the deletion state machine. The exact
+class and trigger for each `core` table are defined in
+[`docs/privacy/RETENTION.md`](../privacy/RETENTION.md); schema defaults cannot
+select a longer period than the server-derived policy.
 
 ## Core relationship model
 
@@ -140,6 +156,38 @@ application roles cannot select it directly; a bounded `SECURITY DEFINER`
 bootstrap resolver is the only authentication read boundary. Tokens, complete
 OIDC claims, provider secrets, and passwords are never stored.
 
+The identity-link lifecycle is exact:
+
+```text
+status: ACTIVE | REVOKED | ANONYMIZED
+issuer                 # required only while raw link is retained
+subject                # required only while raw link is retained
+user_id
+revoked_at
+revoked_by
+revocation_reason_code
+subject_tombstone_hmac # required only after anonymization
+tombstone_key_version  # required only after anonymization
+retention_class        # fixed to ACCOUNT_IDENTITY
+retention_policy_version
+retention_started_at
+expires_at
+deletion_state
+deletion_state_changed_at
+```
+
+Only `ACTIVE` can authenticate. `REVOKED` is immediately unusable. After an
+approved recovery or hold window, `ANONYMIZED` requires null raw issuer/subject
+values and a keyed HMAC-SHA-256 tombstone over the canonical length-prefixed
+pair. The key is external and versioned. Provisioning checks the tombstone only
+to prevent silent recreation; it is never a public identifier, credential,
+log/metric value, or analytics key. Restore replays revocation and
+anonymization before authentication is enabled. Re-linking is a separate,
+audited identity-proofing action and never a state rollback.
+The tombstone remains covered by `ACCOUNT_IDENTITY`, has its own bounded
+`expires_at`, and is purged no later than the authorized deletion-evidence
+period unless a reviewed hold applies.
+
 ### `workspaces`
 
 A workspace belongs to exactly one organization and is the collaboration,
@@ -204,6 +252,23 @@ optimistic concurrency. Identity, scope, public alias, audit events, and
 adoption evidence are immutable. Core schema change is Alembic-only;
 production startup never calls `create_all`, stamps, migrates, provisions a
 tenant, or upgrades this schema.
+
+The foundation migration implements the exact table-to-retention-class mapping
+in [`docs/privacy/RETENTION.md`](../privacy/RETENTION.md) and the closed field
+map in [`docs/privacy/DATA_MAP.md`](../privacy/DATA_MAP.md). The mapping covers
+all twelve tables above; a row with a missing or unknown class/policy version,
+an expiry before its retention start, or a deletion state inconsistent with
+its lifecycle is rejected by database checks.
+
+`core.audit_events` is append-only to application, worker, support, backfill,
+and read-only roles. That immutability does not authorize indefinite
+retention. Audit rows carry policy-derived expiry and are time-partitioned (or
+use an independently reviewed equivalent). A dedicated retention operator may
+detach and purge only an entirely expired, unheld partition, after preserving
+the minimized content-free deletion evidence and aggregate evidence hash
+required by the retention policy. It cannot update individual live events.
+Legal hold pauses expiry for the exact scope; hold release restores the prior
+class without restarting the retention clock.
 
 The existing `384c98f88d53` migration is immutable history. Adoption first
 fingerprints the exact managed legacy schema. Only an empty database, an exact
@@ -741,6 +806,19 @@ search. Vector IDs do not become provenance.
   legacy fallback;
 - migration up/down or forward-fix strategy is tested;
 - RLS tests cover owner, editor, reviewer, viewer, worker, and admin roles;
+- every `core` table has the exact retention class/policy/start/expiry fields,
+  class mapping, checks, and deletion metadata required by its lifecycle;
+- the complete Cartesian complement of the closed deletion-state transitions
+  and retention-class mapping is rejected by domain and database tests;
+- identity-subject tests prove `ACTIVE` authenticates, `REVOKED` and
+  `ANONYMIZED` fail closed, raw issuer/subject values age out, tombstones are
+  non-reversible/non-disclosable, and an unauthorized re-link is rejected;
+- ordinary roles cannot mutate audit history; the retention operator can purge
+  only expired, unheld partitions, cannot purge a held/nonexpired partition,
+  and preserves only minimized deletion evidence;
+- restore tests replay identity and membership revocations, anonymizations,
+  expired audit partitions, deletion obligations, and legal-hold releases
+  before service resumes;
 - every `epistemic-ledger/v2` triple passes and the complete Cartesian
   complement is rejected at domain and database boundaries;
 - completed runs reject mutation;
