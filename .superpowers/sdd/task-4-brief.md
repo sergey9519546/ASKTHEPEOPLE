@@ -736,8 +736,8 @@ Required commands:
 
 | Command | Capability | State effect |
 |---|---|---|
-| `create_source_upload_intent` | `sources:write` | Creates Source and SourceVersion in `UPLOADING`. |
-| `complete_source_upload` | `sources:write` | `UPLOADING -> QUARANTINED`; emits scan work. |
+| `create_source_upload_intent` | `source:create` | Creates Source and SourceVersion in `UPLOADING`. |
+| `complete_source_upload` | `source:create` | `UPLOADING -> QUARANTINED`; emits scan work. |
 | `fail_source_upload` | `sources:process` | Operational upload-protocol failure performs `UPLOADING -> FAILED`; it records no source-policy verdict. |
 | `begin_source_scan` | `sources:scan` | `QUARANTINED -> SCANNING`. |
 | `record_source_quarantine_rejection` | `sources:scan` | Policy/security rejection performs `QUARANTINED -> REJECTED`. |
@@ -1578,7 +1578,7 @@ Add and complete these tests in order, one at a time:
 
 1. feature-off capabilities return no enabled format;
 2. unauthenticated create intent returns 401;
-3. membership without `sources:write` returns 403;
+3. membership without `source:create` returns 403;
 4. PDF and Markdown return 415 without object intent;
 5. valid TXT intent returns prefixed UUIDv7 public IDs, no physical IDs, and
    constrained direct-upload fields;

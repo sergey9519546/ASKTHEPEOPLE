@@ -923,8 +923,11 @@ backend/tests/integration/test_core_migration.py
 backend/tests/integration/test_core_schema_adoption.py
 ```
 
-**Modify:** `backend/app/db/__init__.py` only to prevent core `create_all` and
-separate legacy-development initialization explicitly. Do not modify
+**Modify:** `backend/app/db/__init__.py` to prevent core `create_all` and
+separate legacy-development initialization explicitly. Modify
+`backend/migrations/env.py` only to require `DATABASE_MIGRATION_URL` for core
+migration/adoption commands and remove its SQLite fallback; application web
+and worker processes remain unable to receive that credential. Do not modify
 `384c98f88d53_initial_schema.py` or autogenerate from
 `backend/app/db/schema.py`.
 
