@@ -223,8 +223,14 @@ try:
         ActionType,
         LLMAction,
         ManualAction,
-        generate_twitter_agent_graph,
-        generate_reddit_agent_graph
+    )
+    from app.services.decision_lens_oasis_agent import (
+        generate_decision_lens_agent_graph,
+        load_decision_lens_runtime_adapters,
+    )
+    from app.services.instruction_integrity import (
+        InstructionIntegrityGuard,
+        InstructionIntegrityViolation,
     )
     from app.services.network_topology import apply_network_topology, apply_homophily_rewiring
 except ImportError as e:
@@ -285,14 +291,18 @@ class ParallelIPCHandler:
         simulation_dir: str,
         twitter_env=None,
         twitter_agent_graph=None,
+        twitter_instruction_guard=None,
         reddit_env=None,
-        reddit_agent_graph=None
+        reddit_agent_graph=None,
+        reddit_instruction_guard=None,
     ):
         self.simulation_dir = simulation_dir
         self.twitter_env = twitter_env
         self.twitter_agent_graph = twitter_agent_graph
+        self.twitter_instruction_guard = twitter_instruction_guard
         self.reddit_env = reddit_env
         self.reddit_agent_graph = reddit_agent_graph
+        self.reddit_instruction_guard = reddit_instruction_guard
         
         self.commands_dir = os.path.join(simulation_dir, IPC_COMMANDS_DIR)
         self.responses_dir = os.path.join(simulation_dir, IPC_RESPONSES_DIR)
@@ -366,14 +376,24 @@ class ParallelIPCHandler:
             platform: Platform name ("twitter" or "reddit")
             
         Returns:
-            (env, agent_graph, platform_name) or (None, None, None)
+            (env, agent_graph, integrity_guard, platform_name), or empty values
         """
         if platform == "twitter" and self.twitter_env:
-            return self.twitter_env, self.twitter_agent_graph, "twitter"
+            return (
+                self.twitter_env,
+                self.twitter_agent_graph,
+                self.twitter_instruction_guard,
+                "twitter",
+            )
         elif platform == "reddit" and self.reddit_env:
-            return self.reddit_env, self.reddit_agent_graph, "reddit"
+            return (
+                self.reddit_env,
+                self.reddit_agent_graph,
+                self.reddit_instruction_guard,
+                "reddit",
+            )
         else:
-            return None, None, None
+            return None, None, None, None
     
     async def _interview_single_platform(self, agent_id: int, prompt: str, platform: str) -> Dict[str, Any]:
         """
@@ -382,7 +402,9 @@ class ParallelIPCHandler:
         Returns:
             Dictionary containing the result, or dictionary containing the error
         """
-        env, agent_graph, actual_platform = self._get_env_and_graph(platform)
+        env, agent_graph, integrity_guard, actual_platform = (
+            self._get_env_and_graph(platform)
+        )
         
         if not env or not agent_graph:
             return {"platform": platform, "error": f"{platform}platform is unavailable"}
@@ -394,12 +416,14 @@ class ParallelIPCHandler:
                 action_args={"prompt": prompt}
             )
             actions = {agent: interview_action}
-            await env.step(actions)
+            await integrity_checked_step(env, integrity_guard, actions)
             
             result = self._get_interview_result(agent_id, actual_platform)
             result["platform"] = actual_platform
             return result
             
+        except InstructionIntegrityViolation:
+            raise
         except Exception as e:
             return {"platform": platform, "error": str(e)}
     
@@ -527,13 +551,19 @@ class ParallelIPCHandler:
                         print(f"  Warning: Could not get Twitter Agent {agent_id}: {e}")
                 
                 if twitter_actions:
-                    await self.twitter_env.step(twitter_actions)
+                    await integrity_checked_step(
+                        self.twitter_env,
+                        self.twitter_instruction_guard,
+                        twitter_actions,
+                    )
                     
                     for interview in twitter_interviews:
                         agent_id = interview.get("agent_id")
                         result = self._get_interview_result(agent_id, "twitter")
                         result["platform"] = "twitter"
                         results[f"twitter_{agent_id}"] = result
+            except InstructionIntegrityViolation:
+                raise
             except Exception as e:
                 print(f"  Twitter batch Interview failed: {e}")
         
@@ -554,13 +584,19 @@ class ParallelIPCHandler:
                         print(f"  Warning: Could not get Reddit Agent {agent_id}: {e}")
                 
                 if reddit_actions:
-                    await self.reddit_env.step(reddit_actions)
+                    await integrity_checked_step(
+                        self.reddit_env,
+                        self.reddit_instruction_guard,
+                        reddit_actions,
+                    )
                     
                     for interview in reddit_interviews:
                         agent_id = interview.get("agent_id")
                         result = self._get_interview_result(agent_id, "reddit")
                         result["platform"] = "reddit"
                         results[f"reddit_{agent_id}"] = result
+            except InstructionIntegrityViolation:
+                raise
             except Exception as e:
                 print(f"  Reddit batch Interview failed: {e}")
         
@@ -1123,7 +1159,23 @@ class PlatformSimulation:
     def __init__(self):
         self.env = None
         self.agent_graph = None
+        self.instruction_guard = None
         self.total_actions = 0
+
+
+async def integrity_checked_step(env, integrity_guard, actions):
+    """Verify immutable instructions and tools around every OASIS step."""
+    if integrity_guard is None:
+        raise InstructionIntegrityViolation(
+            agent_id=None,
+            expected_sha256="",
+            actual_sha256="",
+        )
+    integrity_guard.verify(env.agent_graph)
+    try:
+        await env.step(actions)
+    finally:
+        integrity_guard.verify(env.agent_graph)
 
 
 async def run_twitter_simulation(
@@ -1146,16 +1198,15 @@ async def run_twitter_simulation(
     # Twitter actor model
     model, actor_settings = create_model(simulation_dir, use_boost=False)
     
-    # OASIS Twitter uses CSV format
-    profile_path = os.path.join(simulation_dir, "twitter_profiles.csv")
-    if not os.path.exists(profile_path):
-        log_info(f"Error: Profile file does not exist: {profile_path}")
-        return result
-    
-    result.agent_graph = await generate_twitter_agent_graph(
-        profile_path=profile_path,
+    adapters = load_decision_lens_runtime_adapters(simulation_dir)
+    result.agent_graph = await generate_decision_lens_agent_graph(
+        adapters=adapters,
+        platform="twitter",
         model=model,
         available_actions=TWITTER_ACTIONS,
+    )
+    result.instruction_guard = InstructionIntegrityGuard.capture(
+        result.agent_graph
     )
     
     # Apply initial network topology before starting the simulation
@@ -1180,6 +1231,7 @@ async def run_twitter_simulation(
     )
     
     await result.env.reset()
+    result.instruction_guard.verify(result.env.agent_graph)
     log_info("Environment started")
     
     if action_logger:
@@ -1326,7 +1378,11 @@ async def run_twitter_simulation(
             if action_logger:
                 action_logger.log_round_end(round_num + 1, scheduled_count)
             continue
-        await result.env.step(actions)
+        await integrity_checked_step(
+            result.env,
+            result.instruction_guard,
+            actions,
+        )
         
         # Fetch actions actually performed from database and record
         actual_actions, last_rowid = fetch_new_actions_from_db(
@@ -1379,6 +1435,8 @@ async def run_twitter_simulation(
     
     if action_logger:
         action_logger.log_simulation_end(total_rounds, total_actions)
+
+    result.instruction_guard.verify(result.agent_graph)
     
     result.total_actions = total_actions
     elapsed = (datetime.now() - start_time).total_seconds()
@@ -1407,15 +1465,15 @@ async def run_reddit_simulation(
     # Reddit actor model
     model, actor_settings = create_model(simulation_dir, use_boost=True)
     
-    profile_path = os.path.join(simulation_dir, "reddit_profiles.json")
-    if not os.path.exists(profile_path):
-        log_info(f"Error: Profile file does not exist: {profile_path}")
-        return result
-    
-    result.agent_graph = await generate_reddit_agent_graph(
-        profile_path=profile_path,
+    adapters = load_decision_lens_runtime_adapters(simulation_dir)
+    result.agent_graph = await generate_decision_lens_agent_graph(
+        adapters=adapters,
+        platform="reddit",
         model=model,
         available_actions=REDDIT_ACTIONS,
+    )
+    result.instruction_guard = InstructionIntegrityGuard.capture(
+        result.agent_graph
     )
     
     # Apply initial network topology before starting the simulation
@@ -1440,6 +1498,7 @@ async def run_reddit_simulation(
     )
     
     await result.env.reset()
+    result.instruction_guard.verify(result.env.agent_graph)
     log_info("Environment started")
     
     if action_logger:
@@ -1587,7 +1646,11 @@ async def run_reddit_simulation(
             if action_logger:
                 action_logger.log_round_end(round_num + 1, scheduled_count)
             continue
-        await result.env.step(actions)
+        await integrity_checked_step(
+            result.env,
+            result.instruction_guard,
+            actions,
+        )
         
         # Fetch actions actually performed from database and record
         actual_actions, last_rowid = fetch_new_actions_from_db(
@@ -1640,6 +1703,8 @@ async def run_reddit_simulation(
     
     if action_logger:
         action_logger.log_simulation_end(total_rounds, total_actions)
+
+    result.instruction_guard.verify(result.agent_graph)
     
     result.total_actions = total_actions
     elapsed = (datetime.now() - start_time).total_seconds()
@@ -1764,8 +1829,14 @@ async def main():
             simulation_dir=simulation_dir,
             twitter_env=twitter_result.env if twitter_result else None,
             twitter_agent_graph=twitter_result.agent_graph if twitter_result else None,
+            twitter_instruction_guard=(
+                twitter_result.instruction_guard if twitter_result else None
+            ),
             reddit_env=reddit_result.env if reddit_result else None,
-            reddit_agent_graph=reddit_result.agent_graph if reddit_result else None
+            reddit_agent_graph=reddit_result.agent_graph if reddit_result else None,
+            reddit_instruction_guard=(
+                reddit_result.instruction_guard if reddit_result else None
+            ),
         )
         ipc_handler.update_status("alive")
         
@@ -1785,6 +1856,8 @@ async def main():
             print("\nReceived interruption signal")
         except asyncio.CancelledError:
             print("\nTask cancelled")
+        except InstructionIntegrityViolation:
+            raise
         except Exception as e:
             print(f"\nCommand processing error: {e}")
         
@@ -1793,11 +1866,15 @@ async def main():
     
     # Close environment
     if twitter_result and twitter_result.env:
+        twitter_result.instruction_guard.verify(twitter_result.agent_graph)
         await twitter_result.env.close()
+        twitter_result.instruction_guard.verify(twitter_result.agent_graph)
         log_manager.info("[Twitter] Environment closed")
     
     if reddit_result and reddit_result.env:
+        reddit_result.instruction_guard.verify(reddit_result.agent_graph)
         await reddit_result.env.close()
+        reddit_result.instruction_guard.verify(reddit_result.agent_graph)
         log_manager.info("[Reddit] Environment closed")
     
     log_manager.info("=" * 60)

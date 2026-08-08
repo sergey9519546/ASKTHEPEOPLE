@@ -26,7 +26,7 @@ def test_config_generation_consumes_functional_adapters_without_llm(tmp_path) ->
 
     assert len(params.agent_configs) == len(adapters)
     assert [item.agent_id for item in params.agent_configs] == list(
-        range(1, len(adapters) + 1)
+        range(len(adapters))
     )
     assert all(item.entity_type == "decision_lens" for item in params.agent_configs)
     assert all(item.normalized_role == "decision_lens" for item in params.agent_configs)

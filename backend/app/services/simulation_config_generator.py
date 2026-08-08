@@ -472,7 +472,7 @@ class SimulationConfigGenerator:
         if not adapter_tuple:
             raise ValueError("decision_lens_incomplete")
         if tuple(adapter.agent_id for adapter in adapter_tuple) != tuple(
-            range(1, len(adapter_tuple) + 1)
+            range(len(adapter_tuple))
         ):
             raise ValueError("decision_lens_adapter_ids_invalid")
 

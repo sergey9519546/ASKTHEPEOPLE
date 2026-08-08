@@ -33,7 +33,7 @@ def test_adapter_is_deterministic_and_excludes_identity_compatibility(tmp_path) 
 
     assert first == second
     adapter = first[0]
-    assert adapter.agent_id == 1
+    assert adapter.agent_id == 0
     assert adapter.platform_username == "decision_lens_01"
     assert adapter.platform_description.endswith("not a person.")
     prompt = render_semantic_prompt(adapter).lower()
@@ -42,6 +42,8 @@ def test_adapter_is_deterministic_and_excludes_identity_compatibility(tmp_path) 
     assert "mbti" not in prompt
     assert "biography" not in prompt
     assert "not a person" in prompt
+    assert "exactly one registered action tool" in prompt
+    assert "without claiming human identity" in prompt
     assert artifact.lenses[0].goals[0].lower() in prompt
     assert artifact.lenses[0].constraints[0].lower() in prompt
     assert artifact.lenses[0].decision_criteria[0].lower() in prompt
