@@ -11,7 +11,6 @@ from app.domain.decision_workspace import (
     validate_provenance_edge,
 )
 
-
 ALLOWED_PROVENANCE_TRIPLES = (
     (
         EpistemicRole.SOURCE_ASSET,
@@ -19,28 +18,53 @@ ALLOWED_PROVENANCE_TRIPLES = (
         EpistemicRole.SOURCE_SEGMENT,
     ),
     (
+        EpistemicRole.EXTRACTION_CANDIDATE,
+        ProvenanceRelation.EXTRACTED_FROM,
         EpistemicRole.SOURCE_SEGMENT,
-        ProvenanceRelation.SUPPORTS,
+    ),
+    (
+        EpistemicRole.EXTRACTION_CANDIDATE,
+        ProvenanceRelation.ACCEPTED_AS,
         EpistemicRole.STARTING_CONDITION,
     ),
     (
+        EpistemicRole.EXTRACTION_CANDIDATE,
+        ProvenanceRelation.REVISED_AS,
+        EpistemicRole.STARTING_CONDITION,
+    ),
+    (
+        EpistemicRole.SOURCE_SEGMENT,
+        ProvenanceRelation.INFORMS,
+        EpistemicRole.STARTING_CONDITION,
+    ),
+    (
+        EpistemicRole.USER_STATEMENT,
+        ProvenanceRelation.DEFINES,
         EpistemicRole.DECISION,
-        ProvenanceRelation.DECLARES,
-        EpistemicRole.ASSUMPTION,
     ),
     (
-        EpistemicRole.ASSUMPTION,
-        ProvenanceRelation.BRANCHES_TO,
+        EpistemicRole.STARTING_CONDITION,
+        ProvenanceRelation.CONSTRAINS,
+        EpistemicRole.SCENARIO_RULE,
+    ),
+    (
         EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.BRANCHES_ON,
+        EpistemicRole.ASSUMPTION,
     ),
     (
+        EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.BRANCHES_ON,
         EpistemicRole.UNCERTAINTY_STATE,
-        ProvenanceRelation.BRANCHES_TO,
-        EpistemicRole.POSSIBLE_PATH,
+    ),
+    (
+        EpistemicRole.DECISION_LENS,
+        ProvenanceRelation.APPLIES_LENS,
+        EpistemicRole.PATH_STEP,
     ),
     (
         EpistemicRole.POSSIBLE_PATH,
-        ProvenanceRelation.CONTAINS,
+        ProvenanceRelation.SEQUENCES,
         EpistemicRole.PATH_STEP,
     ),
     (
@@ -50,18 +74,33 @@ ALLOWED_PROVENANCE_TRIPLES = (
     ),
     (
         EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.SURFACES,
+        EpistemicRole.CONFLICT,
+    ),
+    (
+        EpistemicRole.POSSIBLE_PATH,
+        ProvenanceRelation.SURFACES,
+        EpistemicRole.MISSING_INFORMATION,
+    ),
+    (
+        EpistemicRole.POSSIBLE_PATH,
         ProvenanceRelation.DISCONFIRMED_BY,
         EpistemicRole.DISCONFIRMING_CONDITION,
     ),
     (
-        EpistemicRole.POSSIBLE_PATH,
-        ProvenanceRelation.VALIDATED_BY,
+        EpistemicRole.CONSIDERATION,
+        ProvenanceRelation.PRODUCES_QUESTION,
         EpistemicRole.VALIDATION_QUESTION,
     ),
     (
-        EpistemicRole.POSSIBLE_PATH,
-        ProvenanceRelation.SUMMARIZED_BY,
         EpistemicRole.BRIEF_STATEMENT,
+        ProvenanceRelation.SUMMARIZES,
+        EpistemicRole.POSSIBLE_PATH,
+    ),
+    (
+        EpistemicRole.BRIEF_STATEMENT,
+        ProvenanceRelation.SUMMARIZES,
+        EpistemicRole.CONSIDERATION,
     ),
 )
 
@@ -136,7 +175,7 @@ def test_truth_bundle_rejects_coercion_and_equality_aliases(
         TruthBundle(**{field: alias})
 
 
-def test_source_segment_may_support_starting_condition() -> None:
+def test_source_segment_may_inform_starting_condition() -> None:
     from app.domain.decision_workspace import (
         EpistemicRole,
         ProvenanceEdge,
@@ -149,7 +188,7 @@ def test_source_segment_may_support_starting_condition() -> None:
         source_role=EpistemicRole.SOURCE_SEGMENT,
         target_id="condition-1",
         target_role=EpistemicRole.STARTING_CONDITION,
-        relation=ProvenanceRelation.SUPPORTS,
+        relation=ProvenanceRelation.INFORMS,
     )
 
     assert validate_provenance_edge(edge) is None
@@ -192,26 +231,11 @@ def test_cartesian_complement_of_provenance_triples_fails_closed(
         relation=relation,
     )
 
-    expected_message = (
-        "source_to_path_forbidden"
-        if (
-            source_role,
-            relation,
-            target_role,
-        )
-        == (
-            EpistemicRole.SOURCE_SEGMENT,
-            ProvenanceRelation.SUPPORTS,
-            EpistemicRole.POSSIBLE_PATH,
-        )
-        else "provenance_edge_forbidden"
-    )
-
-    with pytest.raises(ProvenanceViolation, match=f"^{expected_message}$"):
+    with pytest.raises(ProvenanceViolation, match="^provenance_edge_forbidden$"):
         validate_provenance_edge(edge)
 
 
-def test_source_segment_may_not_support_possible_path() -> None:
+def test_source_segment_may_not_inform_possible_path() -> None:
     from app.domain.decision_workspace import (
         EpistemicRole,
         ProvenanceEdge,
@@ -225,10 +249,10 @@ def test_source_segment_may_not_support_possible_path() -> None:
         source_role=EpistemicRole.SOURCE_SEGMENT,
         target_id="path-1",
         target_role=EpistemicRole.POSSIBLE_PATH,
-        relation=ProvenanceRelation.SUPPORTS,
+        relation=ProvenanceRelation.INFORMS,
     )
 
-    with pytest.raises(ProvenanceViolation, match="^source_to_path_forbidden$"):
+    with pytest.raises(ProvenanceViolation, match="^provenance_edge_forbidden$"):
         validate_provenance_edge(edge)
 
 
@@ -246,7 +270,7 @@ def test_arbitrary_unlisted_provenance_edge_is_forbidden() -> None:
         source_role=EpistemicRole.DECISION,
         target_id="asset-1",
         target_role=EpistemicRole.SOURCE_ASSET,
-        relation=ProvenanceRelation.SUPPORTS,
+        relation=ProvenanceRelation.DEFINES,
     )
 
     with pytest.raises(ProvenanceViolation, match="^provenance_edge_forbidden$"):
@@ -370,7 +394,7 @@ def test_server_ids_reject_non_canonical_shapes(field: str, invalid_id: str) -> 
                     "source_role": EpistemicRole.SOURCE_SEGMENT,
                     "target_id": "condition-1",
                     "target_role": EpistemicRole.STARTING_CONDITION,
-                    "relation": ProvenanceRelation.SUPPORTS,
+                    "relation": ProvenanceRelation.INFORMS,
                     edge_field: invalid_id,
                 }
             )
@@ -539,7 +563,7 @@ def test_domain_models_reject_assignment(model_name: str) -> None:
                 source_role=EpistemicRole.SOURCE_SEGMENT,
                 target_id="condition-1",
                 target_role=EpistemicRole.STARTING_CONDITION,
-                relation=ProvenanceRelation.SUPPORTS,
+                relation=ProvenanceRelation.INFORMS,
             ),
             "source_id",
             "segment-2",

@@ -5,7 +5,6 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-
 _SERVER_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
 
 
@@ -14,34 +13,51 @@ class EpistemicOrigin(str, Enum):
     SOURCE_EXTRACTED = "SOURCE_EXTRACTED"
     ASSUMPTION_DECLARED = "ASSUMPTION_DECLARED"
     SYNTHETIC_GENERATED = "SYNTHETIC_GENERATED"
+    EXTERNAL_HUMAN_EVIDENCE = "EXTERNAL_HUMAN_EVIDENCE"
     SYSTEM_METADATA = "SYSTEM_METADATA"
 
 
 class EpistemicRole(str, Enum):
+    USER_STATEMENT = "USER_STATEMENT"
     DECISION = "DECISION"
+    SCOPE_CONSTRAINT = "SCOPE_CONSTRAINT"
     SOURCE_ASSET = "SOURCE_ASSET"
     SOURCE_SEGMENT = "SOURCE_SEGMENT"
+    EXTRACTION_CANDIDATE = "EXTRACTION_CANDIDATE"
     STARTING_CONDITION = "STARTING_CONDITION"
     ASSUMPTION = "ASSUMPTION"
+    CRITICAL_UNCERTAINTY = "CRITICAL_UNCERTAINTY"
     UNCERTAINTY_STATE = "UNCERTAINTY_STATE"
+    DECISION_LENS = "DECISION_LENS"
+    SCENARIO_RULE = "SCENARIO_RULE"
     POSSIBLE_PATH = "POSSIBLE_PATH"
     PATH_STEP = "PATH_STEP"
     CONSIDERATION = "CONSIDERATION"
+    CONFLICT = "CONFLICT"
+    MISSING_INFORMATION = "MISSING_INFORMATION"
     DISCONFIRMING_CONDITION = "DISCONFIRMING_CONDITION"
     VALIDATION_QUESTION = "VALIDATION_QUESTION"
+    RELATED_RUN_RECORD = "RELATED_RUN_RECORD"
+    EXTERNAL_HUMAN_FINDING = "EXTERNAL_HUMAN_FINDING"
     BRIEF_STATEMENT = "BRIEF_STATEMENT"
+    DECISION_OWNER_CONCLUSION = "DECISION_OWNER_CONCLUSION"
 
 
 class ProvenanceRelation(str, Enum):
-    EXTRACTED_FROM = "EXTRACTED_FROM"
-    SUPPORTS = "SUPPORTS"
-    DECLARES = "DECLARES"
-    BRANCHES_TO = "BRANCHES_TO"
     CONTAINS = "CONTAINS"
+    EXTRACTED_FROM = "EXTRACTED_FROM"
+    ACCEPTED_AS = "ACCEPTED_AS"
+    REVISED_AS = "REVISED_AS"
+    DEFINES = "DEFINES"
+    INFORMS = "INFORMS"
+    CONSTRAINS = "CONSTRAINS"
+    BRANCHES_ON = "BRANCHES_ON"
+    APPLIES_LENS = "APPLIES_LENS"
+    SEQUENCES = "SEQUENCES"
     SURFACES = "SURFACES"
     DISCONFIRMED_BY = "DISCONFIRMED_BY"
-    VALIDATED_BY = "VALIDATED_BY"
-    SUMMARIZED_BY = "SUMMARIZED_BY"
+    PRODUCES_QUESTION = "PRODUCES_QUESTION"
+    SUMMARIZES = "SUMMARIZES"
 
 
 class TruthBundle(BaseModel):
@@ -139,6 +155,7 @@ class PossiblePath(BaseModel):
 class ProvenanceEdge(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    contract_version: Literal["epistemic-ledger/v2"] = "epistemic-ledger/v2"
     source_id: str = Field(
         min_length=1,
         max_length=128,
@@ -166,28 +183,53 @@ _ALLOWED_PROVENANCE_EDGES = frozenset(
             EpistemicRole.SOURCE_SEGMENT,
         ),
         (
+            EpistemicRole.EXTRACTION_CANDIDATE,
+            ProvenanceRelation.EXTRACTED_FROM,
             EpistemicRole.SOURCE_SEGMENT,
-            ProvenanceRelation.SUPPORTS,
+        ),
+        (
+            EpistemicRole.EXTRACTION_CANDIDATE,
+            ProvenanceRelation.ACCEPTED_AS,
             EpistemicRole.STARTING_CONDITION,
         ),
         (
+            EpistemicRole.EXTRACTION_CANDIDATE,
+            ProvenanceRelation.REVISED_AS,
+            EpistemicRole.STARTING_CONDITION,
+        ),
+        (
+            EpistemicRole.SOURCE_SEGMENT,
+            ProvenanceRelation.INFORMS,
+            EpistemicRole.STARTING_CONDITION,
+        ),
+        (
+            EpistemicRole.USER_STATEMENT,
+            ProvenanceRelation.DEFINES,
             EpistemicRole.DECISION,
-            ProvenanceRelation.DECLARES,
-            EpistemicRole.ASSUMPTION,
         ),
         (
-            EpistemicRole.ASSUMPTION,
-            ProvenanceRelation.BRANCHES_TO,
+            EpistemicRole.STARTING_CONDITION,
+            ProvenanceRelation.CONSTRAINS,
+            EpistemicRole.SCENARIO_RULE,
+        ),
+        (
             EpistemicRole.POSSIBLE_PATH,
+            ProvenanceRelation.BRANCHES_ON,
+            EpistemicRole.ASSUMPTION,
         ),
         (
+            EpistemicRole.POSSIBLE_PATH,
+            ProvenanceRelation.BRANCHES_ON,
             EpistemicRole.UNCERTAINTY_STATE,
-            ProvenanceRelation.BRANCHES_TO,
-            EpistemicRole.POSSIBLE_PATH,
+        ),
+        (
+            EpistemicRole.DECISION_LENS,
+            ProvenanceRelation.APPLIES_LENS,
+            EpistemicRole.PATH_STEP,
         ),
         (
             EpistemicRole.POSSIBLE_PATH,
-            ProvenanceRelation.CONTAINS,
+            ProvenanceRelation.SEQUENCES,
             EpistemicRole.PATH_STEP,
         ),
         (
@@ -197,18 +239,33 @@ _ALLOWED_PROVENANCE_EDGES = frozenset(
         ),
         (
             EpistemicRole.POSSIBLE_PATH,
+            ProvenanceRelation.SURFACES,
+            EpistemicRole.CONFLICT,
+        ),
+        (
+            EpistemicRole.POSSIBLE_PATH,
+            ProvenanceRelation.SURFACES,
+            EpistemicRole.MISSING_INFORMATION,
+        ),
+        (
+            EpistemicRole.POSSIBLE_PATH,
             ProvenanceRelation.DISCONFIRMED_BY,
             EpistemicRole.DISCONFIRMING_CONDITION,
         ),
         (
-            EpistemicRole.POSSIBLE_PATH,
-            ProvenanceRelation.VALIDATED_BY,
+            EpistemicRole.CONSIDERATION,
+            ProvenanceRelation.PRODUCES_QUESTION,
             EpistemicRole.VALIDATION_QUESTION,
         ),
         (
-            EpistemicRole.POSSIBLE_PATH,
-            ProvenanceRelation.SUMMARIZED_BY,
             EpistemicRole.BRIEF_STATEMENT,
+            ProvenanceRelation.SUMMARIZES,
+            EpistemicRole.POSSIBLE_PATH,
+        ),
+        (
+            EpistemicRole.BRIEF_STATEMENT,
+            ProvenanceRelation.SUMMARIZES,
+            EpistemicRole.CONSIDERATION,
         ),
     }
 )
@@ -220,11 +277,5 @@ def validate_provenance_edge(edge: ProvenanceEdge) -> None:
         edge.relation,
         edge.target_role,
     )
-    if provenance_triple == (
-        EpistemicRole.SOURCE_SEGMENT,
-        ProvenanceRelation.SUPPORTS,
-        EpistemicRole.POSSIBLE_PATH,
-    ):
-        raise ProvenanceViolation("source_to_path_forbidden")
     if provenance_triple not in _ALLOWED_PROVENANCE_EDGES:
         raise ProvenanceViolation("provenance_edge_forbidden")
