@@ -1,16 +1,15 @@
 import json
 import os
 import tempfile
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 from app import create_app
 from app.services.simulation_observation_store import (
     ensure_observation_store,
-    record_injected_event,
-    push_in_memory_event,
     pop_in_memory_events,
-    sync_observation_store,
+    push_in_memory_event,
 )
 from app.services.simulation_runtime_contract import apply_injected_events
 from scripts.run_parallel_simulation import RedisEventConsumer
@@ -156,6 +155,7 @@ async def test_apply_injected_events_record_and_execute():
         mock_agent.system_message.content = "Base system prompt."
         mock_env.agent_graph.get_agents.return_value = [(1, mock_agent)]
         mock_env.agent_graph.get_agent.return_value = mock_agent
+        mock_env.step = AsyncMock()
 
         config = {"agents": [{"agent_id": 1}], "time_config": {}}
         agent_names = {1: "Agent_1"}
@@ -192,6 +192,13 @@ async def test_apply_injected_events_record_and_execute():
             assert applied_count == 2
             assert mock_apply_specs.call_count == 1
             assert mock_agent.system_message.content == "Base system prompt."
+            mock_agent.set_round_context_overlay.assert_called_once()
+            overlay = mock_agent.set_round_context_overlay.call_args.args[0]
+            assert "Focus on high-growth technology stocks." in overlay
+            mock_env.step.assert_awaited_once()
+            actions = mock_env.step.await_args.args[0]
+            assert list(actions) == [mock_agent]
+            assert actions[mock_agent].__class__.__name__ == "LLMAction"
 
         injected_jsonl = os.path.join(simulation_dir, "injected_events.jsonl")
         assert os.path.exists(injected_jsonl)
@@ -218,6 +225,234 @@ async def test_apply_injected_events_record_and_execute():
         assert intervention_payload["_intervention"]["status"] == "applied"
         assert intervention_payload["_intervention"]["requested_agent_ids"] == [1]
         assert intervention_payload["_intervention"]["resolved_agent_ids"] == [1]
+        assert intervention_payload["_intervention"]["applied_agent_ids"] == [1]
+        assert intervention_payload["_intervention"]["applied_target_count"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event_type",
+    ["persona_modification", "persona_change", "dynamic_instruction"],
+)
+async def test_apply_injected_events_applies_supported_persona_variants(event_type):
+    """Variant persona events should trigger one-shot model actions for targets."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        simulation_dir = tmp_dir
+        platform = "twitter"
+        current_round = 5
+
+        ensure_observation_store(simulation_dir)
+
+        mock_env = MagicMock()
+        mock_agent = MagicMock()
+        mock_agent.system_message = MagicMock()
+        mock_env.agent_graph.get_agents.return_value = [(7, mock_agent)]
+        mock_env.agent_graph.get_agent.return_value = mock_agent
+        mock_env.step = AsyncMock()
+
+        config = {
+            "agents": [{"agent_id": 7, "platform_preference": "twitter", "normalized_role": "student"}],
+            "time_config": {},
+        }
+        agent_names = {7: "Agent_7"}
+
+        injected_events = [
+            {
+                "event_type": event_type,
+                "payload": {
+                    "agent_id": 7,
+                    "instruction": "Use a more conversational tone for this simulation phase.",
+                },
+                "timestamp": "2026-07-29T16:15:00Z",
+            }
+        ]
+
+        with patch("app.services.simulation_runtime_contract._apply_specs") as mock_apply_specs:
+            mock_apply_specs.return_value = 1
+
+            applied_count = await apply_injected_events(
+                env=mock_env,
+                simulation_dir=simulation_dir,
+                config=config,
+                platform=platform,
+                current_round=current_round,
+                events=injected_events,
+                agent_names=agent_names,
+                manual_action_cls=MagicMock(),
+                action_type_cls=MagicMock(),
+                action_logger=None,
+            )
+
+            assert applied_count == 1
+            assert mock_apply_specs.call_count == 0
+            mock_agent.set_round_context_overlay.assert_called_once()
+            mock_env.step.assert_awaited_once()
+            actions = mock_env.step.await_args.args[0]
+            assert list(actions) == [mock_agent]
+            assert actions[mock_agent].__class__.__name__ == "LLMAction"
+
+
+@pytest.mark.asyncio
+async def test_apply_injected_events_rejects_blank_persona_instruction():
+    """Blank persona instructions should be rejected without a model action."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        simulation_dir = tmp_dir
+        platform = "twitter"
+        current_round = 2
+
+        ensure_observation_store(simulation_dir)
+
+        mock_env = MagicMock()
+        mock_agent = MagicMock()
+        mock_env.agent_graph.get_agents.return_value = [(3, mock_agent)]
+        mock_env.agent_graph.get_agent.return_value = mock_agent
+
+        config = {
+            "agents": [{"agent_id": 3, "platform_preference": "twitter", "normalized_role": "student"}],
+            "time_config": {},
+        }
+        agent_names = {3: "Agent_3"}
+
+        injected_events = [
+            {
+                "event_type": "persona_change",
+                "payload": {"agent_id": 3, "instruction": "   "},
+                "timestamp": "2026-07-29T16:16:00Z",
+            }
+        ]
+
+        with patch("app.services.simulation_runtime_contract._apply_specs") as mock_apply_specs:
+            applied_count = await apply_injected_events(
+                env=mock_env,
+                simulation_dir=simulation_dir,
+                config=config,
+                platform=platform,
+                current_round=current_round,
+                events=injected_events,
+                agent_names=agent_names,
+                manual_action_cls=MagicMock(),
+                action_type_cls=MagicMock(),
+                action_logger=None,
+            )
+
+            assert applied_count == 1
+            assert mock_apply_specs.call_count == 0
+
+        import sqlite3
+
+        conn = sqlite3.connect(os.path.join(simulation_dir, "simulation_observations.db"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT payload_json FROM injected_events ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+
+        payload = json.loads(row[0])
+        assert payload["_intervention"]["status"] == "rejected"
+        assert payload["_intervention"]["reason"] == "No instruction content provided."
+
+
+@pytest.mark.asyncio
+async def test_apply_injected_events_rejects_agent_without_runtime_overlay_support():
+    """Resolved legacy agents must not be reported as behaviorally modified."""
+    with tempfile.TemporaryDirectory() as simulation_dir:
+        ensure_observation_store(simulation_dir)
+        legacy_agent = object()
+        env = MagicMock()
+        env.agent_graph.get_agents.return_value = [(4, legacy_agent)]
+        env.agent_graph.get_agent.return_value = legacy_agent
+        env.step = AsyncMock()
+
+        consumed_count = await apply_injected_events(
+            env=env,
+            simulation_dir=simulation_dir,
+            config={"agents": [{"agent_id": 4, "platform_preference": "twitter"}]},
+            platform="twitter",
+            current_round=6,
+            events=[
+                {
+                    "event_type": "dynamic_instruction",
+                    "payload": {"agent_id": 4, "instruction": "Prefer concise posts."},
+                }
+            ],
+            agent_names={4: "Agent_4"},
+            manual_action_cls=MagicMock(),
+            action_type_cls=MagicMock(),
+            action_logger=MagicMock(),
+        )
+
+        assert consumed_count == 1
+        env.step.assert_not_awaited()
+
+        import sqlite3
+
+        conn = sqlite3.connect(os.path.join(simulation_dir, "simulation_observations.db"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT payload_json FROM injected_events ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+
+        intervention = json.loads(row[0])["_intervention"]
+        assert intervention["status"] == "rejected"
+        assert intervention["applied_agent_ids"] == []
+        assert intervention["applied_target_count"] == 0
+        assert intervention["unavailable_agent_ids"] == [4]
+
+
+@pytest.mark.asyncio
+async def test_apply_injected_events_preserves_resolution_and_execution_outcomes():
+    """Final intervention records must retain targets missing during resolution."""
+    with tempfile.TemporaryDirectory() as simulation_dir:
+        ensure_observation_store(simulation_dir)
+        available_agent = MagicMock()
+        env = MagicMock()
+        env.agent_graph.get_agents.return_value = [(1, available_agent)]
+        env.agent_graph.get_agent.side_effect = [
+            available_agent,
+            KeyError(2),
+            available_agent,
+        ]
+        env.step = AsyncMock()
+
+        consumed_count = await apply_injected_events(
+            env=env,
+            simulation_dir=simulation_dir,
+            config={
+                "agents": [
+                    {"agent_id": 1, "platform_preference": "twitter"},
+                    {"agent_id": 2, "platform_preference": "twitter"},
+                ]
+            },
+            platform="twitter",
+            current_round=7,
+            events=[
+                {
+                    "event_type": "persona_change",
+                    "payload": {
+                        "agent_ids": [1, 2],
+                        "instruction": "Prefer concise posts.",
+                    },
+                }
+            ],
+            agent_names={1: "Agent_1", 2: "Agent_2"},
+            manual_action_cls=MagicMock(),
+            action_type_cls=MagicMock(),
+        )
+
+        assert consumed_count == 1
+        env.step.assert_awaited_once()
+
+        import sqlite3
+
+        conn = sqlite3.connect(os.path.join(simulation_dir, "simulation_observations.db"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT payload_json FROM injected_events ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+
+        intervention = json.loads(row[0])["_intervention"]
+        assert intervention["status"] == "applied"
+        assert intervention["applied_agent_ids"] == [1]
+        assert intervention["unavailable_agent_ids"] == [2]
 
 
 @pytest.mark.asyncio

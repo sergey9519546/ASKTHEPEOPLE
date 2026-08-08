@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from camel.models import StubModel
@@ -68,6 +69,78 @@ def test_local_agent_uses_exact_semantic_prompt_not_transport_labels(
     assert changed.system_message.content == original.system_message.content
     assert changed.user_info.name == "Changed transport label"
     assert changed.user_info.user_name == "decision_lens_99"
+
+
+@pytest.mark.asyncio
+async def test_round_context_overlay_is_used_once_without_mutating_system_prompt(
+    tmp_path,
+) -> None:
+    from app.services.decision_lens_oasis_agent import DecisionLensSocialAgent
+    from app.services.decision_lens_runtime_adapter import build_runtime_adapters
+
+    artifact, review = approved_pair(tmp_path)
+    adapter = build_runtime_adapters(artifact, review)[0]
+    agent = DecisionLensSocialAgent(
+        adapter=adapter,
+        platform="twitter",
+        model=_stub_model(),
+        available_actions=[ActionType.CREATE_POST, ActionType.DO_NOTHING],
+    )
+    original_system_prompt = agent.system_message.content
+    agent.env.to_text_prompt = AsyncMock(return_value="Current platform timeline.")
+    response = MagicMock()
+    response.info = {"tool_calls": []}
+    observed_contexts: list[list[str]] = []
+
+    async def _capture_context(_message):
+        context, _ = agent.memory.get_context()
+        observed_contexts.append([message["content"] for message in context])
+        return response
+
+    agent.astep = AsyncMock(side_effect=_capture_context)
+
+    agent.set_round_context_overlay("Use a more conversational tone.")
+    await agent.perform_action_by_llm()
+
+    first_context = "\n".join(observed_contexts[0])
+    assert "Use a more conversational tone." in first_context
+    assert "untrusted" in first_context.lower()
+    assert agent.system_message.content == original_system_prompt
+    persisted_context, _ = agent.memory.get_context()
+    assert "Use a more conversational tone." not in "\n".join(
+        message["content"] for message in persisted_context
+    )
+
+    await agent.perform_action_by_llm()
+
+    second_context = "\n".join(observed_contexts[1])
+    assert "Use a more conversational tone." not in second_context
+    assert agent.system_message.content == original_system_prompt
+
+
+@pytest.mark.asyncio
+async def test_round_context_overlay_propagates_action_failure_and_clears(
+    tmp_path,
+) -> None:
+    from app.services.decision_lens_oasis_agent import DecisionLensSocialAgent
+    from app.services.decision_lens_runtime_adapter import build_runtime_adapters
+
+    artifact, review = approved_pair(tmp_path)
+    adapter = build_runtime_adapters(artifact, review)[0]
+    agent = DecisionLensSocialAgent(
+        adapter=adapter,
+        platform="twitter",
+        model=_stub_model(),
+        available_actions=[ActionType.CREATE_POST],
+    )
+    agent.env.to_text_prompt = AsyncMock(return_value="Current platform timeline.")
+    agent.astep = AsyncMock(side_effect=RuntimeError("model unavailable"))
+    agent.set_round_context_overlay("Prefer concise posts.")
+
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        await agent.perform_action_by_llm()
+
+    assert agent._round_context_overlay is None
 
 
 @pytest.mark.asyncio

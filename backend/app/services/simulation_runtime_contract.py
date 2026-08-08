@@ -214,6 +214,92 @@ def _apply_persona_intervention(
         resolved["reason"] = "No platform-compatible targets found."
     return resolved
 
+
+def _build_intervention_prompt(
+    event_type: str,
+    new_instruction: str,
+    raw_event: Dict[str, Any],
+) -> str:
+    if not str(new_instruction).strip():
+        return "No additional behavioral instruction was provided."
+    source = raw_event.get("platform") or raw_event.get("source") or "operator"
+    cleaned = str(new_instruction).strip()
+    return (
+        f"Dynamic scenario intervention ({event_type}) from {source}: {cleaned}\n"
+        "Treat this as a temporary operating constraint for this round. "
+        "You may factor it into your next actions."
+    )
+
+
+async def _apply_persona_context_action(
+    env: Any,
+    target_ids: Sequence[int],
+    prompt: str,
+) -> Dict[str, Any]:
+    """Run one model-driven action per target under a one-shot context overlay."""
+    from oasis import LLMAction
+
+    actions: Dict[Any, Any] = {}
+    prepared: List[Tuple[int, Any, Any]] = []
+    unavailable_ids: List[int] = []
+
+    for agent_id in target_ids:
+        try:
+            agent = env.agent_graph.get_agent(agent_id)
+        except Exception:
+            unavailable_ids.append(agent_id)
+            continue
+        setter = getattr(agent, "set_round_context_overlay", None)
+        clearer = getattr(agent, "clear_round_context_overlay", None)
+        if not callable(setter) or not callable(clearer):
+            unavailable_ids.append(agent_id)
+            continue
+        try:
+            setter(prompt)
+        except Exception:
+            unavailable_ids.append(agent_id)
+            continue
+        actions[agent] = LLMAction()
+        prepared.append((agent_id, agent, clearer))
+
+    applied_ids: List[int] = []
+    runtime_error: Optional[str] = None
+    try:
+        if actions:
+            await env.step(actions)
+            applied_ids = [agent_id for agent_id, _, _ in prepared]
+    except Exception as exc:
+        runtime_error = type(exc).__name__
+        unavailable_ids.extend(agent_id for agent_id, _, _ in prepared)
+        for _, _, clearer in prepared:
+            try:
+                clearer(prompt)
+            except Exception:
+                pass
+
+    if applied_ids:
+        status = "applied"
+        reason = (
+            "Some resolved targets could not accept the runtime context."
+            if unavailable_ids
+            else ""
+        )
+    else:
+        status = "rejected"
+        reason = (
+            f"Runtime context action failed ({runtime_error})."
+            if runtime_error
+            else "No resolved targets support runtime context overlays."
+        )
+
+    return {
+        "status": status,
+        "reason": reason,
+        "applied_agent_ids": applied_ids,
+        "unavailable_agent_ids": sorted(set(unavailable_ids)),
+        "applied_target_count": len(applied_ids),
+    }
+
 __all__ = [
     "POST_EVENT_TYPES",
     "FOLLOW_EVENT_TYPES",
@@ -970,11 +1056,11 @@ async def apply_injected_events(
     action_type_cls: Any,
     action_logger: Any = None,
 ) -> int:
-    """Apply real-time scenario injection events to the active simulation environment."""
+    """Apply and record events; return the number of events consumed."""
     if not events:
         return 0
 
-    applied_count = 0
+    consumed_count = 0
     injected_log = os.path.join(simulation_dir, "injected_events.jsonl")
 
     for event in events:
@@ -994,6 +1080,31 @@ async def apply_injected_events(
                 event_type=event_type,
                 raw_event=event,
             )
+            if intervention["status"] == "applied":
+                resolution_unavailable_ids = list(
+                    intervention.get("unavailable_agent_ids", [])
+                )
+                execution = await _apply_persona_context_action(
+                    env=env,
+                    target_ids=intervention.get("resolved_agent_ids", []),
+                    prompt=_build_intervention_prompt(
+                        event_type,
+                        str(intervention.get("instruction") or ""),
+                        event,
+                    ),
+                )
+                execution["unavailable_agent_ids"] = sorted(
+                    set(resolution_unavailable_ids)
+                    | set(execution.get("unavailable_agent_ids", []))
+                )
+                intervention.update(execution)
+            else:
+                intervention.update(
+                    {
+                        "applied_agent_ids": [],
+                        "applied_target_count": 0,
+                    }
+                )
             payload = {**payload, "_intervention": intervention}
 
         log_entry = {
@@ -1034,7 +1145,7 @@ async def apply_injected_events(
                     "content": str(content),
                     "metadata": {"injected": True, "event_payload": payload},
                 }]
-                applied = await _apply_specs(
+                await _apply_specs(
                     env=env,
                     simulation_dir=simulation_dir,
                     platform=platform,
@@ -1046,13 +1157,10 @@ async def apply_injected_events(
                     event_log_path=scheduled_events_path(simulation_dir),
                     action_logger=action_logger,
                 )
-                applied_count += applied
-            else:
-                applied_count += 1
         elif event_type in PERSONA_EVENT_TYPES:
-            applied_count += 1
-        else:
-            applied_count += 1
+            pass
 
-    return applied_count
+        consumed_count += 1
+
+    return consumed_count
 
