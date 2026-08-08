@@ -175,3 +175,33 @@ def test_durable_run_public_alias_kinds_use_independent_uuid7(
         uuid7_factory=lambda: alias_id,
     ) == f"{prefix}_{alias_id.hex}"
     assert alias_id != physical_id
+
+
+@pytest.mark.parametrize(
+    ("kind", "prefix"),
+    [
+        ("source", "src"),
+        ("source_version", "srcv"),
+        ("source_segment", "seg"),
+        ("source_candidate", "cand"),
+        ("starting_condition", "cond"),
+        ("source_flag", "sflag"),
+        ("source_review", "srev"),
+        ("deletion_request", "del"),
+    ],
+)
+def test_source_public_alias_kinds_use_independent_uuid7(
+    kind: str,
+    prefix: str,
+) -> None:
+    from app.domain.identifiers import new_public_id, new_uuid7
+
+    physical_id = new_uuid7(clock=lambda: 1_700_000_000, randbits=lambda _: 201)
+    alias_id = new_uuid7(clock=lambda: 1_700_000_001, randbits=lambda _: 202)
+
+    assert new_public_id(
+        kind,  # type: ignore[arg-type]
+        physical_id,
+        uuid7_factory=lambda: alias_id,
+    ) == f"{prefix}_{alias_id.hex}"
+    assert alias_id != physical_id

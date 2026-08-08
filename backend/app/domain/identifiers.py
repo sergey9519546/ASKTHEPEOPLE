@@ -28,6 +28,14 @@ PublicIdKind = Literal[
     "artifact",
     "audit",
     "service",
+    "source",
+    "source_version",
+    "source_segment",
+    "source_candidate",
+    "starting_condition",
+    "source_flag",
+    "source_review",
+    "deletion_request",
 ]
 
 _PUBLIC_ID_PREFIXES = {
@@ -44,6 +52,14 @@ _PUBLIC_ID_PREFIXES = {
     "artifact": "artifact",
     "audit": "audit",
     "service": "service",
+    "source": "src",
+    "source_version": "srcv",
+    "source_segment": "seg",
+    "source_candidate": "cand",
+    "starting_condition": "cond",
+    "source_flag": "sflag",
+    "source_review": "srev",
+    "deletion_request": "del",
 }
 _LEGACY_PROJECT_PUBLIC_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 
@@ -53,12 +69,7 @@ def new_uuid7(
     clock: Callable[[], float] | None = None,
     randbits: Callable[[int], int] | None = None,
 ) -> UUID:
-    """Return an RFC 9562 UUIDv7 using injectable trusted entropy seams.
-
-    ``clock`` follows ``time.time`` and returns Unix epoch seconds. ``randbits``
-    follows ``secrets.randbits``. The seams keep boundary and layout tests
-    deterministic without weakening production defaults.
-    """
+    """Return an RFC 9562 UUIDv7 using injectable trusted entropy seams."""
 
     clock_value = (clock or time.time)()
     if type(clock_value) not in (int, float) or not math.isfinite(clock_value):
