@@ -33,6 +33,8 @@ REQUIRED_LOCKS = (
     "DRY_RUN_VERIFIED -> APPLIED|FAILED",
     "deletion state/time/failed-origin only through the exact deletion trigger",
     "one-way policy-derived `expires_at` shortening",
+    "core.enforce_persistence_cutover_transition()",
+    "rolled_forward_evidence_sha256",
 )
 
 FORBIDDEN_LOCKS = (

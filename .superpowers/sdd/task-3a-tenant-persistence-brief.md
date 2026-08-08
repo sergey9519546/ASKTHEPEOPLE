@@ -514,7 +514,7 @@ Every expiry must be at or after `retention_started_at`.
 | `core.schema_adoptions` | `id uuid PK`, `alembic_revision`, `adoption_mode CLEAN_BOOTSTRAP\|EXISTING_STAMPED\|EXPLICIT_UNVERSIONED_ADOPTION`, expected/observed SHA-256 fingerprints, PostgreSQL server version, tool version, database identity hash, operator database role, UTC timestamp, evidence SHA-256. Operator role only. |
 | `core.backfill_batches` | `id uuid PK`, input-manifest SHA-256, legacy-root fingerprint, status DRY_RUN_VERIFIED\|APPLIED\|RECONCILED\|FAILED, counts, operator public alias, tool version, UTC timestamps, evidence SHA-256. Operator role only. |
 | `core.legacy_project_bindings` | `project_id PK/FK`, organization/workspace IDs, immutable legacy project alias, project JSON SHA-256, workspace-manifest SHA-256, bounded tree fingerprint, backfill batch ID, adoption/reconciliation timestamps, status ADOPTED\|RECONCILED\|CONFLICT, `UNIQUE(legacy_project_public_id)`. |
-| `core.persistence_cutovers` | `subsystem varchar(64) PK` fixed to `core_tenancy`, state PREPARED\|ACTIVE\|ROLLED_FORWARD, backfill batch ID, reconciliation evidence hash, application/build revision, activated by/time, rollback boundary. Operator role only. |
+| `core.persistence_cutovers` | `subsystem varchar(64) PK` fixed to `core_tenancy`, state PREPARED\|ACTIVE\|ROLLED_FORWARD, backfill batch ID, reconciliation evidence hash, application/build revision, nullable activated by/time, rollback boundary, and nullable `rolled_forward_by`, `rolled_forward_at`, bounded `rolled_forward_reason_code`, and lowercase-64-hex `rolled_forward_evidence_sha256`. Operator role only. |
 | `core.audit_events` | `id uuid` logical event ID; `scope_kind TENANT\|SYSTEM`; TENANT requires organization ID and permits bounded workspace/project IDs, while SYSTEM requires all three null; actor type/id, closed event type and reason code, closed privacy-safe `metadata jsonb`, request ID, UTC `occurred_at`, the required retention fields, and non-null immutable `expires_at`; append-only trigger rejects row update/delete by ordinary roles. PostgreSQL-valid physical PK is `(retention_class, expires_at, id)`; `id` has a non-unique lookup index and is never a foreign-key target. It is list-partitioned by the two allowed retention classes and range-subpartitioned by expiry bucket, with no default partition. |
 
 All SHA-256 columns are lowercase 64-character hex with database checks. All
@@ -584,10 +584,15 @@ The exact operator-evidence mutability matrix is:
 | `schema_adoptions` | every column | none; append a new evidence row |
 | `backfill_batches` | `id`, input/legacy hashes, operator alias, tool version, `created_at`, retention class/policy/start | status, bounded counts, evidence hash, `updated_at`, and one-way policy-derived `expires_at` shortening, only through the closed batch transition trigger |
 | `legacy_project_bindings` | project/organization/workspace IDs, legacy alias, project/workspace/tree hashes, backfill batch ID, adoption time, retention class/policy/start | status and reconciliation time, only `ADOPTED -> RECONCILED|CONFLICT` with both targets terminal; deletion state/time/failed-origin only through the exact deletion trigger; one-way policy-derived `expires_at` shortening |
-| `persistence_cutovers` | subsystem; once PREPARED, backfill ID, reconciliation hash, application/build revision, rollback boundary, retention class/policy/start | state and activation actor/time, only `PREPARED -> ACTIVE -> ROLLED_FORWARD`; one-way policy-derived `expires_at` shortening |
+| `persistence_cutovers` | subsystem; once PREPARED, backfill ID, reconciliation hash, application/build revision, rollback boundary, retention class/policy/start | `PREPARED -> ACTIVE` sets activation actor/time exactly once; those fields then freeze. `ACTIVE -> ROLLED_FORWARD` sets rolled-forward actor/time/reason/evidence exactly once; those fields are otherwise null and then freeze. One-way policy-derived `expires_at` shortening remains permitted. |
 
 Test 13 mutates every immutable column and every unlisted mutable column; the
 complete complement fails closed.
+
+`core.enforce_persistence_cutover_transition()` rejects activation evidence on
+PREPARED, missing or changed activation evidence after ACTIVE, rolled-forward
+evidence before ROLLED_FORWARD, missing rolled-forward actor/time/reason/hash
+on that edge, and every edge outside `PREPARED -> ACTIVE -> ROLLED_FORWARD`.
 
 The closed backfill graph is `DRY_RUN_VERIFIED -> APPLIED|FAILED` and
 `APPLIED -> RECONCILED|FAILED`; `RECONCILED` and `FAILED` are terminal. A retry

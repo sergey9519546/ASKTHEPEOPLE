@@ -277,6 +277,12 @@ all twelve tables above; a row with a missing or unknown class/policy version,
 an expiry before its retention start, or a deletion state inconsistent with
 its lifecycle is rejected by database checks.
 
+`core.persistence_cutovers` preserves edge-local accountability. Activation
+actor/time are null in PREPARED, set exactly once on PREPARED -> ACTIVE, and
+immutable thereafter. Rolled-forward actor/time/reason/evidence hash are null
+before ACTIVE -> ROLLED_FORWARD, required exactly on that edge, and immutable
+thereafter. The complete transition complement and evidence overwrites fail.
+
 `core.audit_events` is append-only to application, worker, support, backfill,
 and read-only roles. That immutability does not authorize indefinite
 retention. Audit rows carry policy-derived expiry and are time-partitioned (or
