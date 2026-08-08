@@ -80,6 +80,42 @@ def fail(errors: list[str], message: str) -> None:
     errors.append(message)
 
 
+def fenced_lines_after(text: str, marker: str) -> tuple[str, ...]:
+    """Return stripped non-empty lines in the first text fence after marker."""
+    marker_at = text.find(marker)
+    if marker_at == -1:
+        return ()
+    fence_at = text.find("```text\n", marker_at)
+    if fence_at == -1:
+        return ()
+    content_at = fence_at + len("```text\n")
+    fence_end = text.find("\n```", content_at)
+    if fence_end == -1:
+        return ()
+    return tuple(line.strip() for line in text[content_at:fence_end].splitlines() if line.strip())
+
+
+def mermaid_edges_after(text: str, marker: str) -> tuple[tuple[str, str], ...]:
+    """Return ordered uppercase state edges in the first Mermaid fence."""
+    marker_at = text.find(marker)
+    if marker_at == -1:
+        return ()
+    fence_at = text.find("```mermaid\n", marker_at)
+    if fence_at == -1:
+        return ()
+    content_at = fence_at + len("```mermaid\n")
+    fence_end = text.find("\n```", content_at)
+    if fence_end == -1:
+        return ()
+    return tuple(
+        (match.group(1), match.group(2))
+        for match in re.finditer(
+            r"(?m)^\s*([A-Z][A-Z_]*)\s+-->\s+([A-Z][A-Z_]*)\b",
+            text[content_at:fence_end],
+        )
+    )
+
+
 def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
@@ -217,6 +253,217 @@ def main() -> int:
     ):
         if phrase.lower() not in method.lower():
             fail(errors, f"critical methodology phrase missing: {phrase}")
+
+    # Combined 2026-08-08 authority packet. These checks deliberately lock the
+    # exact tenant boundary, provenance grammar, source graph, path-review
+    # interpretation, comparison cardinality, and deferred-release boundary.
+    authority_paths = {
+        "truth": DOCS / "product" / "PRODUCT_TRUTH_CONTRACT.md",
+        "data": DOCS / "architecture" / "data-model.md",
+        "states": DOCS / "architecture" / "state-machines.md",
+        "tenant_adr": DOCS / "architecture" / "adr" / "ADR-0009-multi-tenant-isolation.md",
+        "persistence_adr": DOCS / "architecture" / "adr" / "ADR-0012-canonical-transactional-and-object-persistence.md",
+        "privacy": DOCS / "privacy" / "DATA_MAP.md",
+        "runbook": DOCS / "release" / "RUNBOOK.md",
+        "acceptance": DOCS / "release" / "ACCEPTANCE.md",
+        "design": DOCS / "superpowers" / "specs" / "2026-08-08-decision-chamber-experience-design.md",
+    }
+    authority = {
+        name: path.read_text(encoding="utf-8") for name, path in authority_paths.items()
+    }
+
+    required_authority_fragments = {
+        "truth": (
+            "epistemic-ledger/v2",
+            "Revision\ntraceability is never evidence.",
+            "External-human-evidence relations and decision-owner-conclusion lineage are\n"
+            "deferred to a later, separately reviewed contract version.",
+        ),
+        "data": (
+            "`organization -> workspace -> project`",
+            "RFC 9562 UUIDv7",
+            "There is no dual-write mode.",
+            "no canonical read or write\nfalls back to SQLite, filesystem JSON, Redis state",
+        ),
+        "states": (
+            "`FAILED` is operational",
+            "Every state except\n`DELETION_PENDING` and `DELETED` may enter `DELETION_PENDING`",
+            "The run remains exactly `VALIDATING_OUTPUT`",
+            "exact current\npath-set ID and SHA-256",
+        ),
+        "tenant_adr": (
+            "`organization -> workspace -> project`",
+            "immutable `ActorContext`",
+            "enabled and forced",
+        ),
+        "persistence_adr": (
+            "explicitly qualified PostgreSQL `core`\n  schema",
+            "There is no dual-write mode.",
+            "never\n  reads or writes SQLite, filesystem, Redis, or another legacy store",
+        ),
+        "privacy": (
+            "Identity subject",
+            "Organization membership",
+            "Workspace membership",
+            "Backfill batch/binding",
+        ),
+        "runbook": (
+            "Railway remains the canonical deployment host",
+            "comparison code performs zero writes",
+            "A database outage in\ncanonical mode is an availability incident, not permission to fall back.",
+        ),
+        "acceptance": (
+            "## Authority-packet acceptance",
+            "The later comparison\n  contract accepts exactly two completed related runs",
+            "Changed-condition injection, advanced intervention, external-human-\n  evidence import",
+        ),
+        "design": (
+            "accepts **exactly two** completed related runs",
+            "Viewport size never changes that cardinality.",
+            "Changed-condition injection is not part of the first vertical slices.",
+            "decision-owner conclusion and external-human-evidence import are later\nreleases",
+        ),
+    }
+    for name, fragments in required_authority_fragments.items():
+        for fragment in fragments:
+            if fragment not in authority[name]:
+                fail(
+                    errors,
+                    f"authority packet lock missing in {authority_paths[name].relative_to(ROOT)}: {fragment!r}",
+                )
+
+    version_locks = {
+        "truth": 'version: "1.2.0"',
+        "data": 'version: "1.2.0"',
+        "states": 'version: "1.2.0"',
+        "tenant_adr": 'version: "1.2.0"',
+        "persistence_adr": 'version: "1.2.0"',
+        "privacy": 'version: "1.2.0"',
+        "runbook": 'version: "1.2.0"',
+        "acceptance": 'version: "1.2.0"',
+        "design": 'version: "1.0.2"',
+    }
+    for name, version in version_locks.items():
+        if version not in authority[name].split("---", 2)[1]:
+            fail(errors, f"authority packet version lock missing: {name} {version}")
+
+    expected_core_tables = (
+        "organizations", "users", "identity_subjects", "workspaces",
+        "organization_memberships", "workspace_memberships", "projects",
+        "schema_adoptions", "backfill_batches", "legacy_project_bindings",
+        "persistence_cutovers", "audit_events",
+    )
+    core_tables = fenced_lines_after(
+        authority["data"], "The TARGET canonical foundation lives in an explicitly qualified PostgreSQL"
+    )
+    if core_tables != expected_core_tables:
+        fail(errors, f"canonical core foundation table set changed: {core_tables!r}")
+
+    expected_roles = (
+        "USER_STATEMENT", "DECISION", "SCOPE_CONSTRAINT", "SOURCE_ASSET",
+        "SOURCE_SEGMENT", "EXTRACTION_CANDIDATE", "STARTING_CONDITION",
+        "ASSUMPTION", "CRITICAL_UNCERTAINTY", "UNCERTAINTY_STATE",
+        "DECISION_LENS", "SCENARIO_RULE", "POSSIBLE_PATH", "PATH_STEP",
+        "CONSIDERATION", "CONFLICT", "MISSING_INFORMATION",
+        "DISCONFIRMING_CONDITION", "VALIDATION_QUESTION",
+        "RELATED_RUN_RECORD", "EXTERNAL_HUMAN_FINDING", "BRIEF_STATEMENT",
+        "DECISION_OWNER_CONCLUSION",
+    )
+    roles = fenced_lines_after(authority["truth"], "The closed v2 role vocabulary is:")
+    if roles != expected_roles:
+        fail(errors, f"epistemic-ledger/v2 role vocabulary changed: {roles!r}")
+
+    expected_relations = (
+        "CONTAINS", "EXTRACTED_FROM", "ACCEPTED_AS", "REVISED_AS", "DEFINES",
+        "INFORMS", "CONSTRAINS", "BRANCHES_ON", "APPLIES_LENS", "SEQUENCES",
+        "SURFACES", "DISCONFIRMED_BY", "PRODUCES_QUESTION", "SUMMARIZES",
+    )
+    relations = fenced_lines_after(
+        authority["truth"], "The closed v2 relation vocabulary is:"
+    )
+    if relations != expected_relations:
+        fail(errors, f"epistemic-ledger/v2 relation vocabulary changed: {relations!r}")
+
+    expected_triples = (
+        ("SOURCE_ASSET", "CONTAINS", "SOURCE_SEGMENT"),
+        ("EXTRACTION_CANDIDATE", "EXTRACTED_FROM", "SOURCE_SEGMENT"),
+        ("EXTRACTION_CANDIDATE", "ACCEPTED_AS", "STARTING_CONDITION"),
+        ("EXTRACTION_CANDIDATE", "REVISED_AS", "STARTING_CONDITION"),
+        ("SOURCE_SEGMENT", "INFORMS", "STARTING_CONDITION"),
+        ("USER_STATEMENT", "DEFINES", "DECISION"),
+        ("STARTING_CONDITION", "CONSTRAINS", "SCENARIO_RULE"),
+        ("POSSIBLE_PATH", "BRANCHES_ON", "ASSUMPTION"),
+        ("POSSIBLE_PATH", "BRANCHES_ON", "UNCERTAINTY_STATE"),
+        ("DECISION_LENS", "APPLIES_LENS", "PATH_STEP"),
+        ("POSSIBLE_PATH", "SEQUENCES", "PATH_STEP"),
+        ("POSSIBLE_PATH", "SURFACES", "CONSIDERATION"),
+        ("POSSIBLE_PATH", "SURFACES", "CONFLICT"),
+        ("POSSIBLE_PATH", "SURFACES", "MISSING_INFORMATION"),
+        ("POSSIBLE_PATH", "DISCONFIRMED_BY", "DISCONFIRMING_CONDITION"),
+        ("CONSIDERATION", "PRODUCES_QUESTION", "VALIDATION_QUESTION"),
+        ("BRIEF_STATEMENT", "SUMMARIZES", "POSSIBLE_PATH"),
+        ("BRIEF_STATEMENT", "SUMMARIZES", "CONSIDERATION"),
+    )
+    matrix_start = authority["truth"].find("Only these ordered")
+    matrix_end = authority["truth"].find("All other triples are forbidden", matrix_start)
+    matrix_text = authority["truth"][matrix_start:matrix_end]
+    triples = tuple(
+        match.groups()
+        for match in re.finditer(
+            r"(?m)^\| `([A-Z_]+)` \| `([A-Z_]+)` \| `([A-Z_]+)` \|",
+            matrix_text,
+        )
+    )
+    if triples != expected_triples:
+        fail(errors, f"epistemic-ledger/v2 exact triple matrix changed: {triples!r}")
+
+    expected_source_edges = (
+        ("UPLOADING", "QUARANTINED"), ("UPLOADING", "FAILED"),
+        ("QUARANTINED", "REJECTED"), ("QUARANTINED", "SCANNING"),
+        ("SCANNING", "REJECTED"), ("SCANNING", "FAILED"),
+        ("SCANNING", "PARSING"), ("PARSING", "FLAGGED"),
+        ("PARSING", "NEEDS_REVIEW"), ("PARSING", "REJECTED"),
+        ("PARSING", "FAILED"), ("FLAGGED", "NEEDS_REVIEW"),
+        ("FLAGGED", "REJECTED"), ("NEEDS_REVIEW", "READY"),
+        ("NEEDS_REVIEW", "REJECTED"), ("NEEDS_REVIEW", "FLAGGED"),
+        ("UPLOADING", "DELETION_PENDING"),
+        ("QUARANTINED", "DELETION_PENDING"),
+        ("SCANNING", "DELETION_PENDING"),
+        ("PARSING", "DELETION_PENDING"),
+        ("FLAGGED", "DELETION_PENDING"),
+        ("NEEDS_REVIEW", "DELETION_PENDING"),
+        ("READY", "DELETION_PENDING"),
+        ("REJECTED", "DELETION_PENDING"),
+        ("FAILED", "DELETION_PENDING"),
+        ("DELETION_PENDING", "DELETED"),
+    )
+    source_edges = mermaid_edges_after(
+        authority["states"], "## Source-ingestion state machine"
+    )
+    if source_edges != expected_source_edges:
+        fail(errors, f"closed source-ingestion transition graph changed: {source_edges!r}")
+
+    expected_path_review_edges = (
+        ("GENERATED", "INCOMPLETE"), ("GENERATED", "NEEDS_REVIEW"),
+        ("NEEDS_REVIEW", "APPROVED"), ("NEEDS_REVIEW", "REJECTED"),
+        ("NEEDS_REVIEW", "SUPERSEDED"), ("APPROVED", "SUPERSEDED"),
+    )
+    path_review_edges = mermaid_edges_after(
+        authority["states"], "## Path-artifact review state machine"
+    )
+    if path_review_edges != expected_path_review_edges:
+        fail(errors, f"path-artifact review transition graph changed: {path_review_edges!r}")
+
+    run_edges = set(mermaid_edges_after(authority["states"], "## Run state machine"))
+    for edge in (
+        ("REVIEWING_CONDITIONS", "STOP_REQUESTED"),
+        ("REVIEWING_CONDITIONS", "FAILED_RETRYABLE"),
+    ):
+        if edge not in run_edges:
+            fail(errors, f"durable-run authority edge missing: {edge[0]} -> {edge[1]}")
+
+    if "three only when" in authority["design"].lower():
+        fail(errors, "design specification still permits a third comparison input")
 
     total_lines = sum(len(p.read_text(encoding="utf-8").splitlines()) for p in markdown_files)
     total_words = sum(len(p.read_text(encoding="utf-8").split()) for p in markdown_files)

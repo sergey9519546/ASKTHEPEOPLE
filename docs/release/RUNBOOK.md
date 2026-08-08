@@ -1,9 +1,9 @@
 ---
 title: "Release Runbook"
 status: "Operational"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Release Manager + SRE"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "Per release; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -208,7 +208,8 @@ Required smoke path:
 9. complete a run;
 10. inspect route map/list;
 11. ask explanatory follow-up;
-12. create research handoff;
+12. verify research-handoff construction is unavailable unless the release
+    manifest explicitly contains its separately approved capability;
 13. export every enabled format;
 14. verify visible/machine disclosure and manifest;
 15. delete a disposable project and verify workflow.
@@ -378,6 +379,108 @@ Exercise:
 - export revocation;
 - cross-tenant incident;
 - missing truth-disclosure incident.
+
+## Canonical identity and workspace cutover procedure
+
+This procedure is **TARGET**. Railway remains the canonical deployment host;
+this packet does not authorize Sites or a second automatic production deploy.
+The canonical organization/workspace foundation may first ship dark or in
+read-only shadow mode. It does not make legacy product routes multi-tenant.
+
+### Preflight and ownership
+
+1. Freeze the exact application/build revision, expected Alembic head,
+   unmodified legacy-baseline hash, checked-in schema fingerprint, adoption
+   tool version, and `epistemic-ledger/v2` validator version in one release
+   manifest.
+2. Require PostgreSQL 16 or later, TLS, private networking, encrypted backups,
+   PITR consistent with the declared RPO/RTO, and bounded connection,
+   statement, and lock timeouts.
+3. Provision separate non-login owner, migrator, application, temporary
+   backfill, and read-only roles. Web and ordinary workers receive only the
+   RLS-subject application URL. Migration/backfill credentials are available
+   only to a manual operator job and are absent from web/worker environments.
+4. Prove the application role is not owner, superuser, `BYPASSRLS`,
+   `CREATEDB`, or `CREATEROLE`; prove forced policies and connection-pool
+   scope reset before any non-legacy mode.
+5. Create a backup, restore it in isolation, verify the database identity and
+   schema fingerprint, and attach restore evidence before migration.
+
+### Fingerprint, adopt, and backfill
+
+1. Acquire the migration advisory lock and require exactly one allowed
+   Alembic starting state.
+2. Recalculate the managed legacy-schema canonical JSON and SHA-256. On any
+   missing, extra, renamed, type-changed, constraint-changed, or index-changed
+   object, stop without stamping or migrating.
+3. Use only one approved path: clean bootstrap, exact stamped baseline, or an
+   explicit exact unversioned adoption with the expected fingerprint supplied
+   by the operator. Never edit or reinterpret the baseline migration.
+4. Apply the additive `core` child revision manually. Application startup
+   never upgrades the schema.
+5. Run the operator mapping in mandatory dry-run mode. Require the same input
+   manifest hash and legacy-root fingerprint for apply. Organization,
+   workspace, memberships, and project bindings are explicit; never infer
+   tenant ownership from filesystem layout, project IDs, aliases, email
+   domains, or token claims.
+6. Preserve accepted legacy workspace/project public aliases while creating
+   independent UUIDv7 physical IDs. Reconcile counts, alias sets,
+   relationships, file/manifest hashes, and evidence hashes. A collision,
+   ambiguity, or changed rerun blocks the batch.
+7. Revoke the temporary backfill role and archive the encrypted operator
+   manifest under the approved retention class after final reconciliation.
+
+### Shadow, cutover, and smoke
+
+1. Deploy dark with core, source-ingestion, durable-run, and path flags off.
+2. Enable `SHADOW` reads only. Legacy remains the response and sole write
+   authority; the comparison code performs zero writes and records only
+   bounded aggregate mismatch codes/counts.
+3. Require zero unexplained mismatch, repeat restore/RLS/role checks, then
+   enter maintenance and disable all legacy identity/project writers.
+4. Fingerprint and reconcile again. Record a `PREPARED` cutover with exact
+   evidence and build hashes before selecting `CANONICAL`.
+5. In `CANONICAL`, read and write core only. Missing rows, RLS denial,
+   timeout, unavailable PostgreSQL, or pool error returns a bounded failure;
+   no request touches SQLite, filesystem JSON, Redis state, or legacy
+   identity storage as fallback.
+6. Run OIDC signature/issuer/audience/expiry, inactive-membership,
+   cross-organization, cross-workspace, missing-scope, pooled-connection,
+   application-role, and no-fallback smoke tests. Activate the cutover record
+   only after all pass.
+7. Keep the legacy snapshot read-only as bounded evidence. Core tenancy does
+   not remove the single-web-worker warning or make the process-local legacy
+   simulation runner horizontally safe.
+
+### Source, run, path, and brief admission
+
+- Source ingestion remains disabled unless the complete TXT-only quarantine,
+  scan, strict parse, review, deletion, RLS, object-store, and worker-isolation
+  evidence exists. `FAILED` operational states and `REJECTED` policy states
+  are never interchanged. Deletion continues from every non-deleted source
+  state during rollback.
+- Durable run creation remains disabled until organization/workspace
+  authorization, canonical reviewed inputs, exact releases, leases, fences,
+  transactional idempotency/outbox, object artifacts, reconnect, stop, and
+  worker-kill recovery evidence pass.
+- Path persistence/review remains disabled until first-class semantic IDs and
+  `epistemic-ledger/v2` role resolution pass. Brief generation requires the
+  exact current approved path-set ID/hash and review ID/hash while the run is
+  `VALIDATING_OUTPUT`; any mismatch, stop, failure, or revision relocks it.
+- Later exact-two comparison, changed-condition injection, external evidence,
+  research-handoff construction, and decision-owner conclusion workflows stay
+  unavailable. This release must not advertise placeholders for them.
+
+### Rollback boundary
+
+Before the first canonical application write, an approved rollback record may
+return reads to the verified read-only legacy snapshot. After that write,
+never route back to legacy or replay writes ad hoc: keep core canonical and
+deploy a compatible application rollback or forward fix. A database outage in
+canonical mode is an availability incident, not permission to fall back.
+Rollback disables new source/run/path work but preserves acknowledged reads,
+stop/recovery, deletion obligations, immutable reviews/events, and truthful
+partial states.
 
 ## References
 

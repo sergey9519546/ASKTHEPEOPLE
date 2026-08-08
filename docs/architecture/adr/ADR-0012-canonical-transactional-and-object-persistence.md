@@ -1,9 +1,9 @@
 ---
 title: "ADR-0012: Canonical Transactional and Object Persistence"
 status: "Accepted"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Architecture Council + Data Platform"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -29,7 +29,15 @@ Use PostgreSQL as the canonical transactional system of record and
 private object storage as the canonical home for uploaded source bytes and
 large generated artifacts.
 
-- Every tenant-owned relational row carries `workspace_id`.
+- Every workspace-owned relational row carries immutable physical
+  `organization_id` and `workspace_id`, with a composite foreign key proving
+  their relationship.
+- Every addressable canonical row uses an application- or operator-issued RFC
+  9562 UUIDv7 physical ID and a separate immutable server-issued public alias.
+  Physical IDs never cross public, queue, log, or telemetry boundaries.
+- The canonical foundation lives in an explicitly qualified PostgreSQL `core`
+  schema. Schema changes are Alembic-only; web and worker startup never call
+  `create_all`, stamp, migrate, provision, or backfill it.
 - Application authorization is mandatory; PostgreSQL row-level security is an
   additional defense where operationally supported.
 - Completed run configuration and release identifiers are immutable.
@@ -42,6 +50,16 @@ large generated artifacts.
   retention class, and deletion state.
 - SQLite/JSONL may remain for local development or migration evidence but are
   not production systems of record.
+- The existing root migration is immutable. An operator-owned schema
+  fingerprint distinguishes clean bootstrap, exact stamped upgrade, and
+  explicit exact unversioned adoption; schema mismatch blocks stamping and
+  migration.
+- Adoption/backfill is offline, dry-run first, idempotent, hash reconciled, and
+  preserves accepted legacy public aliases without inferring tenant ownership.
+- Persistence modes are only `LEGACY`, read-only-comparison `SHADOW`, and
+  `CANONICAL`. There is no dual-write mode. Once canonical is selected, any
+  PostgreSQL error, timeout, absent row, or RLS denial fails closed and never
+  reads or writes SQLite, filesystem, Redis, or another legacy store.
 
 ## Consequences
 
@@ -52,6 +70,11 @@ large generated artifacts.
 - Row-level security cannot replace application authorization, and owner or
   privileged-role bypass must be tested.
 - Deletion status must remain truthful while backup/provider copies age out.
+- A cutover record binds reconciliation evidence, application/build revision,
+  operator, and rollback boundary. Before any canonical application write an
+  approved rollback may return to a verified read-only legacy snapshot. After
+  that write, only a schema-compatible application rollback or forward fix is
+  allowed; legacy writes remain disabled.
 
 ## Rejected alternatives
 
@@ -66,6 +89,15 @@ large generated artifacts.
 
 ## Verification
 
+- The checked-in legacy schema fingerprint is recreated from the unmodified
+  baseline and matches byte-for-byte canonical JSON and SHA-256 evidence.
+- Clean, exact-stamped, and explicit-exact-unversioned adoption rehearsals
+  pass; drift, multiple heads, or edited baseline history fail closed.
+- The `core` owner, migrator, application, temporary backfill, and read-only
+  database roles are separate. The application role is not owner, superuser,
+  or RLS-bypass.
+- Shadow comparison performs zero writes and canonical failure produces a
+  stable unavailable result without any legacy access.
 - Migration rehearsals compare counts, hashes, relationships, and authorization.
 - Cross-tenant negative tests run at application and database layers.
 - Backup restoration is tested against declared recovery objectives.

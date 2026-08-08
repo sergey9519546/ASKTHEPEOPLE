@@ -1,0 +1,118 @@
+# Combined normative authority packet report
+
+Date: 2026-08-08
+
+Status: authority contract implemented; application behavior remains at its
+documented CURRENT / PARTIAL / TARGET / TRANSITION state
+
+Commit: recorded in the parent integration log from the isolated commit that
+contains this report
+
+## Scope
+
+This change is documentation and validation only. It does not add application
+routes, database models, migrations, workers, source processors, path writers,
+comparison APIs, frontend features, or deployment mutations. Existing
+unrelated backend/frontend work was not edited or staged.
+
+The packet resolves the normative intersections required before the tenant,
+source, durable-run, path, and brief implementation checkpoints may proceed:
+
+1. exact `organization -> workspace -> project` ownership;
+2. RFC 9562 UUIDv7 physical identity plus separate immutable server aliases;
+3. organization/workspace memberships, OIDC bootstrap, immutable
+   `ActorContext`, forced RLS, scoped repositories, core-schema adoption,
+   shadow comparison, cutover, and canonical no-fallback behavior;
+4. exact `epistemic-ledger/v2` roles, relations, and 18 ordered allowed
+   triples;
+5. source extraction candidate acceptance/revision semantics and the direct or
+   transitive source-to-path/source-to-consideration ban;
+6. the complete source transition graph, including operational `FAILED`,
+   policy/review `REJECTED`, and deletion from every non-deleted state;
+7. the preserved 20-state run contract, including both
+   `REVIEWING_CONDITIONS` stop and retryable-failure transitions;
+8. an independent immutable path-artifact review machine while the run remains
+   `VALIDATING_OUTPUT`, with exact path-set/review hash binding before brief
+   generation or completion;
+9. exactly two later semantic-comparison inputs; and
+10. changed-condition injection, advanced intervention, external evidence,
+    interactive research-handoff construction, and decision-owner conclusions
+    kept unavailable for later separately governed releases.
+
+## Files
+
+- `docs/architecture/data-model.md` — version `1.2.0`
+- `docs/architecture/adr/ADR-0009-multi-tenant-isolation.md` — version `1.2.0`
+- `docs/architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md` — version `1.2.0`
+- `docs/product/PRODUCT_TRUTH_CONTRACT.md` — version `1.2.0`
+- `docs/architecture/state-machines.md` — version `1.2.0`
+- `docs/privacy/DATA_MAP.md` — version `1.2.0`
+- `docs/release/RUNBOOK.md` — version `1.2.0`
+- `docs/release/ACCEPTANCE.md` — version `1.2.0`
+- `docs/superpowers/specs/2026-08-08-decision-chamber-experience-design.md` — version `1.0.2`, still `Proposed / Revision Required`
+- `tools/validate_docs.py` — exact structural locks for the packet
+
+## Structural enforcement
+
+The validator now fails if any of these change without an intentional packet
+revision:
+
+- normative document version locks;
+- the exact twelve-table core-foundation set;
+- the exact 23-role and 14-relation v2 vocabularies;
+- the ordered 18-triple v2 allowlist;
+- the complete ordered 26-edge source graph;
+- the exact six-edge path-artifact review graph;
+- either required `REVIEWING_CONDITIONS` run edge;
+- tenant/no-fallback/privacy/deployment/acceptance anchor requirements;
+- exact-two comparison language or a reintroduced third-input exception; and
+- later-release boundaries for changed conditions, external evidence, and
+  conclusions.
+
+## Verification
+
+Executed from the repository root:
+
+```text
+python tools/validate_docs.py
+Markdown files: 69
+ADR files: 12
+Warnings: 0
+Errors: 0
+RESULT: PASS
+```
+
+```text
+git diff --check
+exit code: 0
+```
+
+Line-ending notices from Git describe the repository's Windows checkout
+normalization and are not whitespace errors.
+
+## Self-review
+
+- The pre-existing uncommitted run-state corrections in
+  `docs/architecture/state-machines.md` were retained and incorporated into
+  validator locks.
+- The pre-existing canonical run-state/presentation correction in the proposed
+  design spec was retained and completed with an exhaustive display-only
+  mapping.
+- No retired provenance relation is accepted as an alias on new writes.
+- `REVISED_AS` is traceability only and never source evidence.
+- No source transition is missing its deletion path.
+- No new run state was invented for path review.
+- Brief eligibility and finalization bind exact immutable hashes.
+- No comparison implementation or placeholder is authorized.
+- No implementation status was promoted to CURRENT by this docs change.
+
+## Remaining gates, not contract conflicts
+
+The normative ambiguity is resolved in the packet, but named Architecture,
+Security, Privacy, Persistence, and Release owner approval must still be
+recorded before the affected production checkpoints. Application evidence is
+also still required: PostgreSQL migration/restore, database roles and forced
+RLS, OIDC/membership bootstrap, operator adoption/backfill, secure TXT source
+processing and deletion, durable leases/fences/outbox/reconnect, first-class
+path persistence and semantic lineage, worker-kill recovery, accessibility,
+and release drills. None is claimed by this report.

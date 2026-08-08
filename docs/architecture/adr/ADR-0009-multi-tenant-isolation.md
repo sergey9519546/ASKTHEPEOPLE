@@ -1,9 +1,9 @@
 ---
 title: "ADR-0009: Defense-in-depth multi-tenant isolation"
 status: "Accepted"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Architecture Council"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "On material change"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -14,7 +14,7 @@ audit_relevance: "P1 'No object-level authorization model'"
 # ADR-0009: Defense-in-depth multi-tenant isolation
 
 - **Status:** Accepted
-- **Date:** 2026-07-29
+- **Date:** 2026-08-08
 - **Decision owners:** Product, Architecture, Security, Research
 
 ## Context
@@ -25,10 +25,41 @@ background-job mistakes, cache key collisions, and export/retrieval leaks.
 
 ## Decision
 
-Use organization-scoped authorization in API and domain services, PostgreSQL
-row-level security as defense in depth, tenant-prefixed object keys, scoped
-worker credentials, tenant-aware cache keys, and explicit tests for every data
-path. Production database roles must not casually bypass RLS.
+Use the exact physical relationship
+`organization -> workspace -> project`. Organization is the tenant/legal-policy
+boundary; workspace is the collaboration, authorization, retention-policy, and
+operational-isolation boundary. A project belongs to one workspace and
+therefore one organization and never moves between organizations without a
+separately reviewed migration.
+
+Every workspace-owned row and query carries immutable physical
+`organization_id` and `workspace_id`. Composite foreign keys prove that the
+workspace belongs to the organization. Use application authorization in API
+and domain services, PostgreSQL forced row-level security as defense in depth,
+tenant-prefixed object keys, scoped worker credentials, tenant-aware cache
+keys, and explicit negative tests for every data path.
+
+OIDC authenticates exact issuer/subject identity only. It never supplies
+organization, workspace, project, role, or capability. A narrowly scoped
+bootstrap resolver maps the subject to a canonical user, then resolves active
+organization membership, active workspace membership, project, and one
+immutable `ActorContext`. Active workspace membership requires active
+membership in the same organization. A user may be an organization member
+without access to every workspace.
+
+Roles are closed to `OWNER`, `ADMIN`, `EDITOR`, `REVIEWER`, `VIEWER`, and
+`SECURITY`; capabilities derive from one versioned policy. Organization roles
+do not silently grant workspace project mutation. Scope and capabilities are
+server-derived and repositories require `ActorContext` in addition to explicit
+scope predicates.
+
+After bootstrap, every transaction sets actor, organization, workspace, and
+request identifiers with transaction-local parameters. RLS uses non-throwing
+helpers, mirrors `USING` with `WITH CHECK`, is enabled and forced, and yields no
+row when context is missing or malformed. Missing and wrong-tenant resources
+are indistinguishable. Production application roles are neither table owner,
+superuser, nor `BYPASSRLS`; users and identity-subject tables are readable only
+through the bounded bootstrap function.
 
 ## Consequences
 
@@ -84,11 +115,14 @@ The current data model has no `organization_id` and no `workspace_id`:
 
 ### Required correction
 
-Per this ADR and the audit, every aggregate must carry
-`organization_id` and `workspace_id`. Every query must be scoped by both.
-PostgreSQL row-level security is the defense-in-depth layer. Object
-storage keys must be tenant-prefixed. Cache keys must be tenant-aware.
-Worker credentials must be scoped.
+Per this ADR and the audit, the TARGET physical chain is exactly
+`organization -> workspace -> project`. Every workspace-owned aggregate must
+carry `organization_id` and `workspace_id`; every query must be scoped by both.
+The TRANSITION filesystem workspace manifest is a public-alias locator only
+and cannot establish organization ownership, membership, role, or capability.
+PostgreSQL forced row-level security is the defense-in-depth layer. Object
+storage keys must be tenant-prefixed. Cache keys must be tenant-aware. Worker
+credentials must be scoped.
 
 ### Acceptance tests (from the audit)
 
@@ -100,8 +134,10 @@ for User B's objects. The test suite must cover every data path.
 
 Per this ADR, production database roles must not casually bypass RLS.
 When the canonical persistence layer lands in gate 3, the migration
-MUST create separate roles for the application, for migrations, and
-for the read-replica — and the application role MUST be subject to
-RLS. The migration checklist in
+MUST use separate owner, application, migration, temporary backfill, and
+read-only roles. The application role MUST be subject to forced RLS and MUST
+NOT own core tables, be a superuser, or have `BYPASSRLS`. Cross-organization,
+cross-workspace, missing-context, malformed-context, and pooled-connection
+scope-leak tests are release blockers. The migration checklist in
 [`docs/exec-plans/02-tenancy-data-and-secure-ingestion.md`](../../exec-plans/02-tenancy-data-and-secure-ingestion.md)
 will pick this up.

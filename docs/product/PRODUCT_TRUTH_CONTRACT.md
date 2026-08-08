@@ -1,9 +1,9 @@
 ---
 title: "Product Truth Contract"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Product + Research + Engineering"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -142,6 +142,12 @@ Any write that violates an invariant must fail. Any migration, API handler, back
 
 Every meaningful statement in the system must carry both an **origin** and an **epistemic role**.
 
+The canonical write contract is `epistemic-ledger/v2`. Earlier TRANSITION
+vocabularies are not aliases and MUST NOT be accepted for new canonical
+writes. Every stored edge records this contract version. Endpoint roles and
+origins are resolved from canonical assertions; they are never trusted from a
+client, provider, import payload, or task message.
+
 ### Origin types
 
 | Origin | Meaning | Visual label |
@@ -155,53 +161,109 @@ Every meaningful statement in the system must carry both an **origin** and an **
 
 ### Epistemic roles
 
-- Decision statement
-- Scope constraint
-- Source segment
-- Starting condition
-- Assumption
-- Critical uncertainty
-- Generated profile / decision lens
-- Scenario rule
-- Possible path
-- Synthetic action
-- Decision consideration
-- Conflict
-- Missing information
-- Disconfirming condition
-- Validation question
-- Related run record
-- External human finding
-- Decision-owner conclusion
-
-### Allowed and prohibited relationships
-
-Allowed:
+The closed v2 role vocabulary is:
 
 ```text
-SOURCE SEGMENT -> informs -> STARTING CONDITION
-USER STATEMENT -> defines -> DECISION
-STARTING CONDITION -> constrains -> SCENARIO RULE
-ASSUMPTION -> creates branch in -> POSSIBLE PATH
-GENERATED PROFILE -> applies lens to -> SYNTHETIC ACTION
-POSSIBLE PATH -> surfaces -> DECISION CONSIDERATION
-DECISION CONSIDERATION -> produces -> VALIDATION QUESTION
-EXTERNAL HUMAN FINDING -> supports / contradicts / leaves unresolved -> VALIDATION QUESTION
+USER_STATEMENT
+DECISION
+SCOPE_CONSTRAINT
+SOURCE_ASSET
+SOURCE_SEGMENT
+EXTRACTION_CANDIDATE
+STARTING_CONDITION
+ASSUMPTION
+CRITICAL_UNCERTAINTY
+UNCERTAINTY_STATE
+DECISION_LENS
+SCENARIO_RULE
+POSSIBLE_PATH
+PATH_STEP
+CONSIDERATION
+CONFLICT
+MISSING_INFORMATION
+DISCONFIRMING_CONDITION
+VALIDATION_QUESTION
+RELATED_RUN_RECORD
+EXTERNAL_HUMAN_FINDING
+BRIEF_STATEMENT
+DECISION_OWNER_CONCLUSION
 ```
 
-Prohibited:
+`EXTRACTION_CANDIDATE` is synthetic generated content awaiting an explicit
+disposition. `BRIEF_STATEMENT` is synthetic summary content. The presence of
+`EXTERNAL_HUMAN_FINDING` and `DECISION_OWNER_CONCLUSION` in the vocabulary
+reserves their distinct truth categories; it does not enable an importer,
+conclusion writer, or relation for them in this release.
+
+### Relations and exact v2 triple matrix
+
+The closed v2 relation vocabulary is:
 
 ```text
-SOURCE SEGMENT -> proves -> POSSIBLE PATH
-SOURCE SEGMENT -> validates -> DECISION CONSIDERATION
-SYNTHETIC ACTION -> represents -> HUMAN BEHAVIOR
-GENERATED PROFILE -> is member of -> SAMPLE
-RELATED RUN RECORD -> cites / corroborates -> STATEMENT
-MODEL CONSISTENCY -> equals -> HUMAN CONFIDENCE
-PATH COUNT -> equals -> SUPPORT OR PREVALENCE
+CONTAINS
+EXTRACTED_FROM
+ACCEPTED_AS
+REVISED_AS
+DEFINES
+INFORMS
+CONSTRAINS
+BRANCHES_ON
+APPLIES_LENS
+SEQUENCES
+SURFACES
+DISCONFIRMED_BY
+PRODUCES_QUESTION
+SUMMARIZES
 ```
 
-Implement these rules in a domain validation layer and cover them with property-based or exhaustive relationship tests.
+Only these ordered `(from_role, relation, to_role)` triples are writable:
+
+| From role | Relation | To role | Meaning boundary |
+|---|---|---|---|
+| `SOURCE_ASSET` | `CONTAINS` | `SOURCE_SEGMENT` | Structural source segmentation. |
+| `EXTRACTION_CANDIDATE` | `EXTRACTED_FROM` | `SOURCE_SEGMENT` | Candidate traceability; not acceptance. |
+| `EXTRACTION_CANDIDATE` | `ACCEPTED_AS` | `STARTING_CONDITION` | Unchanged reviewed acceptance. |
+| `EXTRACTION_CANDIDATE` | `REVISED_AS` | `STARTING_CONDITION` | User-authored revision traceability only. |
+| `SOURCE_SEGMENT` | `INFORMS` | `STARTING_CONDITION` | Created only for unchanged acceptance. |
+| `USER_STATEMENT` | `DEFINES` | `DECISION` | User-authored decision definition. |
+| `STARTING_CONDITION` | `CONSTRAINS` | `SCENARIO_RULE` | Reviewed input constrains scenario construction. |
+| `POSSIBLE_PATH` | `BRANCHES_ON` | `ASSUMPTION` | Reviewed branch basis. |
+| `POSSIBLE_PATH` | `BRANCHES_ON` | `UNCERTAINTY_STATE` | Reviewed branch basis. |
+| `DECISION_LENS` | `APPLIES_LENS` | `PATH_STEP` | A reviewed functional lens shapes a synthetic action. |
+| `POSSIBLE_PATH` | `SEQUENCES` | `PATH_STEP` | Ordered structural sequence. |
+| `POSSIBLE_PATH` | `SURFACES` | `CONSIDERATION` | Synthetic consequence to consider. |
+| `POSSIBLE_PATH` | `SURFACES` | `CONFLICT` | Explicit cross-input or cross-path conflict. |
+| `POSSIBLE_PATH` | `SURFACES` | `MISSING_INFORMATION` | Explicit information gap. |
+| `POSSIBLE_PATH` | `DISCONFIRMED_BY` | `DISCONFIRMING_CONDITION` | Condition that would weaken or break the path. |
+| `CONSIDERATION` | `PRODUCES_QUESTION` | `VALIDATION_QUESTION` | Research handoff prompt; not validation. |
+| `BRIEF_STATEMENT` | `SUMMARIZES` | `POSSIBLE_PATH` | Exact approved path-set lineage. |
+| `BRIEF_STATEMENT` | `SUMMARIZES` | `CONSIDERATION` | Exact approved consideration lineage. |
+
+All other triples are forbidden. In particular:
+
+```text
+SOURCE_SEGMENT SUPPORTS STARTING_CONDITION                    FORBIDDEN
+SOURCE_SEGMENT INFORMS POSSIBLE_PATH                          FORBIDDEN
+SOURCE_SEGMENT INFORMS CONSIDERATION                          FORBIDDEN
+SOURCE_SEGMENT SUPPORTS POSSIBLE_PATH                         FORBIDDEN
+SOURCE_SEGMENT SUPPORTS CONSIDERATION                         FORBIDDEN
+POSSIBLE_PATH VALIDATED_BY VALIDATION_QUESTION                FORBIDDEN
+REVISED_AS traversed as source evidence or support            FORBIDDEN
+SYNTHETIC ACTION represents HUMAN BEHAVIOR                    FORBIDDEN
+RELATED_RUN_RECORD cites or corroborates a statement          FORBIDDEN
+PATH COUNT encodes support, prevalence, rank, or probability  FORBIDDEN
+```
+
+For `REVISED_AS`, the resulting condition has origin `USER_STATED`; no
+`SOURCE_SEGMENT INFORMS STARTING_CONDITION` edge is written. Revision
+traceability is never evidence. Direct and transitive source-to-path or
+source-to-consideration support remains forbidden even when intermediate
+objects exist.
+
+External-human-evidence relations and decision-owner-conclusion lineage are
+deferred to a later, separately reviewed contract version. No v2 writer may
+invent them. Implement the v2 matrix in a domain validator and test both every
+allowed triple and the complete Cartesian complement.
 
 ## Decision-owner conclusion
 

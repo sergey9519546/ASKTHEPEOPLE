@@ -1,9 +1,9 @@
 ---
 title: "Privacy Data Map"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Privacy + Security + Data Governance"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "Quarterly and every subprocessor/data-flow change"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -94,6 +94,46 @@ Create and maintain a data map for:
 
 Do not duplicate raw customer content in analytics or error tools.
 
+## Canonical identity, membership, and adoption data
+
+**CURRENT:** production identity is not yet organization/workspace scoped; the
+project-specific status section below remains controlling evidence.
+
+**TARGET:** the minimum canonical identity boundary stores:
+
+| Record | Minimum fields | Purpose | Access and logging boundary |
+|---|---|---|---|
+| User | server UUIDv7, immutable public alias, bounded display name, status | stable internal identity | no password, token, email requirement, or complete provider claim |
+| Identity subject | exact OIDC issuer, exact opaque subject, user ID, creation time | authenticate an existing user | bootstrap function only; never ordinary table reads, logs, telemetry, or evidence bundles |
+| Organization membership | organization ID, user ID, closed role, status, version, actor/time | legal-policy tenancy and organization administration | scoped administrators/security; changes audited |
+| Workspace membership | organization ID, workspace ID, user ID, closed role, status, version, actor/time | collaboration and project authorization | requires active organization membership; changes audited |
+| Actor context | user/actor ID, organization/workspace/project scope, derived roles/capabilities, request ID, authentication method/time | one request or command | ephemeral; not copied into tokens or retained as a customer-content blob |
+| Schema adoption | expected/observed schema hashes, revision, database identity hash, operator role, tool/version/time, evidence hash | prove safe migration lineage | operator only; no URL, credential, subject, alias, or customer name |
+| Backfill batch/binding | input and legacy-tree hashes, counts, immutable public aliases, status/times, evidence hash | reconcile operator-approved legacy identity mapping | encrypted operator manifest stored outside ordinary logs; no source/decision/generated content copied |
+| Cutover/audit | subsystem, state, release/evidence hashes, bounded actor/reason/request metadata, time | accountable activation, rollback boundary, investigation | append-only; privacy-safe metadata only |
+
+Roles and capabilities are derived server-side from active memberships. OIDC
+claims authenticate only `(issuer, subject)` and never establish organization,
+workspace, project, role, or capability. Public aliases are operational
+identifiers and remain confidential in ordinary telemetry; physical UUIDs are
+never logged or exposed.
+
+**TRANSITION:** adoption is operator-owned, dry-run first, hash bound, and
+idempotent. The sensitive mapping manifest is not committed. It may contain
+bounded organization/workspace names, exact issuer subjects, membership lists,
+and legacy public aliases only for the adoption purpose. It MUST NOT be used to
+infer customer relationships from filenames, directory ownership, email
+domains, token claims, or aliases, and it MUST NOT copy source bytes, extracted
+text, decisions, runs, reports, prompts, model output, or generated artifacts.
+After reconciliation, temporary backfill access is revoked and the encrypted
+manifest follows its approved retention class.
+
+Identity and membership deletion or suspension is not implemented by silently
+removing audit history. Status, retention, legal-hold, and account-rights
+workflows determine whether identity links are disabled, anonymized, retained,
+or deleted. Restore procedures must replay deletion obligations and must not
+re-activate revoked memberships or credentials.
+
 ## Data minimization
 
 - Ask only for information necessary to construct the decision.
@@ -172,7 +212,7 @@ No marketing or in-product claim of accuracy, efficacy, human equivalence, repre
 | Account identity | name, work email, IdP subject | user/IdP | authentication, authorization, support | IdP, PostgreSQL | identity provider, email provider if configured | Personal |
 | Organization metadata | organization, role, policy configuration | admin | tenancy, access, governance | PostgreSQL | none by default | Business confidential |
 | Decision data | question, owner, constraints, intended use | user | scenario exploration | PostgreSQL | model provider only when stage requires | Business confidential |
-| Source files | PDF/DOCX/TXT/HTML/CSV | user upload | starting-condition extraction | quarantine/processed object storage | parser, model/graph provider only after policy | Potentially sensitive |
+| Source files | TXT in the first controlled slice; PDF/DOCX/Markdown/HTML/CSV/URL/OCR/image/archive unavailable | user upload | reviewed starting-condition extraction only | private quarantine/processed object storage | isolated scanner/parser; approved model provider only when explicitly enabled | Potentially sensitive |
 | Source segments | normalized text, page/section | parser/user | reviewed provenance and retrieval | PostgreSQL/object store | configured providers as needed | Same as source |
 | Assumptions and uncertainties | reviewed statements | user/model proposal | scenario construction | PostgreSQL | model provider | Business confidential |
 | Generated profiles | functional constraints and criteria | model/user review | decision-lens application | PostgreSQL | model/simulation provider | Synthetic; may reflect sensitive context |

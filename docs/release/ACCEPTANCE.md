@@ -1,9 +1,9 @@
 ---
 title: "Release Acceptance"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Release Council"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "Per release; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -330,7 +330,9 @@ A release is blocked by any of the following:
 
 “Done” means all of the following exist and have evidence:
 
-- production product workflow from decision to research handoff;
+- production product workflow from decision to an exact-hash-gated decision
+  brief; research-handoff construction is required only for a later release
+  that explicitly enables it;
 - real persistence, migrations, authorization, storage, and jobs;
 - staged AI prompts with schemas and evals;
 - source security pipeline;
@@ -476,6 +478,106 @@ average threshold passes.
 - error/loading/empty/stopped/reconnecting states complete;
 - design reference and latest screenshots inspected together;
 - content/terminology lint clean.
+
+## Authority-packet acceptance
+
+These locks are release blockers. Passing a domain unit test, showing a UI,
+or deploying a disabled schema does not by itself satisfy them.
+
+### Organization, workspace, and canonical persistence
+
+- [ ] The physical relationship is exactly
+  `organization -> workspace -> project`; active workspace membership also has
+  an active membership in the same organization.
+- [ ] Every workspace-owned row, query, cache/job/object key, export, and
+  deletion target carries server-derived organization and workspace scope.
+- [ ] Every addressable physical ID is RFC 9562 UUIDv7 and every public ID is
+  a separate immutable server-issued alias; public APIs expose no physical ID.
+- [ ] OIDC claims authenticate only exact issuer/subject identity. Scope,
+  role, and capability come from canonical membership and one immutable
+  `ActorContext`; global `APP_TOKEN` is not production tenancy evidence.
+- [ ] The unmodified legacy migration hash and checked-in schema fingerprint
+  match. Clean, exact-stamped, and explicit-exact-unversioned adoption
+  rehearsals pass; every drift case refuses stamp/migration.
+- [ ] Core objects are Alembic-managed in the explicit `core` schema. Startup
+  performs no migration, provisioning, backfill, stamp, or `create_all`.
+- [ ] Owner, migrator, application, temporary backfill, and read-only roles are
+  separate. The application role is not owner, superuser, or `BYPASSRLS`; RLS
+  is enabled and forced and pooled scope cannot leak.
+- [ ] Backfill is operator-mapped, dry-run first, idempotent, hash reconciled,
+  preserves accepted legacy aliases, copies no source/generated content, and
+  ends with temporary-role revocation.
+- [ ] Shadow comparison writes nothing. Canonical mode never reads or writes a
+  legacy store on missing row, RLS denial, timeout, or PostgreSQL failure.
+- [ ] Backup restore, cutover, post-write rollback boundary, and forward-fix
+  drills have attached privacy-safe evidence.
+
+### Epistemic ledger v2
+
+- [ ] Every canonical edge stores contract version
+  `epistemic-ledger/v2`; endpoint roles/origins are resolved from canonical
+  assertions rather than accepted from clients/providers/workers.
+- [ ] The exact role, relation, and ordered triple matrix in the Product Truth
+  Contract is implemented. Tests accept every listed triple and reject the
+  complete Cartesian complement at domain and database boundaries.
+- [ ] `SOURCE_SEGMENT INFORMS STARTING_CONDITION` replaces source support and
+  exists only for unchanged reviewed acceptance.
+- [ ] `EXTRACTION_CANDIDATE REVISED_AS STARTING_CONDITION` creates a
+  `USER_STATED` condition and no `INFORMS` edge; revision traceability is not
+  source evidence.
+- [ ] Direct and transitive source-to-path/source-to-consideration support is
+  impossible.
+- [ ] `POSSIBLE_PATH SEQUENCES PATH_STEP`; paths `SURFACES` considerations,
+  conflicts, and missing information; disconfirming and brief-statement
+  lineage use the exact v2 triples.
+- [ ] `CONSIDERATION PRODUCES_QUESTION VALIDATION_QUESTION` is the only
+  path-question relation. `POSSIBLE_PATH VALIDATED_BY VALIDATION_QUESTION` and
+  every retired TRANSITION relation are rejected, not aliased.
+
+### Source, run, path, and brief state
+
+- [ ] The source transition set matches the normative graph exactly.
+  `FAILED` is operational; `REJECTED` is policy/security/review. Every source
+  state except `DELETION_PENDING` and `DELETED` may request deletion.
+- [ ] Source deletion inventories primary DB, quarantine/processed objects and
+  versions, indexes, cache, exports, provider records, queued work, and backup
+  expiry; status never overstates delayed or held deletion.
+- [ ] The exact 20-state run machine and immutable stage-attempt machine are
+  canonical. `REVIEWING_CONDITIONS` supports both stop and retryable failure.
+- [ ] Path-artifact review is independent while the run remains exactly
+  `VALIDATING_OUTPUT`; waiting for review holds no worker lease and does not
+  invent a run state.
+- [ ] Brief admission and completion bind the exact current path-set ID/hash,
+  immutable approved review ID/hash, validator releases, and manifest. Any
+  revision, stop, failure, incomplete, rejected, stale, or superseded state
+  blocks a final brief.
+- [ ] Canonical paths are first-class immutable objects with server-owned
+  physical, public, and semantic IDs. Legacy prose is never parsed into path
+  facts or provenance.
+
+### Later-release boundary
+
+- [ ] No semantic comparison is enabled before non-null immutable semantic
+  identities and unambiguous predecessor evidence exist. The later comparison
+  contract accepts exactly two completed related runs and rejects every other
+  count; viewport never changes the rule.
+- [ ] Changed-condition injection, advanced intervention, external-human-
+  evidence import, interactive research-handoff construction, and
+  decision-owner conclusion workflows remain unavailable until separate
+  specifications, privacy/security review, tests, and release approvals land.
+- [ ] Capability responses, routes, UI, docs, analytics, exports, and support
+  copy do not imply that any deferred capability exists.
+
+### Honest status and approvals
+
+- [ ] Architecture, Security, Privacy, Persistence, and Release owners approve
+  this normative packet and record the exact doc commit.
+- [ ] Implementation status uses only `CURRENT`, `PARTIAL`, `TARGET`, and
+  `TRANSITION`. Authority approval changes the TARGET contract; it does not
+  convert absent implementation into CURRENT behavior.
+- [ ] `python tools/validate_docs.py` returns zero warnings/errors, the
+  product-truth/content linters pass, and the release evidence cites actual
+  implementation files and lines before any CURRENT claim.
 
 ## Exceptions
 

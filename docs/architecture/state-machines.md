@@ -1,9 +1,9 @@
 ---
 title: "State Machines"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Domain Engineering + SRE"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -57,6 +57,7 @@ stateDiagram-v2
   QUEUED --> STOP_REQUESTED
   PREPARING --> STOP_REQUESTED
   EXTRACTING --> STOP_REQUESTED
+  REVIEWING_CONDITIONS --> STOP_REQUESTED
   GENERATING_PROFILES --> STOP_REQUESTED
   CONSTRUCTING_SCENARIOS --> STOP_REQUESTED
   GENERATING_PATHS --> STOP_REQUESTED
@@ -67,6 +68,7 @@ stateDiagram-v2
 
   PREPARING --> FAILED_RETRYABLE
   EXTRACTING --> FAILED_RETRYABLE
+  REVIEWING_CONDITIONS --> FAILED_RETRYABLE
   GENERATING_PROFILES --> FAILED_RETRYABLE
   CONSTRUCTING_SCENARIOS --> FAILED_RETRYABLE
   GENERATING_PATHS --> FAILED_RETRYABLE
@@ -88,7 +90,7 @@ stateDiagram-v2
 | `NEEDS_REVIEW` | `READY` | decision valid; policy allowed; sources resolved; assumptions/profiles approved; Truth Contract fields present |
 | `READY` | `QUEUED` | immutable config created; configuration hash verified; idempotency key accepted |
 | any active | `STOP_REQUESTED` | requester has stop capability; not already terminal |
-| `VALIDATING_OUTPUT` | `GENERATING_BRIEF` | all critical truth, schema, provenance, coverage, and safety validators pass |
+| `VALIDATING_OUTPUT` | `GENERATING_BRIEF` | all critical truth, schema, provenance, coverage, and safety validators pass; the exact current immutable path-set hash has an immutable `APPROVED` path review; the brief gate binds the path-set ID/hash and review ID/hash |
 | `GENERATING_BRIEF` | `COMPLETED` | brief and manifest stored; export eligibility calculated |
 | `FAILED_RETRYABLE` | `QUEUED` | retryable code; budget remains; same or approved replacement release |
 | terminal | `ARCHIVED` | retention and legal-hold rules allow |
@@ -135,21 +137,40 @@ A stage attempt is immutable. Retry creates the next attempt number.
 stateDiagram-v2
   [*] --> UPLOADING
   UPLOADING --> QUARANTINED
-  UPLOADING --> FAILED
+  UPLOADING --> FAILED: operational exhaustion
   QUARANTINED --> REJECTED: type/size/auth failure
   QUARANTINED --> SCANNING
   SCANNING --> REJECTED: malware/archive failure
+  SCANNING --> FAILED: operational exhaustion
   SCANNING --> PARSING
   PARSING --> FLAGGED: injection/ambiguity risk
   PARSING --> NEEDS_REVIEW
+  PARSING --> REJECTED: content/policy failure
+  PARSING --> FAILED: operational exhaustion
   FLAGGED --> NEEDS_REVIEW: security release
+  FLAGGED --> REJECTED: authorized policy rejection
   NEEDS_REVIEW --> READY: user approval
   NEEDS_REVIEW --> REJECTED
+  NEEDS_REVIEW --> FLAGGED: suspicious candidate reported
+
+  UPLOADING --> DELETION_PENDING
+  QUARANTINED --> DELETION_PENDING
+  SCANNING --> DELETION_PENDING
+  PARSING --> DELETION_PENDING
+  FLAGGED --> DELETION_PENDING
+  NEEDS_REVIEW --> DELETION_PENDING
   READY --> DELETION_PENDING
   REJECTED --> DELETION_PENDING
   FAILED --> DELETION_PENDING
   DELETION_PENDING --> DELETED
 ```
+
+This diagram is the complete closed transition set. `FAILED` is operational:
+bounded processing could not complete and no source-policy judgment was made.
+`REJECTED` is a completed policy, security, or authorized-review judgment.
+Error handling MUST NOT interchange them. Every state except
+`DELETION_PENDING` and `DELETED` may enter `DELETION_PENDING`; neither
+deletion state has a self-transition.
 
 ### Source guards
 
@@ -158,9 +179,42 @@ stateDiagram-v2
 - `FLAGGED` requires named security or authorized reviewer action.
 - `READY` requires extracted candidates to be reviewed; source readiness does
   not mean outcome evidence.
+- `READY` permits zero accepted candidates when every candidate received a
+  terminal disposition; it means review complete, not source truth.
 - Replacement creates a new source version.
 - Deletion does not become `DELETED` until primary copies are purged and backup
   aging is scheduled/accounted for.
+
+## Path-artifact review state machine
+
+Path artifact review is independent from the 20-state run lifecycle. It does
+not add a 21st run state:
+
+```mermaid
+stateDiagram-v2
+  [*] --> GENERATED
+  GENERATED --> INCOMPLETE
+  GENERATED --> NEEDS_REVIEW
+  NEEDS_REVIEW --> APPROVED
+  NEEDS_REVIEW --> REJECTED
+  NEEDS_REVIEW --> SUPERSEDED
+  APPROVED --> SUPERSEDED: new immutable revision
+```
+
+The run remains exactly `VALIDATING_OUTPUT` while an immutable current path
+set waits for review. Waiting holds no worker lease. Rejection or revision
+creates a new immutable path-set revision and validation work while the run
+remains `VALIDATING_OUTPUT`; it never mutates an earlier artifact or moves the
+run backward.
+
+`VALIDATING_OUTPUT -> GENERATING_BRIEF` is allowed only when the exact current
+path-set ID and SHA-256 have an immutable `APPROVED` review, and the brief gate
+binds that path-set ID/hash to the exact review ID/hash and validator-bundle
+IDs. Any content, dependency, order, origin, semantic mapping, validator
+release, review, or head change makes the gate stale. A brief activity and its
+completion manifest must reload and store those exact references. Incomplete,
+rejected, stale, superseded, stopped, or failed work cannot generate or expose
+a final brief.
 
 ## Decision-review state machine
 
@@ -260,6 +314,11 @@ exact model identifier in the run manifest.
 - worker restarts do not lose acknowledged jobs;
 - duplicate messages do not duplicate artifacts;
 - stop works at every active stage;
+- source transition tests cover the exact closed graph, distinguish
+  operational `FAILED` from policy `REJECTED`, and permit deletion from every
+  non-deleted state;
+- path-artifact review remains independent in `VALIDATING_OUTPUT`, and brief
+  admission rejects every stale or non-exact path-set/review hash pair;
 - terminal states are immutable;
 - export and deletion states do not overstate completion;
 - every state exposes plain-language user copy and an explicit next action;

@@ -1,7 +1,7 @@
 ---
 title: "Decision Chamber Experience Design"
 status: "Proposed / Revision Required"
-version: "1.0.1"
+version: "1.0.2"
 owner: "Product Design + Frontend + Architecture"
 last_reviewed: "2026-08-08"
 review_cycle: "Per major experience change"
@@ -386,20 +386,15 @@ The run may be left and reopened. Connection state and server execution state
 are separate. Losing the browser connection must never imply that the server
 stopped.
 
-#### Advanced action: Introduce a changed condition
+#### Deferred TARGET: Introduce a changed condition
 
-While a compatible run is active, the user may add a changed condition. The
-interaction is a deliberate form, not a dramatic event button. It requires:
-
-- a concise condition statement;
-- its effective checkpoint;
-- an origin label of `USER`;
-- a preview of affected configuration;
-- explicit confirmation.
-
-The intervention is appended to the canonical run record. If the runtime
-cannot apply it safely, the product offers `Duplicate with this condition`
-instead. Completed attempts are never mutated.
+Changed-condition injection is not part of the first vertical slices. No
+active control, route, or optimistic placeholder is permitted until durable
+run checkpoints, immutable intervention identity, provenance, stop/fence
+handling, and rerun semantics have a separately approved specification and
+release evidence. The current experience may explain that a new reviewed run
+will be required; it must not mutate a run or imply that live injection is
+available.
 
 ### 8.7 Scene 7 — Explore possible paths
 
@@ -447,8 +442,12 @@ silently create new path facts.
 
 ### 8.8 Scene 8 — Compare attempts
 
-The comparison bench supports two attempts by default and three only when the
-viewport and semantic alignment remain readable.
+The later comparison bench accepts **exactly two** completed related runs.
+Viewport size never changes that cardinality. One, three, or more inputs are
+invalid and the future request schema must reject them with a bounded `422`.
+This scene remains unavailable until stable server-owned semantic identifiers,
+unambiguous predecessor rules, exact approved path-set/review hashes, and
+shared decision lineage exist for both runs.
 
 Comparison aligns objects by stable semantic identifiers:
 
@@ -484,10 +483,13 @@ It contains:
 Generated-profile and group-response tools are secondary disclosures and are
 not required to understand the brief.
 
-### 8.10 Scene 10 — Enter the Public Gallery
+### 8.10 Deferred TARGET — Enter the Public Gallery
 
-The charcoal route stops 8–16 px before the light-cream transfer field.
-Considerations may be converted into:
+The charcoal route stops 8–16 px before the light-cream transfer field. This
+visual boundary remains part of the design language, but the interactive
+handoff builder and any external-evidence importer are unavailable in the
+first vertical slices. A later approved release may convert considerations
+into:
 
 - interview questions;
 - assumptions to test;
@@ -497,9 +499,9 @@ Considerations may be converted into:
 - a questionnaire draft;
 - a path-validation matrix.
 
-The action is available both as a direct `Add to research handoff` button and
-as an optional desktop placement interaction. Dragging is never the only
-method.
+No active `Add to research handoff` control is shown until that later release.
+When implemented, a direct button and keyboard path are mandatory; dragging
+may never be the only method.
 
 The completion statement is:
 
@@ -508,12 +510,14 @@ RESEARCH HANDOFF PREPARED
 No human validation has occurred in this application.
 ```
 
-### 8.11 Scene 11 — Write the owner's conclusion
+### 8.11 Deferred TARGET — Write the owner's conclusion
 
-The decision owner's conclusion is a separate human-authored artifact. It
-records author, date, selected run artifacts, and any external human evidence
-that is later imported with method metadata. AI assistance is opt-in editing
-support only and cannot silently author or approve the conclusion.
+The decision-owner conclusion and external-human-evidence import are later
+releases. The first vertical slices expose neither a conclusion editor nor an
+evidence-import affordance. A later conclusion remains a separate
+human-authored artifact with author, date, exact selected artifact lineage,
+and separately governed external evidence. AI assistance may be opt-in editing
+support only and cannot silently author or approve it.
 
 ## 9. Entertainment and restraint
 
@@ -627,20 +631,70 @@ type ChamberObject = {
   version: number;
 };
 
+type RunState =
+  | "DRAFT"
+  | "NEEDS_REVIEW"
+  | "BLOCKED"
+  | "READY"
+  | "QUEUED"
+  | "PREPARING"
+  | "EXTRACTING"
+  | "REVIEWING_CONDITIONS"
+  | "GENERATING_PROFILES"
+  | "CONSTRUCTING_SCENARIOS"
+  | "GENERATING_PATHS"
+  | "SYNTHESIZING"
+  | "VALIDATING_OUTPUT"
+  | "GENERATING_BRIEF"
+  | "STOP_REQUESTED"
+  | "STOPPED"
+  | "FAILED_RETRYABLE"
+  | "FAILED_TERMINAL"
+  | "COMPLETED"
+  | "ARCHIVED";
+
+type RunPresentationSummary =
+  | "preflight"
+  | "queued"
+  | "active"
+  | "attention"
+  | "terminal";
+
 type RunAttempt = {
   id: string;
   decisionVersion: number;
-  state: "queued" | "running" | "stopped" | "failed" | "complete";
+  state: RunState;
+  presentationSummary: RunPresentationSummary;
   outputOrigin: "synthetic";
   humanRespondentCount: 0;
   isForecast: false;
+  isPublicOpinionMeasure: false;
+  isCausalEvidence: false;
   sourceRole: "starting_conditions_only";
+  humanValidationScope: "external_to_synthetic_run";
 };
 ```
 
 The exact production schema is defined by the typed API and domain model, not
-by this illustrative client shape. Client code must not fabricate path facts,
-consensus values, provenance, or final statuses from progress percentages.
+by this illustrative client shape. `presentationSummary` is a lossy display
+group only; state guards, available actions, brief eligibility, and terminal
+meaning must use the canonical `state`. Client code must not fabricate path
+facts, consensus values, provenance, or final statuses from progress
+percentages.
+
+The summary mapping is exhaustive and display-only:
+
+| `RunPresentationSummary` | Canonical `RunState` values |
+|---|---|
+| `preflight` | `DRAFT`, `NEEDS_REVIEW`, `BLOCKED`, `READY` |
+| `queued` | `QUEUED` |
+| `active` | `PREPARING`, `EXTRACTING`, `REVIEWING_CONDITIONS`, `GENERATING_PROFILES`, `CONSTRUCTING_SCENARIOS`, `GENERATING_PATHS`, `SYNTHESIZING`, `VALIDATING_OUTPUT`, `GENERATING_BRIEF`, `STOP_REQUESTED` |
+| `attention` | `FAILED_RETRYABLE` |
+| `terminal` | `STOPPED`, `FAILED_TERMINAL`, `COMPLETED`, `ARCHIVED` |
+
+`terminal` is never rendered as complete unless canonical state is
+`COMPLETED`, or the immutable event record proves that an `ARCHIVED` run's
+last pre-archive state was `COMPLETED`.
 
 ## 13. Component architecture
 
@@ -667,20 +721,23 @@ consensus values, provenance, or final statuses from progress percentages.
 ### 13.3 Run and path components
 
 - `RunStageList`
-- `ChangedConditionForm`
 - `CanonicalPathList`
 - `RoutePlate`
 - `PathInspector`
 - `PathCrossExamination`
-- `AttemptComparisonBench`
+
+`ChangedConditionForm` and `AttemptComparisonBench` are deferred TARGET
+components. They are not registered, rendered, or feature-advertised in the
+first vertical slices.
 
 ### 13.4 Brief and handoff components
 
 - `DecisionBriefDocument`
 - `BriefQuestionDisclosure`
-- `PublicGallery`
-- `ResearchHandoffBuilder`
-- `DecisionOwnerConclusion`
+
+`PublicGallery`, `ResearchHandoffBuilder`, and `DecisionOwnerConclusion` are
+deferred TARGET components. The route break may be shown as a non-interactive
+truth boundary, but no external-evidence or conclusion workflow is implied.
 
 ### 13.5 State boundary
 
@@ -874,15 +931,17 @@ Required moderated comprehension checks:
 - factual run stages;
 - canonical path list and route plate;
 - complete run-record inspector;
-- attempt comparison;
 - brief-first follow-up;
-- human-research handoff;
 - full state, responsive, and accessibility behavior;
 - compatibility routing from current URLs.
 
 ### 19.2 Deferred until supporting architecture exists
 
 - externally imported human evidence with full method metadata;
+- exactly-two-run semantic comparison;
+- changed-condition injection and advanced run interventions;
+- interactive research-handoff construction;
+- decision-owner conclusions and AI-assisted conclusion editing;
 - collaborative multi-user review and permissions;
 - durable real-time annotations shared across users;
 - calibrated cost and performance history;

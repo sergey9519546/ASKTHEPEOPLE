@@ -1,9 +1,9 @@
 ---
 title: "Data Model"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Domain Engineering + Database Engineering + Privacy"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-08"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -24,7 +24,9 @@ applies_to: "all aggregates under backend/app/models/, all state.json files unde
 ## Design rules
 
 1. PostgreSQL is the target system of record.
-2. Every tenant-owned row carries `organization_id`.
+2. Every workspace-owned row carries immutable physical `organization_id` and
+   `workspace_id`; a composite foreign key proves that the workspace belongs
+   to that organization.
 3. Every mutable aggregate uses optimistic concurrency (`version`).
 4. Historical run inputs and outputs are append-only after a run starts.
 5. Completed runs are immutable.
@@ -36,15 +38,37 @@ applies_to: "all aggregates under backend/app/models/, all state.json files unde
 
 ## Identifier convention
 
-Domain IDs are UUIDv7. Join tables MAY use composite primary keys when they are
-not externally addressable. Human-readable codes such as `P-03` are scoped
-display identifiers, not primary keys.
+Every addressable canonical physical ID is an application- or operator-issued
+RFC 9562 UUIDv7 stored as PostgreSQL `uuid`. Join tables MAY use composite
+primary keys when they are not externally addressable. Human-readable codes
+such as `P-03` are scoped display identifiers, not primary keys.
 
-Common columns:
+Every externally addressable aggregate also has a separate immutable,
+server-issued public alias. The alias is used at API, URL, event, queue, log,
+and telemetry boundaries; physical UUIDs never cross those boundaries. New
+foundation aliases use the lower-case UUID hexadecimal form:
+
+```text
+org_<32 lowercase hex>
+user_<32 lowercase hex>
+workspace_<32 lowercase hex>
+proj_<32 lowercase hex>
+```
+
+Accepted legacy `workspace_<32 lowercase hex>` and project aliases are
+preserved during an operator-owned adoption. Their historical random version
+does not change the UUIDv7 requirement for the independent physical row ID.
+Aliases, physical IDs, `organization_id`, and `workspace_id` are immutable;
+database triggers reject mutation.
+
+Common columns for a mutable workspace-owned aggregate (global identity and
+join tables use their documented scope/composite shape):
 
 ```sql
 id uuid primary key,
 organization_id uuid not null,
+workspace_id uuid not null,
+public_id varchar(128) not null,
 created_at timestamptz not null default now(),
 created_by uuid,
 updated_at timestamptz not null default now(),
@@ -56,8 +80,12 @@ version bigint not null default 1
 
 ```mermaid
 erDiagram
-  ORGANIZATION ||--o{ MEMBERSHIP : has
-  ORGANIZATION ||--o{ PROJECT : owns
+  ORGANIZATION ||--o{ ORGANIZATION_MEMBERSHIP : has
+  ORGANIZATION ||--o{ WORKSPACE : contains
+  USER ||--o{ ORGANIZATION_MEMBERSHIP : holds
+  WORKSPACE ||--o{ WORKSPACE_MEMBERSHIP : has
+  USER ||--o{ WORKSPACE_MEMBERSHIP : holds
+  WORKSPACE ||--o{ PROJECT : contains
   PROJECT ||--o{ DECISION : contains
   DECISION ||--o{ DECISION_VERSION : versions
   DECISION_VERSION ||--o{ SOURCE_VERSION : uses
@@ -90,8 +118,8 @@ Key fields:
 
 ```text
 id
+public_id
 name
-slug
 status
 default_region
 data_residency_policy
@@ -107,24 +135,109 @@ Global identity record. Store the minimum identity fields required by the
 chosen identity provider. Authentication secrets SHOULD remain with the
 identity provider.
 
-### `memberships`
+`identity_subjects` maps exact `(issuer, subject)` pairs to users. Ordinary
+application roles cannot select it directly; a bounded `SECURITY DEFINER`
+bootstrap resolver is the only authentication read boundary. Tokens, complete
+OIDC claims, provider secrets, and passwords are never stored.
+
+### `workspaces`
+
+A workspace belongs to exactly one organization and is the collaboration,
+authorization, retention-policy, and operational-isolation boundary. It may
+contain multiple projects. The TRANSITION Decision Workspace manifest remains
+the one-project product projection and may supply only a preserved public
+alias during operator adoption; it is not authentication, membership, or
+organization evidence.
+
+### `organization_memberships` and `workspace_memberships`
 
 ```text
 organization_id
+workspace_id  # workspace membership only
 user_id
 role: OWNER | ADMIN | EDITOR | REVIEWER | VIEWER | SECURITY
 status
 joined_at
 ```
 
-Authorization is capability-based. Roles map to capabilities in policy rather
-than being hardcoded throughout controllers.
+Organization membership permits `OWNER`, `ADMIN`, or `SECURITY`. Workspace
+membership permits all six roles. An active workspace membership also requires
+an active organization membership for the same user and organization. A user
+may belong to an organization without access to every workspace.
+
+Authorization is capability-based. Roles map to one versioned, closed policy
+rather than being hardcoded throughout controllers. An immutable
+`ActorContext` is resolved for exactly one organization/workspace and optional
+project; issuer claims never directly grant scope, role, or capability.
+
+Bootstrap uses only bounded functions equivalent to
+`core.resolve_oidc_subject(issuer, subject)` and
+`core.resolve_actor_project_scope(user_id, project_public_id)`. After
+bootstrap, each repository transaction sets server-derived transaction-local
+actor, organization, workspace, and request settings. Missing or malformed
+settings yield no rows. Application authorization remains primary; forced RLS
+is defense in depth.
+
+### Canonical `core` foundation
+
+The TARGET canonical foundation lives in an explicitly qualified PostgreSQL
+`core` schema and contains only:
+
+```text
+organizations
+users
+identity_subjects
+workspaces
+organization_memberships
+workspace_memberships
+projects
+schema_adoptions
+backfill_batches
+legacy_project_bindings
+persistence_cutovers
+audit_events
+```
+
+Every addressable row uses UUIDv7. Workspace-owned tables carry both scope
+keys and composite foreign keys. Mutable aggregates use positive `row_version`
+optimistic concurrency. Identity, scope, public alias, audit events, and
+adoption evidence are immutable. Core schema change is Alembic-only;
+production startup never calls `create_all`, stamps, migrates, provisions a
+tenant, or upgrades this schema.
+
+The existing `384c98f88d53` migration is immutable history. Adoption first
+fingerprints the exact managed legacy schema. Only an empty database, an exact
+stamped baseline, or an explicitly approved exact unversioned fingerprint may
+advance. Any missing, extra, renamed, type-changed, constraint-changed, or
+index-changed managed object fails closed. Operator-owned dry-run/apply
+backfill preserves accepted workspace/project public aliases, records hashes
+and reconciliation evidence, and never infers organization ownership from a
+project, filesystem, token claim, or alias.
+
+Persistence modes are closed:
+
+| Mode | Read authority | Write authority |
+|---|---|---|
+| `LEGACY` | Legacy | Legacy only |
+| `SHADOW` | Legacy response; read-only core comparison | Legacy only |
+| `CANONICAL` | Core only | Core only |
+
+There is no dual-write mode. In `CANONICAL`, missing rows, RLS denial,
+timeout, or PostgreSQL unavailability fail closed; no canonical read or write
+falls back to SQLite, filesystem JSON, Redis state, or another legacy store.
+Before the first canonical application write, an approved rollback may return
+to a verified read-only legacy snapshot. After that write, rollback is a
+schema-compatible application rollback or forward fix; it never routes writes
+back to legacy.
 
 ## Product aggregates
 
 ### `projects`
 
-Container for related decisions. It is not a cross-project retrieval corpus by
+Container for related decisions. Every project belongs to exactly one
+workspace and therefore one organization. Projects never move between
+organizations; a future workspace move requires a separately reviewed
+migration workflow. A project is not a cross-project retrieval corpus by
 default.
 
 ### `decisions` and `decision_versions`
@@ -290,6 +403,9 @@ workflow_ref
 human_respondent_count check (= 0)
 output_origin check (= 'synthetic')
 is_forecast check (= false)
+is_public_opinion_measure check (= false)
+is_causal_evidence check (= false)
+source_role check (= 'starting_conditions_only')
 human_validation_scope check (= 'external_to_synthetic_run')
 started_at
 completed_at
@@ -336,9 +452,30 @@ trace_id
 Payloads contain IDs and safe metadata, not hidden reasoning or unrestricted
 source text.
 
-### `possible_paths`
+### `path_sets`, `run_path_heads`, and `possible_paths`
+
+`path_sets` are immutable whole-artifact revisions owned by a canonical run and
+stage attempt. They store UUIDv7 physical identity, stable public identity,
+revision/supersession, status, path count, accepted raw-artifact reference,
+canonical SHA-256, schema/coverage/distinctness validator versions and
+results, creation metadata, and the immutable truth fields. A complete
+reviewable set contains four to eight materially distinct paths; fewer is
+explicitly `INCOMPLETE`, more is invalid, and the system never pads a set.
+
+`run_path_heads` is the only mutable pointer. Optimistic compare-and-swap moves
+it to a new immutable revision in the same transaction as review invalidation,
+audit, command receipt, and outbox events.
+
+Every path, consideration, conflict, missing-information item, disconfirming
+condition, and validation question has three distinct identities: repository-
+internal UUIDv7 physical ID, stable server-issued public ID, and non-null
+server-owned semantic lineage ID. Providers and clients can assign none of
+them. Exact unambiguous predecessor lineage may preserve semantic identity;
+ambiguity creates a new identity rather than guessing.
 
 ```text
+public_id
+semantic_id
 display_code
 title
 scenario_frame jsonb
@@ -354,12 +491,29 @@ No probability, confidence, prevalence, support, or rank field exists.
 ### `path_steps`
 
 Ordered synthetic actions with allowed input IDs and rationale. The rationale is
-a concise user-visible explanation, not chain-of-thought.
+a concise user-visible explanation, not chain-of-thought. Canonical sequences
+are contiguous and represented by `POSSIBLE_PATH SEQUENCES PATH_STEP`.
 
-### `considerations`, `validation_questions`, `decision_briefs`
+### `considerations`, `path_conflicts`, `missing_information`,
+`disconfirming_conditions`, `validation_questions`, and `decision_briefs`
 
 Each object stores origin, approved source/run input links, revision history,
-and truth-language validation result.
+semantic identity, content hash, and truth-language validation result. Every
+path has at least one consideration, missing-information item, disconfirming
+condition, and non-leading validation question. Absence of a detected conflict
+is recorded by the cross-path validator rather than inferred from a missing
+row.
+
+`path_set_reviews` and their per-path dispositions are immutable and bind the
+exact path-set ID and SHA-256. Reviewer actor and membership role come from
+authorization context. A new artifact revision never mutates a review; it
+makes the former review stale.
+
+A decision brief may be generated only from an immutable brief gate containing
+the exact current path-set ID/hash, review ID/hash, validator-bundle IDs, run
+ID, and truth bundle while the run is `VALIDATING_OUTPUT`. `BRIEF_STATEMENT`
+lineage uses only the exact `SUMMARIZES` triples. Final brief and run manifest
+store these references; changed content or lineage relocks the gate.
 
 ## Epistemic Ledger
 
@@ -389,6 +543,11 @@ EXTERNAL_HUMAN_EVIDENCE
 SYSTEM_METADATA
 ```
 
+The closed role vocabulary and all edge semantics are controlled by
+`epistemic-ledger/v2` in
+[`PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md). Canonical
+assertions store one of those exact roles; display labels are not roles.
+
 ### `epistemic_edges`
 
 ```text
@@ -396,12 +555,17 @@ from_assertion_id
 relation enum
 to_assertion_id
 created_by
+contract_version check (= 'epistemic-ledger/v2')
 validator_version
 ```
 
 Allowed relations:
 
 ```text
+CONTAINS
+EXTRACTED_FROM
+ACCEPTED_AS
+REVISED_AS
 DEFINES
 INFORMS
 CONSTRAINS
@@ -409,16 +573,46 @@ BRANCHES_ON
 APPLIES_LENS
 SEQUENCES
 SURFACES
+DISCONFIRMED_BY
 PRODUCES_QUESTION
-SUPPORTS_HUMAN_QUESTION
-CONTRADICTS_HUMAN_QUESTION
-LEAVES_UNRESOLVED
-RELATED_BY_KEYWORD
+SUMMARIZES
 ```
 
-A database trigger or domain constraint rejects disallowed origin/role/relation
-combinations. `RELATED_BY_KEYWORD` can only target a diagnostic record and
-cannot be traversed as support.
+A database trigger and domain constraint reject every relation triple not in
+the exact v2 matrix. Roles and origins are resolved from the referenced
+assertions at write time. Neither endpoint role nor origin is accepted from a
+client, provider, worker payload, or import.
+
+Required path lineage includes:
+
+```text
+POSSIBLE_PATH SEQUENCES PATH_STEP
+POSSIBLE_PATH SURFACES CONSIDERATION
+POSSIBLE_PATH SURFACES CONFLICT
+POSSIBLE_PATH SURFACES MISSING_INFORMATION
+POSSIBLE_PATH DISCONFIRMED_BY DISCONFIRMING_CONDITION
+CONSIDERATION PRODUCES_QUESTION VALIDATION_QUESTION
+BRIEF_STATEMENT SUMMARIZES POSSIBLE_PATH
+BRIEF_STATEMENT SUMMARIZES CONSIDERATION
+```
+
+Required source-review lineage includes:
+
+```text
+SOURCE_ASSET CONTAINS SOURCE_SEGMENT
+EXTRACTION_CANDIDATE EXTRACTED_FROM SOURCE_SEGMENT
+EXTRACTION_CANDIDATE ACCEPTED_AS STARTING_CONDITION
+EXTRACTION_CANDIDATE REVISED_AS STARTING_CONDITION
+SOURCE_SEGMENT INFORMS STARTING_CONDITION  # unchanged acceptance only
+```
+
+A revised condition is `USER_STATED`; `REVISED_AS` preserves traceability but
+does not authorize an `INFORMS` edge. Direct or transitive source-to-path and
+source-to-consideration support is forbidden. The retired relations
+`SUPPORTS`, `DECLARES`, `BRANCHES_TO`, `VALIDATED_BY`, and `SUMMARIZED_BY` are
+not aliases and are invalid for new canonical writes. External-evidence and
+decision-owner-conclusion relations remain deferred to a later contract
+version.
 
 ## Governance and AI tables
 
@@ -514,9 +708,9 @@ completion statement.
 Recommended indexes:
 
 ```sql
-create index on projects (organization_id, updated_at desc);
-create index on decisions (organization_id, project_id, updated_at desc);
-create index on runs (organization_id, decision_id, created_at desc);
+create index on projects (organization_id, workspace_id, updated_at desc);
+create index on decisions (organization_id, workspace_id, project_id, updated_at desc);
+create index on runs (organization_id, workspace_id, decision_id, created_at desc);
 create unique index on run_events (run_id, sequence);
 create index on source_segments using gin (to_tsvector('simple', normalized_text));
 create index on epistemic_assertions (run_id, role, origin);
@@ -529,9 +723,26 @@ search. Vector IDs do not become provenance.
 
 ## Database acceptance
 
+- the physical relationship is exactly
+  `organization -> workspace -> project`, with active organization and
+  workspace memberships resolved server-side;
+- every addressable physical ID is UUIDv7 and every caller-visible ID is a
+  separate immutable server-issued alias;
+- the checked-in baseline fingerprint matches before adoption, the original
+  baseline migration is byte-identical, and the Alembic graph has one reviewed
+  head;
+- clean, exact-stamped, and explicit-exact-unversioned adoption paths are
+  rehearsed; every other schema starting state is rejected;
+- application, migration, backfill, and read-only roles are separate; the
+  application role is neither owner, superuser, nor `BYPASSRLS`;
+- RLS is enabled and forced, `USING` and `WITH CHECK` compare both scope keys,
+  and pooled connections cannot retain transaction-local actor scope;
+- shadow comparison performs no writes and canonical failure never triggers a
+  legacy fallback;
 - migration up/down or forward-fix strategy is tested;
 - RLS tests cover owner, editor, reviewer, viewer, worker, and admin roles;
-- property tests reject every prohibited epistemic edge;
+- every `epistemic-ledger/v2` triple passes and the complete Cartesian
+  complement is rejected at domain and database boundaries;
 - completed runs reject mutation;
 - run config rejects mutation after queueing;
 - source-to-outcome direct relation cannot be inserted;
