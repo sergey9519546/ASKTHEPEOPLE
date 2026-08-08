@@ -25,12 +25,18 @@ Date: 2026-08-08
   only accepted terminal target states, and disclosed scheduled-expiry status.
 - Upload, clean-scan, reviewable-parse, and deletion-request transitions require
   decomposed server-derived facts rather than one aggregate assertion.
+- Every addressable aggregate enforces its own public-ID kind prefix.
+- The closed command vocabulary includes state-changing and non-state review,
+  authorization, intent, and deletion-result commands.
+- Flag release and suspicious reporting require authorization plus durable
+  event, invalidation, extraction, and schema-reference facts as applicable.
 
 ## Verification
 
 - RED evidence was captured before each new contract implementation.
-- Focused source suite after review fixes: 54 passed.
-- Full domain regression after review fixes: 7,663 passed.
+- Focused source suite after second review fixes: 59 passed.
+- Focused source plus identifier suite: 81 passed.
+- Full domain regression after second review fixes: 7,668 passed.
 - Ruff on the touched domain, export, and test files: 0 findings.
 - Documentation validator: 69 Markdown, 12 ADRs, 0 warnings, 0 errors.
 

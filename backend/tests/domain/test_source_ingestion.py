@@ -62,7 +62,13 @@ def _passing_source_guard_data() -> dict[str, bool]:
         "artifact_hashes_durable": True,
         "no_open_flags": True,
         "flags_released": True,
+        "named_reviewer_authorized": True,
+        "release_event_durable": True,
+        "extraction_events_durable": True,
+        "schema_references_valid": True,
         "candidate_reset": True,
+        "finalization_invalidated": True,
+        "review_event_durable": True,
         "all_candidates_terminal": True,
         "review_records_durable": True,
         "deletion_targets_resolved": True,
@@ -179,7 +185,11 @@ def test_suspicious_review_report_transitions_to_flagged() -> None:
         SourceIngestionState.NEEDS_REVIEW,
         SourceIngestionState.FLAGGED,
         SourceCommandKind.REPORT_SOURCE_CANDIDATE_SUSPICIOUS,
-        SourceTransitionGuardFacts(open_flag_created=True),
+        SourceTransitionGuardFacts(
+            open_flag_created=True,
+            finalization_invalidated=True,
+            review_event_durable=True,
+        ),
     )
 
     assert result is SourceIngestionState.FLAGGED
@@ -519,3 +529,127 @@ def test_source_command_context_is_strict_frozen_and_server_scoped() -> None:
         )
     with pytest.raises(ValidationError):
         context.expected_version = 2
+
+
+def test_addressable_source_records_reject_another_kinds_public_prefix() -> None:
+    from app.domain.identifiers import new_public_id, new_uuid7
+    from app.domain.source_ingestion import SourceRecord
+
+    identifiers = iter(
+        new_uuid7(
+            clock=lambda n=n: 1_910_000_000 + n,
+            randbits=lambda _, n=n: n + 1,
+        )
+        for n in range(7)
+    )
+    physical = next(identifiers)
+    wrong_public_id = new_public_id(
+        "source_candidate", physical, uuid7_factory=lambda: next(identifiers)
+    )
+    with pytest.raises(ValidationError, match="source_public_id_kind_mismatch"):
+        SourceRecord(
+            id=physical,
+            public_id=wrong_public_id,
+            organization_id=next(identifiers),
+            workspace_id=next(identifiers),
+            project_id=next(identifiers),
+            display_name="Transit evidence",
+            version=1,
+            created_by_actor_id=next(identifiers),
+            created_at=datetime(2030, 1, 1, tzinfo=UTC),
+            updated_at=datetime(2030, 1, 1, tzinfo=UTC),
+        )
+
+
+def test_checkpoint_4a_records_expose_every_required_audit_field() -> None:
+    from app.domain.source_ingestion import (
+        CandidateStartingConditionRecord,
+        DeletionTargetStatusRecord,
+        SourceProcessingAttemptRecord,
+        SourceReviewEventRecord,
+        SourceReviewFlagRecord,
+        SourceVersionRecord,
+    )
+
+    expected_fields = {
+        SourceVersionRecord: {
+            "scanner_name", "scanner_version", "scanner_definitions_version",
+            "parser_name", "parser_version", "parser_policy_version",
+            "extraction_prompt_id", "extraction_prompt_version",
+            "extraction_schema_id", "extraction_schema_version",
+            "extraction_model_release_id",
+        },
+        CandidateStartingConditionRecord: {
+            "disposition_reason_code", "disposition_reason_note",
+            "disposed_by_actor_id", "disposed_at",
+        },
+        SourceReviewFlagRecord: {
+            "disposition_reason_code", "disposed_by_actor_id", "disposed_at",
+        },
+        SourceReviewEventRecord: {"reason_note"},
+        SourceProcessingAttemptRecord: {
+            "lease_owner", "lease_expires_at", "last_heartbeat_at", "retry_class",
+            "error_code", "started_at", "finished_at",
+        },
+        DeletionTargetStatusRecord: {
+            "provider_receipt_ref", "last_error_code", "next_attempt_at",
+            "confirmed_at",
+        },
+    }
+    for record_type, fields in expected_fields.items():
+        assert fields <= set(record_type.model_fields), record_type.__name__
+
+
+def test_source_command_kind_is_the_complete_closed_command_vocabulary() -> None:
+    from app.domain.source_ingestion import SourceCommandKind
+
+    assert {command.value for command in SourceCommandKind} == {
+        "create_source_upload_intent", "complete_source_upload", "fail_source_upload",
+        "begin_source_scan", "record_source_quarantine_rejection",
+        "record_source_scan_rejection", "record_source_scan_failure",
+        "record_source_scan_pass", "record_source_parse_flagged",
+        "record_source_parse_reviewable", "record_source_parse_rejection",
+        "record_source_parse_failure", "authorize_source_flag_release",
+        "complete_source_flag_release", "reject_flagged_source",
+        "accept_source_candidate", "revise_source_candidate",
+        "exclude_source_candidate", "report_source_candidate_suspicious",
+        "release_review_reported_flag", "finalize_source_review",
+        "reject_source_review", "request_source_deletion",
+        "record_deletion_target_result", "complete_source_deletion",
+    }
+
+
+def test_flag_release_requires_authority_validation_and_durable_events() -> None:
+    from app.domain.source_ingestion import (
+        SourceCommandKind,
+        SourceIngestionState,
+        SourceTransitionGuardFacts,
+        SourceTransitionGuardViolation,
+        transition_source_version,
+    )
+
+    with pytest.raises(SourceTransitionGuardViolation, match="flag_release_guard_failed"):
+        transition_source_version(
+            SourceIngestionState.FLAGGED,
+            SourceIngestionState.NEEDS_REVIEW,
+            SourceCommandKind.COMPLETE_SOURCE_FLAG_RELEASE,
+            SourceTransitionGuardFacts(flags_released=True, candidates_durable=True),
+        )
+
+
+def test_suspicious_report_requires_finalization_invalidation_and_durable_event() -> None:
+    from app.domain.source_ingestion import (
+        SourceCommandKind,
+        SourceIngestionState,
+        SourceTransitionGuardFacts,
+        SourceTransitionGuardViolation,
+        transition_source_version,
+    )
+
+    with pytest.raises(SourceTransitionGuardViolation, match="open_flag_required"):
+        transition_source_version(
+            SourceIngestionState.NEEDS_REVIEW,
+            SourceIngestionState.FLAGGED,
+            SourceCommandKind.REPORT_SOURCE_CANDIDATE_SUSPICIOUS,
+            SourceTransitionGuardFacts(open_flag_created=True),
+        )

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from hashlib import sha256
-from typing import Literal, Self
+from typing import ClassVar, Literal, Self
 from uuid import RFC_4122, UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -34,6 +34,7 @@ class SourceIngestionState(str, Enum):
 
 
 class SourceCommandKind(str, Enum):
+    CREATE_SOURCE_UPLOAD_INTENT = "create_source_upload_intent"
     COMPLETE_SOURCE_UPLOAD = "complete_source_upload"
     FAIL_SOURCE_UPLOAD = "fail_source_upload"
     BEGIN_SOURCE_SCAN = "begin_source_scan"
@@ -46,12 +47,17 @@ class SourceCommandKind(str, Enum):
     RECORD_SOURCE_PARSE_REJECTION = "record_source_parse_rejection"
     RECORD_SOURCE_PARSE_FAILURE = "record_source_parse_failure"
     COMPLETE_SOURCE_FLAG_RELEASE = "complete_source_flag_release"
+    AUTHORIZE_SOURCE_FLAG_RELEASE = "authorize_source_flag_release"
     RELEASE_REVIEW_REPORTED_FLAG = "release_review_reported_flag"
     REJECT_FLAGGED_SOURCE = "reject_flagged_source"
     FINALIZE_SOURCE_REVIEW = "finalize_source_review"
     REJECT_SOURCE_REVIEW = "reject_source_review"
     REPORT_SOURCE_CANDIDATE_SUSPICIOUS = "report_source_candidate_suspicious"
+    ACCEPT_SOURCE_CANDIDATE = "accept_source_candidate"
+    REVISE_SOURCE_CANDIDATE = "revise_source_candidate"
+    EXCLUDE_SOURCE_CANDIDATE = "exclude_source_candidate"
     REQUEST_SOURCE_DELETION = "request_source_deletion"
+    RECORD_DELETION_TARGET_RESULT = "record_deletion_target_result"
     COMPLETE_SOURCE_DELETION = "complete_source_deletion"
 
 
@@ -190,6 +196,8 @@ class _StrictRecord(BaseModel):
 
 
 class _AddressableRecord(_StrictRecord):
+    public_id_prefix: ClassVar[str]
+
     id: UUID
     public_id: str
 
@@ -199,6 +207,8 @@ class _AddressableRecord(_StrictRecord):
         pattern = _PUBLIC_PATTERNS.get(prefix)
         if pattern is None or pattern.fullmatch(self.public_id) is None:
             raise ValueError("source_public_id_invalid")
+        if prefix != self.public_id_prefix:
+            raise ValueError("source_public_id_kind_mismatch")
         if self.public_id.endswith(self.id.hex):
             raise ValueError("source_public_id_must_not_reveal_physical_id")
         return self
@@ -211,6 +221,8 @@ class _ScopedRecord(_AddressableRecord):
 
 
 class SourceRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "src"
+
     display_name: str = Field(min_length=1, max_length=255)
     current_version_id: UUID | None = None
     version: int = Field(ge=1)
@@ -220,6 +232,8 @@ class SourceRecord(_ScopedRecord):
 
 
 class SourceVersionRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "srcv"
+
     source_id: UUID
     version_number: int = Field(ge=1)
     state: SourceIngestionState
@@ -233,6 +247,17 @@ class SourceVersionRecord(_ScopedRecord):
     normalized_byte_length: int | None = Field(default=None, ge=0)
     normalized_sha256: str | None = None
     normalized_token_count: int | None = Field(default=None, ge=0)
+    scanner_name: str | None = None
+    scanner_version: str | None = None
+    scanner_definitions_version: str | None = None
+    parser_name: str | None = None
+    parser_version: str | None = None
+    parser_policy_version: str | None = None
+    extraction_prompt_id: str | None = None
+    extraction_prompt_version: str | None = None
+    extraction_schema_id: str | None = None
+    extraction_schema_version: str | None = None
+    extraction_model_release_id: str | None = None
     processing_fence: int = Field(ge=0)
     deletion_fence: int = Field(ge=0)
     version: int = Field(ge=1)
@@ -242,6 +267,8 @@ class SourceVersionRecord(_ScopedRecord):
 
 
 class SourceSegmentRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "seg"
+
     source_version_id: UUID
     ordinal: int = Field(ge=0)
     normalized_start_byte: int = Field(ge=0)
@@ -253,6 +280,8 @@ class SourceSegmentRecord(_ScopedRecord):
 
 
 class CandidateStartingConditionRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "cand"
+
     source_version_id: UUID
     source_segment_id: UUID
     ordinal: int = Field(ge=0)
@@ -260,13 +289,22 @@ class CandidateStartingConditionRecord(_ScopedRecord):
     proposed_statement_sha256: str
     extraction_origin: Literal["SYNTHETIC_GENERATED"] = "SYNTHETIC_GENERATED"
     disposition: CandidateDisposition
+    disposition_reason_code: str | None = None
+    disposition_reason_note: str | None = None
+    disposed_by_actor_id: UUID | None = None
+    disposed_at: datetime | None = None
     version: int = Field(ge=1)
 
 
 class StartingConditionRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "cond"
+
     statement: str = Field(min_length=1, max_length=4000)
     statement_sha256: str
-    origin: EpistemicOrigin
+    origin: Literal[
+        EpistemicOrigin.SOURCE_EXTRACTED,
+        EpistemicOrigin.USER_STATED,
+    ]
     source_version_id: UUID
     source_segment_id: UUID | None
     candidate_id: UUID
@@ -275,17 +313,24 @@ class StartingConditionRecord(_ScopedRecord):
 
 
 class SourceReviewFlagRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "sflag"
+
     source_version_id: UUID
     candidate_id: UUID | None = None
     flag_code: str
     severity: str
     disposition: ReviewFlagDisposition
     detected_by: str
+    disposition_reason_code: str | None = None
+    disposed_by_actor_id: UUID | None = None
+    disposed_at: datetime | None = None
     created_at: datetime
     version: int = Field(ge=1)
 
 
 class SourceReviewEventRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "srev"
+
     source_version_id: UUID
     command_name: str
     from_state: SourceIngestionState | None
@@ -298,6 +343,7 @@ class SourceReviewEventRecord(_ScopedRecord):
     idempotency_key: str
     request_body_sha256: str
     reason_code: str
+    reason_note: str | None = None
     request_id: UUID
     occurred_at: datetime
 
@@ -311,12 +357,21 @@ class SourceProcessingAttemptRecord(_StrictRecord):
     stage: SourceProcessingStage
     attempt_number: int = Field(ge=1)
     state: SourceAttemptState
+    lease_owner: str | None = None
+    lease_expires_at: datetime | None = None
+    last_heartbeat_at: datetime | None = None
     fencing_token: int = Field(ge=1)
     deletion_fence_at_claim: int = Field(ge=0)
+    retry_class: str | None = None
+    error_code: str | None = None
     created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 class DeletionRequestRecord(_ScopedRecord):
+    public_id_prefix: ClassVar[str] = "del"
+
     source_version_id: UUID
     requested_by_actor_id: UUID
     reason_code: str
@@ -330,7 +385,11 @@ class DeletionTargetStatusRecord(_StrictRecord):
     target_kind: DeletionTargetKind
     target_ref_hash: str
     state: DeletionTargetState
+    provider_receipt_ref: str | None = None
     attempt_count: int = Field(ge=0)
+    last_error_code: str | None = None
+    next_attempt_at: datetime | None = None
+    confirmed_at: datetime | None = None
     scheduled_expiry_at: datetime | None = None
     version: int = Field(ge=1)
 
@@ -506,7 +565,13 @@ class SourceTransitionGuardFacts(BaseModel):
     artifact_hashes_durable: bool = False
     no_open_flags: bool = False
     flags_released: bool = False
+    named_reviewer_authorized: bool = False
+    release_event_durable: bool = False
+    extraction_events_durable: bool = False
+    schema_references_valid: bool = False
     candidate_reset: bool = False
+    finalization_invalidated: bool = False
+    review_event_durable: bool = False
     all_candidates_terminal: bool = False
     review_records_durable: bool = False
     deletion_targets_resolved: bool = False
@@ -686,7 +751,13 @@ def transition_source_version(
         raise SourceTransitionGuardViolation("open_flags_must_be_rejected")
     if (
         command is SourceCommandKind.REPORT_SOURCE_CANDIDATE_SUSPICIOUS
-        and not guards.open_flag_created
+        and not all(
+            (
+                guards.open_flag_created,
+                guards.finalization_invalidated,
+                guards.review_event_durable,
+            )
+        )
     ):
         raise SourceTransitionGuardViolation("open_flag_required")
     if (
@@ -730,11 +801,20 @@ def transition_source_version(
     ):
         raise SourceTransitionGuardViolation("reviewable_parse_artifacts_required")
     if command is SourceCommandKind.COMPLETE_SOURCE_FLAG_RELEASE and not (
-        guards.flags_released and guards.candidates_durable
+        guards.flags_released
+        and guards.candidates_durable
+        and guards.named_reviewer_authorized
+        and guards.release_event_durable
+        and guards.extraction_events_durable
+        and guards.schema_references_valid
     ):
         raise SourceTransitionGuardViolation("flag_release_guard_failed")
     if command is SourceCommandKind.RELEASE_REVIEW_REPORTED_FLAG and not (
-        guards.flags_released and guards.candidate_reset
+        guards.flags_released
+        and guards.candidate_reset
+        and guards.named_reviewer_authorized
+        and guards.release_event_durable
+        and guards.review_event_durable
     ):
         raise SourceTransitionGuardViolation("reported_flag_release_guard_failed")
     if command is SourceCommandKind.FINALIZE_SOURCE_REVIEW and not (
