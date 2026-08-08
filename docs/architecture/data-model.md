@@ -290,10 +290,14 @@ class without restarting the retention clock.
 Audit scope is closed to `TENANT|SYSTEM`: TENANT requires organization scope;
 SYSTEM requires organization/workspace/project null. The closed v1 event set is
 `SCHEMA_ADOPTION_RECORDED`, `ROLE_TOPOLOGY_VERIFIED`,
-`AUDIT_EXPIRY_APPROVED`, and `AUDIT_PARTITION_EXPIRED`. The first two accept
+`AUDIT_PARTITION_EXPIRY_APPROVED`, and `AUDIT_PARTITION_EXPIRED`. The first two accept
 only `evidence_sha256`; approval accepts class, UTC bucket bounds, evidence and
 zero-hold hashes, and approver public alias; completion adds nonnegative row
 count and aggregate event hash. No extra JSON key or alternate type is valid.
+Their exact reason codes, in the same order, are
+`SCHEMA_ADOPTION_VERIFIED`, `ROLE_TOPOLOGY_MATCHED`,
+`RETENTION_EXPIRY_APPROVED`, and `RETENTION_EXPIRY_COMPLETED`; no other
+event/reason pairing is valid.
 
 PostgreSQL requires every partition key in a partitioned-table unique or
 primary key. `core.audit_events` is therefore the explicit exception to the

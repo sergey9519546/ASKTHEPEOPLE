@@ -137,6 +137,13 @@ collected.
 | `projects` and `legacy_project_bindings`: bounded name, legacy aliases, manifest/tree/content hashes | Customer confidential | Workspace owner + Persistence; preserve approved legacy mapping | `PROJECT_STANDARD`; purged or minimized with project deletion, never repurposed for analytics or tenant inference. |
 | `schema_adoptions`, `backfill_batches`, `persistence_cutovers`: revision, mode/state, counts, tool/build versions, database/manifest/evidence hashes, bounded operator alias/time | Security-confidential system lineage | Persistence/Release; prove migration and cutover integrity | `AUDIT_LONG`; no source/generated content, credentials, customer names, subjects, raw paths, URLs, or manifests. |
 | `audit_events`: closed TENANT/SYSTEM scope, actor type/ID, closed event/reason code, request ID, event-specific typed metadata, occurrence/expiry time | Security confidential; TENANT may include scoped personal identifiers; SYSTEM expiry evidence contains none | Security/Privacy; investigation, rights and deletion proof | `AUDIT_LONG` by default; only minimized content-free deletion proof may use `DELETION_EVIDENCE_LONG`. Expired, unheld partitions are purged by the reviewed retention operator. |
+
+The closed foundation event/reason pairs are
+`SCHEMA_ADOPTION_RECORDED/SCHEMA_ADOPTION_VERIFIED`,
+`ROLE_TOPOLOGY_VERIFIED/ROLE_TOPOLOGY_MATCHED`,
+`AUDIT_PARTITION_EXPIRY_APPROVED/RETENTION_EXPIRY_APPROVED`, and
+`AUDIT_PARTITION_EXPIRED/RETENTION_EXPIRY_COMPLETED`. No cross-pairing or
+unlisted reason is accepted.
 | All foundation rows: retention class/policy/start/expiry and deletion state/time where applicable | Governance metadata | Privacy + Data Governance; execute and prove lifecycle policy | Retained with the row; final evidence contains no deleted content and expires under its own declared class. |
 
 ### Identity-subject revocation and tombstone

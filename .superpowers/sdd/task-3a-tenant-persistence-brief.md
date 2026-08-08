@@ -525,12 +525,12 @@ strings.
 
 The closed v1 audit event/metadata matrix is:
 
-| Event type | Scope | Exact JSON keys and types |
-|---|---|---|
-| `SCHEMA_ADOPTION_RECORDED` | `SYSTEM` | `evidence_sha256: lowerhex64` |
-| `ROLE_TOPOLOGY_VERIFIED` | `SYSTEM` | `evidence_sha256: lowerhex64` |
-| `AUDIT_EXPIRY_APPROVED` | `SYSTEM` | `retention_class: enum`, `bucket_start: UTC date`, `bucket_end: UTC date`, `evidence_sha256: lowerhex64`, `zero_hold_evidence_sha256: lowerhex64`, `approver_public_id: bounded alias` |
-| `AUDIT_PARTITION_EXPIRED` | `SYSTEM` | all approval keys plus `row_count: nonnegative integer` and `aggregate_event_sha256: lowerhex64` |
+| Event type | Exact reason code | Scope | Exact JSON keys and types |
+|---|---|---|---|
+| `SCHEMA_ADOPTION_RECORDED` | `SCHEMA_ADOPTION_VERIFIED` | `SYSTEM` | `evidence_sha256: lowerhex64` |
+| `ROLE_TOPOLOGY_VERIFIED` | `ROLE_TOPOLOGY_MATCHED` | `SYSTEM` | `evidence_sha256: lowerhex64` |
+| `AUDIT_PARTITION_EXPIRY_APPROVED` | `RETENTION_EXPIRY_APPROVED` | `SYSTEM` | `retention_class: enum`, `bucket_start: UTC date`, `bucket_end: UTC date`, `evidence_sha256: lowerhex64`, `zero_hold_evidence_sha256: lowerhex64`, `approver_public_id: bounded alias` |
+| `AUDIT_PARTITION_EXPIRED` | `RETENTION_EXPIRY_COMPLETED` | `SYSTEM` | all approval keys plus `row_count: nonnegative integer` and `aggregate_event_sha256: lowerhex64` |
 
 No extra key, alternate type, tenant scope for these events, physical ID, free
 text, raw error, or content field is accepted. Later event types require a
@@ -576,6 +576,18 @@ The migration also creates:
   complete identity-subject lifecycle invariants;
 - only the indexes needed by exact identity, membership, scope, and audit
   queries.
+
+The exact operator-evidence mutability matrix is:
+
+| Table | Immutable after insert | Only authorized mutable fields |
+|---|---|---|
+| `schema_adoptions` | every column | none; append a new evidence row |
+| `backfill_batches` | `id`, input/legacy hashes, operator alias, tool version, `created_at` | status, bounded counts, evidence hash, `updated_at`, only through the closed batch transition trigger |
+| `legacy_project_bindings` | project/organization/workspace IDs, legacy alias, project/workspace/tree hashes, backfill batch ID, adoption time | status and reconciliation time, only `ADOPTED -> RECONCILED|CONFLICT`; both targets terminal |
+| `persistence_cutovers` | subsystem; once PREPARED, backfill ID, reconciliation hash, application/build revision and rollback boundary | state and activation actor/time, only `PREPARED -> ACTIVE -> ROLLED_FORWARD` |
+
+Test 13 mutates every immutable column and every unlisted mutable column; the
+complete complement fails closed.
 
 Append-only is role-bounded rather than perpetual. Checkpoint 3A-2 creates the
 class/expiry partition topology and row-mutation trigger, but no application or
@@ -1310,7 +1322,7 @@ Required order:
 15. `test_deletion_transition_complement_and_failed_origin_retry_are_exact`
 16. `test_identity_subject_transition_complement_and_tombstone_uniqueness_are_exact`
 17. `test_audit_partition_relations_bounds_composite_key_and_no_default_are_exact`
-18. `test_audit_scope_metadata_matrix_and_row_immutability_are_closed`
+18. `test_audit_scope_type_reason_metadata_complement_and_row_immutability_are_closed`
 19. `test_oidc_rejects_wrong_issuer_audience_algorithm_expiry_and_signature`
 20. `test_oidc_claimed_scope_and_roles_are_ignored`
 21. `test_legacy_dev_adapter_is_impossible_in_production_or_railway`
