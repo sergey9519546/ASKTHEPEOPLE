@@ -116,6 +116,22 @@ def mermaid_edges_after(text: str, marker: str) -> tuple[tuple[str, str], ...]:
     )
 
 
+def text_between(text: str, start_marker: str, end_marker: str) -> str:
+    """Return a bounded document section, or an empty string if malformed."""
+    start = text.find(start_marker)
+    if start == -1:
+        return ""
+    end = text.find(end_marker, start + len(start_marker))
+    if end == -1:
+        return ""
+    return text[start:end]
+
+
+def normalized_prose(text: str) -> str:
+    """Collapse Markdown wrapping so prose locks are line-ending agnostic."""
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def main() -> int:
     errors: list[str] = []
     warnings: list[str] = []
@@ -454,16 +470,219 @@ def main() -> int:
     if path_review_edges != expected_path_review_edges:
         fail(errors, f"path-artifact review transition graph changed: {path_review_edges!r}")
 
-    run_edges = set(mermaid_edges_after(authority["states"], "## Run state machine"))
-    for edge in (
-        ("REVIEWING_CONDITIONS", "STOP_REQUESTED"),
-        ("REVIEWING_CONDITIONS", "FAILED_RETRYABLE"),
-    ):
-        if edge not in run_edges:
-            fail(errors, f"durable-run authority edge missing: {edge[0]} -> {edge[1]}")
+    expected_run_states = (
+        "DRAFT", "NEEDS_REVIEW", "BLOCKED", "READY", "QUEUED", "PREPARING",
+        "EXTRACTING", "REVIEWING_CONDITIONS", "GENERATING_PROFILES",
+        "CONSTRUCTING_SCENARIOS", "GENERATING_PATHS", "SYNTHESIZING",
+        "VALIDATING_OUTPUT", "GENERATING_BRIEF", "STOP_REQUESTED", "STOPPED",
+        "FAILED_RETRYABLE", "FAILED_TERMINAL", "COMPLETED", "ARCHIVED",
+    )
+    run_state_union = re.search(
+        r"(?ms)^type RunState =\s*(.*?);",
+        authority["design"],
+    )
+    parsed_run_states = (
+        tuple(re.findall(r'^\s*\| "([A-Z][A-Z_]*)"', run_state_union.group(1), re.MULTILINE))
+        if run_state_union
+        else ()
+    )
+    if parsed_run_states != expected_run_states:
+        fail(errors, f"canonical 20-state RunState union changed: {parsed_run_states!r}")
 
-    if "three only when" in authority["design"].lower():
-        fail(errors, "design specification still permits a third comparison input")
+    expected_run_edges = (
+        ("DRAFT", "NEEDS_REVIEW"),
+        ("NEEDS_REVIEW", "BLOCKED"),
+        ("BLOCKED", "NEEDS_REVIEW"),
+        ("NEEDS_REVIEW", "READY"),
+        ("READY", "QUEUED"),
+        ("QUEUED", "PREPARING"),
+        ("PREPARING", "EXTRACTING"),
+        ("EXTRACTING", "REVIEWING_CONDITIONS"),
+        ("REVIEWING_CONDITIONS", "GENERATING_PROFILES"),
+        ("GENERATING_PROFILES", "CONSTRUCTING_SCENARIOS"),
+        ("CONSTRUCTING_SCENARIOS", "GENERATING_PATHS"),
+        ("GENERATING_PATHS", "SYNTHESIZING"),
+        ("SYNTHESIZING", "VALIDATING_OUTPUT"),
+        ("VALIDATING_OUTPUT", "GENERATING_BRIEF"),
+        ("GENERATING_BRIEF", "COMPLETED"),
+        ("QUEUED", "STOP_REQUESTED"),
+        ("PREPARING", "STOP_REQUESTED"),
+        ("EXTRACTING", "STOP_REQUESTED"),
+        ("REVIEWING_CONDITIONS", "STOP_REQUESTED"),
+        ("GENERATING_PROFILES", "STOP_REQUESTED"),
+        ("CONSTRUCTING_SCENARIOS", "STOP_REQUESTED"),
+        ("GENERATING_PATHS", "STOP_REQUESTED"),
+        ("SYNTHESIZING", "STOP_REQUESTED"),
+        ("VALIDATING_OUTPUT", "STOP_REQUESTED"),
+        ("GENERATING_BRIEF", "STOP_REQUESTED"),
+        ("STOP_REQUESTED", "STOPPED"),
+        ("PREPARING", "FAILED_RETRYABLE"),
+        ("EXTRACTING", "FAILED_RETRYABLE"),
+        ("REVIEWING_CONDITIONS", "FAILED_RETRYABLE"),
+        ("GENERATING_PROFILES", "FAILED_RETRYABLE"),
+        ("CONSTRUCTING_SCENARIOS", "FAILED_RETRYABLE"),
+        ("GENERATING_PATHS", "FAILED_RETRYABLE"),
+        ("SYNTHESIZING", "FAILED_RETRYABLE"),
+        ("VALIDATING_OUTPUT", "FAILED_RETRYABLE"),
+        ("GENERATING_BRIEF", "FAILED_RETRYABLE"),
+        ("FAILED_RETRYABLE", "QUEUED"),
+        ("FAILED_RETRYABLE", "FAILED_TERMINAL"),
+        ("COMPLETED", "ARCHIVED"),
+        ("STOPPED", "ARCHIVED"),
+        ("FAILED_TERMINAL", "ARCHIVED"),
+    )
+    run_edges = mermaid_edges_after(authority["states"], "## Run state machine")
+    if run_edges != expected_run_edges:
+        fail(errors, f"closed ordered durable-run transition graph changed: {run_edges!r}")
+    run_graph_states = {state for edge in run_edges for state in edge}
+    if len(run_graph_states) != 20 or run_graph_states != set(expected_run_states):
+        fail(errors, f"durable-run graph does not contain exactly the 20 locked states: {sorted(run_graph_states)!r}")
+
+    comparison_section = text_between(
+        authority["design"],
+        "### 8.8 Scene 8 — Compare attempts",
+        "### 8.9 Scene 9 — Read the decision brief",
+    )
+    comparison_prose = normalized_prose(comparison_section)
+    comparison_policy = normalized_prose(text_between(
+        comparison_section,
+        "The later comparison bench",
+        "Comparison aligns objects by stable semantic identifiers:",
+    ))
+    expected_comparison_policy = normalized_prose(
+        """The later comparison bench accepts **exactly two** completed related runs.
+        Viewport size never changes that cardinality. One, three, or more inputs
+        are invalid and the future request schema must reject them with a bounded
+        `422`. This scene remains unavailable until stable server-owned semantic
+        identifiers, unambiguous predecessor rules, exact approved path-set/review
+        hashes, and shared decision lineage exist for both runs."""
+    )
+    if comparison_policy != expected_comparison_policy:
+        fail(errors, f"exact-two comparison policy changed: {comparison_policy!r}")
+    if comparison_prose.count("**exactly two**") != 1:
+        fail(errors, "comparison section must contain exactly one exact-two policy declaration")
+    expected_comparison_prose = normalized_prose(
+        """### 8.8 Scene 8 — Compare attempts
+
+        The later comparison bench accepts **exactly two** completed related runs.
+        Viewport size never changes that cardinality. One, three, or more inputs are
+        invalid and the future request schema must reject them with a bounded `422`.
+        This scene remains unavailable until stable server-owned semantic identifiers,
+        unambiguous predecessor rules, exact approved path-set/review hashes, and
+        shared decision lineage exist for both runs.
+
+        Comparison aligns objects by stable semantic identifiers:
+
+        - decision version;
+        - changed assumptions;
+        - uncertainty states;
+        - interventions;
+        - path branch reasons;
+        - considerations;
+        - validation questions.
+
+        The view begins with a textual change ledger. A forked route plate is
+        secondary. Shared history remains neutral; divergence uses a single red cut.
+        No winner, score, ranking, or automated recommendation is shown."""
+    )
+    if comparison_prose != expected_comparison_prose:
+        fail(errors, "bounded comparison scene changed outside the exact-two contract")
+
+    included_section = text_between(
+        authority["design"],
+        "### 19.1 Included in the redesign",
+        "### 19.2 Deferred until supporting architecture exists",
+    )
+    deferred_section = text_between(
+        authority["design"],
+        "### 19.2 Deferred until supporting architecture exists",
+        "## 20. Acceptance criteria",
+    )
+    included_bullets = tuple(re.findall(r"(?m)^- (.+)$", included_section))
+    expected_included_bullets = (
+        "shared chamber shell;",
+        "docket review and run-order experience;",
+        "factual run stages;",
+        "canonical path list and route plate;",
+        "complete run-record inspector;",
+        "brief-first follow-up;",
+        "full state, responsive, and accessibility behavior;",
+        "compatibility routing from current URLs.",
+    )
+    if included_bullets != expected_included_bullets:
+        fail(errors, f"first-slice included capability list changed: {included_bullets!r}")
+    expected_included_prose = normalized_prose(
+        """### 19.1 Included in the redesign
+
+        - shared chamber shell;
+        - docket review and run-order experience;
+        - factual run stages;
+        - canonical path list and route plate;
+        - complete run-record inspector;
+        - brief-first follow-up;
+        - full state, responsive, and accessibility behavior;
+        - compatibility routing from current URLs."""
+    )
+    if normalized_prose(included_section) != expected_included_prose:
+        fail(errors, "first-slice included capability section changed")
+
+    deferred_bullets = tuple(re.findall(r"(?m)^- (.+)$", deferred_section))
+    expected_deferred_bullets = (
+        "externally imported human evidence with full method metadata;",
+        "exactly-two-run semantic comparison;",
+        "changed-condition injection and advanced run interventions;",
+        "interactive research-handoff construction;",
+        "decision-owner conclusions and AI-assisted conclusion editing;",
+        "collaborative multi-user review and permissions;",
+        "durable real-time annotations shared across users;",
+        "calibrated cost and performance history;",
+        "full playback from durable checkpoint snapshots;",
+        "organization-level decision portfolio analytics.",
+    )
+    if deferred_bullets != expected_deferred_bullets:
+        fail(errors, f"later-release deferred capability list changed: {deferred_bullets!r}")
+    expected_deferred_prose = normalized_prose(
+        """### 19.2 Deferred until supporting architecture exists
+
+        - externally imported human evidence with full method metadata;
+        - exactly-two-run semantic comparison;
+        - changed-condition injection and advanced run interventions;
+        - interactive research-handoff construction;
+        - decision-owner conclusions and AI-assisted conclusion editing;
+        - collaborative multi-user review and permissions;
+        - durable real-time annotations shared across users;
+        - calibrated cost and performance history;
+        - full playback from durable checkpoint snapshots;
+        - organization-level decision portfolio analytics.
+
+        Deferred capabilities may be represented only as unavailable TARGET features;
+        the interface must not imply that they already exist."""
+    )
+    if normalized_prose(deferred_section) != expected_deferred_prose:
+        fail(errors, "later-release deferred capability section changed")
+
+    later_release_section = text_between(
+        authority["acceptance"],
+        "### Later-release boundary",
+        "### Honest status and approvals",
+    )
+    later_release_prose = normalized_prose(later_release_section)
+    expected_later_release_prose = normalized_prose(
+        """### Later-release boundary
+
+        - [ ] No semantic comparison is enabled before non-null immutable semantic
+          identities and unambiguous predecessor evidence exist. The later comparison
+          contract accepts exactly two completed related runs and rejects every other
+          count; viewport never changes the rule.
+        - [ ] Changed-condition injection, advanced intervention, external-human-
+          evidence import, interactive research-handoff construction, and
+          decision-owner conclusion workflows remain unavailable until separate
+          specifications, privacy/security review, tests, and release approvals land.
+        - [ ] Capability responses, routes, UI, docs, analytics, exports, and support
+          copy do not imply that any deferred capability exists."""
+    )
+    if later_release_prose != expected_later_release_prose:
+        fail(errors, f"release exact-two/deferred-capability boundary changed: {later_release_prose!r}")
 
     total_lines = sum(len(p.read_text(encoding="utf-8").splitlines()) for p in markdown_files)
     total_words = sum(len(p.read_text(encoding="utf-8").split()) for p in markdown_files)

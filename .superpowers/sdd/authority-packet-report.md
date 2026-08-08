@@ -116,3 +116,41 @@ RLS, OIDC/membership bootstrap, operator adoption/backfill, secure TXT source
 processing and deletion, durable leases/fences/outbox/reconnect, first-class
 path persistence and semantic lineage, worker-kill recovery, accessibility,
 and release drills. None is claimed by this report.
+
+## Independent-review addendum
+
+An independent review of `ce132a5` found three supporting-contract defects.
+They are corrected in the isolated follow-up commit recorded by the parent
+integration log; no normative document from `ce132a5` was changed.
+
+1. The Task 3a brief no longer derives a public alias from the physical UUID.
+   `new_public_id(kind)` generates and encodes an independent UUIDv7; physical
+   ID and public-alias UUID are produced by separate calls and cannot be
+   reversed into one another. Preserved legacy aliases remain the explicit
+   adoption exception.
+2. The docs validator now parses and locks the ordered 20-value `RunState`
+   union, the complete ordered 40-edge durable-run graph, and the fact that the
+   graph contains exactly those 20 states. It also parses bounded comparison,
+   included-scope, deferred-scope, and release-boundary sections so exact-two
+   and later-capability rules cannot be satisfied by an unrelated substring.
+3. The Task 6 brief now follows the complete repository authority hierarchy
+   and records that `ce132a5` resolved provenance lineage, path-review/run-state
+   interpretation, and exact-two comparison normatively. Named owner approval,
+   TRANSITION domain updates, semantic-identity evidence, and all persistence
+   and release gates remain open.
+
+Follow-up verification:
+
+```text
+python tools/validate_docs.py
+Markdown files: 69
+ADR files: 12
+Warnings: 0
+Errors: 0
+RESULT: PASS
+```
+
+The follow-up commit contains only the two supporting briefs, the structural
+validator, and this report addendum. It does not touch the concurrently edited
+Task 5 brief or any normative, backend, frontend, migration, deployment, or
+design asset file.
