@@ -1,5 +1,7 @@
 import json
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +9,9 @@ from flask import Flask
 
 from app.api import simulation_bp
 from app.api.routes import workspace_routes
+from app.application import (
+    decision_workspace_service as workspace_service_module,
+)
 from app.application.decision_workspace_service import (
     DecisionWorkspaceManifest,
     DecisionWorkspaceService,
@@ -95,6 +100,64 @@ def test_service_atomically_persists_and_reuses_server_workspace_id(
     )
 
 
+def test_simultaneous_first_resolution_returns_one_persisted_winner(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(ProjectManager, "PROJECTS_DIR", str(tmp_path / "projects"))
+    project = ProjectManager.create_project(name="Concurrent identity")
+    manifest_path = (
+        tmp_path / "projects" / project.project_id / "workspace_manifest.json"
+    )
+    initial_checks = threading.Barrier(2)
+    check_count = 0
+    check_count_lock = threading.Lock()
+    original_exists = workspace_service_module.os.path.exists
+
+    def synchronize_initial_absence_check(path) -> bool:
+        nonlocal check_count
+        if str(path) != str(manifest_path):
+            return original_exists(path)
+        with check_count_lock:
+            check_count += 1
+            current_check = check_count
+        exists = original_exists(path)
+        if current_check <= 2:
+            initial_checks.wait(timeout=5)
+        return exists
+
+    monkeypatch.setattr(
+        "app.application.decision_workspace_service.os.path.exists",
+        synchronize_initial_absence_check,
+    )
+
+    class NoSimulations:
+        def list_simulations(self, project_id=None):
+            return []
+
+    class NoReports:
+        @classmethod
+        def list_reports(cls, limit=50):
+            return []
+
+    service = DecisionWorkspaceService(
+        project_manager=ProjectManager,
+        simulation_manager_factory=NoSimulations,
+        report_manager=NoReports,
+    )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        manifests = tuple(
+            executor.map(
+                lambda _: service.resolve_by_project(project.project_id),
+                range(2),
+            )
+        )
+
+    persisted = json.loads(manifest_path.read_text(encoding="utf-8"))
+    issued_workspace_ids = {manifest.workspace_id for manifest in manifests}
+    assert issued_workspace_ids == {persisted["workspace_id"]}
+
+
 def test_endpoint_does_not_accept_or_override_workspace_or_decision_identity(
     monkeypatch,
 ) -> None:
@@ -173,6 +236,45 @@ def test_invalid_stored_manifest_returns_conflict_without_overwrite(
         encoding="utf-8",
     )
     original = manifest_path.read_text(encoding="utf-8")
+
+    response = _client().get(
+        f"/api/simulation/workspaces/by-project/{project.project_id}"
+    )
+
+    assert response.status_code == 409
+    assert response.get_json() == {
+        "success": False,
+        "error": "workspace_manifest_conflict",
+    }
+    assert manifest_path.read_text(encoding="utf-8") == original
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "workspace_id",
+        "project_id",
+        "manifest_version",
+        "storage_status",
+    ],
+)
+def test_stored_manifest_missing_any_required_field_conflicts_without_overwrite(
+    monkeypatch, tmp_path, missing_field: str
+) -> None:
+    monkeypatch.setattr(ProjectManager, "PROJECTS_DIR", str(tmp_path / "projects"))
+    project = ProjectManager.create_project(name="Missing stored identity field")
+    manifest_path = (
+        tmp_path / "projects" / project.project_id / "workspace_manifest.json"
+    )
+    stored_identity = {
+        "workspace_id": "workspace_0123456789abcdef0123456789abcdef",
+        "project_id": project.project_id,
+        "manifest_version": 1,
+        "storage_status": "TRANSITION",
+    }
+    del stored_identity[missing_field]
+    original = json.dumps(stored_identity, ensure_ascii=False, indent=2)
+    manifest_path.write_text(original, encoding="utf-8")
 
     response = _client().get(
         f"/api/simulation/workspaces/by-project/{project.project_id}"

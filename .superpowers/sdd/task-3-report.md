@@ -4,9 +4,10 @@
 
 `COMPLETE_WITH_TEST_RUNNER_CLEANUP_CONCERN`
 
-All required Task 3 behaviors are implemented and verified. The focused suite
-passes all 16 tests when pytest uses a workspace-local base temp directory. The
-exact focused command also executed all 16 tests as passes, but pytest then
+All required Task 3 behaviors and both P1 review fixes are implemented and
+verified. The focused suite passes all 21 tests when pytest uses a
+workspace-local base temp directory. Before the review fixes, the exact focused
+command also executed all then-current 16 tests as passes, but pytest then
 exited nonzero while attempting to clean an inaccessible pre-existing Windows
 temp symlink; details are under Concerns.
 
@@ -105,17 +106,45 @@ default pytest temp root is not accessible.
    - Result: `1 passed` after moving typed presentation inside the protected
      route boundary.
 
+## P1 review-fix RED and GREEN evidence
+
+1. Simultaneous first resolution has one persisted winner
+   - RED: `.\.venv\Scripts\pytest tests/test_decision_workspace_api.py::test_simultaneous_first_resolution_returns_one_persisted_winner -q --basetemp=.pytest-tmp-task3-review-red-concurrency`
+   - Result: `1 failed`; two different workspace IDs were issued while only
+     one of them was present in `workspace_manifest.json`.
+   - GREEN: `.\.venv\Scripts\pytest tests/test_decision_workspace_api.py::test_simultaneous_first_resolution_returns_one_persisted_winner -q --basetemp=.pytest-tmp-task3-review-green-concurrency`
+   - Result: `1 passed`. The deterministic test forces both contenders to
+     observe the initial absence before either may continue. The service now
+     uses an OS-backed process lock (`msvcrt.locking` on Windows and
+     `fcntl.flock` on POSIX), rechecks under that lock, retains
+     `ProjectManager._atomic_write_text` for the canonical write, and returns
+     the persisted winner to every contender.
+
+2. Every stored identity field is mandatory
+   - RED: `.\.venv\Scripts\pytest tests/test_decision_workspace_api.py::test_stored_manifest_missing_any_required_field_conflicts_without_overwrite -q --basetemp=.pytest-tmp-task3-review-red-required-fields`
+   - Result: `2 failed, 2 passed`; missing `manifest_version` or
+     `storage_status` returned HTTP 200 because model defaults silently filled
+     them, while the two already-required identity fields correctly returned
+     409.
+   - GREEN: `.\.venv\Scripts\pytest tests/test_decision_workspace_api.py::test_stored_manifest_missing_any_required_field_conflicts_without_overwrite -q --basetemp=.pytest-tmp-task3-review-green-required-fields`
+   - Result: `4 passed`; every omitted stored key returns the stable 409 body
+     and the original file bytes are unchanged. New identity creation now
+     explicitly supplies version `1` and storage status `TRANSITION`.
+
 ## Final verification
 
 - Focused suite:
-  `.\.venv\Scripts\pytest tests/test_decision_workspace_api.py -q --basetemp=.pytest-tmp-task3`
-  - Result: `16 passed in 1.55s`.
-- Contract regressions (the exact command from the brief):
-  `.\.venv\Scripts\pytest tests/domain/test_decision_workspace.py tests/test_api_schemas.py -q`
-  - Result: `1379 passed in 2.37s`.
+  `.\.venv\Scripts\pytest tests/test_decision_workspace_api.py -q --basetemp=.pytest-tmp-task3-review-final-focused`
+  - Result: `21 passed in 1.71s`.
+- Contract regressions with the requested workspace base temp:
+  `.\.venv\Scripts\pytest tests/domain/test_decision_workspace.py tests/test_api_schemas.py -q --basetemp=.pytest-tmp-task3-review-final-regression`
+  - Result: `1379 passed in 2.25s`.
 - Documentation baseline, run from the repository root:
   `python tools/validate_docs.py`
   - Result: `PASS`, 0 warnings, 0 errors.
+- Touched-file lint:
+  `uvx ruff check app/application/decision_workspace_service.py tests/test_decision_workspace_api.py`
+  - Result: `All checks passed!`.
 
 ## Self-review
 
@@ -127,6 +156,15 @@ default pytest temp root is not accessible.
   `app.domain.decision_workspace`.
 - Only the four identity metadata keys are persisted. Relationship,
   availability, decision, and truth data are derived for each response.
+- All four stored identity fields are required; no default can repair an
+  incomplete canonical file. New manifests explicitly pass all four values.
+- First creation is serialized with a descriptor-scoped OS lock. Both Windows
+  and POSIX branches are process-safe; the lock is explicitly released in a
+  `finally`, and descriptor close also releases it after exceptional process
+  paths. Lock acquisition has a bounded timeout with no path in its error.
+- The manifest existence check is repeated inside the process lock. Only the
+  lock winner generates and atomically writes an ID; all other contenders load
+  that winner from the canonical file.
 - `ProjectManager.get_project`, `SimulationManager.list_simulations` with the
   project filter, `ReportManager.list_reports(limit=1000)`, and
   `ProjectManager.get_project_files` are the only record-resolution APIs used.
@@ -141,14 +179,16 @@ default pytest temp root is not accessible.
 
 ## Commit
 
-Task 3 deliverables are intended for one isolated commit. The resulting SHA is
-reported in the agent handoff because a commit cannot contain its own final
-SHA without changing that SHA.
+The original Task 3 deliverable is commit
+`9800e6885c7739e030350a302bc4bad4ec306d63`. The isolated P1 review-fix commit
+SHA is reported in the agent handoff because a commit cannot contain its own
+final SHA without changing that SHA.
 
 ## Concerns
 
-- Running the exact focused command without `--basetemp` executes all 16 tests
-  as passes, then pytest exits with `PermissionError: [WinError 5]` while
+- Before the P1 review fixes, running the exact focused command without
+  `--basetemp` executed all then-current 16 tests as passes, then pytest exited
+  with `PermissionError: [WinError 5]` while
   cleaning
   `C:\Users\serge\AppData\Local\Temp\pytest-of-serge\pytest-current`.
   The workspace-local base-temp run is clean and verifies every focused
