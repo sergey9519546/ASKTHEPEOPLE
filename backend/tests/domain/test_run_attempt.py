@@ -1,10 +1,10 @@
 """Durable run domain-kernel tests."""
 
+from itertools import product
 from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
-
 
 ALLOWED_RUN_TRANSITIONS = (
     ("DRAFT", "SUBMIT_FOR_REVIEW", "NEEDS_REVIEW"),
@@ -47,6 +47,19 @@ ALLOWED_RUN_TRANSITIONS = (
     ("COMPLETED", "ARCHIVE_RUN", "ARCHIVED"),
     ("STOPPED", "ARCHIVE_RUN", "ARCHIVED"),
     ("FAILED_TERMINAL", "ARCHIVE_RUN", "ARCHIVED"),
+)
+
+ALLOWED_STAGE_ATTEMPT_TRANSITIONS = (
+    ("PENDING", "READY"),
+    ("READY", "RUNNING"),
+    ("RUNNING", "VALIDATING"),
+    ("VALIDATING", "SUCCEEDED"),
+    ("RUNNING", "RETRY_WAIT"),
+    ("VALIDATING", "RETRY_WAIT"),
+    ("RUNNING", "FAILED_TERMINAL"),
+    ("VALIDATING", "FAILED_TERMINAL"),
+    ("RUNNING", "CANCEL_REQUESTED"),
+    ("CANCEL_REQUESTED", "CANCELLED"),
 )
 
 
@@ -300,3 +313,178 @@ def test_every_allowed_run_transition_is_decided(
     assert transition.from_state is RunState(from_state)
     assert transition.to_state is RunState(to_state)
     assert transition.next_version == snapshot.version + 1
+
+
+def test_complete_cartesian_complement_of_run_pairs_fails_closed() -> None:
+    from app.domain.run_attempt import (
+        RunState,
+        RunTransitionViolation,
+        validate_run_state_pair,
+    )
+
+    allowed_pairs = {
+        (RunState(source), RunState(target))
+        for source, _command, target in ALLOWED_RUN_TRANSITIONS
+    }
+    for source, target in product(RunState, repeat=2):
+        if (source, target) in allowed_pairs:
+            assert validate_run_state_pair(source, target) is None
+            continue
+        with pytest.raises(
+            RunTransitionViolation,
+            match="^run_transition_forbidden$",
+        ):
+            validate_run_state_pair(source, target)
+
+
+def test_stage_attempt_graph_is_exact_and_retry_creates_a_new_attempt() -> None:
+    from app.domain.run_attempt import (
+        RunStageAttemptState,
+        StageAttemptTransitionViolation,
+        next_retry_attempt_number,
+        validate_stage_attempt_transition,
+    )
+
+    allowed_pairs = {
+        (RunStageAttemptState(source), RunStageAttemptState(target))
+        for source, target in ALLOWED_STAGE_ATTEMPT_TRANSITIONS
+    }
+    for source, target in product(RunStageAttemptState, repeat=2):
+        if (source, target) in allowed_pairs:
+            assert validate_stage_attempt_transition(source, target) is None
+            continue
+        with pytest.raises(
+            StageAttemptTransitionViolation,
+            match="^stage_attempt_transition_forbidden$",
+        ):
+            validate_stage_attempt_transition(source, target)
+
+    assert next_retry_attempt_number(1, RunStageAttemptState.RETRY_WAIT) == 2
+    with pytest.raises(ValueError, match="^retry_requires_closed_retry_wait_attempt$"):
+        next_retry_attempt_number(1, RunStageAttemptState.RUNNING)
+    with pytest.raises(ValueError, match="^attempt_number_must_be_positive_integer$"):
+        next_retry_attempt_number(0, RunStageAttemptState.RETRY_WAIT)
+
+
+@pytest.mark.parametrize(
+    "missing_guard",
+    [
+        "critical_validators_pass",
+        "current_path_set_review_approved",
+        "path_set_review_hashes_match",
+        "path_validator_bundle_matches",
+        "brief_gate_hashes_bound",
+        "current_path_set_id",
+        "approved_path_review_id",
+        "current_path_set_sha256",
+        "approved_path_review_sha256",
+        "brief_gate_sha256",
+        "path_validator_bundle_version",
+    ],
+)
+def test_validating_output_never_advances_without_the_exact_path_gate(
+    missing_guard: str,
+) -> None:
+    from app.domain.run_attempt import (
+        RunCommandKind,
+        RunGuardFacts,
+        RunGuardViolation,
+        decide_run_transition,
+    )
+
+    guard_data = _passing_guard_data()
+    guard_data[missing_guard] = (
+        False if isinstance(guard_data[missing_guard], bool) else None
+    )
+    with pytest.raises(RunGuardViolation, match="^path_brief_gate_not_satisfied$"):
+        decide_run_transition(
+            _snapshot_for_state("VALIDATING_OUTPUT"),
+            command=RunCommandKind.SUCCEED_STAGE,
+            guards=RunGuardFacts(**guard_data),
+        )
+
+
+def test_rerun_identity_is_new_and_links_to_parent_without_a_state_transition() -> None:
+    from app.domain.run_attempt import (
+        RerunIdentityViolation,
+        RunCommandKind,
+        RunSnapshot,
+        validate_rerun_identity,
+    )
+
+    parent = RunSnapshot(**_snapshot_data())
+    child_id = _uuid7(second=1_700_000_020, random_value=20)
+    child_public_uuid = _uuid7(second=1_700_000_021, random_value=21)
+    child = RunSnapshot(
+        **{
+            **_snapshot_data(),
+            "id": child_id,
+            "public_id": f"run_{child_public_uuid.hex}",
+            "parent_run_id": parent.id,
+        }
+    )
+
+    assert validate_rerun_identity(parent, child) is None
+    assert "RERUN" not in {command.value for command in RunCommandKind}
+
+    same_id_child = child.model_copy(update={"id": parent.id})
+    with pytest.raises(RerunIdentityViolation, match="^rerun_identity_must_be_new$"):
+        validate_rerun_identity(parent, same_id_child)
+
+    same_public_child = child.model_copy(update={"public_id": parent.public_id})
+    with pytest.raises(RerunIdentityViolation, match="^rerun_identity_must_be_new$"):
+        validate_rerun_identity(parent, same_public_child)
+
+    unlinked_child = child.model_copy(update={"parent_run_id": None})
+    with pytest.raises(RerunIdentityViolation, match="^rerun_parent_mismatch$"):
+        validate_rerun_identity(parent, unlinked_child)
+
+
+def test_run_snapshot_rejects_identity_leaks_coercion_and_truth_overrides() -> None:
+    from app.domain.run_attempt import RunSnapshot
+
+    valid = _snapshot_data()
+    physical_id = valid["id"]
+    assert isinstance(physical_id, UUID)
+    invalid_cases = (
+        {"id": UUID("12345678-1234-4234-8234-123456789abc")},
+        {"parent_run_id": UUID("12345678-1234-4234-8234-123456789abc")},
+        {"public_id": f"run_{physical_id.hex}"},
+        {"public_id": "run_12345678123442348234123456789abc"},
+        {"public_id": "workspace_0123456789abcdef0123456789abcdef"},
+        {"version": True},
+        {"stop_fence": False},
+        {"truth": {"output_origin": "human"}},
+        {"unexpected": "field"},
+    )
+
+    for override in invalid_cases:
+        with pytest.raises(ValidationError):
+            RunSnapshot(**{**valid, **override})
+
+
+def test_durable_run_contract_is_exported_from_domain_package() -> None:
+    from app import domain
+
+    expected_exports = (
+        "RunCommandKind",
+        "RunEventType",
+        "RunGuardFacts",
+        "RunGuardViolation",
+        "RunSnapshot",
+        "RunStageAttemptState",
+        "RunStageCode",
+        "RunState",
+        "RunTransition",
+        "RunTransitionViolation",
+        "StageAttemptTransitionViolation",
+        "decide_run_transition",
+        "next_retry_attempt_number",
+        "validate_rerun_identity",
+        "validate_run_state_pair",
+        "validate_stage_attempt_transition",
+    )
+
+    for export in expected_exports:
+        assert export in domain.__all__
+        assert getattr(domain, export) is not None

@@ -1,14 +1,14 @@
 """Pure durable-run and immutable stage-attempt domain contracts."""
 
-from enum import Enum
 import re
+from enum import Enum
+from itertools import pairwise
 from typing import Self
 from uuid import RFC_4122, UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .decision_workspace import TruthBundle
-
 
 _PUBLIC_RUN_ID_PATTERN = re.compile(r"run_([0-9a-f]{32})")
 _SHA256_PATTERN = r"^[0-9a-f]{64}$"
@@ -222,8 +222,18 @@ class RunGuardViolation(ValueError):
     """Raised when server-derived facts do not satisfy an allowed edge."""
 
 
+class StageAttemptTransitionViolation(ValueError):
+    """Raised when an immutable stage attempt is asked to cross a closed edge."""
+
+
+class RerunIdentityViolation(ValueError):
+    """Raised when a rerun tries to reuse identity or omit its parent link."""
+
+
 _STAGE_SEQUENCE = tuple(RunStageCode)
-_ACTIVE_RUN_STATES = frozenset({RunState.QUEUED, *map(lambda stage: RunState(stage.value), _STAGE_SEQUENCE)})
+_ACTIVE_RUN_STATES = frozenset(
+    {RunState.QUEUED, *(RunState(stage.value) for stage in _STAGE_SEQUENCE)}
+)
 _STAGE_RUN_STATES = frozenset(RunState(stage.value) for stage in _STAGE_SEQUENCE)
 
 _COMMAND_TARGETS: dict[tuple[RunState, RunCommandKind], RunState] = {
@@ -247,7 +257,7 @@ _COMMAND_TARGETS: dict[tuple[RunState, RunCommandKind], RunState] = {
     (RunState.FAILED_TERMINAL, RunCommandKind.ARCHIVE_RUN): RunState.ARCHIVED,
 }
 
-for current_stage, next_stage in zip(_STAGE_SEQUENCE, _STAGE_SEQUENCE[1:]):
+for current_stage, next_stage in pairwise(_STAGE_SEQUENCE):
     _COMMAND_TARGETS[
         (RunState(current_stage.value), RunCommandKind.SUCCEED_STAGE)
     ] = RunState(next_stage.value)
@@ -268,10 +278,57 @@ _ALLOWED_RUN_STATE_PAIRS = frozenset(
     for (from_state, _command), to_state in _COMMAND_TARGETS.items()
 )
 
+_ALLOWED_STAGE_ATTEMPT_PAIRS = frozenset(
+    {
+        (RunStageAttemptState.PENDING, RunStageAttemptState.READY),
+        (RunStageAttemptState.READY, RunStageAttemptState.RUNNING),
+        (RunStageAttemptState.RUNNING, RunStageAttemptState.VALIDATING),
+        (RunStageAttemptState.VALIDATING, RunStageAttemptState.SUCCEEDED),
+        (RunStageAttemptState.RUNNING, RunStageAttemptState.RETRY_WAIT),
+        (RunStageAttemptState.VALIDATING, RunStageAttemptState.RETRY_WAIT),
+        (RunStageAttemptState.RUNNING, RunStageAttemptState.FAILED_TERMINAL),
+        (
+            RunStageAttemptState.VALIDATING,
+            RunStageAttemptState.FAILED_TERMINAL,
+        ),
+        (RunStageAttemptState.RUNNING, RunStageAttemptState.CANCEL_REQUESTED),
+        (
+            RunStageAttemptState.CANCEL_REQUESTED,
+            RunStageAttemptState.CANCELLED,
+        ),
+    }
+)
+
 
 def validate_run_state_pair(from_state: RunState, to_state: RunState) -> None:
     if (from_state, to_state) not in _ALLOWED_RUN_STATE_PAIRS:
         raise RunTransitionViolation("run_transition_forbidden")
+
+
+def validate_stage_attempt_transition(
+    from_state: RunStageAttemptState,
+    to_state: RunStageAttemptState,
+) -> None:
+    if (from_state, to_state) not in _ALLOWED_STAGE_ATTEMPT_PAIRS:
+        raise StageAttemptTransitionViolation("stage_attempt_transition_forbidden")
+
+
+def next_retry_attempt_number(
+    closed_attempt_number: int,
+    closed_state: RunStageAttemptState,
+) -> int:
+    if type(closed_attempt_number) is not int or closed_attempt_number < 1:
+        raise ValueError("attempt_number_must_be_positive_integer")
+    if closed_state is not RunStageAttemptState.RETRY_WAIT:
+        raise ValueError("retry_requires_closed_retry_wait_attempt")
+    return closed_attempt_number + 1
+
+
+def validate_rerun_identity(parent: RunSnapshot, child: RunSnapshot) -> None:
+    if child.parent_run_id != parent.id:
+        raise RerunIdentityViolation("rerun_parent_mismatch")
+    if child.id == parent.id or child.public_id == parent.public_id:
+        raise RerunIdentityViolation("rerun_identity_must_be_new")
 
 
 def _require_guard(condition: bool, code: str) -> None:

@@ -14,13 +14,36 @@ _MAX_UUID7_UNIX_MILLISECONDS = (1 << 48) - 1
 _UUID7_RANDOM_BITS = 74
 _PUBLIC_ALIAS_MAX_ATTEMPTS = 3
 
-PublicIdKind = Literal["org", "user", "workspace", "project"]
+PublicIdKind = Literal[
+    "org",
+    "user",
+    "workspace",
+    "project",
+    "run_config",
+    "run",
+    "run_stage",
+    "run_event",
+    "command_receipt",
+    "outbox",
+    "artifact",
+    "audit",
+    "service",
+]
 
 _PUBLIC_ID_PREFIXES = {
     "org": "org",
     "user": "user",
     "workspace": "workspace",
     "project": "proj",
+    "run_config": "run_config",
+    "run": "run",
+    "run_stage": "run_stage",
+    "run_event": "run_event",
+    "command_receipt": "command_receipt",
+    "outbox": "outbox",
+    "artifact": "artifact",
+    "audit": "audit",
+    "service": "service",
 }
 _LEGACY_PROJECT_PUBLIC_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 

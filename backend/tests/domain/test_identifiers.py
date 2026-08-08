@@ -144,3 +144,34 @@ def test_legacy_project_alias_is_preserved_but_invalid_alias_is_rejected() -> No
     for alias in rejected:
         with pytest.raises(ValueError, match="invalid_legacy_project_public_id"):
             validate_legacy_project_public_id(alias)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("kind", "prefix"),
+    [
+        ("run_config", "run_config"),
+        ("run", "run"),
+        ("run_stage", "run_stage"),
+        ("run_event", "run_event"),
+        ("command_receipt", "command_receipt"),
+        ("outbox", "outbox"),
+        ("artifact", "artifact"),
+        ("audit", "audit"),
+        ("service", "service"),
+    ],
+)
+def test_durable_run_public_alias_kinds_use_independent_uuid7(
+    kind: str,
+    prefix: str,
+) -> None:
+    from app.domain.identifiers import new_public_id, new_uuid7
+
+    physical_id = new_uuid7(clock=lambda: 1_700_000_000, randbits=lambda _: 101)
+    alias_id = new_uuid7(clock=lambda: 1_700_000_001, randbits=lambda _: 102)
+
+    assert new_public_id(
+        kind,  # type: ignore[arg-type]
+        physical_id,
+        uuid7_factory=lambda: alias_id,
+    ) == f"{prefix}_{alias_id.hex}"
+    assert alias_id != physical_id
