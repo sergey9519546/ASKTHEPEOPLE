@@ -1,5 +1,7 @@
 """Controlled source-ingestion domain tests."""
 
+from datetime import UTC, datetime
+from hashlib import sha256
 from itertools import product
 
 import pytest
@@ -35,16 +37,29 @@ def _passing_source_guard_data() -> dict[str, bool]:
     return {
         "upload_verified": True,
         "format_enabled": True,
+        "exact_object_key_exists": True,
+        "byte_length_matches": True,
+        "sha256_matches": True,
+        "object_private": True,
+        "upload_intent_unexpired": True,
         "operational_failure_recorded": True,
         "policy_rejection_recorded": True,
         "open_flags_rejected": True,
         "open_flag_created": True,
         "deletion_request_committed": True,
+        "deletion_fence_committed": True,
+        "upload_intent_revoked": True,
+        "queued_work_cancelled": True,
+        "deletion_target_inventory_complete": True,
         "worker_lease_valid": True,
         "scanner_definitions_fresh": True,
         "scan_clean_receipt_stored": True,
+        "scan_result_clean": True,
+        "source_limits_pass": True,
         "parse_artifacts_durable": True,
         "candidates_durable": True,
+        "prompt_model_schema_records_durable": True,
+        "artifact_hashes_durable": True,
         "no_open_flags": True,
         "flags_released": True,
         "candidate_reset": True,
@@ -69,6 +84,11 @@ def test_uploading_may_transition_to_quarantined() -> None:
         SourceTransitionGuardFacts(
             upload_verified=True,
             format_enabled=True,
+            exact_object_key_exists=True,
+            byte_length_matches=True,
+            sha256_matches=True,
+            object_private=True,
+            upload_intent_unexpired=True,
         ),
     )
 
@@ -193,7 +213,13 @@ def test_every_non_deleting_state_may_enter_deletion_pending(
         SourceIngestionState(current_state),
         SourceIngestionState.DELETION_PENDING,
         SourceCommandKind.REQUEST_SOURCE_DELETION,
-        SourceTransitionGuardFacts(deletion_request_committed=True),
+        SourceTransitionGuardFacts(
+            deletion_request_committed=True,
+            deletion_fence_committed=True,
+            upload_intent_revoked=True,
+            queued_work_cancelled=True,
+            deletion_target_inventory_complete=True,
+        ),
     )
 
     assert result is SourceIngestionState.DELETION_PENDING
@@ -274,7 +300,7 @@ def test_ready_allows_zero_candidates_but_rejects_nonterminal_candidates() -> No
         (CandidateDisposition.PENDING,), open_flag_count=0
     )
     assert not candidate_review_is_finalizable(
-        (CandidateDisposition.ACCEPTED,), open_flag_count=1
+        (CandidateDisposition.ACCEPTED_SOURCE_CONDITION,), open_flag_count=1
     )
 
 
@@ -290,6 +316,9 @@ def test_unchanged_acceptance_preserves_source_origin_and_informs_edge() -> None
         segment_id="seg_1",
         condition_id="cond_1",
         extracted_statement="Weekend service is currently hourly.",
+        extracted_statement_sha256=sha256(
+            b"Weekend service is currently hourly."
+        ).hexdigest(),
         accepted_statement="Weekend service is currently hourly.",
     )
     assert result.condition_origin is EpistemicOrigin.SOURCE_EXTRACTED
@@ -312,6 +341,9 @@ def test_revision_becomes_user_stated_and_never_claims_source_informs_it() -> No
         segment_id="seg_1",
         condition_id="cond_1",
         extracted_statement="Weekend service is currently hourly.",
+        extracted_statement_sha256=sha256(
+            b"Weekend service is currently hourly."
+        ).hexdigest(),
         revised_statement="Weekend service is usually hourly.",
     )
     assert result.condition_origin is EpistemicOrigin.USER_STATED
@@ -330,6 +362,7 @@ def test_acceptance_and_revision_require_semantically_distinct_operations() -> N
             segment_id="seg_1",
             condition_id="cond_1",
             extracted_statement="Exact statement",
+            extracted_statement_sha256=sha256(b"Exact statement").hexdigest(),
             revised_statement="Exact statement",
         )
 
@@ -343,9 +376,114 @@ def test_deletion_completion_rejects_any_unresolved_target() -> None:
 
     with pytest.raises(SourceReviewViolation, match="^deletion_targets_unresolved$"):
         validate_deletion_completion(
-            (DeletionTargetState.DELETED, DeletionTargetState.PENDING)
+            (DeletionTargetState.CONFIRMED, DeletionTargetState.PENDING),
+            primary_content_absent=True,
         )
-    assert validate_deletion_completion(()) is None
+    with pytest.raises(SourceReviewViolation, match="^deletion_inventory_required$"):
+        validate_deletion_completion((), primary_content_absent=True)
+    with pytest.raises(SourceReviewViolation, match="^primary_content_still_present$"):
+        validate_deletion_completion(
+            (DeletionTargetState.CONFIRMED,), primary_content_absent=False
+        )
+    assert validate_deletion_completion(
+        (
+            DeletionTargetState.CONFIRMED,
+            DeletionTargetState.NOT_APPLICABLE,
+            DeletionTargetState.SCHEDULED_AGE_OUT,
+        ),
+        primary_content_absent=True,
+        scheduled_expiry_disclosed=True,
+    ) is None
+
+
+def test_exact_source_review_and_deletion_vocabulary() -> None:
+    from app.domain.source_ingestion import (
+        CandidateDisposition,
+        DeletionTargetKind,
+        DeletionTargetState,
+        ReviewFlagDisposition,
+        SourceAttemptState,
+        SourceProcessingStage,
+    )
+
+    assert {item.value for item in CandidateDisposition} == {
+        "PENDING", "ACCEPTED_SOURCE_CONDITION", "REVISED_USER_CONDITION",
+        "EXCLUDED", "REPORTED_SUSPICIOUS",
+    }
+    assert {item.value for item in ReviewFlagDisposition} == {"OPEN", "RELEASED", "REJECTED"}
+    assert {item.value for item in SourceProcessingStage} == {"SCAN", "PARSE", "EXTRACT"}
+    assert {item.value for item in SourceAttemptState} == {
+        "READY", "RUNNING", "RETRY_WAIT", "SUCCEEDED", "FAILED_TERMINAL", "CANCELLED",
+    }
+    assert len(DeletionTargetKind) == 9
+    assert {item.value for item in DeletionTargetState} == {
+        "PENDING", "IN_PROGRESS", "CONFIRMED", "SCHEDULED_AGE_OUT", "FAILED",
+        "NOT_APPLICABLE", "LEGAL_HOLD",
+    }
+
+
+def test_acceptance_is_bound_to_persisted_canonical_hash() -> None:
+    from app.domain.source_ingestion import (
+        SourceReviewViolation,
+        accept_candidate_unchanged,
+    )
+
+    statement = "Weekend service is currently hourly."
+    digest = sha256(statement.encode("utf-8")).hexdigest()
+    result = accept_candidate_unchanged(
+        candidate_id="cand_1", segment_id="seg_1", condition_id="cond_1",
+        extracted_statement=statement, extracted_statement_sha256=digest,
+        accepted_statement=statement,
+    )
+    assert result.condition_statement_sha256 == digest
+    with pytest.raises(SourceReviewViolation, match="^candidate_statement_hash_mismatch$"):
+        accept_candidate_unchanged(
+            candidate_id="cand_1", segment_id="seg_1", condition_id="cond_1",
+            extracted_statement=statement, extracted_statement_sha256="0" * 64,
+            accepted_statement=statement,
+        )
+
+
+def test_checkpoint_4a_aggregate_identity_and_scope_are_strict() -> None:
+    from app.domain.identifiers import new_public_id, new_uuid7
+    from app.domain.source_ingestion import SourceRecord
+
+    ids = iter(new_uuid7(clock=lambda n=n: 1_900_000_000 + n, randbits=lambda _: 1) for n in range(6))
+    physical = next(ids)
+    record = SourceRecord(
+        id=physical,
+        public_id=new_public_id("source", physical, uuid7_factory=lambda: next(ids)),
+        organization_id=next(ids), workspace_id=next(ids), project_id=next(ids),
+        display_name="Transit evidence", version=1,
+        created_by_actor_id=next(ids), created_at=datetime(2030, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2030, 1, 1, tzinfo=UTC),
+    )
+    assert record.public_id.startswith("src_")
+    with pytest.raises(ValidationError):
+        SourceRecord.model_validate({**record.model_dump(), "version": "1"})
+
+
+def test_security_guards_require_decomposed_server_facts() -> None:
+    from app.domain.source_ingestion import (
+        SourceCommandKind,
+        SourceIngestionState,
+        SourceTransitionGuardFacts,
+        SourceTransitionGuardViolation,
+        transition_source_version,
+    )
+
+    with pytest.raises(SourceTransitionGuardViolation, match="^source_upload_guard_failed$"):
+        transition_source_version(
+            SourceIngestionState.UPLOADING, SourceIngestionState.QUARANTINED,
+            SourceCommandKind.COMPLETE_SOURCE_UPLOAD,
+            SourceTransitionGuardFacts(upload_verified=True, format_enabled=True),
+        )
+    with pytest.raises(SourceTransitionGuardViolation, match="^clean_scan_receipt_required$"):
+        transition_source_version(
+            SourceIngestionState.SCANNING, SourceIngestionState.PARSING,
+            SourceCommandKind.RECORD_SOURCE_SCAN_PASS,
+            SourceTransitionGuardFacts(scan_clean_receipt_stored=True),
+        )
 
 
 def test_source_command_context_is_strict_frozen_and_server_scoped() -> None:

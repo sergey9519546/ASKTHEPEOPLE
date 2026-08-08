@@ -1,12 +1,14 @@
 """Pure contracts for controlled source ingestion and review."""
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Literal
+from hashlib import sha256
+from typing import Literal, Self
 from uuid import RFC_4122, UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .decision_workspace import (
     EpistemicOrigin,
@@ -55,22 +57,60 @@ class SourceCommandKind(str, Enum):
 
 class CandidateDisposition(str, Enum):
     PENDING = "PENDING"
-    ACCEPTED = "ACCEPTED"
-    REVISED = "REVISED"
+    ACCEPTED_SOURCE_CONDITION = "ACCEPTED_SOURCE_CONDITION"
+    REVISED_USER_CONDITION = "REVISED_USER_CONDITION"
+    EXCLUDED = "EXCLUDED"
+    REPORTED_SUSPICIOUS = "REPORTED_SUSPICIOUS"
+
+
+class ReviewFlagDisposition(str, Enum):
+    OPEN = "OPEN"
+    RELEASED = "RELEASED"
     REJECTED = "REJECTED"
+
+
+class SourceProcessingStage(str, Enum):
+    SCAN = "SCAN"
+    PARSE = "PARSE"
+    EXTRACT = "EXTRACT"
+
+
+class SourceAttemptState(str, Enum):
+    READY = "READY"
+    RUNNING = "RUNNING"
+    RETRY_WAIT = "RETRY_WAIT"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED_TERMINAL = "FAILED_TERMINAL"
+    CANCELLED = "CANCELLED"
+
+
+class DeletionTargetKind(str, Enum):
+    PRIMARY_DATABASE = "PRIMARY_DATABASE"
+    QUARANTINE_OBJECT = "QUARANTINE_OBJECT"
+    PROCESSED_OBJECT = "PROCESSED_OBJECT"
+    OBJECT_VERSIONS = "OBJECT_VERSIONS"
+    DERIVED_INDEX = "DERIVED_INDEX"
+    CACHE = "CACHE"
+    EXPORT = "EXPORT"
+    PROVIDER_RECORD = "PROVIDER_RECORD"
+    BACKUP_EXPIRY = "BACKUP_EXPIRY"
 
 
 class DeletionTargetState(str, Enum):
     PENDING = "PENDING"
-    DELETED = "DELETED"
-    RETAINED_BY_POLICY = "RETAINED_BY_POLICY"
+    IN_PROGRESS = "IN_PROGRESS"
+    CONFIRMED = "CONFIRMED"
+    SCHEDULED_AGE_OUT = "SCHEDULED_AGE_OUT"
+    FAILED = "FAILED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    LEGAL_HOLD = "LEGAL_HOLD"
 
 
-_TERMINAL_CANDIDATE_DISPOSITIONS = frozenset(
+TERMINAL_REVIEW_DISPOSITIONS = frozenset(
     {
-        CandidateDisposition.ACCEPTED,
-        CandidateDisposition.REVISED,
-        CandidateDisposition.REJECTED,
+        CandidateDisposition.ACCEPTED_SOURCE_CONDITION,
+        CandidateDisposition.REVISED_USER_CONDITION,
+        CandidateDisposition.EXCLUDED,
     }
 )
 
@@ -118,10 +158,187 @@ class SourceCommandContext(BaseModel):
         return value
 
 
+_SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
+_PUBLIC_PATTERNS = {
+    "src": re.compile(r"src_[0-9a-f]{32}"),
+    "srcv": re.compile(r"srcv_[0-9a-f]{32}"),
+    "seg": re.compile(r"seg_[0-9a-f]{32}"),
+    "cand": re.compile(r"cand_[0-9a-f]{32}"),
+    "cond": re.compile(r"cond_[0-9a-f]{32}"),
+    "sflag": re.compile(r"sflag_[0-9a-f]{32}"),
+    "srev": re.compile(r"srev_[0-9a-f]{32}"),
+    "del": re.compile(r"del_[0-9a-f]{32}"),
+}
+
+
+class _StrictRecord(BaseModel):
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def validate_record_values(cls, value: object, info: object) -> object:
+        field_name = getattr(info, "field_name", "")
+        if isinstance(value, UUID) and (value.version != 7 or value.variant != RFC_4122):
+            raise ValueError("source_record_ids_must_be_uuid7")
+        if isinstance(value, datetime) and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("source_record_timestamp_must_be_timezone_aware")
+        if field_name.endswith("sha256") and value is not None and (
+            not isinstance(value, str) or _SHA256_PATTERN.fullmatch(value) is None
+        ):
+            raise ValueError("source_record_sha256_invalid")
+        return value
+
+
+class _AddressableRecord(_StrictRecord):
+    id: UUID
+    public_id: str
+
+    @model_validator(mode="after")
+    def validate_public_identity(self) -> Self:
+        prefix = self.public_id.split("_", 1)[0]
+        pattern = _PUBLIC_PATTERNS.get(prefix)
+        if pattern is None or pattern.fullmatch(self.public_id) is None:
+            raise ValueError("source_public_id_invalid")
+        if self.public_id.endswith(self.id.hex):
+            raise ValueError("source_public_id_must_not_reveal_physical_id")
+        return self
+
+
+class _ScopedRecord(_AddressableRecord):
+    organization_id: UUID
+    workspace_id: UUID
+    project_id: UUID
+
+
+class SourceRecord(_ScopedRecord):
+    display_name: str = Field(min_length=1, max_length=255)
+    current_version_id: UUID | None = None
+    version: int = Field(ge=1)
+    created_by_actor_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class SourceVersionRecord(_ScopedRecord):
+    source_id: UUID
+    version_number: int = Field(ge=1)
+    state: SourceIngestionState
+    original_filename_display: str
+    declared_media_type: str
+    detected_media_type: str | None = None
+    raw_object_ref: str | None = None
+    processed_object_ref: str | None = None
+    raw_byte_length: int | None = Field(default=None, ge=0)
+    raw_sha256: str | None = None
+    normalized_byte_length: int | None = Field(default=None, ge=0)
+    normalized_sha256: str | None = None
+    normalized_token_count: int | None = Field(default=None, ge=0)
+    processing_fence: int = Field(ge=0)
+    deletion_fence: int = Field(ge=0)
+    version: int = Field(ge=1)
+    created_by_actor_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class SourceSegmentRecord(_ScopedRecord):
+    source_version_id: UUID
+    ordinal: int = Field(ge=0)
+    normalized_start_byte: int = Field(ge=0)
+    normalized_end_byte: int = Field(ge=0)
+    start_line: int = Field(ge=1)
+    end_line: int = Field(ge=1)
+    segment_sha256: str
+    created_at: datetime
+
+
+class CandidateStartingConditionRecord(_ScopedRecord):
+    source_version_id: UUID
+    source_segment_id: UUID
+    ordinal: int = Field(ge=0)
+    proposed_statement: str = Field(min_length=1, max_length=4000)
+    proposed_statement_sha256: str
+    extraction_origin: Literal["SYNTHETIC_GENERATED"] = "SYNTHETIC_GENERATED"
+    disposition: CandidateDisposition
+    version: int = Field(ge=1)
+
+
+class StartingConditionRecord(_ScopedRecord):
+    statement: str = Field(min_length=1, max_length=4000)
+    statement_sha256: str
+    origin: EpistemicOrigin
+    source_version_id: UUID
+    source_segment_id: UUID | None
+    candidate_id: UUID
+    created_by_actor_id: UUID
+    created_at: datetime
+
+
+class SourceReviewFlagRecord(_ScopedRecord):
+    source_version_id: UUID
+    candidate_id: UUID | None = None
+    flag_code: str
+    severity: str
+    disposition: ReviewFlagDisposition
+    detected_by: str
+    created_at: datetime
+    version: int = Field(ge=1)
+
+
+class SourceReviewEventRecord(_ScopedRecord):
+    source_version_id: UUID
+    command_name: str
+    from_state: SourceIngestionState | None
+    to_state: SourceIngestionState | None
+    actor_type: str
+    actor_id: UUID
+    capability: str
+    expected_version: int = Field(ge=1)
+    resulting_version: int = Field(ge=1)
+    idempotency_key: str
+    request_body_sha256: str
+    reason_code: str
+    request_id: UUID
+    occurred_at: datetime
+
+
+class SourceProcessingAttemptRecord(_StrictRecord):
+    id: UUID
+    source_version_id: UUID
+    organization_id: UUID
+    workspace_id: UUID
+    project_id: UUID
+    stage: SourceProcessingStage
+    attempt_number: int = Field(ge=1)
+    state: SourceAttemptState
+    fencing_token: int = Field(ge=1)
+    deletion_fence_at_claim: int = Field(ge=0)
+    created_at: datetime
+
+
+class DeletionRequestRecord(_ScopedRecord):
+    source_version_id: UUID
+    requested_by_actor_id: UUID
+    reason_code: str
+    requested_at: datetime
+    completed_at: datetime | None = None
+    version: int = Field(ge=1)
+
+
+class DeletionTargetStatusRecord(_StrictRecord):
+    deletion_request_id: UUID
+    target_kind: DeletionTargetKind
+    target_ref_hash: str
+    state: DeletionTargetState
+    attempt_count: int = Field(ge=0)
+    scheduled_expiry_at: datetime | None = None
+    version: int = Field(ge=1)
+
 @dataclass(frozen=True, slots=True)
 class CandidateReviewResult:
     condition_origin: EpistemicOrigin
     condition_statement: str
+    condition_statement_sha256: str
     edges: tuple[ProvenanceEdge, ...]
 
 
@@ -151,7 +368,7 @@ def candidate_review_is_finalizable(
     if type(open_flag_count) is not int or open_flag_count < 0:
         raise SourceReviewViolation("invalid_open_flag_count")
     return open_flag_count == 0 and all(
-        disposition in _TERMINAL_CANDIDATE_DISPOSITIONS
+        disposition in TERMINAL_REVIEW_DISPOSITIONS
         for disposition in dispositions
     )
 
@@ -162,8 +379,12 @@ def accept_candidate_unchanged(
     segment_id: str,
     condition_id: str,
     extracted_statement: str,
+    extracted_statement_sha256: str,
     accepted_statement: str,
 ) -> CandidateReviewResult:
+    actual_hash = sha256(extracted_statement.encode("utf-8")).hexdigest()
+    if actual_hash != extracted_statement_sha256:
+        raise SourceReviewViolation("candidate_statement_hash_mismatch")
     if accepted_statement != extracted_statement:
         raise SourceReviewViolation("unchanged_acceptance_must_match_extraction")
     edges = (
@@ -192,6 +413,7 @@ def accept_candidate_unchanged(
     return CandidateReviewResult(
         condition_origin=EpistemicOrigin.SOURCE_EXTRACTED,
         condition_statement=accepted_statement,
+        condition_statement_sha256=actual_hash,
         edges=edges,
     )
 
@@ -202,8 +424,11 @@ def revise_candidate(
     segment_id: str,
     condition_id: str,
     extracted_statement: str,
+    extracted_statement_sha256: str,
     revised_statement: str,
 ) -> CandidateReviewResult:
+    if sha256(extracted_statement.encode("utf-8")).hexdigest() != extracted_statement_sha256:
+        raise SourceReviewViolation("candidate_statement_hash_mismatch")
     if revised_statement == extracted_statement:
         raise SourceReviewViolation("revision_must_change_statement")
     edges = (
@@ -225,15 +450,30 @@ def revise_candidate(
     return CandidateReviewResult(
         condition_origin=EpistemicOrigin.USER_STATED,
         condition_statement=revised_statement,
+        condition_statement_sha256=sha256(revised_statement.encode("utf-8")).hexdigest(),
         edges=edges,
     )
 
 
 def validate_deletion_completion(
     targets: tuple[DeletionTargetState, ...],
+    *,
+    primary_content_absent: bool,
+    scheduled_expiry_disclosed: bool = False,
 ) -> None:
-    if any(target is DeletionTargetState.PENDING for target in targets):
+    if not primary_content_absent:
+        raise SourceReviewViolation("primary_content_still_present")
+    if not targets:
+        raise SourceReviewViolation("deletion_inventory_required")
+    terminal = {
+        DeletionTargetState.CONFIRMED,
+        DeletionTargetState.NOT_APPLICABLE,
+        DeletionTargetState.SCHEDULED_AGE_OUT,
+    }
+    if any(target not in terminal for target in targets):
         raise SourceReviewViolation("deletion_targets_unresolved")
+    if DeletionTargetState.SCHEDULED_AGE_OUT in targets and not scheduled_expiry_disclosed:
+        raise SourceReviewViolation("scheduled_expiry_required")
 
 
 class SourceTransitionGuardFacts(BaseModel):
@@ -241,16 +481,29 @@ class SourceTransitionGuardFacts(BaseModel):
 
     upload_verified: bool = False
     format_enabled: bool = False
+    exact_object_key_exists: bool = False
+    byte_length_matches: bool = False
+    sha256_matches: bool = False
+    object_private: bool = False
+    upload_intent_unexpired: bool = False
     operational_failure_recorded: bool = False
     policy_rejection_recorded: bool = False
     open_flags_rejected: bool = False
     open_flag_created: bool = False
     deletion_request_committed: bool = False
+    deletion_fence_committed: bool = False
+    upload_intent_revoked: bool = False
+    queued_work_cancelled: bool = False
+    deletion_target_inventory_complete: bool = False
     worker_lease_valid: bool = False
     scanner_definitions_fresh: bool = False
     scan_clean_receipt_stored: bool = False
+    scan_result_clean: bool = False
+    source_limits_pass: bool = False
     parse_artifacts_durable: bool = False
     candidates_durable: bool = False
+    prompt_model_schema_records_durable: bool = False
+    artifact_hashes_durable: bool = False
     no_open_flags: bool = False
     flags_released: bool = False
     candidate_reset: bool = False
@@ -396,7 +649,13 @@ def transition_source_version(
         raise SourceTransitionViolation("source_transition_forbidden")
     validate_source_state_pair(current, target)
     if command is SourceCommandKind.COMPLETE_SOURCE_UPLOAD and (
-        not guards.upload_verified or not guards.format_enabled
+        not guards.upload_verified
+        or not guards.format_enabled
+        or not guards.exact_object_key_exists
+        or not guards.byte_length_matches
+        or not guards.sha256_matches
+        or not guards.object_private
+        or not guards.upload_intent_unexpired
     ):
         raise SourceTransitionGuardViolation("source_upload_guard_failed")
     if (
@@ -432,7 +691,15 @@ def transition_source_version(
         raise SourceTransitionGuardViolation("open_flag_required")
     if (
         command is SourceCommandKind.REQUEST_SOURCE_DELETION
-        and not guards.deletion_request_committed
+        and not all(
+            (
+                guards.deletion_request_committed,
+                guards.deletion_fence_committed,
+                guards.upload_intent_revoked,
+                guards.queued_work_cancelled,
+                guards.deletion_target_inventory_complete,
+            )
+        )
     ):
         raise SourceTransitionGuardViolation("deletion_request_required")
     if command is SourceCommandKind.BEGIN_SOURCE_SCAN and not (
@@ -441,7 +708,13 @@ def transition_source_version(
         raise SourceTransitionGuardViolation("source_scan_start_guard_failed")
     if (
         command is SourceCommandKind.RECORD_SOURCE_SCAN_PASS
-        and not guards.scan_clean_receipt_stored
+        and not all(
+            (
+                guards.scan_clean_receipt_stored,
+                guards.scan_result_clean,
+                guards.source_limits_pass,
+            )
+        )
     ):
         raise SourceTransitionGuardViolation("clean_scan_receipt_required")
     if command is SourceCommandKind.RECORD_SOURCE_PARSE_FLAGGED and not (
@@ -451,6 +724,8 @@ def transition_source_version(
     if command is SourceCommandKind.RECORD_SOURCE_PARSE_REVIEWABLE and not (
         guards.parse_artifacts_durable
         and guards.candidates_durable
+        and guards.prompt_model_schema_records_durable
+        and guards.artifact_hashes_durable
         and guards.no_open_flags
     ):
         raise SourceTransitionGuardViolation("reviewable_parse_artifacts_required")
