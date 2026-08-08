@@ -280,7 +280,7 @@ states. `ARCHIVED` is terminal storage state.
 | `BLOCKED` | `NEEDS_REVIEW` | `RESUBMIT_REVIEW` | deficiency revision recorded |
 | `NEEDS_REVIEW` | `READY` | `APPROVE_CONFIGURATION` | decision valid; policy allowed; secure sources ready; assumptions and decision lenses approved; immutable truth fields present; exact release identifiers present |
 | `READY` | `QUEUED` | `START_RUN` | config sealed; config hash matches; durable idempotency receipt accepted |
-| `QUEUED` | `PREPARING` | `ACCEPT_WORKFLOW` | first `PREPARING` attempt durably created and leased |
+| `QUEUED` | `PREPARING` | `ACCEPT_WORKFLOW` | a new `PREPARING` attempt for this start or run-level retry is durably created and leased |
 | `PREPARING` | `EXTRACTING` | `SUCCEED_STAGE` | accepted immutable stage output exists |
 | `EXTRACTING` | `REVIEWING_CONDITIONS` | `SUCCEED_STAGE` | accepted immutable stage output exists |
 | `REVIEWING_CONDITIONS` | `GENERATING_PROFILES` | `SUCCEED_STAGE` | reviewed-condition artifact accepted |
@@ -293,7 +293,7 @@ states. `ARCHIVED` is terminal storage state.
 | every active execution state | `STOP_REQUESTED` | `REQUEST_STOP` | authorized stop actor; no terminal state |
 | `STOP_REQUESTED` | `STOPPED` | `CONFIRM_STOPPED` | no accepted active lease/work remains; in-flight output was accepted before stop or quarantined |
 | every stage state from `PREPARING` through `GENERATING_BRIEF` | `FAILED_RETRYABLE` | `RECORD_RETRYABLE_FAILURE` | stable retryable code; failed attempt closed; no final brief |
-| `FAILED_RETRYABLE` | `QUEUED` | `ACCEPT_RETRY` | retry budget remains; next stage attempt number reserved; release set unchanged or an authorized replacement is recorded |
+| `FAILED_RETRYABLE` | `QUEUED` | `ACCEPT_RETRY` | run-level retry budget remains; restart from a new `PREPARING` attempt; release set unchanged or an authorized replacement is recorded |
 | `FAILED_RETRYABLE` | `FAILED_TERMINAL` | `EXHAUST_RETRY_BUDGET` | budget exhausted or authorized no-retry decision recorded |
 | `COMPLETED` | `ARCHIVED` | `ARCHIVE_RUN` | retention and legal-hold rules allow |
 | `STOPPED` | `ARCHIVED` | `ARCHIVE_RUN` | retention and legal-hold rules allow |
@@ -374,10 +374,22 @@ VALIDATING -> FAILED_TERMINAL
 RUNNING -> CANCEL_REQUESTED -> CANCELLED
 ```
 
-A row is one immutable attempt identity. `RETRY_WAIT -> READY` in the
-normative conceptual diagram is materialized by closing attempt N as
-`RETRY_WAIT` and inserting attempt N+1 as `READY` in one transaction; attempt N
-is never reset. The unique key is `(run_id, stage_code, attempt_number)`.
+A row is one immutable attempt identity. Stage-local automatic retry does not
+change the run state: `RETRY_WAIT -> READY` in the normative conceptual diagram
+is materialized by closing attempt N as `RETRY_WAIT` and inserting attempt N+1
+for the same stage as `READY` in one transaction; attempt N is never reset. The
+unique key is `(run_id, stage_code, attempt_number)`. When the stage-local
+budget is exhausted, the failed attempt closes and the run takes the normative
+stage-state `-> FAILED_RETRYABLE` edge. No same-stage attempt is pre-created
+after that run-level failure.
+
+`FAILED_RETRYABLE -> QUEUED` is a distinct authorized run-level retry. It does
+not resume or reserve the failed stage. It preserves all prior attempts, enters
+`QUEUED`, and `ACCEPT_WORKFLOW` creates a new `PREPARING` attempt with the next
+attempt number for `PREPARING`; the run then executes the full canonical stage
+sequence again under the sealed release set or recorded approved replacement.
+This is the only interpretation compatible with the locked run graph's sole
+`QUEUED -> PREPARING` edge.
 
 Normal advancement is also atomic. `SUCCEED_STAGE` verifies and accepts the
 current output under its fence, closes the current attempt `SUCCEEDED`, moves
@@ -385,8 +397,10 @@ the run to the next canonical stage, creates the next attempt `PENDING`,
 derives and hashes its canonical inputs, changes it to `READY`, appends each
 event, and requests dispatch through the outbox in one transaction. The final
 `GENERATING_BRIEF` success performs the same acceptance/finalization but
-creates no next attempt. A retry copies the prior accepted input hash unless an
-authorized replacement release changes the input set and records the new hash.
+creates no next attempt. A stage-local automatic retry copies the prior
+accepted input hash. A run-level retry restarts at `PREPARING`, re-derives the
+full canonical input chain, and records a replacement hash only when an
+authorized replacement release changes the sealed input set.
 
 The `VALIDATING_OUTPUT` success is the deliberate exception to any generic
 “accepted output advances” shortcut. It may advance only after the Task 6
@@ -460,8 +474,16 @@ Optimistic concurrency semantics:
 
 PostgreSQL is lease authority. Celery task ownership is not a lease.
 
-1. A worker claims only a `READY` stage attempt in a transaction.
-2. Claim atomically increments the owning run's `lease_fence`, copies that
+1. A worker claim is one atomic predicate over the exact committed dispatch
+   outbox row, its `READY` stage attempt, and owning run. The outbox row must be
+   eligible and name that exact attempt; the run must be in the matching active
+   state with `current_stage_code` equal to the attempt's stage, its current
+   `stop_fence` equal to the dispatched fence, no stop/terminal state, and no
+   other active attempt. A delayed or duplicated message after
+   `STOP_REQUESTED`, stage advancement, fence change, outbox cancellation, or
+   another successful claim returns `lease_claim_ineligible` before provider
+   work begins.
+2. An eligible claim atomically increments the owning run's `lease_fence`, copies that
    globally monotonic value into the attempt's `fencing_token`, sets the
    physical `lease_owner_service_principal_id`, `lease_expires_at`, and
    `last_heartbeat_at`, and transitions the attempt to `RUNNING`.
@@ -639,27 +661,49 @@ owners must approve this extension before the durable migration is generated:
 core.service_principals
 id uuid primary key check (UUID version = 7)
 public_id varchar(64) not null unique check (^service_[0-9a-f]{32}$)
-purpose varchar(32) not null check (= 'RUN_STAGE_WORKER')
+purpose varchar(32) not null check (purpose in (
+  'RUN_STAGE_WORKER',
+  'RUN_OUTBOX_DISPATCHER',
+  'RUN_LEASE_REAPER'
+))
 status varchar(16) not null check (status in ('ACTIVE', 'REVOKED'))
 row_version bigint not null default 1 check (row_version >= 1)
 created_at timestamp with time zone not null
 revoked_at timestamp with time zone null
 ```
 
-No credential or token is stored in this table. Deployment maps an authenticated
-workload identity to its physical service-principal row. A narrowly granted,
-schema-qualified `SECURITY DEFINER` bootstrap function accepts the physical
-authenticated service ID plus both prefixed public IDs
-`(stage_attempt_public_id, dispatch_outbox_public_id)`. It returns one
-organization/workspace/run scope only when the service is active, purpose is
-exact, the committed outbox row names that exact stage attempt, and dispatch is
-still eligible. The function has bounded inputs, fixed `search_path`, no dynamic
-SQL, no content access, and no general alias lookup; execution is revoked from
-`PUBLIC`. Its result creates one immutable service `ActorContext`. The worker
-cannot submit organization/workspace scope, and a user HTTP adapter cannot
-construct a service actor. Until this mechanism and its revocation/negative
-tests are accepted, Checkpoints 2–3 remain TRANSITION and production dispatch
-is blocked.
+No credential or token is stored in this table. Deployment maps three distinct
+authenticated workload identities to three physical service-principal rows;
+one credential may not hold multiple purposes. Three narrowly granted,
+schema-qualified `SECURITY DEFINER` seams are mandatory:
+
+1. `bootstrap_run_stage_worker(service_id, stage_attempt_public_id,
+   dispatch_outbox_public_id)` returns one organization/workspace/run scope
+   only when the service is active with purpose `RUN_STAGE_WORKER`, the exact
+   committed outbox row names that exact attempt, the run is in the matching
+   active stage, its stop fence is unchanged, no stop/terminal state exists,
+   and no other active attempt exists.
+2. `claim_run_dispatch_batch(service_id, batch_size)` accepts an active
+   `RUN_OUTBOX_DISPATCHER`, bounds `batch_size`, claims only eligible committed
+   dispatch rows with `FOR UPDATE SKIP LOCKED`, and returns opaque public
+   outbox/attempt aliases plus the single row's tenant scope. It cannot read
+   content or perform a general tenant scan outside the claim result.
+3. `claim_expired_run_lease_batch(service_id, batch_size, observed_before)`
+   accepts an active `RUN_LEASE_REAPER`, bounds both inputs, claims only expired
+   active attempts with `FOR UPDATE SKIP LOCKED`, and returns opaque attempt
+   aliases plus each claimed row's tenant scope. It cannot claim healthy,
+   stopped, terminal, or already-owned work.
+
+Each function has a fixed `search_path`, no dynamic SQL, no content access, no
+general alias lookup, and execution revoked from `PUBLIC`. Each result creates
+one immutable purpose-bound service `ActorContext`; it never gives a service
+principal unrestricted cross-tenant query authority or RLS bypass. The worker,
+dispatcher, and reaper cannot submit organization/workspace scope, exchange
+purposes, or call user/reviewer commands, and a user HTTP adapter cannot
+construct any service actor. Revocation, wrong-purpose, over-broad-batch,
+cross-tenant, replay, and zero-visible-row tests are mandatory. Until all three
+seams are accepted, Checkpoints 2–3 remain TRANSITION and production dispatch
+and recovery are blocked.
 
 Task 5 extends the single central capability enum with exactly:
 
@@ -675,20 +719,24 @@ run:archive
 run_event:read
 run_audit:read
 run_stage:execute
+run_outbox:dispatch
+run_lease:reap
 ```
 
 Only the explicit workspace role controls user run access; an organization role
 does not silently widen it. Workspace OWNER/ADMIN receive every user capability
-except `run_stage:execute`; EDITOR receives `run_config:create`, `run:create`,
+except `run_stage:execute`, `run_outbox:dispatch`, and `run_lease:reap`; EDITOR receives `run_config:create`, `run:create`,
 `run:read`, `run:start`, `run:stop`, `run:retry`, and `run_event:read`; REVIEWER
 receives `run_config:review`, `run:read`, and `run_event:read`; VIEWER receives
 `run:read` and `run_event:read`; SECURITY receives `run:read`, `run_event:read`,
 and `run_audit:read`. `run:archive` is OWNER/ADMIN only.
-`run_stage:execute` is service-only and is effective only through the exact
-stage/outbox bootstrap above. Central-policy Cartesian tests prove every
-unlisted role/capability pair is denied. Product, security, and architecture
-owners must approve this policy extension before Checkpoint 2; routes must not
-hard-code a second matrix.
+`run_stage:execute`, `run_outbox:dispatch`, and `run_lease:reap` are
+service-only and effective only for their exact purpose-bound bootstrap/claim
+seam. No service principal receives a user or reviewer capability. Central-
+policy Cartesian tests prove every unlisted role/capability and every wrong-
+purpose service/capability pair is denied. Product, security, and architecture
+owners must approve this policy extension before Checkpoint 2; routes and
+workers must not hard-code a second matrix.
 
 ### `core.run_configs`
 
@@ -1214,6 +1262,13 @@ methods and return type `CommandReceipt`:
 
 All command/receipt types are frozen, strict, extra-forbidden Pydantic models:
 
+- `WorkerRunCommandKind`: a separate closed enum containing only
+  `ACCEPT_WORKFLOW`, `SUCCEED_STAGE`, `RECORD_RETRYABLE_FAILURE`,
+  `CONFIRM_STOPPED`, and `EXHAUST_RETRY_BUDGET`. It is not an alias of the
+  13-value user/reviewer `RunCommandKind` and cannot represent submission,
+  review approval/blocking, start, manual retry, archive, rerun, or a generic
+  state assignment;
+
 - `RunCommand`: caller-visible `run_public_id`, immutable server-derived user
   `actor: ActorContext`, `expected_version >= 1`, `idempotency_key`, and
   `command`;
@@ -1227,7 +1282,7 @@ All command/receipt types are frozen, strict, extra-forbidden Pydantic models:
   `actor: ActorContext` whose physical actor ID equals the attempt's
   `lease_owner_service_principal_id`,
   `fencing_token`, `stop_fence`, `expected_version`, deterministic
-  `idempotency_key`, `command`, nullable physical UUID
+  `idempotency_key`, `command: WorkerRunCommandKind`, nullable physical UUID
   `accepted_artifact_ref_id`, and nullable stable `failure_code`;
 - `CreateRerunCommand`: `parent_run_public_id`, immutable server-derived user
   `actor: ActorContext`, `expected_parent_version`, `idempotency_key`, and
@@ -1242,6 +1297,15 @@ the command and resolve canonical rows under matching physical organization/
 workspace scope. No command accepts organization/workspace scope, actor type,
 actor ID, roles, capabilities, current state, next state, event sequence, truth
 values, or final status from a caller.
+
+Purpose is checked again transactionally for every service command.
+`RUN_STAGE_WORKER` may issue only `ACCEPT_WORKFLOW`, `SUCCEED_STAGE`, or
+`RECORD_RETRYABLE_FAILURE` for its currently leased attempt;
+`RUN_LEASE_REAPER` may issue only `RECORD_RETRYABLE_FAILURE`,
+`CONFIRM_STOPPED`, or `EXHAUST_RETRY_BUDGET` for a row returned by its exact
+claim seam; `RUN_OUTBOX_DISPATCHER` may publish a claimed outbox row but may not
+issue a run command. The application rejects every other purpose/command pair
+with `service_command_forbidden` before mutation.
 
 `RunConfigurationService` is the only writer of `core.run_configs` and has these
 exact methods:
@@ -1417,6 +1481,16 @@ TDD sequence:
 11. Prove the validation worker cannot advance on general validators or a
     generic artifact, and prove changing any Task 6 path-set/review/validator/
     brief-gate reference before commit leaves the run `VALIDATING_OUTPUT`.
+12. Deliver an otherwise valid delayed broker message after
+    `STOP_REQUESTED`, current-stage advancement, stop-fence change, and outbox
+    cancellation; every claim returns `lease_claim_ineligible` and no provider
+    work begins.
+13. Prove the dispatcher and reaper see work only through their bounded claim
+    seams under forced RLS, wrong-purpose principals see zero rows, and a
+    revoked principal cannot claim or continue work.
+14. Generate the Cartesian complement of service purpose and
+    `WorkerRunCommandKind`; every unlisted pair fails with
+    `service_command_forbidden` before mutation.
 
 Focused verification:
 
@@ -1437,6 +1511,9 @@ cd backend
 - Modify `backend/app/api/routes/__init__.py` to import `run_routes`.
 - Modify `backend/app/api/ws.py` to add the durable run event stream without
   removing legacy streams yet.
+- Create `backend/app/application/run_stream_ticket_service.py`.
+- Create `backend/app/infrastructure/auth/run_stream_ticket_store.py`.
+- Create `backend/app/api/routes/run_stream_ticket_routes.py`.
 - Fix `backend/app/api/jobs.py` to instantiate `TaskManager()` for legacy jobs;
   canonical run clients use run/event endpoints instead.
 - Create `backend/tests/test_run_attempt_api.py`.
@@ -1455,9 +1532,35 @@ POST /api/simulation/runs/<run_public_id>/stop
 POST /api/simulation/runs/<run_public_id>/retry
 POST /api/simulation/runs/<run_public_id>/rerun
 POST /api/simulation/runs/<run_public_id>/archive
+POST /api/simulation/runs/<run_public_id>/event-ticket
 GET  /api/simulation/runs/<run_public_id>/events?after_sequence=<n>&limit=<n>
 WS   /ws/runs/<run_public_id>?after_sequence=<n>&ticket=<signed-ticket>
 ```
+
+The event-ticket endpoint is protected by the canonical OIDC bootstrap. It
+derives `ActorContext`, resolves the run inside organization/workspace scope,
+requires `run_event:read`, rechecks current organization/workspace membership
+in the issuance transaction, and issues a random, single-use, short-lived
+signed ticket bound to the run public alias, authenticated OIDC subject, and
+current membership row versions. Only the ticket nonce hash and expiry live in
+a namespaced shared Redis replay store; the raw ticket and physical IDs are
+never logged, used as Redis keys, or serialized in claims.
+
+The WebSocket handshake first validates the signature and binding, then
+atomically consumes the pre-existing nonce record with a fixed Redis Lua
+compare-and-delete script: it compares the stored binding digest in constant
+time and deletes only on an exact match. Missing, mismatched, expired, or
+already deleted keys fail. `SET NX` is issuance/replay registration only and is
+never treated as consumption. The stream opens only when the expiry,
+route-bound run alias, OIDC subject, and membership versions also match a fresh
+transactional membership recheck. The shared atomic compare-and-delete is the
+multi-worker replay control; process memory and the APP_TOKEN-era
+`AccessController.used_tickets` set are not authority. Redis unavailability or
+consumption failure fails closed, is indistinguishable from not found, and
+opens no stream. Reconnect requires a new ticket and replays committed events
+from `after_sequence`; the ticket never grants mutation or another run's
+stream. Ticket state is ephemeral authentication state, not canonical run
+state, and its loss does not alter event history.
 
 Reviewer-only `BLOCK_REVIEW`, `RESUBMIT_REVIEW`, and
 `APPROVE_CONFIGURATION` remain application commands called by the canonical
@@ -1469,9 +1572,11 @@ Capability checks are exact: create-configuration and submit/resubmit use
 `run:stop`; retry uses `run:retry`; rerun requires both `run:retry` on the
 parent and `run:create` for the new row; archive uses `run:archive`; HTTP event
 reads, WebSocket-ticket issue, replay, and reconnect use `run_event:read`.
-Service transitions use only `run_stage:execute`. Every check occurs again in
-the transaction against current membership/service status before a new or
-replayed receipt is returned.
+Stage-worker transitions use only `run_stage:execute`; dispatcher claims use
+only `run_outbox:dispatch`; reaper transitions use only `run_lease:reap`.
+Every check includes the exact service purpose and occurs again in the
+transaction against current membership/service status before a new or replayed
+receipt is returned.
 
 All mutating routes require `Idempotency-Key` matching
 `^[A-Za-z0-9._:-]{1,128}$` and, after creation, an `If-Match` header exactly
@@ -1562,7 +1667,10 @@ source text, prompt text, database details, or artifact content.
 
 TDD sequence:
 
-1. Prove the flag hides every durable route by default.
+1. Prove the flag blocks new canonical configuration/run creation and start by
+   default, while canonical reads, event replay, ticket issuance, stop,
+   publisher delivery, lease heartbeat/recovery, and reaper handling remain
+   available for every already acknowledged canonical run.
 2. Prove all mutable commands require valid idempotency and version headers.
 3. Prove every route rejects a raw physical UUID, a malformed alias, and a
    wrong aggregate prefix; valid requests and every response/event/Location/
@@ -1684,6 +1792,7 @@ Documentation verification:
 ```powershell
 cd ..
 python tools/validate_docs.py
+python tools/validate_task5_brief.py
 ```
 
 ## Required red-green implementation order
@@ -1718,8 +1827,10 @@ PARTIAL until all of the following evidence exists:
   cross-tenant evidence all pass;
 - every durable HTTP/WS route uses the canonical OIDC/ActorContext path; a route
   still protected only by the CURRENT application-wide token blocks rollout;
-- the Task 5 service-principal row, workload authenticator, scoped stage/outbox
-  bootstrap, revocation, and service-only capability are approved and proven;
+- the three Task 5 purpose-bound service-principal rows, workload
+  authenticators, scoped stage-worker bootstrap, bounded dispatcher/reaper
+  claim seams, revocation, wrong-purpose denials, and service-only capabilities
+  are approved and proven under forced RLS;
 - every addressable run-control row has an application-issued UUIDv7 physical
   key and a separate exact prefixed alias containing an independently issued
   UUIDv7, every external boundary uses only the alias, and every
@@ -1766,7 +1877,10 @@ PARTIAL until all of the following evidence exists:
   telemetry boundaries, with wrong-tenant existence hidden;
 - touched-file lint, focused suites, full backend/frontend suites, and
   `npm run verify` pass from a clean checkout;
-- `python tools/validate_docs.py` reports zero errors and zero warnings;
+- `python tools/validate_docs.py` reports zero errors and zero warnings, and
+  `python tools/validate_task5_brief.py` locks the duplicated 20-state,
+  40-edge, nine-stage, nine-attempt-state, ten-attempt-edge, Task 6 gate,
+  service-purpose, ticket, retry, and feature-flag contracts;
 - release runbook, rollback, alerts, lease-age dashboard, dead-outbox alert,
   queue-depth alert, and worker-stall alert are verified.
 
@@ -1798,7 +1912,7 @@ idempotency-key reuse, or report generation from incomplete runs.
 | Audit baseline omitted `REVIEWING_CONDITIONS` stop/failure arrows | Authority packet `ce132a5` resolves the contract with both normative arrows | Verify the locked packet on integration HEAD, record outstanding named approvals, and keep the validator clean before Checkpoint 1 acceptance |
 | Audit baseline used a five-value `RunAttempt.state` | Authority packet `ce132a5` retains exact canonical `RunState`; `RunPresentationSummary` remains display-only | Record outstanding approval of the still-proposed experience spec and complete frontend cutover in Checkpoint 5 |
 | ADR-0009 requires organization plus workspace scope; the Task 3 manifest is only a project projection and CURRENT auth has no object membership | Consume the Task 3a independent UUIDv7 physical/public identities, organization/workspace/project, membership, OIDC, ActorContext, capability, and forced-RLS foundation; keep persistence and production creation/start disabled until canonical cutover evidence passes | Task 3a must land, its `CORE_FOUNDATION_HEAD` must be captured, and no manifest/client inference is permitted |
-| Task 3a reserves `ActorContext.actor_type=SERVICE` but has no persisted/authorized service principal or RLS bootstrap for an ID-only stage worker | Propose `core.service_principals`, a `service_[0-9a-f]{32}` alias, service-only capability, workload authentication, and exact stage/outbox bootstrap in this brief | Architecture and security owner approval plus normative doc update are required before Checkpoint 2 migration generation |
+| Task 3a reserves `ActorContext.actor_type=SERVICE` but has no persisted/authorized service principal or RLS bootstrap for stage workers, dispatchers, or reapers | Propose purpose-bound `core.service_principals`, `service_[0-9a-f]{32}` aliases, three service-only capabilities, workload authentication, and exact bounded worker/dispatcher/reaper bootstrap or claim seams | Architecture and security owner approval plus normative doc update are required before Checkpoint 2 migration generation |
 | Canonical decision, source bundle, review, prompt/model release-set, and artifact schemas may not exist at the core-foundation head | Keep physical non-null references and tenant-composite FKs in the TARGET; do not replace them with client JSON or unverified UUIDs | Their reviewed migrations must land before Task 5 captures the actual single `RUN_CONTROL_PARENT_HEAD`; otherwise Checkpoint 2 stops |
 | Task 6 owns canonical path sets, immutable path reviews, validator bindings, and brief gates | Define a fail-closed Task 5 application port; keep the run exactly `VALIDATING_OUTPUT` until Task 6 atomically returns the exact current path-set ID/hash, approved review ID/hash, validator bundle, and brief-gate hash | Task 6 implementation, tenant/RLS proof, replacement-race tests, and named approval are required before brief generation or `COMPLETED` can become available |
 | Supporting build-plan section 66 uses a different coarse lifecycle | Normative ADR/state-machine hierarchy controls; do not add aliases | No action unless product/architecture intentionally proposes a new ADR |
@@ -1828,6 +1942,7 @@ npm run lint
 
 cd ..
 python tools/validate_docs.py
+python tools/validate_task5_brief.py
 npm run verify
 ```
 

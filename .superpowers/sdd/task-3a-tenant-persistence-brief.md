@@ -196,13 +196,19 @@ core domain.
 Create `backend/app/domain/identifiers.py` with these interfaces:
 
 ```python
+from collections.abc import Callable
 from typing import Literal
 from uuid import UUID
 
 PublicIdKind = Literal["org", "user", "workspace", "project"]
 
 def new_uuid7() -> UUID: ...
-def new_public_id(kind: PublicIdKind) -> str: ...
+def new_public_id(
+    kind: PublicIdKind,
+    physical_id: UUID,
+    *,
+    uuid7_factory: Callable[[], UUID] | None = None,
+) -> str: ...
 def validate_legacy_project_public_id(value: str) -> str: ...
 ```
 
