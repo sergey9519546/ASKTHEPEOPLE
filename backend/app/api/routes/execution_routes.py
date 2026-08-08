@@ -18,6 +18,10 @@ from ..simulation import (
 from ...config import Config
 from ...services.simulation_manager import SimulationManager, SimulationStatus
 from ...services.simulation_runner import SimulationRunner, RunnerStatus
+from ...services.decision_lens_repository import DecisionLensAdmissionError
+from ...services.simulation_preflight import (
+    assert_decision_lens_execution_admission,
+)
 from ...services.claim_boundary import synthetic_output_disclosure
 from ...utils.logger import get_logger
 from ...utils.input_policy import (
@@ -146,6 +150,24 @@ def start_simulation():
                 "success": False,
                 "error": f"Simulation does not exist: {simulation_id}"
             }), 404
+
+        # Admission precedes force-stop, cleanup, task creation, dispatch, and
+        # all simulation state mutation. READY alone is never authorization.
+        sim_dir = _safe_sim_dir(simulation_id)
+        try:
+            assert_decision_lens_execution_admission(sim_dir)
+        except DecisionLensAdmissionError as exc:
+            return jsonify({
+                "success": False,
+                "code": exc.code,
+                "error": exc.code,
+                "message": (
+                    "This run requires a current, approved decision-lens "
+                    "boundary and matching runtime artifacts."
+                ),
+                "remediation": exc.remediation,
+                "simulation_id": simulation_id,
+            }), 409
 
         # Validate the write target before force-restart can stop a process or
         # remove run logs. Invalid provenance settings must have no side effects.

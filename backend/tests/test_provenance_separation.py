@@ -83,22 +83,27 @@ def test_start_route_defaults_to_observation_store_without_graph_write(monkeypat
         def _save_simulation_state(self, saved_state):
             assert saved_state is state
 
-    class FakeRunner:
-        @staticmethod
-        def start_simulation(**kwargs):
-            captured.update(kwargs)
-            return SimpleNamespace(
-                to_dict=lambda: {
-                    "simulation_id": kwargs["simulation_id"],
-                    "runner_status": "running",
-                }
-            )
+    class FakeTaskManager:
+        def create_task(self, **_kwargs):
+            return "task-1"
+
+    def capture_dispatch(**kwargs):
+        captured.update(kwargs)
 
     # execution_routes owns the registered /start handler. api/simulation.py
     # still carries an undecorated copy of the same body; asserting against
     # that one would prove nothing about what the API actually serves.
     monkeypatch.setattr(execution_routes, "SimulationManager", FakeManager)
-    monkeypatch.setattr(execution_routes, "SimulationRunner", FakeRunner)
+    monkeypatch.setattr(
+        execution_routes,
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: {},
+    )
+    monkeypatch.setattr("app.models.task.TaskManager", FakeTaskManager)
+    monkeypatch.setattr(
+        "app.tasks.simulation_tasks.run_simulation_task.delay",
+        capture_dispatch,
+    )
     app = Flask(__name__)
 
     with app.test_request_context(
@@ -142,6 +147,11 @@ def test_invalid_graph_write_request_has_no_force_restart_side_effects(monkeypat
 
     monkeypatch.setattr(execution_routes, "SimulationManager", FakeManager)
     monkeypatch.setattr(execution_routes, "SimulationRunner", NoSideEffectRunner)
+    monkeypatch.setattr(
+        execution_routes,
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: {},
+    )
     app = Flask(__name__)
 
     with app.test_request_context(

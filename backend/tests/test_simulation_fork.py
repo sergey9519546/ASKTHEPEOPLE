@@ -334,6 +334,11 @@ def test_start_simulation_closes_the_log_when_spawning_fails(tmp_path, monkeypat
     # Preflight gates the path under test and needs a fully valid simulation on
     # disk; stub it so this test stays about the log handle.
     monkeypatch.setattr(runner_module, "run_preflight", lambda _dir: {"status": "passed"})
+    monkeypatch.setattr(
+        runner_module,
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: {},
+    )
 
     sim_id = "sim_spawn_fail"
     sim_dir = tmp_path / sim_id

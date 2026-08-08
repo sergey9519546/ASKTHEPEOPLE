@@ -25,7 +25,10 @@ from ..utils.input_policy import SIMULATION_ROUNDS_MAX
 from .zep_graph_memory_updater import ZepGraphMemoryManager
 from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
 from .simulation_observation_store import sync_observation_store
-from .simulation_preflight import run_preflight
+from .simulation_preflight import (
+    assert_decision_lens_execution_admission,
+    run_preflight,
+)
 
 logger = get_logger('askthepeople.simulation_runner')
 
@@ -439,16 +442,17 @@ class SimulationRunner:
                 "remains in the simulation observation store."
             )
 
+        sim_dir = cls._get_run_state_dir(simulation_id)
+        if not os.path.exists(sim_dir):
+            raise ValueError(f"Simulation does not exist: {simulation_id}")
+        assert_decision_lens_execution_admission(sim_dir)
+
         # Check if already running
         existing = cls.get_run_state(simulation_id)
         if existing and existing.runner_status in [RunnerStatus.RUNNING, RunnerStatus.STARTING]:
             raise ValueError(f"Simulation already running: {simulation_id}")
         
         # Load simulation config
-        sim_dir = cls._get_run_state_dir(simulation_id)
-        if not os.path.exists(sim_dir):
-            raise ValueError(f"Simulation does not exist: {simulation_id}")
-        
         # Get all agent info from config file
         config_path = os.path.join(sim_dir, "simulation_config.json")
         if not os.path.exists(config_path):

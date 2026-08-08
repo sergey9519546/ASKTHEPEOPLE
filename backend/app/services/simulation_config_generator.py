@@ -41,13 +41,26 @@ class InertRuntimeControlError(ValueError):
         super().__init__(self.code)
 
 
-DECISION_LENS_CONFIG_CONSUMPTION = frozenset(
-    {
+DECISION_LENS_CONFIG_CONSUMPTION_REGISTRY_VERSION = (
+    "decision-lens-control-consumption/v1"
+)
+DECISION_LENS_CONFIG_CONSUMPTION_REGISTRY = {
+    path: {
+        "consumer": "SimulationConfigGenerator._apply_consumed_controls",
+        "mutation_test": (
+            "tests/test_simulation_config_generation.py::"
+            "test_registered_runtime_controls_change_the_typed_target"
+        ),
+    }
+    for path in (
         "time_config.total_simulation_hours",
         "time_config.minutes_per_round",
         "twitter_config.viral_threshold",
         "reddit_config.viral_threshold",
-    }
+    )
+}
+DECISION_LENS_CONFIG_CONSUMPTION = frozenset(
+    DECISION_LENS_CONFIG_CONSUMPTION_REGISTRY
 )
 
 _NEUTRAL_DEPRECATED_RUNTIME_CONTROLS = {
@@ -573,6 +586,10 @@ class SimulationConfigGenerator:
                 "adapter_version": "decision-lens-runtime/v1",
                 "source_artifact_sha256s": artifact_hashes,
                 "source_review_sha256s": review_hashes,
+                "runtime_control_registry_version": (
+                    DECISION_LENS_CONFIG_CONSUMPTION_REGISTRY_VERSION
+                ),
+                "consumed_runtime_controls": dict(sorted(consumed.items())),
                 "omitted_deprecated_controls": sorted(omitted),
                 "human_respondents": 0,
                 "is_forecast": False,

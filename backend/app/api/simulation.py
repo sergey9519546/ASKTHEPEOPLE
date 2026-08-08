@@ -262,16 +262,31 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
     if not os.path.exists(simulation_dir):
         return False, {"reason": "Simulation directory does not exist"}
     
-    # List of required files (excluding scripts, which are in backend/scripts/)
-    required_files = [
-        "state.json",
-        "simulation_config.json",
-        "agent_profiles.canonical.json",
-        "entity_type_registry.json",
-        "reddit_profiles.json",
-        "twitter_profiles.csv",
-        "preflight.json",
-    ]
+    # Reviewed decision-lens runs deliberately do not emit executable legacy
+    # profile exports. Keep the legacy shape readable, while recognizing the
+    # new runtime artifact as the preparation contract for current runs.
+    decision_lens_runtime_file = os.path.join(
+        simulation_dir, "decision_lens_runtime.v1.json"
+    )
+    uses_decision_lens_boundary = os.path.exists(decision_lens_runtime_file)
+    required_files = (
+        [
+            "state.json",
+            "simulation_config.json",
+            "decision_lens_runtime.v1.json",
+            "preflight.json",
+        ]
+        if uses_decision_lens_boundary
+        else [
+            "state.json",
+            "simulation_config.json",
+            "agent_profiles.canonical.json",
+            "entity_type_registry.json",
+            "reddit_profiles.json",
+            "twitter_profiles.csv",
+            "preflight.json",
+        ]
+    )
     
     # Check if files exist
     existing_files = []
@@ -321,13 +336,48 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                 preflight_data = json.load(pf)
             preflight_passed = preflight_data.get("status") == "passed"
 
-        if status in prepared_statuses and config_generated and preflight_passed:
+        admission_error = None
+        if uses_decision_lens_boundary:
+            from ..services.decision_lens_repository import (
+                DecisionLensAdmissionError,
+            )
+            from ..services.simulation_preflight import (
+                assert_decision_lens_execution_admission,
+            )
+
+            try:
+                assert_decision_lens_execution_admission(simulation_dir)
+            except DecisionLensAdmissionError as exc:
+                admission_error = {
+                    "code": exc.code,
+                    "remediation": exc.remediation,
+                }
+
+        if (
+            status in prepared_statuses
+            and config_generated
+            and preflight_passed
+            and admission_error is None
+        ):
             # Get file statistics
-            profiles_file = os.path.join(simulation_dir, "reddit_profiles.json")
             config_file = os.path.join(simulation_dir, "simulation_config.json")
             
             profiles_count = 0
-            if os.path.exists(profiles_file):
+            if uses_decision_lens_boundary:
+                with open(
+                    decision_lens_runtime_file, "r", encoding="utf-8"
+                ) as runtime_handle:
+                    runtime_data = json.load(runtime_handle)
+                adapters = (
+                    runtime_data.get("adapters", [])
+                    if isinstance(runtime_data, dict)
+                    else []
+                )
+                profiles_count = len(adapters) if isinstance(adapters, list) else 0
+            else:
+                profiles_file = os.path.join(
+                    simulation_dir, "reddit_profiles.json"
+                )
                 with open(profiles_file, 'r', encoding='utf-8') as f:
                     profiles_data = json.load(f)
                     profiles_count = len(profiles_data) if isinstance(profiles_data, list) else 0
@@ -348,6 +398,11 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                 "entity_types": state_data.get("entity_types", []),
                 "config_generated": config_generated,
                 "preflight_passed": preflight_passed,
+                "execution_boundary": (
+                    "decision_lens_reviewed"
+                    if uses_decision_lens_boundary
+                    else "legacy_profile_artifact_non_executable"
+                ),
                 "created_at": state_data.get("created_at"),
                 "updated_at": state_data.get("updated_at"),
                 "existing_files": existing_files
@@ -359,6 +414,7 @@ def _check_simulation_prepared(simulation_id: str) -> tuple:
                 "status": status,
                 "config_generated": config_generated,
                 "preflight_passed": preflight_passed,
+                "admission_error": admission_error,
             }
             
     except Exception as e:

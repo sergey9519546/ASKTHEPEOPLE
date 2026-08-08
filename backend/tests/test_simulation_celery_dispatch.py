@@ -23,6 +23,11 @@ def configure_celery_eager(monkeypatch):
     """Enable Celery eager mode during tests to avoid network connection retries."""
     monkeypatch.setattr(celery_app.conf, "task_always_eager", True)
     monkeypatch.setattr(celery_app.conf, "task_eager_propagates", True)
+    monkeypatch.setattr(
+        execution_api,
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: {},
+    )
 
 
 @pytest.fixture

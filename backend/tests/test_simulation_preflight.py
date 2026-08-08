@@ -59,7 +59,9 @@ def _config():
     }
 
 
-def test_preflight_passes_when_contracts_are_valid(tmp_path, monkeypatch):
+def test_legacy_preflight_contracts_cannot_authorize_execution(
+    tmp_path, monkeypatch
+):
     canonical_agents = _canonical_agents()
     write_json(tmp_path / "agent_profiles.canonical.json", canonical_agents)
     write_exports_from_canonical(str(tmp_path), canonical_agents)
@@ -75,12 +77,12 @@ def test_preflight_passes_when_contracts_are_valid(tmp_path, monkeypatch):
     monkeypatch.setattr(preflight_module.Config, "validate", lambda: [])
 
     result = preflight_module.run_preflight(str(tmp_path))
-    assert result["status"] == "passed"
-    assert result["failed_checks"] == []
+    assert result["status"] == "failed"
+    assert "decision_lens_execution_admission" in result["failed_checks"]
 
     with open(tmp_path / "preflight.json", "r", encoding="utf-8") as handle:
         persisted = json.load(handle)
-    assert persisted["status"] == "passed"
+    assert persisted["status"] == "failed"
 
     with open(tmp_path / "run_manifest.json", "r", encoding="utf-8") as handle:
         manifest = json.load(handle)

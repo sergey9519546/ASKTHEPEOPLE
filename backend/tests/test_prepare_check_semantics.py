@@ -105,3 +105,34 @@ def test_check_does_not_mutate_state_for_any_status(sim_data_dir):
         _check_simulation_prepared("sim_test")
         after = (sim_data_dir / "sim_test" / "state.json").read_text()
         assert before == after, f"state.json was mutated by the read for status={status!r}"
+
+
+def test_reviewed_decision_lens_runtime_is_prepared_without_legacy_exports(
+    sim_data_dir, monkeypatch
+):
+    sim_dir = sim_data_dir / "sim_test"
+    sim_dir.mkdir(parents=True)
+    (sim_dir / "state.json").write_text(
+        json.dumps({"status": "ready", "config_generated": True}),
+        encoding="utf-8",
+    )
+    (sim_dir / "simulation_config.json").write_text("{}", encoding="utf-8")
+    (sim_dir / "decision_lens_runtime.v1.json").write_text(
+        json.dumps({"adapters": [{"agent_id": 1}, {"agent_id": 2}]}),
+        encoding="utf-8",
+    )
+    (sim_dir / "preflight.json").write_text(
+        json.dumps({"status": "passed"}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "app.services.simulation_preflight."
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: {},
+    )
+
+    is_prepared, info = _check_simulation_prepared("sim_test")
+
+    assert is_prepared is True
+    assert info["profiles_count"] == 2
+    assert info["execution_boundary"] == "decision_lens_reviewed"
