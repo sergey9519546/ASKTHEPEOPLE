@@ -1,6 +1,6 @@
 # Task 5 Checkpoint 1 — Durable Run Domain Report
 
-Status: IMPLEMENTED / REVIEW REQUIRED
+Status: TRANSITION / REVIEW REQUIRED
 
 Date: 2026-08-08
 

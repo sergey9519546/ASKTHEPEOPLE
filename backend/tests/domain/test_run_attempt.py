@@ -404,6 +404,24 @@ def test_validating_output_never_advances_without_the_exact_path_gate(
         )
 
 
+def test_run_level_retry_requires_the_recorded_retryable_failure_code() -> None:
+    from app.domain.run_attempt import (
+        RunCommandKind,
+        RunGuardFacts,
+        RunGuardViolation,
+        decide_run_transition,
+    )
+
+    guards = _passing_guard_data()
+    guards["retryable_failure_code"] = None
+    with pytest.raises(RunGuardViolation, match="^retry_acceptance_guard_failed$"):
+        decide_run_transition(
+            _snapshot_for_state("FAILED_RETRYABLE"),
+            command=RunCommandKind.ACCEPT_RETRY,
+            guards=RunGuardFacts(**guards),
+        )
+
+
 def test_rerun_identity_is_new_and_links_to_parent_without_a_state_transition() -> None:
     from app.domain.run_attempt import (
         RerunIdentityViolation,

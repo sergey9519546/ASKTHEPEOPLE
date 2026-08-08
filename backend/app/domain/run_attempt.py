@@ -418,7 +418,8 @@ def _validate_transition_guards(
         )
     elif command is RunCommandKind.ACCEPT_RETRY:
         _require_guard(
-            guards.retry_budget_remaining
+            guards.retryable_failure_code is not None
+            and guards.retry_budget_remaining
             and (
                 guards.release_set_unchanged
                 or guards.approved_replacement_release
