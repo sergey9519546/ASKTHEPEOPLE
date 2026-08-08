@@ -4,15 +4,16 @@ Manages parallel Twitter and Reddit simulations
 Uses preset scripts + LLM to intelligently generate configuration parameters
 """
 
-import os
+import hashlib
 import json
-import shutil
-from typing import Dict, Any, List, Optional
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, List, Optional
 
 from ..config import Config
+from ..domain.decision_lens import InputReferenceV1
 from ..utils.input_policy import (
     ARCHETYPE_COUNT_MAX,
     ARCHETYPE_EXPANSION_MAX,
@@ -24,15 +25,21 @@ from ..utils.input_policy import (
     validate_item_count,
 )
 from ..utils.logger import get_logger
-from .zep_entity_reader import ZepEntityReader, FilteredEntities
-from .oasis_profile_generator import OasisProfileGenerator, OasisAgentProfile
-from .simulation_config_generator import SimulationConfigGenerator, SimulationParameters
+from .decision_lens_generator import DecisionLensGenerator
+from .decision_lens_repository import DecisionLensRepository
+from .oasis_profile_generator import OasisProfileGenerator
 from .simulation_artifacts import (
-    read_json, save_prepare_artifacts, write_exports_from_canonical,
-    write_json, canonical_agents_path, relationship_bootstrap_path,
     build_canonical_agents_from_profiles,
+    canonical_agents_path,
+    read_json,
+    relationship_bootstrap_path,
+    save_prepare_artifacts,
+    write_exports_from_canonical,
+    write_json,
 )
+from .simulation_config_generator import SimulationConfigGenerator
 from .simulation_preflight import run_preflight
+from .zep_entity_reader import ZepEntityReader
 
 logger = get_logger('askthepeople.simulation')
 
@@ -41,6 +48,7 @@ class SimulationStatus(str, Enum):
     """Simulation Status"""
     CREATED = "created"
     PREPARING = "preparing"
+    NEEDS_REVIEW = "needs_review"
     READY = "ready"
     RUNNING = "running"
     PAUSED = "paused"
@@ -54,6 +62,14 @@ class PlatformType(str, Enum):
     """Platform Type"""
     TWITTER = "twitter"
     REDDIT = "reddit"
+
+
+class DecisionLensPreparationError(ValueError):
+    """Stable preparation-boundary error for API and task translation."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
 
 
 @dataclass
@@ -73,6 +89,7 @@ class SimulationState:
     # Preparation stage data
     entities_count: int = 0
     profiles_count: int = 0
+    decision_lenses_count: int = 0
     entity_types: List[str] = field(default_factory=list)
     
     # Configuration generation info
@@ -110,6 +127,7 @@ class SimulationState:
             "status": self.status.value,
             "entities_count": self.entities_count,
             "profiles_count": self.profiles_count,
+            "decision_lenses_count": self.decision_lenses_count,
             "entity_types": self.entity_types,
             "config_generated": self.config_generated,
             "config_reasoning": self.config_reasoning,
@@ -133,6 +151,7 @@ class SimulationState:
             "status": self.status.value,
             "entities_count": self.entities_count,
             "profiles_count": self.profiles_count,
+            "decision_lenses_count": self.decision_lenses_count,
             "entity_types": self.entity_types,
             "config_generated": self.config_generated,
             "error": self.error,
@@ -213,6 +232,7 @@ class SimulationManager:
             status=SimulationStatus(data.get("status", "created")),
             entities_count=data.get("entities_count", 0),
             profiles_count=data.get("profiles_count", 0),
+            decision_lenses_count=data.get("decision_lenses_count", 0),
             entity_types=data.get("entity_types", []),
             config_generated=data.get("config_generated", False),
             config_reasoning=data.get("config_reasoning", ""),
@@ -317,6 +337,24 @@ class SimulationManager:
                 field="defined_entity_types",
                 maximum=ENTITY_TYPE_FILTER_MAX,
             )
+        if not Config.DECISION_LENS_V1_ENABLED:
+            raise DecisionLensPreparationError(
+                "decision_lens_preparation_unavailable"
+            )
+        if use_archetypes:
+            raise DecisionLensPreparationError(
+                "deprecated_control_not_supported"
+            )
+        return self._prepare_decision_lens_review(
+            state=state,
+            simulation_requirement=simulation_requirement,
+            document_text=document_text,
+            defined_entity_types=defined_entity_types,
+            progress_callback=progress_callback,
+        )
+
+        # Legacy persona preparation remains readable for existing artifacts,
+        # but it is not executable for new runs under the v1 transition.
         if use_archetypes:
             archetype_count = bounded_integer(
                 archetype_count or Config.ARCHETYPE_DEFAULT_COUNT,
@@ -570,6 +608,176 @@ class SimulationManager:
             state.error = str(e)
             self._save_simulation_state(state)
             raise
+
+    def _prepare_decision_lens_review(
+        self,
+        *,
+        state: SimulationState,
+        simulation_requirement: str,
+        document_text: str,
+        defined_entity_types: Optional[List[str]],
+        progress_callback: Optional[callable],
+    ) -> SimulationState:
+        requirement = simulation_requirement.strip()
+        if not requirement:
+            raise DecisionLensPreparationError(
+                "decision_lens_requirement_required"
+            )
+
+        try:
+            state.status = SimulationStatus.PREPARING
+            state.error = None
+            self._save_simulation_state(state)
+            sim_dir = self._get_simulation_dir(state.simulation_id)
+
+            if progress_callback:
+                progress_callback("reading", 0, "Reading graph records...")
+            filtered = ZepEntityReader().filter_defined_entities(
+                graph_id=state.graph_id,
+                defined_entity_types=defined_entity_types,
+                enrich_with_edges=True,
+            )
+            if filtered.filtered_count > PREPARE_ENTITY_MAX:
+                raise ValueError(
+                    "Selected graph contains "
+                    f"{filtered.filtered_count} records; the maximum is "
+                    f"{PREPARE_ENTITY_MAX}."
+                )
+            state.entities_count = filtered.filtered_count
+            state.entity_types = list(filtered.entity_types)
+            if filtered.filtered_count == 0:
+                raise DecisionLensPreparationError(
+                    "decision_lens_source_records_required"
+                )
+            if progress_callback:
+                progress_callback(
+                    "reading",
+                    100,
+                    f"Read {filtered.filtered_count} graph records",
+                    current=filtered.filtered_count,
+                    total=filtered.filtered_count,
+                )
+
+            references, context_records = self._decision_lens_inputs(
+                requirement=requirement,
+                document_text=document_text,
+                entities=filtered.entities,
+            )
+            repository = DecisionLensRepository(sim_dir)
+            current = repository.get_current_artifact()
+            revision = 1 if current is None else current.revision + 1
+
+            if progress_callback:
+                progress_callback(
+                    "generating_decision_lenses",
+                    0,
+                    "Generating functional decision lenses...",
+                )
+            artifact = DecisionLensGenerator().generate(
+                simulation_id=state.simulation_id,
+                revision=revision,
+                simulation_requirement=requirement,
+                input_references=references,
+                allowed_reference_ids={ref.ref_id for ref in references},
+                context_records=context_records,
+            )
+            persisted = repository.save_artifact(artifact)
+
+            state.profiles_count = 0
+            state.decision_lenses_count = len(persisted.lenses)
+            state.config_generated = False
+            state.config_reasoning = ""
+            state.status = SimulationStatus.NEEDS_REVIEW
+            self._save_simulation_state(state)
+            if progress_callback:
+                progress_callback(
+                    "generating_decision_lenses",
+                    100,
+                    "Decision lenses are ready for human review",
+                    current=len(persisted.lenses),
+                    total=len(persisted.lenses),
+                )
+            logger.info(
+                "Simulation preparation paused for decision-lens review: %s, "
+                "records=%s, lenses=%s",
+                state.simulation_id,
+                state.entities_count,
+                state.decision_lenses_count,
+            )
+            return state
+        except Exception as exc:
+            logger.error(
+                "Decision-lens preparation failed: %s, error=%s",
+                state.simulation_id,
+                str(exc),
+            )
+            state.status = SimulationStatus.FAILED
+            state.error = str(exc)
+            self._save_simulation_state(state)
+            raise
+
+    @staticmethod
+    def _decision_lens_inputs(
+        *,
+        requirement: str,
+        document_text: str,
+        entities: List[Any],
+    ) -> tuple[tuple[InputReferenceV1, ...], list[Dict[str, Any]]]:
+        references: list[InputReferenceV1] = []
+        records: list[Dict[str, Any]] = []
+
+        requirement_ref = InputReferenceV1(
+            ref_id="starting_condition_requirement",
+            role="starting_condition",
+            origin="USER_STATED",
+        )
+        references.append(requirement_ref)
+        records.append(
+            {
+                **requirement_ref.model_dump(mode="json"),
+                "record_type": "declared_simulation_requirement",
+                "content": requirement,
+            }
+        )
+
+        source_text = document_text.strip()
+        if source_text:
+            source_ref = InputReferenceV1(
+                ref_id="source_document_excerpt",
+                role="source_segment",
+                origin="SOURCE_EXTRACTED",
+            )
+            references.append(source_ref)
+            records.append(
+                {
+                    **source_ref.model_dump(mode="json"),
+                    "record_type": "unverified_source_excerpt",
+                    "content": source_text[:12000],
+                }
+            )
+
+        for index, entity in enumerate(entities, start=1):
+            stable_key = str(getattr(entity, "uuid", "") or index)
+            suffix = hashlib.sha256(stable_key.encode("utf-8")).hexdigest()[:24]
+            reference = InputReferenceV1(
+                ref_id=f"graph_record_{suffix}",
+                role="graph_record",
+                origin="SYNTHETIC_GENERATED",
+            )
+            references.append(reference)
+            records.append(
+                {
+                    **reference.model_dump(mode="json"),
+                    "record_type": "unverified_graph_extraction",
+                    "entity_type": entity.get_entity_type(),
+                    "labels": list(getattr(entity, "labels", [])),
+                    "summary": str(getattr(entity, "summary", ""))[:2000],
+                    "attributes": dict(getattr(entity, "attributes", {}) or {}),
+                    "external_validation": False,
+                    "causal_evidence": False,
+                }
+            )
+        return tuple(references), records
     
     def get_simulation(self, simulation_id: str) -> Optional[SimulationState]:
         """Get simulation status"""

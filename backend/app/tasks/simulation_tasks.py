@@ -225,17 +225,13 @@ def run_simulation_task(
 # used only to produce a 0-100 progress number; they carry no quantitative
 # meaning about the run's expected outcome or duration.
 _PREPARE_STAGE_WEIGHTS = {
-    "reading": (0, 20),
-    "generating_profiles": (20, 70),
-    "generating_config": (70, 90),
-    "copying_scripts": (90, 100),
+    "reading": (0, 45),
+    "generating_decision_lenses": (45, 100),
 }
 
 _PREPARE_STAGE_NAMES = {
     "reading": "Reading graph entities",
-    "generating_profiles": "Generating Agent personas",
-    "generating_config": "Generating simulation configuration",
-    "copying_scripts": "Preparing simulation scripts",
+    "generating_decision_lenses": "Generating functional decision lenses",
 }
 
 
@@ -256,6 +252,7 @@ def prepare_simulation_task(
     archetype_count: int,
     expansion_factor: int,
     document_text: str,
+    simulation_requirement: str = "",
 ):
     """Celery task wrapper for the simulation preparation work.
 
@@ -268,8 +265,8 @@ def prepare_simulation_task(
     in-process thread and routing the work through the existing Celery
     infrastructure.
     """
-    from ..services.simulation_manager import SimulationManager
     from ..config import Config
+    from ..services.simulation_manager import SimulationManager, SimulationStatus
     task_manager = TaskManager()
     manager = SimulationManager()
     effective_task_id = task_id or getattr(self.request, 'id', None)
@@ -349,7 +346,7 @@ def prepare_simulation_task(
     try:
         result_state = manager.prepare_simulation(
             simulation_id=simulation_id,
-            simulation_requirement="",
+            simulation_requirement=simulation_requirement,
             document_text=document_text,
             defined_entity_types=list(entity_types) if entity_types else [],
             use_llm_for_profiles=use_llm_for_profiles,
@@ -360,15 +357,22 @@ def prepare_simulation_task(
             expansion_factor=expansion_factor,
         )
         if effective_task_id:
+            task_result = result_state.to_simple_dict()
+            task_result["review_required"] = (
+                result_state.status == SimulationStatus.NEEDS_REVIEW
+            )
             task_manager.complete_task(
                 effective_task_id,
-                result=result_state.to_simple_dict()
+                result=task_result,
             )
         return {
             "success": True,
             "simulation_id": simulation_id,
             "task_id": effective_task_id,
-            "status": "completed",
+            "status": result_state.status.value,
+            "review_required": (
+                result_state.status == SimulationStatus.NEEDS_REVIEW
+            ),
         }
     except Exception as exc:
         # Retry classification (ADR-0003): transient failures only. A

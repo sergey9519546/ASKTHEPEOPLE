@@ -156,12 +156,18 @@ def prepare_simulation():
             }
         }
     """
-    import os
     from ...models.task import TaskManager
     from ...config import Config
     
     try:
         data = request.get_json() or {}
+
+        if not Config.DECISION_LENS_V1_ENABLED:
+            return jsonify({
+                "success": False,
+                "error": "decision_lens_preparation_unavailable",
+                "message": "Reviewed decision-lens preparation is unavailable.",
+            }), 503
         
         simulation_id = data.get('simulation_id')
         if not simulation_id:
@@ -178,6 +184,12 @@ def prepare_simulation():
                 "error": exc.code,
                 "message": exc.message,
             }), 400
+        if prepare_controls["use_archetypes"]:
+            return jsonify({
+                "success": False,
+                "error": "deprecated_control_not_supported",
+                "message": "Archetype controls are not supported for reviewed preparation.",
+            }), 422
         
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
@@ -191,6 +203,22 @@ def prepare_simulation():
         # Check if force regenerate
         force_regenerate = prepare_controls["force_regenerate"]
         logger.info(f"Start processing /prepare request: simulation_id={simulation_id}, force_regenerate={force_regenerate}")
+
+        if (
+            state.status == SimulationStatus.NEEDS_REVIEW
+            and not force_regenerate
+        ):
+            return jsonify({
+                "success": True,
+                "data": {
+                    "simulation_id": simulation_id,
+                    "status": "needs_review",
+                    "message": "Decision lenses are ready for human review.",
+                    "already_prepared": False,
+                    "review_required": True,
+                    "decision_lenses_count": state.decision_lenses_count,
+                },
+            })
         
         # Check if already prepared (avoid duplicate generation)
         if not force_regenerate:
@@ -318,6 +346,7 @@ def prepare_simulation():
                 use_archetypes=use_archetypes,
                 archetype_count=archetype_count,
                 expansion_factor=expansion_factor,
+                simulation_requirement=simulation_requirement,
                 document_text=document_text,
             )
 

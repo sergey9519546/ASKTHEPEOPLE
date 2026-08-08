@@ -229,6 +229,12 @@ class Config:
             os.path.join(UPLOAD_FOLDER, 'simulations'),
         )
     )
+    # Controlled transition: all new preparation runs stop at a reviewed,
+    # functional decision-lens boundary. Disabling the boundary fails closed;
+    # it never reactivates legacy persona generation.
+    DECISION_LENS_V1_ENABLED = os.environ.get(
+        'DECISION_LENS_V1_ENABLED', 'True'
+    ).lower() == 'true'
     # OASIS Platform Available Actions Configuration
     OASIS_TWITTER_ACTIONS = [
         'CREATE_POST', 'LIKE_POST', 'REPOST', 'FOLLOW', 'DO_NOTHING', 'QUOTE_POST'
