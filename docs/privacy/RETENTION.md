@@ -130,14 +130,40 @@ to active periods.
 The canonical identity/persistence foundation is not exempt from retention.
 Every `core` table MUST store `retention_class`,
 `retention_policy_version`, `retention_started_at`, and nullable `expires_at`.
+Checkpoint 3A-2 accepts exactly `retention-policy/v1`; any other value fails a
+database check and requires a later reviewed migration before use.
 Customer-lifecycle records that can be deletion targets MUST also store a
 nullable, closed `deletion_state` and `deletion_state_changed_at`; null means
-no deletion request has been accepted. The exact non-null values are
+no deletion request has been accepted. They also store nullable
+`deletion_failed_from_state`, used only while state is `FAILED`. The exact
+non-null values are
 `REQUESTED`, `ELIGIBILITY_CHECK`, `LEGAL_HOLD`,
 `PURGING_PRIMARY`, `PURGING_PROVIDERS`, `PURGING_BACKUPS`, `COMPLETE`, and
 `FAILED`, matching the deletion state machine. No unknown value or direct
 transition is accepted. A database default MUST NOT silently choose a longer
 class than the server-derived organization or workspace policy.
+
+The authorized deletion graph is exact and closed:
+
+```text
+NULL -> REQUESTED
+REQUESTED -> ELIGIBILITY_CHECK
+ELIGIBILITY_CHECK -> LEGAL_HOLD | PURGING_PRIMARY
+LEGAL_HOLD -> ELIGIBILITY_CHECK
+PURGING_PRIMARY -> PURGING_PROVIDERS | FAILED
+PURGING_PROVIDERS -> PURGING_BACKUPS | FAILED
+PURGING_BACKUPS -> COMPLETE | FAILED
+FAILED -> the recorded same purge state
+COMPLETE -> terminal
+```
+
+Every zero-work purge stage is still recorded and advanced with durable
+evidence; there are no skip edges. Domain and database tests reject the full
+Cartesian complement.
+
+Rows also store nullable `deletion_failed_from_state`, closed to the three purge
+states. Entering `FAILED` atomically records the originating purge state;
+leaving `FAILED` is authorized only to that recorded state and clears it.
 
 This mapping is exact for the foundation schema:
 
@@ -183,6 +209,12 @@ Row-by-row mutation of live audit history remains forbidden. A blanket trigger
 that prevents the reviewed retention operator from aging out expired,
 unheld partitions is noncompliant because it converts append-only into
 perpetual retention.
+
+Partition-expiry approval and completion are `SYSTEM` audit events: their
+organization, workspace, and project scope is null. Closed metadata is limited
+to retention class, UTC bucket bounds, evidence and zero-hold hashes, approver
+public alias, and, for completion, nonnegative row count plus aggregate event
+hash. No tenant content, raw identifier, free text, or extra key is allowed.
 
 ## Deletion request scope
 

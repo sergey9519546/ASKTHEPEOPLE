@@ -82,15 +82,28 @@ expires_at timestamptz
 
 Every canonical table, including global identities, memberships, audit, and
 operator evidence, stores those four retention fields even when its documented
-scope/composite shape differs. Customer-lifecycle deletion targets also store
+scope/composite shape differs. Checkpoint 3A-2 accepts exactly
+`retention-policy/v1`; unknown versions fail closed and require a reviewed
+migration. Customer-lifecycle deletion targets also store
 nullable `deletion_state varchar(32)` and
-`deletion_state_changed_at timestamptz`; null means no accepted deletion
+`deletion_state_changed_at timestamptz`, plus nullable
+`deletion_failed_from_state varchar(32)`; null means no accepted deletion
 request. The closed non-null values are `REQUESTED`, `ELIGIBILITY_CHECK`, `LEGAL_HOLD`,
 `PURGING_PRIMARY`, `PURGING_PROVIDERS`, `PURGING_BACKUPS`, `COMPLETE`, and
 `FAILED`, with only the transitions in the deletion state machine. The exact
 class and trigger for each `core` table are defined in
 [`docs/privacy/RETENTION.md`](../privacy/RETENTION.md); schema defaults cannot
 select a longer period than the server-derived policy.
+
+The exact deletion edges are `NULL -> REQUESTED`, `REQUESTED ->
+ELIGIBILITY_CHECK`, `ELIGIBILITY_CHECK -> LEGAL_HOLD|PURGING_PRIMARY`,
+`LEGAL_HOLD -> ELIGIBILITY_CHECK`, `PURGING_PRIMARY ->
+PURGING_PROVIDERS|FAILED`, `PURGING_PROVIDERS -> PURGING_BACKUPS|FAILED`, and
+`PURGING_BACKUPS -> COMPLETE|FAILED`. `FAILED` returns only to its recorded
+originating purge state; `COMPLETE` is terminal. Nullable
+`deletion_failed_from_state` stores that origin and is closed to the three purge
+states. Zero-work stages still require durable advancement evidence and no
+skip edge is authorized.
 
 ## Core relationship model
 
@@ -187,6 +200,10 @@ audited identity-proofing action and never a state rollback.
 The tombstone remains covered by `ACCOUNT_IDENTITY`, has its own bounded
 `expires_at`, and is purged no later than the authorized deletion-evidence
 period unless a reviewed hold applies.
+Retained raw pairs have a partial unique constraint on `(issuer, subject)`;
+anonymized rows have a partial unique constraint on
+`(tombstone_key_version, subject_tombstone_hmac)`. `id`, `user_id`, and a set
+tombstone/key are immutable.
 
 ### `workspaces`
 
@@ -269,6 +286,29 @@ the minimized content-free deletion evidence and aggregate evidence hash
 required by the retention policy. It cannot update individual live events.
 Legal hold pauses expiry for the exact scope; hold release restores the prior
 class without restarting the retention clock.
+
+Audit scope is closed to `TENANT|SYSTEM`: TENANT requires organization scope;
+SYSTEM requires organization/workspace/project null. The closed v1 event set is
+`SCHEMA_ADOPTION_RECORDED`, `ROLE_TOPOLOGY_VERIFIED`,
+`AUDIT_EXPIRY_APPROVED`, and `AUDIT_PARTITION_EXPIRED`. The first two accept
+only `evidence_sha256`; approval accepts class, UTC bucket bounds, evidence and
+zero-hold hashes, and approver public alias; completion adds nonnegative row
+count and aggregate event hash. No extra JSON key or alternate type is valid.
+
+PostgreSQL requires every partition key in a partitioned-table unique or
+primary key. `core.audit_events` is therefore the explicit exception to the
+sole-column UUID primary-key shorthand: its physical primary key is
+`(retention_class, expires_at, id)`. `id` remains the server-issued UUIDv7
+logical event identifier and has a non-unique lookup index. Class and expiry
+are immutable. The initial schema creates yearly expiry partitions for both
+allowed classes covering `2026-01-01T00:00:00Z` through
+`2035-01-01T00:00:00Z`, with no default partition. Inserts outside that window
+fail closed; future coverage requires a separately reviewed operator action.
+
+The twelve-table count means twelve logical domain tables; PostgreSQL child
+partition relations are physical storage relations. Top-level children are
+`audit_events_audit_long` and `audit_events_deletion_evidence_long`; yearly
+leaves use `audit_events_<class>_y<year>` for 2026 through 2034.
 
 The existing `384c98f88d53` migration is immutable history. Adoption first
 fingerprints the exact managed legacy schema. Only an empty database, an exact

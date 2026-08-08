@@ -455,15 +455,30 @@ retention_started_at timestamptz not null
 expires_at timestamptz null
 ```
 
+Checkpoint 3A-2 accepts exactly `retention-policy/v1` in every table-level
+check. Any other value fails closed and requires a reviewed migration.
+
 The eight customer-lifecycle deletion targets — `organizations`, `users`,
 `identity_subjects`, `workspaces`, `organization_memberships`,
 `workspace_memberships`, `projects`, and `legacy_project_bindings` — also
 store nullable `deletion_state varchar(32)` and
-`deletion_state_changed_at timestamptz`. Null means no accepted deletion
+`deletion_state_changed_at timestamptz`, plus nullable
+`deletion_failed_from_state varchar(32)`. Null means no accepted deletion
 request. Non-null values are closed to `REQUESTED`, `ELIGIBILITY_CHECK`,
 `LEGAL_HOLD`, `PURGING_PRIMARY`, `PURGING_PROVIDERS`, `PURGING_BACKUPS`,
 `COMPLETE`, and `FAILED`; database guards accept only the transitions in the
 normative deletion state machine and reject the complete Cartesian complement.
+
+The exact graph is `NULL -> REQUESTED`, `REQUESTED -> ELIGIBILITY_CHECK`,
+`ELIGIBILITY_CHECK -> LEGAL_HOLD|PURGING_PRIMARY`, `LEGAL_HOLD ->
+ELIGIBILITY_CHECK`, `PURGING_PRIMARY -> PURGING_PROVIDERS|FAILED`,
+`PURGING_PROVIDERS -> PURGING_BACKUPS|FAILED`, and `PURGING_BACKUPS ->
+COMPLETE|FAILED`. `FAILED` returns only to its recorded originating purge
+state; `COMPLETE` is terminal. Each lifecycle target also stores nullable
+`deletion_failed_from_state`, closed to the three purge states. Entering
+`FAILED` atomically stores the origin; leaving it is authorized only to that
+state and clears the field. Zero-work stages still advance with durable
+evidence and no skip edge is authorized.
 
 The exact table-to-class map is:
 
@@ -491,7 +506,7 @@ Every expiry must be at or after `retention_started_at`.
 |---|---|
 | `core.organizations` | `id uuid PK`, immutable `public_id varchar(128) UNIQUE`, `name varchar(255)`, `status ACTIVE\|SUSPENDED`, `default_region varchar(32)`, nullable policy-version strings, `row_version bigint >= 1`, UTC `created_at/updated_at`, nullable `created_by/updated_by`. |
 | `core.users` | `id uuid PK`, immutable `public_id varchar(128) UNIQUE`, nullable bounded `display_name`, `status ACTIVE\|DISABLED`, `row_version`, UTC timestamps. No password, token, or provider secret. |
-| `core.identity_subjects` | `id uuid PK`, `user_id` FK, nullable bounded `issuer` and `subject`, status ACTIVE\|REVOKED\|ANONYMIZED, nullable `revoked_at`, `revoked_by`, bounded `revocation_reason_code`, lowercase 64-hex `subject_tombstone_hmac`, bounded `tombstone_key_version`, UTC timestamps, and the retention/deletion fields above. `UNIQUE(issuer, subject)` covers retained raw pairs. Revoke direct application-table access; resolve only through the exact-subject bootstrap function. |
+| `core.identity_subjects` | `id uuid PK`, `user_id` FK, nullable bounded `issuer` and `subject`, status ACTIVE\|REVOKED\|ANONYMIZED, nullable `revoked_at`, `revoked_by`, bounded `revocation_reason_code`, lowercase 64-hex `subject_tombstone_hmac`, bounded `tombstone_key_version`, UTC timestamps, and the retention/deletion fields above. A partial `UNIQUE(issuer, subject)` covers retained non-null raw pairs; a partial `UNIQUE(tombstone_key_version, subject_tombstone_hmac)` covers non-null tombstones. Revoke direct application-table access; resolve only through the exact-subject bootstrap function. |
 | `core.workspaces` | `id uuid PK`, immutable `organization_id` FK, immutable `public_id UNIQUE`, `name`, `status ACTIVE\|SUSPENDED\|ARCHIVED`, nullable retention/policy versions, `row_version`, actor/timestamps, and `UNIQUE(organization_id, id)`. |
 | `core.organization_memberships` | composite PK `(organization_id, user_id)`, role check limited to OWNER\|ADMIN\|SECURITY, status ACTIVE\|SUSPENDED\|REVOKED, actor/timestamps, `row_version`. |
 | `core.workspace_memberships` | composite PK `(organization_id, workspace_id, user_id)`, role check over all six roles, status ACTIVE\|SUSPENDED\|REVOKED, actor/timestamps, `row_version`; composite FKs enforce the same organization and an organization membership. |
@@ -500,13 +515,26 @@ Every expiry must be at or after `retention_started_at`.
 | `core.backfill_batches` | `id uuid PK`, input-manifest SHA-256, legacy-root fingerprint, status DRY_RUN_VERIFIED\|APPLIED\|RECONCILED\|FAILED, counts, operator public alias, tool version, UTC timestamps, evidence SHA-256. Operator role only. |
 | `core.legacy_project_bindings` | `project_id PK/FK`, organization/workspace IDs, immutable legacy project alias, project JSON SHA-256, workspace-manifest SHA-256, bounded tree fingerprint, backfill batch ID, adoption/reconciliation timestamps, status ADOPTED\|RECONCILED\|CONFLICT, `UNIQUE(legacy_project_public_id)`. |
 | `core.persistence_cutovers` | `subsystem varchar(64) PK` fixed to `core_tenancy`, state PREPARED\|ACTIVE\|ROLLED_FORWARD, backfill batch ID, reconciliation evidence hash, application/build revision, activated by/time, rollback boundary. Operator role only. |
-| `core.audit_events` | `id uuid PK`, non-null organization ID, nullable workspace/project IDs, actor type/id, bounded event type and reason code, closed privacy-safe `metadata jsonb`, request ID, UTC `occurred_at`, the required retention fields, and non-null `expires_at`; append-only trigger rejects row update/delete by ordinary roles. It is list-partitioned by the two allowed retention classes and range-subpartitioned by expiry bucket, with no default partition. |
+| `core.audit_events` | `id uuid` logical event ID; `scope_kind TENANT\|SYSTEM`; TENANT requires organization ID and permits bounded workspace/project IDs, while SYSTEM requires all three null; actor type/id, closed event type and reason code, closed privacy-safe `metadata jsonb`, request ID, UTC `occurred_at`, the required retention fields, and non-null immutable `expires_at`; append-only trigger rejects row update/delete by ordinary roles. PostgreSQL-valid physical PK is `(retention_class, expires_at, id)`; `id` has a non-unique lookup index and is never a foreign-key target. It is list-partitioned by the two allowed retention classes and range-subpartitioned by expiry bucket, with no default partition. |
 
 All SHA-256 columns are lowercase 64-character hex with database checks. All
 timestamps are `TIMESTAMPTZ`. All mutable foundation aggregates use optimistic
 concurrency. No table stores raw bearer tokens, OIDC claims, source text,
 decision text, prompts, model output, hidden reasoning, or unrestricted error
 strings.
+
+The closed v1 audit event/metadata matrix is:
+
+| Event type | Scope | Exact JSON keys and types |
+|---|---|---|
+| `SCHEMA_ADOPTION_RECORDED` | `SYSTEM` | `evidence_sha256: lowerhex64` |
+| `ROLE_TOPOLOGY_VERIFIED` | `SYSTEM` | `evidence_sha256: lowerhex64` |
+| `AUDIT_EXPIRY_APPROVED` | `SYSTEM` | `retention_class: enum`, `bucket_start: UTC date`, `bucket_end: UTC date`, `evidence_sha256: lowerhex64`, `zero_hold_evidence_sha256: lowerhex64`, `approver_public_id: bounded alias` |
+| `AUDIT_PARTITION_EXPIRED` | `SYSTEM` | all approval keys plus `row_count: nonnegative integer` and `aggregate_event_sha256: lowerhex64` |
+
+No extra key, alternate type, tenant scope for these events, physical ID, free
+text, raw error, or content field is accepted. Later event types require a
+reviewed migration that expands this closed matrix.
 
 Identity-subject checks are fail closed:
 
@@ -533,6 +561,15 @@ The migration also creates:
 
 - `core.reject_identity_or_scope_update()` and triggers on organization, user,
   workspace, and project physical/public identity and ownership columns;
+- the same trigger protects `identity_subjects.id/user_id`, both membership
+  composite identities/scopes, `legacy_project_bindings` project/organization/
+  workspace/legacy-alias fields, and IDs plus immutable identity fields on
+  every operator-evidence record;
+- `core.enforce_identity_subject_transition()` permits only ACTIVE -> REVOKED
+  -> ANONYMIZED, makes ANONYMIZED terminal, permits raw issuer/subject nulling
+  only on REVOKED -> ANONYMIZED, and makes a set tombstone/key immutable;
+- `core.enforce_deletion_transition()` enforces the exact OLD-to-NEW graph and
+  recorded failed-origin invariant on all eight lifecycle tables;
 - `core.reject_audit_mutation()` on audit events;
 - `CHECK` constraints for aliases, states, roles, versions, hashes, exact
   table/class mapping, expiry ordering, deletion-state vocabulary, and the
@@ -546,6 +583,17 @@ retention grant. Checkpoint 3A-3 creates the reviewed partition-expiry function
 and its least-privilege grant as described in section 10.3. No ordinary role
 may update/delete a live event, detach a partition, or bypass expiry/hold
 evidence.
+
+The initial migration creates yearly expiry partitions for both allowed audit
+classes covering `2026-01-01T00:00:00Z` through
+`2035-01-01T00:00:00Z`. There is no default partition. An insert whose expiry
+has no exact partition fails closed; future coverage requires a separately
+reviewed operator action before the boundary is reached.
+
+The twelve-table count is the logical domain-table count; partition children
+are physical storage relations. List children are `audit_events_audit_long`
+and `audit_events_deletion_evidence_long`; yearly leaves use
+`audit_events_<class>_y<year>` for 2026 through 2034 with exact UTC bounds.
 
 The migration creates no PostgreSQL role. Before Alembic connects,
 `deploy/postgres/core_roles.sql` must have provisioned the exact reviewed roles
@@ -1257,12 +1305,12 @@ Required order:
 10. `test_original_384c_migration_hash_is_unchanged`
 11. `test_exact_unversioned_384c_requires_explicit_fingerprint_adoption`
 12. `test_schema_mismatch_refuses_stamp_and_core_migration`
-13. `test_public_alias_and_scope_update_triggers_reject_mutation`
+13. `test_exact_identity_scope_and_operator_evidence_immutability_matrix_is_enforced`
 14. `test_all_twelve_foundation_tables_have_exact_retention_columns_and_class_checks`
-15. `test_deletion_state_vocabulary_and_cartesian_complement_are_closed`
-16. `test_identity_subject_lifecycle_fields_and_database_invariants_are_exact`
-17. `test_audit_events_are_partitioned_by_closed_class_and_expiry_without_default`
-18. `test_audit_event_update_and_delete_are_rejected`
+15. `test_deletion_transition_complement_and_failed_origin_retry_are_exact`
+16. `test_identity_subject_transition_complement_and_tombstone_uniqueness_are_exact`
+17. `test_audit_partition_relations_bounds_composite_key_and_no_default_are_exact`
+18. `test_audit_scope_metadata_matrix_and_row_immutability_are_closed`
 19. `test_oidc_rejects_wrong_issuer_audience_algorithm_expiry_and_signature`
 20. `test_oidc_claimed_scope_and_roles_are_ignored`
 21. `test_legacy_dev_adapter_is_impossible_in_production_or_railway`
