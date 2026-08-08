@@ -29,6 +29,190 @@ POST_EVENT_TYPES = {
     "inject_post",
 }
 FOLLOW_EVENT_TYPES = {"follow_wave"}
+PERSONA_EVENT_TYPES = {"persona_modification", "persona_change", "dynamic_instruction"}
+
+
+def _manual_action_args(action_name: str, action_args: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize action arguments for known schema quirks."""
+    args = dict(action_args)
+    if (
+        action_name == "FOLLOW"
+        and "followee_id" not in args
+        and "user_id" in args
+    ):
+        args["followee_id"] = args.pop("user_id")
+    return args
+
+
+def _to_int_id(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, str)):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    if parsed < 0:
+        return None
+    return parsed
+
+
+def _agent_config_list(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_agents = config.get("agent_configs")
+    if not isinstance(raw_agents, list):
+        raw_agents = config.get("agents")
+    return raw_agents if isinstance(raw_agents, list) else []
+
+
+def _coerce_agent_ids(value: Any) -> List[int]:
+    ids: List[int] = []
+    for candidate in _listify(value):
+        if not isinstance(candidate, (bool, int, str)):
+            continue
+        parsed = _to_int_id(candidate)
+        if parsed is None or parsed in ids:
+            continue
+        ids.append(parsed)
+    return ids
+
+
+def _resolve_injection_target_agents(
+    env: Any,
+    config: Dict[str, Any],
+    platform: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    agent_configs = _agent_config_list(config)
+    agent_configs_by_id = {cfg.get("agent_id"): cfg for cfg in agent_configs if isinstance(cfg.get("agent_id"), int)}
+    agent_graph = getattr(env, "agent_graph", None)
+    if not agent_graph:
+        return {
+            "status": "rejected",
+            "reason": "Runtime environment has no agent graph",
+            "requested_agent_ids": _coerce_agent_ids(payload.get("agent_id")) + _coerce_agent_ids(payload.get("agent_ids")),
+            "resolved_agent_ids": [],
+            "rejected_agent_ids": [],
+            "unavailable_agent_ids": [],
+            "target_count": 0,
+        }
+
+    requested_agent_ids = _coerce_agent_ids(payload.get("agent_id"))
+    requested_agent_ids.extend(_coerce_agent_ids(payload.get("agent_ids")))
+    requested_agent_ids = list(dict.fromkeys(requested_agent_ids))
+
+    resolved_agent_ids: List[int] = []
+    unavailable_agent_ids: List[int] = []
+    rejected_agent_ids: List[int] = []
+
+    requested_snapshot = requested_agent_ids[:]
+    if requested_agent_ids:
+        for agent_id in requested_agent_ids:
+            config_entry = agent_configs_by_id.get(agent_id)
+            if not isinstance(config_entry, dict):
+                rejected_agent_ids.append(agent_id)
+                continue
+            if not _platform_matches(
+                config_entry.get("platform_preference", "both"),
+                platform,
+            ):
+                rejected_agent_ids.append(agent_id)
+                continue
+            try:
+                agent_graph.get_agent(agent_id)
+            except Exception:
+                unavailable_agent_ids.append(agent_id)
+                continue
+            resolved_agent_ids.append(agent_id)
+        if not resolved_agent_ids:
+            status = "rejected"
+            reason = "No matching platform-compatible agent IDs"
+        else:
+            status = "applied"
+            reason = ""
+    else:
+        roles = _listify(payload.get("roles"))
+        if roles:
+            requested_agent_ids = _select_target_agent_ids(
+                config,
+                platform,
+                {"roles": roles},
+                fallback_limit=max(1, len(_coerce_agent_ids(roles))),
+            )
+        else:
+            requested_agent_ids = [
+                cfg.get("agent_id")
+                for cfg in agent_configs
+                if _platform_matches(cfg.get("platform_preference", "both"), platform)
+                and isinstance(cfg.get("agent_id"), int)
+            ]
+
+        for agent_id in requested_agent_ids:
+            if not isinstance(agent_id, int):
+                continue
+            if agent_id in resolved_agent_ids:
+                continue
+            try:
+                agent_graph.get_agent(agent_id)
+            except Exception:
+                unavailable_agent_ids.append(agent_id)
+                continue
+            resolved_agent_ids.append(agent_id)
+
+        if requested_agent_ids and not resolved_agent_ids:
+            status = "rejected"
+            reason = "No matching platform-compatible agents currently available"
+        else:
+            status = "applied" if resolved_agent_ids else "ignored"
+            reason = ""
+
+    return {
+        "status": status,
+        "reason": reason,
+        "requested_agent_ids": requested_snapshot or requested_agent_ids,
+        "resolved_agent_ids": resolved_agent_ids,
+        "rejected_agent_ids": sorted(set(rejected_agent_ids)),
+        "unavailable_agent_ids": sorted(set(unavailable_agent_ids)),
+        "target_count": len(resolved_agent_ids),
+    }
+
+
+def _apply_persona_intervention(
+    env: Any,
+    config: Dict[str, Any],
+    platform: str,
+    payload: Dict[str, Any],
+    event_type: str,
+    raw_event: Dict[str, Any],
+) -> Dict[str, Any]:
+    new_instruction = (
+        payload.get("instruction")
+        or payload.get("persona")
+        or payload.get("content")
+        or ""
+    )
+    if not str(new_instruction).strip():
+        return {
+            "intervention_type": event_type,
+            "status": "rejected",
+            "reason": "No instruction content provided.",
+            "requested_agent_ids": [],
+            "resolved_agent_ids": [],
+            "rejected_agent_ids": [],
+            "unavailable_agent_ids": [],
+            "target_count": 0,
+            "instruction": None,
+            "raw_event": raw_event,
+        }
+
+    resolved = _resolve_injection_target_agents(env, config, platform, payload)
+    resolved["intervention_type"] = event_type
+    resolved["instruction"] = str(new_instruction)
+    resolved["raw_event"] = raw_event
+    if resolved["status"] == "ignored":
+        resolved["status"] = "rejected"
+        resolved["reason"] = "No platform-compatible targets found."
+    return resolved
 
 __all__ = [
     "POST_EVENT_TYPES",
@@ -546,7 +730,10 @@ async def _apply_specs(
         except AttributeError:
             continue
 
-        action_args = dict(spec.get("action_args") or {})
+        action_args = _manual_action_args(
+            action_name,
+            action_args=dict(spec.get("action_args") or {}),
+        )
         action = manual_action_cls(action_type=action_type, action_args=action_args)
         _add_action(actions, agent, action)
 
@@ -795,8 +982,20 @@ async def apply_injected_events(
         payload = event.get("payload") or {}
         if not isinstance(payload, dict):
             payload = {"content": str(payload)}
+        payload = dict(payload)
 
         timestamp = event.get("timestamp") or datetime.now().isoformat()
+        if event_type in PERSONA_EVENT_TYPES:
+            intervention = _apply_persona_intervention(
+                env=env,
+                config=config,
+                platform=platform,
+                payload=payload,
+                event_type=event_type,
+                raw_event=event,
+            )
+            payload = {**payload, "_intervention": intervention}
+
         log_entry = {
             "timestamp": timestamp,
             "platform": platform,
@@ -850,23 +1049,7 @@ async def apply_injected_events(
                 applied_count += applied
             else:
                 applied_count += 1
-        elif event_type in ("persona_modification", "persona_change", "dynamic_instruction"):
-            agent_id = payload.get("agent_id")
-            new_instruction = payload.get("instruction") or payload.get("persona") or payload.get("content")
-            if new_instruction and hasattr(env, "agent_graph"):
-                target_agents = []
-                if isinstance(agent_id, int):
-                    try:
-                        target_agents.append(env.agent_graph.get_agent(agent_id))
-                    except Exception:
-                        pass
-                else:
-                    for _, agent in env.agent_graph.get_agents():
-                        target_agents.append(agent)
-
-                for agent in target_agents:
-                    if hasattr(agent, "system_message") and hasattr(agent.system_message, "content"):
-                        agent.system_message.content += f"\n[Scenario Update]: {new_instruction}"
+        elif event_type in PERSONA_EVENT_TYPES:
             applied_count += 1
         else:
             applied_count += 1

@@ -27,6 +27,7 @@ documentation system package with three project-specific changes:
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -95,23 +96,27 @@ def fenced_lines_after(text: str, marker: str) -> tuple[str, ...]:
     return tuple(line.strip() for line in text[content_at:fence_end].splitlines() if line.strip())
 
 
-def mermaid_edges_after(text: str, marker: str) -> tuple[tuple[str, str], ...]:
-    """Return ordered uppercase state edges in the first Mermaid fence."""
-    marker_at = text.find(marker)
-    if marker_at == -1:
-        return ()
-    fence_at = text.find("```mermaid\n", marker_at)
-    if fence_at == -1:
-        return ()
-    content_at = fence_at + len("```mermaid\n")
-    fence_end = text.find("\n```", content_at)
-    if fence_end == -1:
-        return ()
+def uppercase_state_edges(text: str) -> tuple[tuple[str, str], ...]:
+    """Return every ordered uppercase state edge in text."""
     return tuple(
         (match.group(1), match.group(2))
         for match in re.finditer(
             r"(?m)^\s*([A-Z][A-Z_]*)\s+-->\s+([A-Z][A-Z_]*)\b",
-            text[content_at:fence_end],
+            text,
+        )
+    )
+
+
+def mermaid_graphs_between(
+    text: str, start_marker: str, end_marker: str
+) -> tuple[tuple[tuple[str, str], ...], ...]:
+    """Return every Mermaid graph, including empty graphs, in a bounded section."""
+    section = text_between(text, start_marker, end_marker)
+    return tuple(
+        uppercase_state_edges(match.group(1))
+        for match in re.finditer(
+            r"(?ms)^```mermaid[ \t]*\n(.*?)^```[ \t]*$",
+            section,
         )
     )
 
@@ -288,6 +293,53 @@ def main() -> int:
         name: path.read_text(encoding="utf-8") for name, path in authority_paths.items()
     }
 
+    machine_policy_specs = {
+        "decision-workspace-comparison/v1": {
+            "policy_id": "decision-workspace-comparison/v1",
+            "availability": "LATER_RELEASE",
+            "input_count": 2,
+            "viewport_override": False,
+        },
+        "decision-workspace-first-slice/v1": {
+            "policy_id": "decision-workspace-first-slice/v1",
+            "changed_condition_injection": "DEFERRED",
+            "external_human_evidence_import": "DEFERRED",
+            "interactive_research_handoff": "DEFERRED",
+            "decision_owner_conclusion_workflow": "DEFERRED",
+        },
+    }
+    for policy_id, expected_policy in machine_policy_specs.items():
+        start_marker = f"<!-- authority-policy:{policy_id}:start -->"
+        end_marker = f"<!-- authority-policy:{policy_id}:end -->"
+        start_count = sum(text.count(start_marker) for text in authority.values())
+        end_count = sum(text.count(end_marker) for text in authority.values())
+        if start_count != 1 or end_count != 1:
+            fail(
+                errors,
+                f"machine policy {policy_id!r} must have exactly one start and end marker; "
+                f"found {start_count}/{end_count}",
+            )
+            continue
+        block_pattern = re.compile(
+            rf"(?ms){re.escape(start_marker)}\s*```json\s*(\{{.*?\}})\s*```\s*{re.escape(end_marker)}"
+        )
+        blocks = [
+            (name, match.group(1))
+            for name, text in authority.items()
+            for match in block_pattern.finditer(text)
+        ]
+        if len(blocks) != 1:
+            fail(errors, f"machine policy {policy_id!r} must contain one bounded JSON object")
+            continue
+        owner, payload = blocks[0]
+        try:
+            parsed_policy = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            fail(errors, f"machine policy {policy_id!r} in {owner} is invalid JSON: {exc}")
+            continue
+        if parsed_policy != expected_policy:
+            fail(errors, f"machine policy {policy_id!r} changed: {parsed_policy!r}")
+
     required_authority_fragments = {
         "truth": (
             "epistemic-ledger/v2",
@@ -349,7 +401,7 @@ def main() -> int:
                 )
 
     version_locks = {
-        "truth": 'version: "1.2.0"',
+        "truth": 'version: "1.2.1"',
         "data": 'version: "1.2.0"',
         "states": 'version: "1.2.0"',
         "tenant_adr": 'version: "1.2.0"',
@@ -453,22 +505,54 @@ def main() -> int:
         ("FAILED", "DELETION_PENDING"),
         ("DELETION_PENDING", "DELETED"),
     )
-    source_edges = mermaid_edges_after(
-        authority["states"], "## Source-ingestion state machine"
+    source_section = text_between(
+        authority["states"],
+        "## Source-ingestion state machine",
+        "## Path-artifact review state machine",
     )
+    source_graphs = mermaid_graphs_between(
+        authority["states"],
+        "## Source-ingestion state machine",
+        "## Path-artifact review state machine",
+    )
+    source_edges = source_graphs[0] if len(source_graphs) == 1 else ()
+    if len(source_graphs) != 1:
+        fail(
+            errors,
+            "source-ingestion section must contain exactly one Mermaid graph, "
+            f"found {len(source_graphs)}",
+        )
     if source_edges != expected_source_edges:
         fail(errors, f"closed source-ingestion transition graph changed: {source_edges!r}")
+    if uppercase_state_edges(source_section) != expected_source_edges:
+        fail(errors, "source-ingestion section contains state edges outside its canonical graph")
 
     expected_path_review_edges = (
         ("GENERATED", "INCOMPLETE"), ("GENERATED", "NEEDS_REVIEW"),
         ("NEEDS_REVIEW", "APPROVED"), ("NEEDS_REVIEW", "REJECTED"),
         ("NEEDS_REVIEW", "SUPERSEDED"), ("APPROVED", "SUPERSEDED"),
     )
-    path_review_edges = mermaid_edges_after(
-        authority["states"], "## Path-artifact review state machine"
+    path_review_section = text_between(
+        authority["states"],
+        "## Path-artifact review state machine",
+        "## Decision-review state machine",
     )
+    path_review_graphs = mermaid_graphs_between(
+        authority["states"],
+        "## Path-artifact review state machine",
+        "## Decision-review state machine",
+    )
+    path_review_edges = path_review_graphs[0] if len(path_review_graphs) == 1 else ()
+    if len(path_review_graphs) != 1:
+        fail(
+            errors,
+            "path-review section must contain exactly one Mermaid graph, "
+            f"found {len(path_review_graphs)}",
+        )
     if path_review_edges != expected_path_review_edges:
         fail(errors, f"path-artifact review transition graph changed: {path_review_edges!r}")
+    if uppercase_state_edges(path_review_section) != expected_path_review_edges:
+        fail(errors, "path-review section contains state edges outside its canonical graph")
 
     expected_run_states = (
         "DRAFT", "NEEDS_REVIEW", "BLOCKED", "READY", "QUEUED", "PREPARING",
@@ -531,9 +615,27 @@ def main() -> int:
         ("STOPPED", "ARCHIVED"),
         ("FAILED_TERMINAL", "ARCHIVED"),
     )
-    run_edges = mermaid_edges_after(authority["states"], "## Run state machine")
+    run_section = text_between(
+        authority["states"],
+        "## Run state machine",
+        "## Run-stage state machine",
+    )
+    run_graphs = mermaid_graphs_between(
+        authority["states"],
+        "## Run state machine",
+        "## Run-stage state machine",
+    )
+    run_edges = run_graphs[0] if len(run_graphs) == 1 else ()
+    if len(run_graphs) != 1:
+        fail(
+            errors,
+            "run section must contain exactly one Mermaid transition graph, "
+            f"found {len(run_graphs)}",
+        )
     if run_edges != expected_run_edges:
         fail(errors, f"closed ordered durable-run transition graph changed: {run_edges!r}")
+    if uppercase_state_edges(run_section) != expected_run_edges:
+        fail(errors, "run section contains state edges outside its one canonical transition graph")
     run_graph_states = {state for edge in run_edges for state in edge}
     if len(run_graph_states) != 20 or run_graph_states != set(expected_run_states):
         fail(errors, f"durable-run graph does not contain exactly the 20 locked states: {sorted(run_graph_states)!r}")
@@ -683,6 +785,81 @@ def main() -> int:
     )
     if later_release_prose != expected_later_release_prose:
         fail(errors, f"release exact-two/deferred-capability boundary changed: {later_release_prose!r}")
+
+    higher_comparison_count = (
+        r"(?:third|three(?: or more)?|four(?: or more)?|five|six|seven|eight|nine"
+        r"|[3-9]|\d{2,}|more than two)"
+    )
+    comparison_authorization_patterns = (
+        rf"\b(?:comparison(?: bench| contract| request| view)?\s+)?"
+        rf"(?:accepts?|allows?|permits?|supports?|compares?|takes?|contains?|includes?)\s+"
+        rf"(?:up to\s+|as many as\s+|at least\s+)?(?:an?\s+)?"
+        rf"(?:optional\s+)?{higher_comparison_count}\b[^.?!]{{0,100}}"
+        rf"\b(?:runs?|attempts?|inputs?)\b",
+        rf"\b(?:up to|as many as|at least)\s+{higher_comparison_count}\s+"
+        rf"(?:completed\s+|related\s+)?(?:runs?|attempts?|inputs?)\s+"
+        rf"(?:are|may be|can be|will be)\s+"
+        rf"(?:accepted|allowed|permitted|supported|valid|available|included|compared)\b",
+        rf"\b(?:an?\s+)?(?:optional\s+)?third\s+(?:comparison\s+)?"
+        rf"(?:run|attempt|input)\s+(?:is|may be|can be|will be)?\s*"
+        rf"(?:accepted|allowed|permitted|supported|valid|available|optional|included|added|"
+        rf"shown|displayed|selected)\b",
+        rf"\b{higher_comparison_count}\s+(?:completed\s+|related\s+)?"
+        rf"(?:comparison\s+)?(?:runs?|attempts?|inputs?)\s+"
+        rf"(?:are|may be|can be|will be)\s+"
+        rf"(?:accepted|allowed|permitted|supported|valid|available|optional|included|compared)\b",
+        r"\b(?:comparison(?: input| run| attempt)?\s+(?:count|cardinality|maximum|max)"
+        r"|max(?:imum)?\s+comparison\s+(?:inputs?|runs?|attempts?))\s*[:=]\s*"
+        r"(?:[3-9]|\d{2,})\b",
+        r"\b(?:[3-9]|\d{2,})\+\s+(?:completed\s+|related\s+)?"
+        r"(?:runs?|attempts?|inputs?)\s+(?:are|may be|can be|will be)\s+"
+        r"(?:accepted|allowed|permitted|supported|valid|available|included|compared)\b",
+    )
+    deferred_capability = (
+        r"(?:changed[- ]condition(?: injection| controls?| workflow)?"
+        r"|external(?:[- ]human)?[- ]evidence(?: import(?:er)?| ingestion| workflow)?"
+        r"|decision[- ]owner(?:[’']s)? conclusion(?: workflow| editor| editing)?)"
+    )
+    first_slice = (
+        r"(?:the[-\s]+)?(?:first(?:[-\s]+vertical)?[-\s]+slices?"
+        r"|initial[-\s]+(?:release|slice)|first[-\s]+release)"
+    )
+    deferred_authorization_patterns = (
+        rf"\b{deferred_capability}\b[^.?!]{{0,120}}\b"
+        rf"(?:is|are|will be|may be|can be)\s+"
+        rf"(?:included|available|enabled|supported|authorized|permitted|implemented|"
+        rf"shipped|offered|provided|part of)\s+(?:in|for|during|with)?\s*{first_slice}\b",
+        rf"\b{first_slice}\b"
+        rf"(?![^.?!]{{0,100}}\b(?:does|do|will|may|can|must|should)\s+not\b)"
+        rf"[^.?!]{{0,100}}\b"
+        rf"(?:includes?|enables?|supports?|authorizes?|permits?|implements?|ships with|"
+        rf"offers?|provides?|has|have|contains?)\s+(?!no\b|neither\b)"
+        rf"[^.?!]{{0,100}}\b{deferred_capability}\b",
+        rf"\b{deferred_capability}\b[^.?!]{{0,60}}\b"
+        rf"(?:ships?|lands?|launches?)\s+(?:in|with)\s+{first_slice}\b",
+        rf"\b{deferred_capability}\b[^.?!]{{0,80}}\b(?:is|are)\s+"
+        rf"(?:an?\s+)?{first_slice}\s+(?:feature|capability|workflow|control)s?\b",
+        rf"\b{first_slice}\b[^.?!]{{0,80}}\bexposes?\s+"
+        rf"(?!neither\b|no\b)[^.?!]{{0,80}}\b{deferred_capability}\b",
+    )
+    for name, raw_text in authority.items():
+        whole_authority_prose = normalized_prose(raw_text)
+        for pattern in comparison_authorization_patterns:
+            match = re.search(pattern, whole_authority_prose, re.IGNORECASE)
+            if match:
+                fail(
+                    errors,
+                    f"authority contradiction in {name}: third-or-more comparison authorized: "
+                    f"{match.group(0)!r}",
+                )
+        for pattern in deferred_authorization_patterns:
+            match = re.search(pattern, whole_authority_prose, re.IGNORECASE)
+            if match:
+                fail(
+                    errors,
+                    f"authority contradiction in {name}: deferred first-slice capability authorized: "
+                    f"{match.group(0)!r}",
+                )
 
     total_lines = sum(len(p.read_text(encoding="utf-8").splitlines()) for p in markdown_files)
     total_words = sum(len(p.read_text(encoding="utf-8").split()) for p in markdown_files)

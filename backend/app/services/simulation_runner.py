@@ -449,7 +449,15 @@ class SimulationRunner:
 
         # Check if already running
         existing = cls.get_run_state(simulation_id)
-        if existing and existing.runner_status in [RunnerStatus.RUNNING, RunnerStatus.STARTING]:
+        running_process = cls._processes.get(simulation_id)
+        if (
+            existing
+            and existing.runner_status in [
+                RunnerStatus.RUNNING,
+                RunnerStatus.STARTING,
+                RunnerStatus.STOPPING,
+            ]
+        ) or (running_process is not None and running_process.poll() is None):
             raise ValueError(f"Simulation already running: {simulation_id}")
         
         # Load simulation config
@@ -807,7 +815,7 @@ class SimulationRunner:
                     if "event_type" in action_data:
                         event_type = action_data.get("event_type")
                         
-                        # Detect simulation_end, mark platform completed
+                        # Track platform completion signal for diagnostics.
                         if event_type == "simulation_end":
                             if platform == "twitter":
                                 state.twitter_completed = True
@@ -817,13 +825,6 @@ class SimulationRunner:
                                 state.reddit_completed = True
                                 state.reddit_running = False
                                 logger.info(f"Reddit simulation completed: {state.simulation_id}, total_rounds={action_data.get('total_rounds')}, total_actions={action_data.get('total_actions')}")
-                            
-                            # Check if all enabled platforms completed
-                            all_completed = cls._check_all_platforms_completed(state)
-                            if all_completed:
-                                state.runner_status = RunnerStatus.COMPLETED
-                                state.completed_at = datetime.now().isoformat()
-                                logger.info(f"All platform simulations completed: {state.simulation_id}")
                         
                         # Update round info (from round_end event)
                         elif event_type == "round_end":

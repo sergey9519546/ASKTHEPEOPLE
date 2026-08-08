@@ -330,7 +330,7 @@ describe("global recovery and focus contracts", () => {
     expect(tokens).toContain("input:focus-visible");
     expect(tokens).toContain("textarea:focus-visible");
     expect(tokens).toContain("select:focus-visible");
-    expect(tokens).toContain("outline: 3px solid var(--signal)");
+    expect(tokens).toContain("outline: 3px solid var(--attention)");
     expect(tokens).not.toMatch(
       /input:focus,[\s\S]*?select:focus\s*\{[\s\S]*?outline:\s*none/,
     );

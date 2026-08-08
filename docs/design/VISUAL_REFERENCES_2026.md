@@ -101,10 +101,10 @@ This document provides extracted specifications from contemporary high-end inter
 - ✅ Four-step surface ladder (charcoal already has this foundation)
 - ✅ Aggressive negative tracking on display type (-2% at 48px+)
 - ✅ 4px spacing base (already specified)
-- ✅ Single accent discipline (yellow signal is already this)
+- ✅ Single primary-action discipline (editorial red owns action; yellow is attention only)
 
 **What NOT to adopt**:
-- ❌ Lavender accent (keep yellow #FFD51D)
+- ❌ Lavender accent (keep editorial red `#F04B3D`; reserve yellow `#FFD51D` for attention)
 - ❌ Dark-only approach (paper surface is core to semantic system)
 - ❌ Linear's specific typefaces (Archivo Narrow + Source Sans 3 are appropriate)
 
@@ -212,7 +212,7 @@ box-shadow:
 **What to adopt**:
 - ✅ Stacked shadows (paper surface 4px hard offset could become layered)
 - ✅ Controlled maximum type size (48px hero, not 91px)
-- ✅ Single-color discipline (yellow signal already follows this)
+- ✅ Single-primary discipline (editorial red owns action; yellow is attention only)
 - ✅ Sentence-case headlines (already specified in content system)
 
 **What NOT to adopt**:
@@ -471,9 +471,9 @@ Power user → Advanced features revealed
 |---|---|---|---|---|
 | **Linear** | Near-black (#010102) | Lavender (#5e6ad2) | 4-step dark ladder | Dark-first, single accent |
 | **Vercel** | Near-black (#171717) | None (blue for links only) | White + near-white | Stark minimalism |
-| **ASKTHEPEOPLE** | Ink (#111313) | Signal (#FFD51D) | Paper (#F2EBDD) + Charcoal | **Semantic surfaces** ✨ |
+| **ASKTHEPEOPLE** | Ink (#111313) | Editorial red (#F04B3D) | Cream (#F2EBDD) + Charcoal | **Semantic surfaces** ✨ |
 
-**Verdict**: ASKTHEPEOPLE's semantic surface system (paper/charcoal/white) is **more distinctive** than Linear/Vercel. Preserve it.
+**Verdict**: ASKTHEPEOPLE's semantic surface system (cream/charcoal/light cream) is **more distinctive** than Linear/Vercel. Preserve it.
 
 ### Typography Scale
 
@@ -658,12 +658,12 @@ Click "Review" expands inline:
 
 These elements are **strengths** of ASKTHEPEOPLE's identity:
 
-- ✅ **Semantic surface system** (paper/charcoal/white narrative)
+- ✅ **Semantic surface system** (cream/charcoal/light-cream narrative)
 - ✅ **Truth Rail** (five-cell desktop, two-line mobile)
 - ✅ **Hard geometry** (0px radius, 1–2px borders)
 - ✅ **Typography pairing** (Archivo Narrow + Source Sans 3)
 - ✅ **Route grammar** (equal-weight paths, no quantitative encoding)
-- ✅ **Signal yellow** (#FFD51D as single accent)
+- ✅ **Editorial red** (`#F04B3D`) for action, with yellow (`#FFD51D`) limited to attention
 - ✅ **Editorial voice** (plain language, sentence case, active voice)
 
 ---

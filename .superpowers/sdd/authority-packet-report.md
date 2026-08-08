@@ -44,7 +44,7 @@ source, durable-run, path, and brief implementation checkpoints may proceed:
 - `docs/architecture/data-model.md` — version `1.2.0`
 - `docs/architecture/adr/ADR-0009-multi-tenant-isolation.md` — version `1.2.0`
 - `docs/architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md` — version `1.2.0`
-- `docs/product/PRODUCT_TRUTH_CONTRACT.md` — version `1.2.0`
+- `docs/product/PRODUCT_TRUTH_CONTRACT.md` — version `1.2.1`
 - `docs/architecture/state-machines.md` — version `1.2.0`
 - `docs/privacy/DATA_MAP.md` — version `1.2.0`
 - `docs/release/RUNBOOK.md` — version `1.2.0`
@@ -63,11 +63,14 @@ revision:
 - the ordered 18-triple v2 allowlist;
 - the complete ordered 26-edge source graph;
 - the exact six-edge path-artifact review graph;
-- either required `REVIEWING_CONDITIONS` run edge;
+- the exact ordered 20-state/40-edge run graph, as the only Mermaid graph and
+  only uppercase transition-edge set in the bounded run section;
 - tenant/no-fallback/privacy/deployment/acceptance anchor requirements;
-- exact-two comparison language or a reintroduced third-input exception; and
-- later-release boundaries for changed conditions, external evidence, and
-  conclusions.
+- unique machine-readable comparison and first-slice policy blocks;
+- third-or-more comparison authorization anywhere in the authority packet;
+  and
+- first-slice authorization of changed conditions, external evidence, or
+  decision-owner conclusions anywhere in the authority packet.
 
 ## Verification
 
@@ -154,3 +157,44 @@ The follow-up commit contains only the two supporting briefs, the structural
 validator, and this report addendum. It does not touch the concurrently edited
 Task 5 brief or any normative, backend, frontend, migration, deployment, or
 design asset file.
+
+## Second independent-review addendum
+
+The review of `0170aaa` identified two remaining validator bypasses and stale
+Task 3a checkpoint language. This isolated follow-up corrects them without
+editing application code or the concurrently active Task 3a implementation
+report.
+
+1. State-machine validation is now bounded from `## Run state machine` to
+   `## Run-stage state machine`. The bounded section must contain exactly one
+   Mermaid fence, that graph must contain the exact ordered 40-edge set, and
+   every uppercase state edge anywhere in the section must be that same set.
+   A second diagram or an edge after the canonical fence therefore fails.
+2. Product Truth Contract version `1.2.1` contains exactly one JSON block for
+   `decision-workspace-comparison/v1` and exactly one for
+   `decision-workspace-first-slice/v1`. The validator parses their exact typed
+   values and scans every authority-packet document for affirmative
+   third-or-more comparison language or affirmative first-slice authorization
+   of changed-condition injection, external-human-evidence import, or
+   decision-owner-conclusion workflows.
+3. The Task 3a brief now records the tenancy relationship as normatively
+   resolved by `ce132a5`. Named Architecture, Security, Privacy, Persistence,
+   and Release approvals and implementation evidence remain open. A disabled,
+   dependency-free 3A-1 domain kernel may land for review, but no canonical
+   persistence/integration, 3A-2-or-later rollout, or production acceptance is
+   authorized before those approvals are recorded.
+
+Reviewer-attack mutation probes cover a second run Mermaid graph, an uppercase
+edge outside the canonical fence, third-input authorization in another
+authority document, first-slice deferred-capability authorization outside the
+scope section, and duplicate or altered machine-policy blocks. The verification
+result for the clean packet remains:
+
+```text
+python tools/validate_docs.py
+Markdown files: 69
+ADR files: 12
+Warnings: 0
+Errors: 0
+RESULT: PASS
+```

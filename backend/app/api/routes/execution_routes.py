@@ -32,6 +32,8 @@ from ...utils.input_policy import (
     validate_weight_distribution,
 )
 
+from app.api.schemas import StartSimulationRequest, StopSimulationRequest, validate_schema
+
 logger = get_logger('askthepeople.api.simulation')
 
 
@@ -44,6 +46,7 @@ logger = get_logger('askthepeople.api.simulation')
 
 
 @simulation_bp.route('/start', methods=['POST'])
+@validate_schema(StartSimulationRequest)
 def start_simulation():
     """
     Start running simulation
@@ -223,7 +226,7 @@ def start_simulation():
                 }), 400
 
         # Create Task in TaskManager for background tracking
-        from ...models.task import TaskManager, TaskStatus
+        from ...models.task import TaskManager
         task_manager = TaskManager()
         task_id = task_manager.create_task(
             task_type="simulation_run",
@@ -234,10 +237,8 @@ def start_simulation():
             }
         )
 
-        sim_dir = _safe_sim_dir(simulation_id)
         config_path = os.path.join(sim_dir, "simulation_config.json")
 
-        celery_dispatched = False
         try:
             from ...tasks.simulation_tasks import run_simulation_task
             run_simulation_task.delay(
@@ -256,34 +257,34 @@ def start_simulation():
             # Keep the TaskManager id as the client-facing handle. The Celery
             # result id is not known to TaskManager, so returning it would make
             # GET /api/simulation/task/<task_id>/status 404.
-            celery_dispatched = True
         except Exception as celery_err:
-            logger.warning(f"Celery dispatch unavailable or failed, falling back to direct runner: {celery_err}")
-
-        if not celery_dispatched:
-            # Fallback runner mode (when Celery broker is not running in test mode)
-            run_state = SimulationRunner.start_simulation(
-                simulation_id=simulation_id,
-                platform=platform,
-                max_rounds=max_rounds,
-                enable_graph_memory_update=enable_graph_memory_update,
-                graph_id=synthetic_graph_id,
-                source_graph_id=state.graph_id,
-                enable_followers=enable_followers,
-                follower_count=follower_count,
-                follower_distribution=follower_distribution,
+            logger.error(
+                "Celery dispatch failed for simulation %s; refusing to run "
+                "OASIS in the request process: %s",
+                simulation_id,
+                celery_err,
             )
-            task_manager.update_task(
+            task_manager.fail_task(
                 task_id,
-                status=TaskStatus.PROCESSING,
-                message="Simulation execution started via runner",
-                progress=10,
-                result=run_state.to_dict(),
+                error=str(celery_err),
+                public_error="simulation_dispatch_unavailable",
             )
-            r_status = getattr(run_state, 'runner_status', 'running')
-            response_runner_status = r_status.value if hasattr(r_status, 'value') else str(r_status)
-        else:
-            response_runner_status = "queued"
+            resp = jsonify({
+                "success": False,
+                "code": "simulation_dispatch_unavailable",
+                "error": "simulation_dispatch_unavailable",
+                "message": (
+                    "Simulation execution could not be queued. "
+                    "Try again after the worker service is available."
+                ),
+                "simulation_id": simulation_id,
+                "task_id": task_id,
+            })
+            resp.status_code = 503
+            resp.headers["Retry-After"] = "5"
+            return resp
+
+        response_runner_status = "queued"
 
         # Update simulation status in SimulationManager
         state.status = SimulationStatus.RUNNING
@@ -329,6 +330,7 @@ def start_simulation():
         }), 500
 
 @simulation_bp.route('/stop', methods=['POST'])
+@validate_schema(StopSimulationRequest)
 def stop_simulation():
     """
     Stop simulation

@@ -10,6 +10,7 @@
     <ToastContainer />
     <ProjectLinks />
     <CommandPalette v-if="!accessRequired && !hasCrashed" />
+    <KeyboardShortcutsModal :is-open="shortcutsOpen" @close="shortcutsOpen = false" />
   </div>
   <AccessKeyGate v-if="accessRequired && !hasCrashed" />
 
@@ -44,9 +45,10 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AccessKeyGate from "./components/AccessKeyGate.vue";
 import CommandPalette from "./components/CommandPalette.vue";
+import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.vue";
 import ProjectLinks from "./components/ProjectLinks.vue";
 import ToastContainer from "./components/ToastContainer.vue";
 import { accessRequired } from "./composables/useAccessKey.js";
@@ -54,8 +56,34 @@ import { hasCrashed } from "./composables/useCrashState.js";
 
 const crashDialog = ref(null);
 const crashReload = ref(null);
+const shortcutsOpen = ref(false);
 let previouslyFocused = null;
 let previousBodyOverflow = "";
+
+const handleGlobalShortcuts = (event) => {
+  if (
+    event.target.tagName === "INPUT" ||
+    event.target.tagName === "TEXTAREA" ||
+    event.target.isContentEditable
+  ) {
+    return;
+  }
+
+  if (event.key === "?") {
+    event.preventDefault();
+    shortcutsOpen.value = !shortcutsOpen.value;
+  } else if (event.key === "Escape" && shortcutsOpen.value) {
+    shortcutsOpen.value = false;
+  }
+};
+
+onMounted(() => {
+  window.addEventListener("keydown", handleGlobalShortcuts);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("keydown", handleGlobalShortcuts);
+});
 
 const getCrashFocusableElements = () =>
   Array.from(

@@ -13,7 +13,7 @@ applies_to: "frontend/src/*, design system, visual language"
 
 ## Executive Summary
 
-**Current State:** ASKTHEPEOPLE has implemented a distinctive "Civic Wayfinding" design system with strong conceptual foundations: editorial clarity, semantic surfaces (paper/charcoal/white), hard-edged geometry, and truth-first disclosure. The implementation is **architecturally sound but visually under-realized**.
+**Current State:** ASKTHEPEOPLE has implemented a distinctive "Civic Wayfinding" design system with strong conceptual foundations: editorial clarity, semantic surfaces (cream/charcoal/light cream), hard-edged geometry, and truth-first disclosure. The implementation is **architecturally sound but visually under-realized**.
 
 **Gap Analysis:** Comparing against 2026 high-end references (Linear, Stripe, Vercel, Bloomberg Terminal UX evolution, and civic design systems), ASKTHEPEOPLE has the right conceptual bones but needs **refinement in density, hierarchy, motion, and progressive disclosure** to match the polish of contemporary interfaces.
 
@@ -121,7 +121,7 @@ applies_to: "frontend/src/*, design system, visual language"
 
 ### 2.1 Conceptual Clarity
 The Civic Wayfinding system has **strong semantic architecture**:
-- Surface semantics (paper/charcoal/white) are conceptually sound
+- Surface semantics (cream/charcoal/light cream) are conceptually sound
 - Route grammar is well-defined and normative
 - Truth Rail is a unique, memorable disclosure pattern
 - Typography choices (Archivo Narrow + Source Sans 3) support the editorial voice
@@ -315,7 +315,7 @@ Each section expands inline when clicked. Only one section open at a time.
 - Background: `#000000`
 - Text: `#E5E5E5` (not pure white)
 - Rules: `#1A1A1A`
-- Signal: Keep `#FFD51D`
+- Signal: Use editorial red `#F04B3D`; reserve `#FFD51D` for focus and attention
 
 **Reference:** Linear's true-black mode, Twitter's OLED theme
 
@@ -324,7 +324,7 @@ Each section expands inline when clicked. Only one section open at a time.
 ## 5. What to Preserve (Do Not Change)
 
 ### 5.1 **Semantic Surface System**
-The paper/charcoal/white narrative is **unique and effective**. Do not replace it with generic light/dark modes.
+The cream/charcoal/light-cream narrative is **unique and effective**. Do not replace it with generic light/dark modes.
 
 ### 5.2 **Truth Rail**
 The five-cell desktop rail is **memorable and functional**. Do not reduce it to a footer disclaimer.

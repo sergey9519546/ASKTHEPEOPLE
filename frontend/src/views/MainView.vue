@@ -44,14 +44,36 @@
         :key="step"
         :ref="(element) => setWorkflowStepRef(element, index)"
         class="workflow-path-step"
-        :class="{ current: currentStep === index + 1, complete: currentStep > index + 1 }"
+        :class="{ current: currentStep === index + 1, complete: currentStep > index + 1, clickable: index + 1 <= maxCompletedStep }"
         :aria-current="currentStep === index + 1 ? 'step' : undefined"
+        :tabindex="index + 1 <= maxCompletedStep ? 0 : -1"
+        role="button"
+        :aria-label="`Step ${index + 1}: ${step}`"
+        @click="jumpToStep(index + 1)"
+        @keydown.enter.space.prevent="jumpToStep(index + 1)"
       >
         <span>{{ String(index + 1).padStart(2, "0") }}</span>
         <strong>{{ step }}</strong>
       </div>
       <p><strong>0 human respondents</strong> · Synthetic scenarios, not a forecast</p>
     </nav>
+    <label class="mobile-workflow-picker">
+      <span>Workflow step</span>
+      <select
+        :value="currentStep"
+        aria-label="Choose an available workflow step"
+        @change="jumpToStep(Number($event.target.value))"
+      >
+        <option
+          v-for="(step, index) in stepNames"
+          :key="step"
+          :value="index + 1"
+          :disabled="index + 1 > maxCompletedStep"
+        >
+          {{ String(index + 1).padStart(2, "0") }} — {{ step }}
+        </option>
+      </select>
+    </label>
 
     <div v-if="error" class="workspace-error" role="alert">
       <div>
@@ -176,6 +198,7 @@ const router = useRouter();
 
 const viewMode = ref("workbench");
 const currentStep = ref(1);
+const maxCompletedStep = ref(1);
 const stepNames = [
   "Map the sources",
   "Set assumptions",
@@ -183,6 +206,18 @@ const stepNames = [
   "Review the brief",
   "Ask follow-ups",
 ];
+
+watch(currentStep, (newStep) => {
+  if (newStep > maxCompletedStep.value) {
+    maxCompletedStep.value = newStep;
+  }
+}, { immediate: true });
+
+const jumpToStep = (targetStep) => {
+  if (targetStep <= maxCompletedStep.value && targetStep !== currentStep.value) {
+    currentStep.value = targetStep;
+  }
+};
 
 const currentProjectId = ref(route.params.projectId);
 const loading = ref(false);
@@ -706,7 +741,7 @@ onUnmounted(() => {
 }
 
 .status-indicator.processing .dot {
-  animation: smooth-pulse 1.4s infinite var(--ease-out);
+  background: var(--attention);
 }
 
 .status-indicator.error .dot {
@@ -779,6 +814,10 @@ onUnmounted(() => {
 
 .workflow-path > p strong {
   color: var(--paper-muted);
+}
+
+.mobile-workflow-picker {
+  display: none;
 }
 
 .workspace-error {
@@ -892,22 +931,37 @@ onUnmounted(() => {
 
 @media (max-width: 700px) {
   .workflow-path {
-    display: flex;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .workflow-path::-webkit-scrollbar {
     display: none;
   }
 
-  .workflow-path-step {
-    flex: 0 0 auto;
-    min-width: 9.5rem;
+  .mobile-workflow-picker {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 1rem;
+    border-bottom: 1px solid var(--line-dark);
+    background: var(--ink);
+    color: var(--paper-muted);
   }
 
-  .workflow-path > p {
-    display: none;
+  .mobile-workflow-picker > span {
+    font-family: var(--font-display);
+    font-size: 0.72rem;
+    letter-spacing: 0.045em;
+    text-transform: uppercase;
+  }
+
+  .mobile-workflow-picker select {
+    width: 100%;
+    min-height: 2.75rem;
+    padding: 0.45rem 2rem 0.45rem 0.65rem;
+    border: 1px solid var(--line-dark);
+    border-radius: 0;
+    background: var(--ink-deep);
+    color: var(--paper);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
   }
 
   .workspace-error {

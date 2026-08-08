@@ -11,17 +11,31 @@
   --ink-deep: #0c100f;
   --ink-soft: #1a1f1d;
   --ink-raised: #232825;
-  --paper: #f1eee6;
-  --paper-strong: #faf7ef;
-  --paper-muted: #bcb8ad;
+  /* Brutal Editorial palette — sampled and tuned from the approved reference.
+     Red owns action and wayfinding. Cream owns every light field. Yellow is
+     reserved for small attention marks and keyboard focus. */
+  --paper: #f2ebdd;
+  --paper-strong: #fbf4e5;
+  --paper-transfer: #f7f0e2;
+  --paper-muted: #c7c0b3;
   --paper-dim: #817e76;
-  --signal: #e5c21d;
-  --signal-strong: #f0cf28;
-  --signal-soft: #eee2a3;
-  --signal-deep: #9b7f00;
+  --signal: #f04b3d;
+  --signal-strong: #ff5d4f;
+  --signal-soft: #f7b6ab;
+  --signal-deep: #982d24;
+  --signal-faint: rgba(240, 75, 61, 0.06);
+  --signal-tint: rgba(240, 75, 61, 0.14);
+  --signal-wash: rgba(240, 75, 61, 0.24);
+  --signal-rule: rgba(240, 75, 61, 0.42);
   /* Text variants meet WCAG AA on the warm paper surfaces. Keep the brighter
      colors for borders, fills, and status marks rather than small copy. */
-  --signal-text: #806800;
+  --signal-text: #982d24;
+  --attention: #ffd51d;
+  --attention-strong: #ffe05a;
+  --attention-soft: #f6e79c;
+  --attention-deep: #7a6200;
+  --attention-tint: rgba(255, 213, 29, 0.13);
+  --attention-rule: rgba(255, 213, 29, 0.5);
   --error: #bd493d;
   --error-text: #a63329;
   --warning: #c8872f;
@@ -91,7 +105,7 @@
   --line-strong: #59605c;
   --line-active: var(--signal);
   --text-void: var(--paper);
-  --text-primary: #e5e1d8;
+  --text-primary: var(--paper);
   --text-secondary: var(--paper-muted);
   --text-muted: var(--paper-dim);
   --text-dim: #5c615e;
@@ -100,7 +114,7 @@
   --accent-dim: var(--signal-deep);
   --accent-ink: var(--ink);
   --status-live: var(--signal);
-  --status-warn: var(--warning);
+  --status-warn: var(--attention);
   --status-error: var(--error);
   --status-info: var(--paper-muted);
   --bg-color: var(--ink);
@@ -111,13 +125,24 @@
   --accent-color: var(--signal);
   --accent-secondary: var(--signal);
   --accent-tertiary: var(--signal);
-  --accent-amber: var(--signal);
+  --accent-amber: var(--attention);
   --accent-cyan: var(--signal);
   --atp-light-gray: var(--ink-raised);
   --text-color: var(--paper);
+  /* The reference uses hard print-like offsets, never glow or glass depth. */
+  --shadow-sm: 0.2rem 0.2rem 0 rgba(0, 0, 0, 0.45);
+  --shadow-md: 0.35rem 0.35rem 0 rgba(0, 0, 0, 0.56);
+  --shadow-lg: 0.55rem 0.55rem 0 rgba(0, 0, 0, 0.7);
+  --shadow-glow: none;
   --shadow-glass: none;
   --shadow-glass-hover: none;
   --shadow-card: none;
+
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-full: 0;
+
   --bg-dark: var(--ink);
   --bg-card: var(--ink-soft);
   --bg-card-hover: var(--ink-raised);
@@ -141,11 +166,11 @@
   --border-hairline-subtle: 1px solid #292e2b;
   --border-hairline-bright: 1px solid #59605c;
   --border-hairline-active: 1px solid var(--signal);
-  --color-lime: var(--signal);
-  --color-lime-dim: rgba(229, 194, 29, 0.16);
+  --color-lime: var(--attention);
+  --color-lime-dim: var(--attention-tint);
   --color-lime-glow: transparent;
   --color-status-active: var(--signal);
-  --color-status-warning: var(--warning);
+  --color-status-warning: var(--attention);
   --color-status-danger: var(--error);
   --color-status-info: var(--paper-muted);
 }
@@ -154,6 +179,18 @@
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 html {
@@ -247,7 +284,7 @@ button:disabled,
 }
 
 :focus-visible {
-  outline: 3px solid var(--signal);
+  outline: 3px solid var(--attention);
   outline-offset: 3px;
 }
 
@@ -276,7 +313,7 @@ select:focus {
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid var(--signal);
+  outline: 3px solid var(--attention);
   outline-offset: 3px;
 }
 
@@ -339,17 +376,18 @@ select:focus-visible {
   background-image: none;
 }
 
-/* Remap the legacy lime utility color to the approved safety-yellow signal. */
+/* Legacy lime remains the small attention accent; it is no longer the
+   product's primary action color. */
 [class*="text-[#a3e635]"] {
-  color: var(--signal) !important;
+  color: var(--attention) !important;
 }
 
 [class*="bg-[#a3e635]"] {
-  background-color: var(--signal) !important;
+  background-color: var(--attention) !important;
 }
 
 [class*="border-[#a3e635]"] {
-  border-color: var(--signal) !important;
+  border-color: var(--attention) !important;
 }
 
 [class*="text-[#1a2e05]"] {
@@ -357,14 +395,22 @@ select:focus-visible {
 }
 
 [class*="bg-[#1a2e05]"] {
-  background-color: rgba(229, 194, 29, 0.13) !important;
+  background-color: var(--attention-tint) !important;
 }
 
 [class*="text-[#60a5fa]"],
 [class*="text-[#a5b4fc]"],
 [class*="text-blue-"],
-[class*="text-emerald-"] {
+[class*="text-emerald-"],
+[class*="text-rose-"] {
   color: var(--signal) !important;
+}
+
+[class*="text-slate-"],
+[class*="text-zinc-"],
+[class*="text-gray-"],
+[class*="text-neutral-"] {
+  color: var(--paper-muted) !important;
 }
 
 [class*="bg-[#60a5fa]"],
@@ -422,13 +468,13 @@ select:focus-visible {
   padding: 0.8rem 1.1rem !important;
   border-right: 1px solid var(--line-dark);
   background: var(--signal) !important;
-  color: var(--ink) !important;
+  color: var(--paper) !important;
 }
 
 .brand,
 .brand-monogram,
 .brand-full {
-  color: var(--ink) !important;
+  color: var(--paper) !important;
   font-family: var(--font-display) !important;
   letter-spacing: 0.035em !important;
 }
@@ -519,7 +565,7 @@ select:focus-visible {
 .step-num,
 .step-val,
 .phase-label {
-  color: var(--signal) !important;
+  color: var(--attention) !important;
   font-family: var(--font-mono) !important;
   font-size: 0.65rem !important;
   letter-spacing: 0.05em !important;
@@ -553,7 +599,7 @@ select:focus-visible {
   width: 0.55rem !important;
   height: 0.55rem !important;
   border-radius: 50%;
-  background: var(--signal) !important;
+  background: var(--attention) !important;
 }
 
 .content-area,
@@ -565,11 +611,7 @@ select:focus-visible {
   gap: 0.8rem !important;
   padding: 0.8rem !important;
   overflow: hidden;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    var(--ink) !important;
-  background-size: 2.5rem 2.5rem !important;
+  background: var(--ink) !important;
 }
 
 .panel-wrapper,

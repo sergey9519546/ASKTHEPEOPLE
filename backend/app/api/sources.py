@@ -7,6 +7,7 @@ Handles URL fetching for source material ingestion.
 from flask import Blueprint, request, jsonify, current_app
 from werkzeug.exceptions import BadRequest
 
+from app.api.schemas import FetchUrlsRequest, validate_schema
 from app.services.url_fetcher import fetch_and_store_urls
 from app.utils.logger import get_logger
 from app.utils.safe_url import SafeUrlError, assert_public_http_url
@@ -17,34 +18,14 @@ sources_bp = Blueprint("sources", __name__, url_prefix="/api/sources")
 
 
 @sources_bp.route("/fetch", methods=["POST"])
+@validate_schema(FetchUrlsRequest)
 def fetch_urls():
     """
     Fetch content from URLs and store as source material files.
-    
-    Request body:
-        {
-            "urls": ["https://example.com/article", "https://..."],
-            "simulation_id": "optional_sim_id"  # For future use with persistent sims
-        }
-    
-    Response:
-        {
-            "success": true,
-            "files": [
-                {"name": "article.txt", "size": 12345, "source_url": "https://..."}
-            ],
-            "errors": [
-                {"url": "https://...", "error": "Failed to fetch: ..."}
-            ]
-        }
     """
     try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({"success": False, "error": "JSON body required"}), 400
-        
-        urls = data.get("urls", [])
+        req_data = request.validated_data
+        urls = req_data.urls
         
         # Validate input
         if not urls or not isinstance(urls, list):

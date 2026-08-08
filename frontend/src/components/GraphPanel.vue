@@ -10,6 +10,13 @@
         <h2 class="panel-label" aria-live="polite">{{ phaseLabels }}</h2>
       </div>
       <div class="header-right">
+        <input
+          v-model="searchQuery"
+          type="text"
+          class="graph-search-input"
+          placeholder="Filter nodes…"
+          aria-label="Filter map nodes"
+        />
         <button
           class="btn-action small"
           @click="$emit('refresh')"
@@ -139,13 +146,13 @@
               <div v-if="selectedItem.type === 'node'" class="node-attributes">
                 <div class="attr-row">
                   <label>Identifier</label>
-                  <div class="attr-value title text-rose-500">
+                  <div class="attr-value title">
                     {{ selectedItem.data.name }}
                   </div>
                 </div>
                 <div class="attr-row">
                   <label>Item reference</label>
-                  <div class="attr-value mono text-slate-500">
+                  <div class="attr-value mono">
                     {{ selectedItem.data.uuid }}
                   </div>
                 </div>
@@ -185,7 +192,7 @@
                   Loop: {{ selectedItem.data.source_name }} —
                   {{ selectedItem.data.selfLoopCount }} references
                 </div>
-                <div v-else class="edge-path-header text-slate-800">
+                <div v-else class="edge-path-header">
                   {{ selectedItem.data.source_name }} →
                   {{ selectedItem.data.name || "LINKED" }} →
                   {{ selectedItem.data.target_name }}
@@ -193,7 +200,7 @@
 
                 <div class="attr-row">
                   <label>Relationship Type</label>
-                  <div class="attr-value highlight text-rose-500">
+                  <div class="attr-value highlight">
                     {{
                       selectedItem.data.fact_type ||
                       selectedItem.data.name ||
@@ -296,6 +303,7 @@ const selectedItem = ref(null);
 const showEdgeLabels = ref(true);
 const showSimulationFinishedHint = ref(false);
 const wasSimulating = ref(false);
+const searchQuery = ref("");
 let currentSimulation = null;
 let gSelection = null;
 let lastGraphTrigger = null;
@@ -334,12 +342,13 @@ const dismissFinishedHint = () => (showSimulationFinishedHint.value = false);
 
 const entityTypes = computed(() => {
   if (!props.graphData?.nodes) return [];
-  // The map uses the Public Signal accent plus high-contrast neutrals.
+  // Keep generated entity groups inside the approved editorial palette.
   const palette = [
-    "#e5c21d",
-    "#f1eee6",
-    "#9b7f00",
-    "#bcb8ad",
+    "#f04b3d",
+    "#f2ebdd",
+    "#ffd51d",
+    "#f7b6ab",
+    "#c7c0b3",
     "#646761",
   ];
   const map = {};
@@ -619,7 +628,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   background: var(--surface-color);
-  backdrop-filter: blur(16px);
+  backdrop-filter: none;
 }
 
 .panel-label {
@@ -659,9 +668,9 @@ onUnmounted(() => {
 }
 
 :deep(.graph-node:focus-visible) {
-  outline: 3px solid var(--signal);
+  outline: 3px solid var(--attention);
   outline-offset: 4px;
-  stroke: var(--signal) !important;
+  stroke: var(--attention) !important;
   stroke-width: 6px;
   stroke-dasharray: 2 2;
 }
@@ -673,18 +682,18 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(255, 69, 0, 0.1);
-  backdrop-filter: blur(8px);
+  background: var(--signal-tint);
+  backdrop-filter: none;
   border: 1px solid var(--accent-color);
   padding: 6px 12px;
   border-radius: 20px;
   z-index: 10;
-  box-shadow: 0 0 15px rgba(255, 69, 0, 0.2);
+  box-shadow: none;
 }
 .completion-hint {
-  background: rgba(16, 185, 129, 0.1);
-  border-color: #10b981;
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+  background: var(--attention-tint);
+  border-color: var(--attention);
+  box-shadow: none;
 }
 .status-msg {
   font-family: var(--font-mono);
@@ -697,7 +706,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #10b981;
+  color: var(--attention);
   font-weight: 700;
   font-size: 10px;
 }
@@ -709,9 +718,8 @@ onUnmounted(() => {
   animation: pulse 1s infinite;
 }
 @keyframes pulse {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 69, 0, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(255, 69, 0, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 69, 0, 0); }
+  0%, 100% { transform: scale(0.95); }
+  50% { transform: scale(1); }
 }
 .hint-close {
   background: none;
@@ -732,7 +740,7 @@ onUnmounted(() => {
   width: 280px;
   max-height: calc(100% - 32px);
   background: var(--surface-color);
-  backdrop-filter: blur(16px);
+  backdrop-filter: none;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
@@ -758,7 +766,7 @@ onUnmounted(() => {
 .type-badge {
   font-size: 8px;
   font-weight: 700;
-  color: #fff;
+  color: var(--paper);
   padding: 2px 6px;
   border-radius: 4px;
   text-transform: uppercase;
@@ -846,7 +854,7 @@ onUnmounted(() => {
   padding: 10px 12px;
   max-width: 240px;
   background: var(--surface-color);
-  backdrop-filter: blur(16px);
+  backdrop-filter: none;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   pointer-events: auto;
@@ -885,7 +893,7 @@ onUnmounted(() => {
 .view-controls {
   padding: 8px 12px;
   background: var(--surface-color);
-  backdrop-filter: blur(16px);
+  backdrop-filter: none;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
   pointer-events: auto;
@@ -903,7 +911,7 @@ onUnmounted(() => {
 }
 
 .btn-action {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(242, 235, 221, 0.05);
   border: 1px solid var(--border-color);
   padding: 6px 12px;
   font-weight: 600;
@@ -917,7 +925,7 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 .btn-action:hover {
-  background: rgba(255, 69, 0, 0.1);
+  background: var(--signal-tint);
   border-color: var(--accent-color);
   color: var(--accent-color);
 }
@@ -953,7 +961,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(242, 235, 221, 0.2);
   border-radius: 34px;
   transition: .2s;
 }
@@ -1031,9 +1039,9 @@ input:checked + .switch-slider:before {
   min-height: 2.75rem;
   margin-top: 0.35rem;
   border-color: var(--signal);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   font-family: var(--font-display);
   letter-spacing: 0.035em;
   text-transform: uppercase;
@@ -1075,8 +1083,8 @@ input:checked + .switch-slider:before {
 /* Public Signal map geometry */
 .graph-panel-workbench {
   border: 0;
-  border-radius: 0;
-  background: var(--ink);
+  border-radius: var(--radius-md);
+  background: var(--ink-deep);
 }
 
 .panel-header-block {
@@ -1096,7 +1104,7 @@ input:checked + .switch-slider:before {
 }
 
 .btn-action {
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: var(--ink-raised);
   box-shadow: none;
 }
@@ -1110,9 +1118,9 @@ input:checked + .switch-slider:before {
 .status-overlay-hint,
 .completion-hint {
   border-color: var(--signal);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   box-shadow: none;
   backdrop-filter: none;
 }
@@ -1125,7 +1133,7 @@ input:checked + .switch-slider:before {
 .view-controls,
 .entity-detail-panel {
   border-color: var(--line-light);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: var(--paper);
   color: var(--ink);
   box-shadow: 0.35rem 0.35rem 0 rgba(12, 16, 15, 0.55);
@@ -1140,19 +1148,19 @@ input:checked + .switch-slider:before {
 }
 
 .color-swatch {
-  border-radius: 0;
+  border-radius: var(--radius-md);
 }
 
 .summary-box {
   border-color: var(--line-light);
-  border-radius: 0;
-  background: var(--paper-strong);
+  border-radius: var(--radius-md);
+  background: var(--paper-transfer);
   color: var(--ink);
 }
 
 .type-badge {
-  border-radius: 0;
-  color: var(--ink);
+  border-radius: var(--radius-md);
+  color: var(--paper);
 }
 
 @media (max-width: 900px) {

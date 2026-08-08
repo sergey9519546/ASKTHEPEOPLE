@@ -1,37 +1,42 @@
 <template>
-  <section class="run-wayfinder" aria-labelledby="run-wayfinder-title">
+  <section
+    class="run-wayfinder"
+    :data-run-state="recordState"
+    aria-labelledby="run-wayfinder-title"
+  >
     <header class="run-hero">
       <div class="run-hero-copy">
-        <span class="run-kicker">03 / Map the scenarios</span>
+        <span class="run-kicker">03 / Check the run</span>
         <h2 id="run-wayfinder-title">{{ runHeadline }}</h2>
         <p>{{ runDeck }}</p>
       </div>
 
-      <div
-        class="truth-stamp"
-        aria-label="0 human respondents. Synthetic observations. Not a forecast."
+      <aside
+        class="run-truth-boundary"
+        data-testid="run-truth-boundary"
+        aria-label="Interpretation limits for this synthetic run"
       >
-        <span class="truth-number">0</span>
-        <span>
-          <strong>human respondents</strong>
-          <small>Synthetic observations · not a forecast</small>
-        </span>
-      </div>
+        <span>Actions + answers: synthetic</span>
+        <span>Human respondents: 0</span>
+        <span>Not a forecast</span>
+        <span>Sources: starting conditions only</span>
+        <span>Human validation: outside this run</span>
+      </aside>
     </header>
 
     <section class="decision-band" aria-labelledby="decision-heading">
       <div class="decision-copy">
-        <span class="section-index">The decision</span>
+        <span class="section-index">Decision under rehearsal</span>
         <h3 id="decision-heading">{{ decisionQuestion }}</h3>
       </div>
 
       <div
-        class="route-progress"
+        class="run-progress"
         role="progressbar"
-        aria-label="Scenario run progress"
+        aria-label="Saved simulation round completion"
         :aria-valuemin="0"
-        :aria-valuemax="totalRounds || 1"
-        :aria-valuenow="currentRound"
+        :aria-valuemax="progressMax"
+        :aria-valuenow="Math.min(currentRound, progressMax)"
         :aria-valuetext="progressText"
       >
         <div class="progress-heading">
@@ -41,122 +46,153 @@
         <div class="progress-track" aria-hidden="true">
           <span :style="{ transform: `scaleX(${progressRatio})` }"></span>
         </div>
+        <small>
+          This tracks saved rounds only. It does not score a path or outcome.
+        </small>
       </div>
     </section>
 
-    <div
-      v-if="startError || hasFailed"
-      class="run-alert"
-      role="alert"
-    >
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3 2.8 20h18.4L12 3Z" />
-        <path d="M12 9v5M12 17.2v.1" />
-      </svg>
-      <div>
-        <strong>This run needs attention.</strong>
-        <p>{{ startError || runStatus.error || "The saved run did not finish." }}</p>
+    <section class="run-record" aria-labelledby="run-record-heading">
+      <header class="record-heading">
+        <div>
+          <span class="section-index">Run record / generated activity</span>
+          <h3 id="run-record-heading">Generated activity, in recorded order</h3>
+          <p>
+            Generated activity is the run record. Possible paths are created
+            later in the decision brief.
+          </p>
+        </div>
+        <span class="record-status" :class="`is-${statusTone}`" aria-live="polite">
+          <b aria-hidden="true">{{ statusCode }}</b>
+          {{ statusLabel }}
+        </span>
+      </header>
+
+      <div
+        v-if="hasRunError"
+        class="record-state is-error"
+        data-testid="run-record-error"
+        role="alert"
+      >
+        <span class="state-code" aria-hidden="true">ERR</span>
+        <div>
+          <strong>This run stopped before the record was complete.</strong>
+          <p>{{ startError || runStatus.error || "The saved run did not finish." }}</p>
+        </div>
         <button
           type="button"
           @click="$emit(startError ? 'retry-run' : 'start-over')"
         >
-          {{ startError ? "Try again" : "Return to assumptions" }}
+          {{ startError ? "Try this run again" : "Return to assumptions" }}
         </button>
       </div>
-    </div>
 
-    <section class="route-board" aria-labelledby="routes-heading">
-      <div class="route-board-heading">
+      <div
+        v-if="recordState === 'loading'"
+        class="record-state is-loading"
+        data-testid="run-record-loading"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="state-code" aria-hidden="true">REC</span>
         <div>
-          <span class="section-index">Activity in this run</span>
-          <h3 id="routes-heading">{{ routesHeading }}</h3>
+          <strong>No generated action has been saved yet.</strong>
           <p>
-            These are model-generated channel streams under the chosen
-            assumptions. They show activity inside this run, not causal paths
-            or what people will do.
+            The run is active. This area will show each saved synthetic action
+            without making claims about people or outcomes outside this run.
           </p>
         </div>
-
-        <span class="plain-status" :class="`is-${statusTone}`" aria-live="polite">
-          <i aria-hidden="true"></i>
-          {{ statusLabel }}
-        </span>
       </div>
 
-      <div class="route-map">
-        <div class="route-origin" aria-hidden="true">
-          <span></span>
+      <div
+        v-else-if="recordItems.length === 0 && !hasRunError"
+        class="record-state is-empty"
+        data-testid="run-record-empty"
+      >
+        <span class="state-code" aria-hidden="true">00</span>
+        <div>
+          <strong v-if="hasCompleted">
+            The run finished without a saved generated action.
+          </strong>
+          <strong v-else>No generated actions are recorded.</strong>
+          <p v-if="hasCompleted">
+            This is an empty synthetic run record, not evidence about people
+            or any real-world outcome.
+          </p>
+          <p v-else>
+            Begin the run to create a synthetic activity record under the
+            reviewed assumptions.
+          </p>
+        </div>
+      </div>
+
+      <div
+        v-else-if="recordItems.length > 0"
+        class="record-layout"
+        :data-testid="hasCompleted ? 'run-record-complete' : 'run-record-active'"
+      >
+        <div class="record-ledger">
+          <div class="record-list-heading">
+            <span>Recorded order</span>
+            <strong>Oldest to newest · {{ recordItems.length }} saved</strong>
+          </div>
+          <ol class="run-record-list" data-testid="run-record-list">
+            <li
+              v-for="item in recordItems"
+              :key="item.id"
+              data-origin="synthetic-generated"
+            >
+              <span class="record-number" aria-hidden="true">{{ item.sequence }}</span>
+              <article>
+                <header>
+                  <span>{{ item.roundLabel }} · {{ item.channel }}</span>
+                  <strong>{{ item.actor }}</strong>
+                </header>
+                <p>{{ item.text }}</p>
+                <footer>
+                  Synthetic generated action · recorded inside this run
+                </footer>
+              </article>
+            </li>
+          </ol>
         </div>
 
-        <div class="route-lanes">
-          <article
-            v-for="(lane, laneIndex) in routeLanes"
-            :key="lane.id"
-            class="route-lane"
-            :class="[`route-${lane.id}`, { 'is-waiting': lane.isWaiting }]"
-          >
-            <header>
-              <span>Generated channel {{ String(laneIndex + 1).padStart(2, "0") }}</span>
-              <h4>{{ lane.title }}</h4>
-              <p>{{ lane.summary }}</p>
-            </header>
-
-            <div
-              class="route-line"
-              :style="{ '--route-step-count': lane.steps.length }"
-              aria-hidden="true"
-            >
-              <span class="route-stroke"></span>
-              <i
-                v-for="step in lane.steps"
-                :key="step.id"
-                class="route-node"
-              ></i>
+        <aside class="meaning-boundary" aria-labelledby="meaning-boundary-heading">
+          <span class="section-index">Do not collapse these stages</span>
+          <h4 id="meaning-boundary-heading">Record ≠ path ≠ human finding</h4>
+          <dl>
+            <div>
+              <dt>Generated activity</dt>
+              <dd>Model-generated actions recorded inside this run.</dd>
             </div>
-
-            <ol
-              class="route-steps"
-              :style="{ '--route-step-count': lane.steps.length }"
-            >
-              <li v-for="step in lane.steps" :key="step.id">
-                <span>{{ step.label }}</span>
-                <p>{{ step.text }}</p>
-              </li>
-            </ol>
-          </article>
-        </div>
-
-        <aside class="validation-destination">
-          <svg viewBox="0 0 48 48" aria-hidden="true">
-            <circle cx="16" cy="17" r="6" />
-            <circle cx="32" cy="17" r="6" />
-            <path d="M5 39c1.2-8 7-12 13-12s11.8 4 13 12M22 39c1-6.4 5.6-10 11-10 5.3 0 9.8 3.6 10 10" />
-          </svg>
-          <span>Next stop</span>
-          <strong>Validate with people</strong>
-          <p>Turn the strongest assumptions and tensions into questions for real conversations.</p>
+            <div>
+              <dt>Possible paths</dt>
+              <dd>
+                Exploratory branches assembled in the decision brief from
+                assumptions, tensions, and missing information.
+              </dd>
+            </div>
+            <div>
+              <dt>Human validation</dt>
+              <dd>External research with real people after this workflow.</dd>
+            </div>
+          </dl>
+          <p>
+            Possible paths are exploratory branches, not predictions, rankings,
+            or real-world evidence.
+          </p>
         </aside>
-      </div>
-
-      <div v-if="isWaitingForSignals" class="route-waiting" aria-live="polite">
-        <span class="route-waiting-mark" aria-hidden="true"></span>
-        <p>
-          <strong>The first activity stream is being recorded.</strong>
-          Generated observations will appear here as the run moves forward.
-        </p>
       </div>
     </section>
 
     <section class="validation-handoff" aria-labelledby="handoff-heading">
-      <svg class="handoff-arrow" viewBox="0 0 56 56" aria-hidden="true">
-        <path d="M5 28h39M31 14l14 14-14 14" />
-      </svg>
+      <span class="handoff-index" aria-hidden="true">→</span>
       <div>
-        <span class="section-index">Make the next move human</span>
-        <h3 id="handoff-heading">Review the activity. Challenge the assumptions.</h3>
+        <span class="section-index">Next boundary</span>
+        <h3 id="handoff-heading">Validate with people outside this run</h3>
         <p>
-          The decision brief turns this synthetic activity into possible paths,
-          questions, and source gaps to test with affected people.
+          Open the decision brief to turn recorded synthetic activity into
+          possible paths, source gaps, and questions for real conversations.
         </p>
         <div v-if="reportError" class="handoff-error" role="alert">
           <strong>The decision brief was not prepared.</strong>
@@ -172,9 +208,6 @@
         <span v-if="isReviewing">Preparing the brief…</span>
         <span v-else-if="canReview">Open the decision brief</span>
         <span v-else>Available when the run finishes</span>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12h13M13 6l6 6-6 6" />
-        </svg>
       </button>
     </section>
 
@@ -185,10 +218,10 @@
       aria-live="polite"
     >
       <span>
-        <strong>Live updates are disconnected.</strong>
-        The run may still be continuing.
+        <strong>Run updates are disconnected.</strong>
+        The server-side run may still be continuing.
       </span>
-      <button type="button" @click="$emit('reconnect')">Reconnect</button>
+      <button type="button" @click="$emit('reconnect')">Reconnect updates</button>
     </div>
 
     <div class="run-capability-note">
@@ -203,12 +236,10 @@
     <details class="run-details" @toggle="handleDetailsToggle">
       <summary>
         <span>
-          <strong>Run details</strong>
-          <small>Readiness, generated activity, and interaction summary</small>
+          <strong>Technical run details</strong>
+          <small>Readiness, synthetic interaction diagnostics, and process notes</small>
         </span>
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
+        <b aria-hidden="true">+</b>
       </summary>
 
       <div class="details-grid">
@@ -216,7 +247,7 @@
           <span class="detail-number">01</span>
           <div>
             <h3 id="readiness-heading">Before the run</h3>
-            <p>What was ready when this scenario started.</p>
+            <p>System readiness recorded when this run started.</p>
             <dl class="readiness-list">
               <div>
                 <dt>Readiness checks</dt>
@@ -242,33 +273,33 @@
         <section class="detail-section" aria-labelledby="activity-heading">
           <span class="detail-number">02</span>
           <div>
-            <h3 id="activity-heading">Generated activity</h3>
-            <p>
-              A plain-language record of model-generated actions. No human
-              behavior was observed.
-            </p>
-            <ol v-if="detailActions.length" class="detail-activity">
-              <li v-for="item in detailActions" :key="item.id">
-                <span>{{ item.channel }}</span>
-                <p>{{ item.text }}</p>
-              </li>
-            </ol>
-            <p v-else class="detail-empty">No generated activity is available yet.</p>
+            <h3 id="activity-heading">Record inventory</h3>
+            <p>Counts saved synthetic actions only. They are not a sample size.</p>
+            <dl class="readiness-list">
+              <div>
+                <dt>Saved actions</dt>
+                <dd>{{ recordItems.length }}</dd>
+              </div>
+              <div>
+                <dt>Last saved round</dt>
+                <dd>{{ currentRound || "Not available" }}</dd>
+              </div>
+            </dl>
           </div>
         </section>
 
         <section class="detail-section" aria-labelledby="patterns-heading">
           <span class="detail-number">03</span>
           <div>
-            <h3 id="patterns-heading">Interaction summary</h3>
+            <h3 id="patterns-heading">Synthetic interaction diagnostics</h3>
             <p>
-              Descriptive patterns inside this synthetic run. They are not
-              population measurements.
+              Descriptive values from this generated interaction graph. They
+              are not population measures or real-world confidence scores.
             </p>
 
-            <div v-if="metricsLoading" class="detail-loading" aria-live="polite">
-              <span></span>
-              Reading the generated interaction record…
+            <div v-if="metricsLoading" class="detail-loading" role="status">
+              <span aria-hidden="true">··</span>
+              Reading the saved diagnostic record…
             </div>
             <div v-else-if="metricsError" class="detail-error">
               <p>{{ metricsError }}</p>
@@ -278,17 +309,17 @@
               <div>
                 <dt>Conversation clustering</dt>
                 <dd>{{ formatDecimal(metrics.polarization_index) }}</dd>
-                <small>Network modularity inside this run</small>
+                <small>Generated network modularity inside this run</small>
               </div>
               <div>
                 <dt>Activity concentration</dt>
                 <dd>{{ formatDecimal(metrics.engagement_gini) }}</dd>
-                <small>0 is even; 1 is concentrated</small>
+                <small>Generated action distribution inside this run</small>
               </div>
               <div>
-                <dt>Within-group interaction</dt>
-                <dd>{{ formatPercent(metrics.echo_chamber_score) }}</dd>
-                <small>Share of generated interactions</small>
+                <dt>Within-group interaction ratio</dt>
+                <dd>{{ formatDecimal(metrics.echo_chamber_score) }}</dd>
+                <small>Raw 0–1 ratio inside the generated graph</small>
               </div>
             </dl>
             <button
@@ -298,7 +329,7 @@
               :disabled="!canReview"
               @click="$emit('load-metrics')"
             >
-              {{ canReview ? "Load interaction summary" : "Available after the run" }}
+              {{ canReview ? "Load synthetic diagnostics" : "Available after the run" }}
             </button>
           </div>
         </section>
@@ -307,7 +338,7 @@
           <span class="detail-number">04</span>
           <div>
             <h3 id="notes-heading">Process notes</h3>
-            <p>Recent plain-language updates from this run.</p>
+            <p>Recent system-authored updates from this run.</p>
             <ul v-if="recentNotes.length" class="process-notes">
               <li v-for="(note, index) in recentNotes" :key="`${index}-${note}`">
                 {{ note }}
@@ -372,9 +403,8 @@ const failedStatuses = new Set(["failed", "interrupted"]);
 
 const runnerStatus = computed(() => props.runStatus?.runner_status || "idle");
 const hasFailed = computed(() => failedStatuses.has(runnerStatus.value));
-const hasCompleted = computed(
-  () => props.phase === 2 && !hasFailed.value,
-);
+const hasRunError = computed(() => Boolean(props.startError) || hasFailed.value);
+const hasCompleted = computed(() => props.phase === 2 && !hasFailed.value);
 const isRunning = computed(
   () =>
     !hasCompleted.value &&
@@ -394,21 +424,24 @@ const runHeadline = computed(() => {
   if (hasFailed.value) return "This run stopped before the finish.";
   if (hasCompleted.value) return "See how the run unfolded.";
   if (isRunning.value) return "Follow the activity as it unfolds.";
-  return "Preparing the activity map.";
+  return "Prepare the decision rehearsal.";
 });
 
 const runDeck = computed(() => {
   if (hasFailed.value) {
-    return "Keep the partial observations, inspect what stopped, and decide whether to begin a new run.";
+    return "Inspect any saved generated actions, then decide whether to revise the assumptions and begin again.";
   }
   if (hasCompleted.value) {
-    return "Compare the generated channel activity, then decide which possible paths and assumptions need real-world validation.";
+    return "Read the generated activity in chronological order before opening possible paths in the decision brief.";
   }
-  return "Follow two synthetic conversation spaces as they respond to the same conditions.";
+  if (isRunning.value) {
+    return "This screen records model-generated actions under the reviewed assumptions. It does not observe people.";
+  }
+  return "Review the decision and conditions before the synthetic run begins.";
 });
 
-const totalRounds = computed(
-  () => Number(props.runStatus?.total_rounds || props.maxRounds || 0),
+const totalRounds = computed(() =>
+  Math.max(Number(props.runStatus?.total_rounds || props.maxRounds || 0), 0),
 );
 const currentRound = computed(() =>
   Math.max(
@@ -417,10 +450,12 @@ const currentRound = computed(() =>
     Number(props.runStatus?.reddit_current_round || 0),
   ),
 );
+const progressMax = computed(() =>
+  Math.max(totalRounds.value, currentRound.value, 1),
+);
 const progressRatio = computed(() => {
   if (hasCompleted.value) return 1;
-  if (!totalRounds.value) return 0;
-  return Math.max(0, Math.min(1, currentRound.value / totalRounds.value));
+  return Math.max(0, Math.min(1, currentRound.value / progressMax.value));
 });
 const progressText = computed(() => {
   if (hasCompleted.value) return "Run complete";
@@ -429,29 +464,29 @@ const progressText = computed(() => {
 });
 const progressLabel = computed(() => {
   if (hasFailed.value) return "Run stopped";
-  if (hasCompleted.value) return "Activity recorded";
-  if (isRunning.value) return "Run in progress";
-  return "Getting ready";
+  if (hasCompleted.value) return "Rounds recorded";
+  if (isRunning.value) return "Saved round progress";
+  return "Run not started";
 });
 
 const statusLabel = computed(() => {
-  if (hasFailed.value) return "Needs attention";
-  if (hasCompleted.value) return "Ready to review";
-  if (isRunning.value) return "Activity unfolding";
-  return "Waiting to start";
+  if (hasRunError.value) return "Run stopped";
+  if (hasCompleted.value) return "Record complete";
+  if (isRunning.value) return "Recording generated activity";
+  return "Not started";
 });
 const statusTone = computed(() => {
-  if (hasFailed.value) return "error";
+  if (hasRunError.value) return "error";
   if (hasCompleted.value) return "complete";
   if (isRunning.value) return "running";
   return "waiting";
 });
-
-const routesHeading = computed(() =>
-  hasCompleted.value
-    ? "What happened inside the generated channels"
-    : "What is happening inside the generated channels",
-);
+const statusCode = computed(() => ({
+  error: "ERR",
+  complete: "END",
+  running: "REC",
+  waiting: "WAIT",
+})[statusTone.value]);
 
 const actionText = (action) => {
   const args = action?.action_args || {};
@@ -467,7 +502,7 @@ const actionText = (action) => {
   );
 };
 
-const cleanText = (value, limit = 150) => {
+const cleanText = (value, limit = 180) => {
   const normalized = String(value || "").replace(/\s+/g, " ").trim();
   if (!normalized) return "";
   return normalized.length > limit
@@ -475,8 +510,14 @@ const cleanText = (value, limit = 150) => {
     : normalized;
 };
 
+const channelLabel = (platform) => {
+  if (platform === "twitter") return "Short-post channel";
+  if (platform === "reddit") return "Topic-community channel";
+  return "Generated channel";
+};
+
 const describeAction = (action) => {
-  const actor = cleanText(action?.agent_name, 48) || "A generated profile";
+  const actor = cleanText(action?.agent_name, 48) || "Generated profile";
   const text = cleanText(actionText(action));
   const target =
     cleanText(action?.action_args?.target_user_name, 48) ||
@@ -484,109 +525,80 @@ const describeAction = (action) => {
 
   switch (action?.action_type) {
     case "CREATE_POST":
-      return text ? `${actor} introduces “${text}”` : `${actor} introduces a new post.`;
+      return text ? `${actor} introduces “${text}”` : `${actor} creates a post.`;
     case "CREATE_COMMENT":
-      return text ? `${actor} responds with “${text}”` : `${actor} joins a discussion.`;
+      return text ? `${actor} responds with “${text}”` : `${actor} adds a reply.`;
     case "QUOTE_POST":
-      return text ? `${actor} reframes the discussion with “${text}”` : `${actor} reframes an earlier post.`;
+      return text
+        ? `${actor} reframes a prior post with “${text}”`
+        : `${actor} reframes a prior post.`;
     case "REPOST":
-      return text ? `${actor} carries forward “${text}”` : `${actor} carries an earlier post forward.`;
+      return text
+        ? `${actor} carries forward “${text}”`
+        : `${actor} carries a prior post forward.`;
     case "LIKE_POST":
     case "LIKE_COMMENT":
     case "UPVOTE_POST":
-      return `${actor} signals support for another generated contribution.`;
+      return `${actor} applies a positive reaction to another generated contribution.`;
     case "DISLIKE_POST":
     case "DISLIKE_COMMENT":
     case "DOWNVOTE_POST":
-      return `${actor} signals disagreement with another generated contribution.`;
+      return `${actor} applies a negative reaction to another generated contribution.`;
     case "FOLLOW":
       return target
-        ? `${actor} follows ${target} inside the synthetic network.`
-        : `${actor} follows another generated profile.`;
+        ? `${actor} follows ${target} inside the generated network.`
+        : `${actor} follows another generated profile inside the run.`;
     case "SEARCH_POSTS":
     case "SEARCH_USER":
       return text
-        ? `${actor} looks for “${text}”`
-        : `${actor} looks for more information inside the run.`;
+        ? `${actor} searches the generated channel for “${text}”`
+        : `${actor} searches for more information inside the run.`;
     case "DO_NOTHING":
-      return `${actor} does not act during this round.`;
+      return `${actor} records no action during this round.`;
     default:
       return text
         ? `${actor} adds “${text}”`
-        : `${actor} takes a generated action in this channel.`;
+        : `${actor} records a generated action.`;
   }
 };
 
-const routeDefinitions = [
-  {
-    id: "short",
-    platform: "twitter",
-    title: "Short-post activity",
-    empty: "Waiting for the first short-post signal.",
-  },
-  {
-    id: "community",
-    platform: "reddit",
-    title: "Topic-community activity",
-    empty: "Waiting for the first community signal.",
-  },
-];
+const chronologicalActions = computed(() =>
+  props.actions
+    .map((action, index) => ({ action, index }))
+    .sort((left, right) => {
+      const roundDifference =
+        Number(left.action?.round_num || 0) -
+        Number(right.action?.round_num || 0);
+      if (roundDifference) return roundDifference;
 
-const routeLanes = computed(() =>
-  routeDefinitions.map((definition) => {
-    const laneActions = props.actions.filter(
-      (action) => action?.platform === definition.platform,
-    );
-    const meaningful = laneActions
-      .filter((action) => action?.action_type !== "DO_NOTHING" || laneActions.length < 3)
-      .slice(-3);
-    const steps = meaningful.length
-      ? meaningful.map((action, index) => ({
-          id:
-            action._uniqueId ||
-            action.id ||
-            `${definition.id}-${action.round_num || 0}-${index}`,
-          label: action.round_num ? `Round ${action.round_num}` : `Signal ${index + 1}`,
-          text: describeAction(action),
-        }))
-      : [
-          {
-            id: `${definition.id}-waiting`,
-            label: isRunning.value ? "Tracing" : "No signal yet",
-            text: definition.empty,
-          },
-        ];
-
-    return {
-      ...definition,
-      steps,
-      isWaiting: meaningful.length === 0,
-      summary: laneActions.length
-        ? `${laneActions.length} generated ${laneActions.length === 1 ? "action occurred" : "actions occurred"} in this channel.`
-        : "No generated action has occurred in this channel yet.",
-    };
-  }),
+      const timeDifference = String(left.action?.timestamp || "").localeCompare(
+        String(right.action?.timestamp || ""),
+      );
+      return timeDifference || left.index - right.index;
+    }),
 );
 
-const isWaitingForSignals = computed(
-  () => isRunning.value && props.actions.length === 0,
-);
-
-const detailActions = computed(() =>
-  props.actions.slice(-12).reverse().map((action, index) => ({
+const recordItems = computed(() =>
+  chronologicalActions.value.map(({ action, index }, recordIndex) => ({
     id:
-      action._uniqueId ||
-      action.id ||
-      `detail-${action.platform || "mixed"}-${action.round_num || 0}-${index}`,
-    channel:
-      action.platform === "twitter"
-        ? "Short-post activity"
-        : action.platform === "reddit"
-          ? "Topic-community activity"
-          : "Generated activity",
+      action?._uniqueId ||
+      action?.id ||
+      `record-${action?.platform || "mixed"}-${action?.round_num || 0}-${index}`,
+    sequence: String(recordIndex + 1).padStart(2, "0"),
+    roundLabel: action?.round_num ? `Round ${action.round_num}` : "Round unavailable",
+    channel: channelLabel(action?.platform),
+    actor: cleanText(action?.agent_name, 48) || "Generated profile",
     text: describeAction(action),
   })),
 );
+
+const recordState = computed(() => {
+  if (hasRunError.value) return "error";
+  if (hasCompleted.value) return "complete";
+  if (isRunning.value && recordItems.value.length === 0) return "loading";
+  if (recordItems.value.length > 0) return "active";
+  return "empty";
+});
 
 const recentNotes = computed(() =>
   props.systemLogs
@@ -610,11 +622,6 @@ const formatDecimal = (value) => {
   return Number.isFinite(number) ? number.toFixed(2) : "Not available";
 };
 
-const formatPercent = (value) => {
-  const number = Number(value);
-  return Number.isFinite(number) ? `${(number * 100).toFixed(0)}%` : "Not available";
-};
-
 const handleDetailsToggle = (event) => {
   if (
     event.currentTarget.open &&
@@ -629,7 +636,7 @@ const handleDetailsToggle = (event) => {
 
 <style scoped>
 .run-wayfinder {
-  width: 100%;
+  min-width: 0;
   min-height: 100%;
   overflow-x: clip;
   background: var(--ink-deep);
@@ -638,21 +645,12 @@ const handleDetailsToggle = (event) => {
 }
 
 .run-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1.65fr) minmax(14rem, 0.55fr);
-  gap: clamp(2rem, 7vw, 6rem);
-  align-items: end;
-  padding: clamp(2rem, 5vw, 4.5rem) clamp(1.25rem, 4.5vw, 4.5rem) 2rem;
+  padding: 1.5rem 1rem 0;
   border-bottom: 1px solid var(--line-dark);
-  background:
-    linear-gradient(115deg, rgba(229, 194, 29, 0.05), transparent 42%),
-    var(--ink-deep);
 }
 
 .run-kicker,
-.section-index,
-.validation-destination > span,
-.route-lane > header > span {
+.section-index {
   display: block;
   color: var(--signal);
   font-family: var(--font-display);
@@ -664,7 +662,7 @@ const handleDetailsToggle = (event) => {
 
 .run-hero h2,
 .decision-band h3,
-.route-board-heading h3,
+.record-heading h3,
 .validation-handoff h3 {
   margin: 0;
   font-family: var(--font-display);
@@ -674,95 +672,76 @@ const handleDetailsToggle = (event) => {
 
 .run-hero h2 {
   max-width: 15ch;
-  margin-top: 0.65rem;
-  font-size: clamp(3.15rem, 7vw, 6.7rem);
+  margin-top: 0.6rem;
+  font-size: clamp(3rem, 16vw, 4.8rem);
   line-height: 0.88;
 }
 
 .run-hero-copy > p {
-  max-width: 58ch;
-  margin: 1rem 0 0;
+  max-width: 60ch;
+  margin: 0.9rem 0 1.5rem;
   color: var(--paper-muted);
-  font-size: clamp(1rem, 1.4vw, 1.2rem);
-  line-height: 1.55;
-}
-
-.truth-stamp {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.8rem;
-  align-items: center;
-  padding: 1rem 0;
-  border-top: 1px solid var(--paper-muted);
-  border-bottom: 1px solid var(--paper-muted);
-}
-
-.truth-number {
-  color: var(--signal);
-  font-family: var(--font-display);
-  font-size: 4.25rem;
-  line-height: 0.8;
-}
-
-.truth-stamp strong,
-.truth-stamp small {
-  display: block;
-}
-
-.truth-stamp strong {
   font-size: 0.9rem;
-  font-weight: 700;
+  line-height: 1.5;
 }
 
-.truth-stamp small {
-  margin-top: 0.22rem;
-  color: var(--paper-muted);
-  font-size: 0.72rem;
-  line-height: 1.35;
+.run-truth-boundary {
+  display: grid;
+  margin: 0 -1rem;
+  border-top: 1px solid var(--line-dark);
+  background: var(--ink-soft);
+}
+
+.run-truth-boundary span {
+  padding: 0.72rem 1rem;
+  border-bottom: 1px solid var(--line-dark);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.run-truth-boundary span:nth-child(3) {
+  background: var(--signal);
+  color: var(--ink-deep);
 }
 
 .decision-band {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) minmax(16rem, 0.75fr);
-  gap: clamp(2rem, 5vw, 5rem);
-  align-items: center;
-  margin: clamp(1.25rem, 3vw, 2.5rem);
-  padding: clamp(1.4rem, 3vw, 2.35rem);
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0.65rem 0.65rem 0 var(--signal-deep);
-}
-
-.decision-band .section-index {
-  color: var(--signal-deep);
+  gap: 1.5rem;
+  margin: 1rem;
+  padding: 1.2rem;
+  border: 1px solid var(--paper);
+  background: var(--ink-soft);
+  box-shadow: 0.42rem 0.42rem 0 var(--signal-deep);
 }
 
 .decision-band h3 {
-  max-width: 26ch;
+  max-width: 28ch;
   margin-top: 0.55rem;
-  font-size: clamp(2rem, 4vw, 4.1rem);
-  line-height: 0.97;
+  font-size: clamp(2rem, 10vw, 3.6rem);
+  line-height: 0.95;
 }
 
-.route-progress {
-  align-self: stretch;
-  display: grid;
-  align-content: center;
-  padding-left: clamp(1.25rem, 3vw, 2.5rem);
-  border-left: 1px solid var(--line-light);
+.run-progress {
+  min-width: 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line-light);
 }
 
 .progress-heading {
   display: flex;
-  justify-content: space-between;
   gap: 1rem;
   align-items: baseline;
-  font-size: 0.76rem;
+  justify-content: space-between;
+  font-size: 0.74rem;
 }
 
-.progress-heading span {
-  color: var(--ink-muted);
-  font-weight: 600;
+.progress-heading span,
+.run-progress small {
+  color: var(--paper-muted);
 }
 
 .progress-heading strong {
@@ -772,11 +751,11 @@ const handleDetailsToggle = (event) => {
 }
 
 .progress-track {
-  height: 0.55rem;
+  height: 0.5rem;
   margin-top: 0.75rem;
   overflow: hidden;
-  border: 1px solid var(--ink);
-  background: var(--paper-strong);
+  border: 1px solid var(--line-dark);
+  background: var(--ink-raised);
 }
 
 .progress-track span {
@@ -786,479 +765,367 @@ const handleDetailsToggle = (event) => {
   transform: scaleX(0);
   transform-origin: left;
   background: var(--signal);
-  transition: transform 700ms var(--ease-out);
+  transition: transform 180ms var(--ease-out);
 }
 
-.run-alert {
-  display: grid;
-  grid-template-columns: 2rem 1fr;
-  gap: 1rem;
-  margin: 0 clamp(1.25rem, 3vw, 2.5rem) 1.5rem;
-  padding: 1rem 1.2rem;
-  border-left: 0.45rem solid var(--error);
-  background: #ead5cf;
-  color: #612b26;
-}
-
-.run-alert svg {
-  width: 1.7rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-  stroke-width: 1.8;
-}
-
-.run-alert strong {
-  font-weight: 700;
-}
-
-.run-alert p {
-  margin: 0.25rem 0 0;
-  font-size: 0.85rem;
-}
-
-.run-alert button,
-.live-update-alert button,
-.run-capability-note button {
-  min-height: 2.25rem;
-  margin-top: 0.7rem;
-  padding: 0.42rem 0.72rem;
-  border: 1px solid currentColor;
-  border-radius: 0;
-  background: transparent;
-  color: inherit;
-  font-weight: 700;
-}
-
-.run-alert button:hover,
-.live-update-alert button:hover,
-.run-capability-note button:hover {
-  background: currentColor;
-  color: var(--paper);
-}
-
-.route-board {
-  padding: clamp(1.5rem, 3vw, 2.75rem) clamp(1.25rem, 3vw, 2.5rem) clamp(2rem, 4vw, 4rem);
-}
-
-.route-board-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2rem;
-  align-items: end;
-  margin-bottom: clamp(2rem, 4vw, 3.5rem);
-}
-
-.route-board-heading h3 {
+.run-progress small {
+  display: block;
   margin-top: 0.5rem;
-  font-size: clamp(2.25rem, 4.5vw, 4.6rem);
-  line-height: 0.95;
+  font-size: 0.66rem;
+  line-height: 1.45;
 }
 
-.route-board-heading p {
+.run-record {
+  padding: 2rem 1rem;
+}
+
+.record-heading {
+  display: grid;
+  gap: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.record-heading h3 {
+  max-width: 17ch;
+  margin-top: 0.5rem;
+  font-size: clamp(2.35rem, 12vw, 4.5rem);
+  line-height: 0.9;
+}
+
+.record-heading p {
   max-width: 64ch;
-  margin: 0.75rem 0 0;
+  margin: 0.8rem 0 0;
   color: var(--paper-muted);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   line-height: 1.55;
 }
 
-.plain-status {
-  display: inline-flex;
+.record-status {
+  display: inline-grid;
+  grid-template-columns: auto 1fr;
   gap: 0.55rem;
   align-items: center;
-  min-height: 2.4rem;
-  padding: 0.55rem 0.75rem;
+  justify-self: start;
+  min-height: 2.75rem;
+  padding: 0.45rem 0.7rem 0.45rem 0.45rem;
   border: 1px solid var(--line-dark);
   color: var(--paper-muted);
-  font-size: 0.76rem;
-  font-weight: 650;
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
-.plain-status i {
-  width: 0.62rem;
-  height: 0.62rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.plain-status.is-running {
-  border-color: var(--signal);
+.record-status b {
+  display: grid;
+  min-width: 2.5rem;
+  min-height: 1.8rem;
+  place-items: center;
+  background: var(--ink-raised);
   color: var(--signal);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
 }
 
-.plain-status.is-running i {
-  animation: route-pulse 1.7s var(--ease-out) infinite;
+.record-status.is-error {
+  border-color: var(--error);
+  color: #e7aaa0;
 }
 
-.plain-status.is-complete {
+.record-status.is-complete {
   border-color: var(--paper-muted);
   color: var(--paper);
 }
 
-.plain-status.is-error {
-  border-color: var(--error);
-  color: #e09b91;
-}
-
-.route-map {
-  display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) minmax(11rem, 0.25fr);
-  gap: 1.25rem;
-  align-items: stretch;
-}
-
-.route-origin {
-  display: grid;
-  place-items: center;
-  position: relative;
-}
-
-.route-origin::before {
-  content: "";
-  position: absolute;
-  top: 25%;
-  bottom: 25%;
-  width: 0.22rem;
-  background: var(--paper);
-}
-
-.route-origin span {
-  position: relative;
-  width: 1.6rem;
-  height: 1.6rem;
-  border: 0.28rem solid var(--paper);
-  border-radius: 50%;
-  background: var(--ink-deep);
-}
-
-.route-lanes {
-  display: grid;
-  gap: clamp(2.25rem, 5vw, 4.5rem);
-  padding: 0.8rem 0 1rem;
-}
-
-.route-lane {
-  min-width: 0;
-}
-
-.route-lane header {
-  display: grid;
-  grid-template-columns: minmax(11rem, 0.55fr) minmax(0, 1fr);
-  column-gap: 1.25rem;
-  align-items: baseline;
-}
-
-.route-lane header > span {
-  grid-column: 1;
+.record-status.is-running {
+  border-color: var(--signal);
   color: var(--signal);
 }
 
-.route-lane h4 {
-  grid-column: 1;
-  margin: 0.28rem 0 0;
-  color: var(--paper);
+.record-state {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+  padding: 1.25rem;
+  border: 1px solid var(--paper);
+  background: var(--ink-soft);
+}
+
+.record-state.is-error {
+  border-color: var(--error);
+}
+
+.state-code {
+  display: grid;
+  min-width: 3.2rem;
+  min-height: 3.2rem;
+  place-items: center;
+  background: var(--signal);
+  color: var(--ink-deep);
   font-family: var(--font-display);
-  font-size: 1.8rem;
+  font-size: 1.1rem;
+}
+
+.record-state.is-error .state-code {
+  background: var(--error);
+  color: var(--paper);
+}
+
+.record-state strong {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
   font-weight: 400;
   line-height: 1;
 }
 
-.route-lane header > p {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  align-self: center;
-  margin: 0;
+.record-state p {
+  max-width: 62ch;
+  margin: 0.5rem 0 0;
   color: var(--paper-muted);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
 }
 
-.route-line {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(var(--route-step-count), minmax(0, 1fr));
-  height: 2rem;
-  margin-top: 0.65rem;
-  align-items: center;
+.record-state button,
+.review-button,
+.live-update-alert button,
+.run-capability-note button,
+.load-patterns,
+.detail-error button {
+  min-height: 2.75rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
 }
 
-.route-stroke {
-  position: absolute;
-  inset: calc(50% - 0.18rem) 0 auto;
-  height: 0.36rem;
-  transform: scaleX(1);
-  transform-origin: left;
-  background: var(--signal);
-  animation: trace-route 760ms var(--ease-out) both;
-}
-
-.route-community .route-stroke {
-  height: 0.2rem;
-  background:
-    repeating-linear-gradient(
-      90deg,
-      var(--signal) 0 1.4rem,
-      transparent 1.4rem 2rem
-    );
-}
-
-.route-lane.is-waiting .route-stroke {
-  opacity: 0.35;
-}
-
-.route-node {
-  z-index: 1;
-  justify-self: center;
-  width: 1.35rem;
-  height: 1.35rem;
-  border: 0.27rem solid var(--signal);
-  border-radius: 50%;
-  background: var(--ink-deep);
-}
-
-.route-node:first-of-type {
+.record-state button {
+  grid-column: 2;
   justify-self: start;
 }
 
-.route-node:last-of-type {
-  justify-self: end;
+.record-layout {
+  display: grid;
+  gap: 1.5rem;
 }
 
-.route-steps {
-  display: grid;
-  grid-template-columns: repeat(var(--route-step-count), minmax(0, 1fr));
-  gap: clamp(0.8rem, 2vw, 2rem);
+.record-ledger {
+  min-width: 0;
+  border: 1px solid var(--paper);
+}
+
+.record-list-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--paper);
+  background: var(--paper);
+  color: var(--ink-deep);
+}
+
+.record-list-heading span {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  text-transform: uppercase;
+}
+
+.record-list-heading strong {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+}
+
+.run-record-list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.route-steps li {
-  min-width: 0;
+.run-record-list > li {
+  display: grid;
+  grid-template-columns: 3.3rem minmax(0, 1fr);
+  border-bottom: 1px solid var(--line-dark);
 }
 
-.route-steps li:not(:first-child):not(:last-child) {
-  text-align: center;
+.run-record-list > li:last-child {
+  border-bottom: 0;
 }
 
-.route-steps li:last-child:not(:only-child) {
-  text-align: right;
-}
-
-.route-steps span {
+.record-number {
+  display: grid;
+  place-items: start center;
+  padding-top: 1rem;
+  border-right: 1px solid var(--line-dark);
   color: var(--signal);
   font-family: var(--font-display);
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
+  font-size: 1rem;
+}
+
+.run-record-list article {
+  min-width: 0;
+  padding: 1rem;
+}
+
+.run-record-list header {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.run-record-list header span,
+.run-record-list footer {
+  color: var(--paper-dim);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
-.route-steps p {
-  margin: 0.35rem 0 0;
+.run-record-list header strong {
+  font-size: 0.82rem;
+}
+
+.run-record-list p {
+  margin: 0.7rem 0;
   color: var(--paper);
-  font-size: clamp(0.78rem, 1.1vw, 0.9rem);
-  line-height: 1.42;
+  font-size: 0.82rem;
+  line-height: 1.52;
 }
 
-.validation-destination {
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
+.meaning-boundary {
+  align-self: start;
   padding: 1.25rem;
-  border: 1px solid var(--paper);
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0.45rem 0.45rem 0 var(--signal-deep);
+  border: 1px solid var(--signal);
+  background: var(--ink-soft);
 }
 
-.validation-destination svg {
-  width: 3rem;
-  fill: none;
-  stroke: var(--ink);
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-  stroke-width: 2;
-}
-
-.validation-destination > span {
-  margin-top: 1rem;
-  color: var(--signal-deep);
-}
-
-.validation-destination strong {
-  margin-top: 0.35rem;
+.meaning-boundary h4 {
+  margin: 0.55rem 0 1rem;
   font-family: var(--font-display);
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 400;
-  line-height: 0.95;
+  line-height: 0.92;
 }
 
-.validation-destination p {
-  margin: 0.7rem 0 0;
-  color: var(--ink-muted);
-  font-size: 0.76rem;
-  line-height: 1.45;
+.meaning-boundary dl {
+  margin: 0;
 }
 
-.route-waiting {
-  display: flex;
-  gap: 0.85rem;
-  align-items: center;
-  margin-top: 2rem;
-  padding-top: 1rem;
+.meaning-boundary dl > div {
+  padding: 0.85rem 0;
   border-top: 1px solid var(--line-dark);
 }
 
-.route-waiting-mark {
-  flex: 0 0 auto;
-  width: 1rem;
-  height: 1rem;
-  border: 0.18rem solid var(--signal);
-  border-radius: 50%;
-  animation: route-pulse 1.7s var(--ease-out) infinite;
+.meaning-boundary dt {
+  color: var(--signal);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  text-transform: uppercase;
 }
 
-.route-waiting p {
-  margin: 0;
+.meaning-boundary dd {
+  margin: 0.3rem 0 0;
   color: var(--paper-muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
-.route-waiting strong {
-  color: var(--paper);
+.meaning-boundary > p {
+  margin: 1rem -1.25rem -1.25rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--signal);
+  color: var(--ink-deep);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .validation-handoff {
   display: grid;
-  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
-  gap: clamp(1.2rem, 3vw, 2.5rem);
-  align-items: center;
-  width: min(94%, 78rem);
-  padding: clamp(1.4rem, 3vw, 2.2rem) clamp(1.2rem, 3vw, 2.8rem);
+  gap: 1rem;
+  padding: 1.5rem 1rem;
   background: var(--signal);
-  color: var(--ink);
-  clip-path: polygon(0 0, 96% 0, 100% 100%, 0 100%);
-}
-
-.handoff-arrow {
-  width: 3.25rem;
-  fill: none;
-  stroke: var(--ink);
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-  stroke-width: 4;
+  color: var(--ink-deep);
 }
 
 .validation-handoff .section-index {
-  color: var(--ink-muted);
+  color: var(--ink-deep);
+}
+
+.handoff-index {
+  font-family: var(--font-display);
+  font-size: 3.5rem;
+  line-height: 0.8;
 }
 
 .validation-handoff h3 {
-  margin-top: 0.38rem;
-  font-size: clamp(1.8rem, 3.2vw, 3.25rem);
-  line-height: 0.98;
+  margin-top: 0.35rem;
+  font-size: clamp(2rem, 10vw, 3.5rem);
+  line-height: 0.92;
 }
 
 .validation-handoff p {
   max-width: 58ch;
-  margin: 0.55rem 0 0;
-  font-size: 0.82rem;
-  line-height: 1.45;
+  margin: 0.65rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.review-button {
+  width: 100%;
+  border-color: var(--ink-deep);
+  background: var(--ink-deep);
+  color: var(--paper);
+}
+
+.review-button:disabled {
+  opacity: 0.55;
 }
 
 .handoff-error {
   display: grid;
-  gap: 0.18rem;
-  margin-top: 0.75rem;
-  padding: 0.65rem 0.75rem;
+  gap: 0.2rem;
+  margin-top: 0.8rem;
+  padding: 0.75rem;
   border-left: 0.35rem solid var(--error);
-  background: rgba(255, 255, 255, 0.58);
-  color: #612b26;
-  font-size: 0.78rem;
-}
-
-.handoff-error strong,
-.handoff-error span {
-  display: block;
-}
-
-.review-button {
-  min-width: 12rem;
-  min-height: 3.25rem;
-  padding: 0.8rem 1rem;
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--paper);
-  font-weight: 700;
-}
-
-.review-button:hover:not(:disabled) {
-  border-color: var(--ink);
   background: var(--paper);
-  color: var(--ink);
+  color: #612b26;
+  font-size: 0.76rem;
 }
 
-.review-button svg {
-  width: 1.15rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
-  stroke-width: 2;
-}
-
+.live-update-alert,
 .run-capability-note {
   display: flex;
-  gap: 0.8rem;
-  align-items: center;
-  justify-content: space-between;
-  margin: 1rem clamp(1.25rem, 3vw, 2.5rem) 0;
-  color: var(--paper-dim);
-  font-size: 0.72rem;
-}
-
-.run-capability-note button {
-  flex: 0 0 auto;
-  margin-top: 0;
-}
-
-.live-update-alert {
-  display: flex;
-  gap: 1rem;
-  align-items: center;
-  justify-content: space-between;
-  margin: 1rem clamp(1.25rem, 3vw, 2.5rem) 0;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid var(--signal);
-  color: var(--paper);
-  font-size: 0.78rem;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: stretch;
+  margin: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line-dark);
+  color: var(--paper-muted);
+  font-size: 0.74rem;
 }
 
 .live-update-alert strong {
   color: var(--signal);
 }
 
-.live-update-alert button {
-  flex: 0 0 auto;
-  margin-top: 0;
-  color: var(--signal);
-}
-
 .run-details {
-  margin: clamp(1.5rem, 3vw, 2.75rem) clamp(1.25rem, 3vw, 2.5rem) 0;
+  margin: 1.5rem 1rem 0;
   border-top: 1px solid var(--line-dark);
 }
 
 .run-details summary {
   display: flex;
-  justify-content: space-between;
   gap: 1rem;
   align-items: center;
-  padding: 1rem 0;
+  justify-content: space-between;
+  min-height: 3.5rem;
+  padding: 0.8rem 0;
   cursor: pointer;
   list-style: none;
 }
@@ -1277,58 +1144,53 @@ const handleDetailsToggle = (event) => {
   font-family: var(--font-display);
   font-size: 1.2rem;
   font-weight: 400;
-  letter-spacing: 0.035em;
 }
 
 .run-details summary small {
   margin-top: 0.2rem;
   color: var(--paper-dim);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
 }
 
-.run-details summary svg {
-  width: 1.25rem;
-  fill: none;
-  stroke: var(--signal);
-  stroke-linecap: square;
-  stroke-width: 2;
-  transition: transform 240ms var(--ease-out);
+.run-details summary > b {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  background: var(--signal);
+  color: var(--ink-deep);
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  transition: transform 160ms var(--ease-out);
 }
 
-.run-details[open] summary svg {
-  transform: rotate(180deg);
+.run-details[open] summary > b {
+  transform: rotate(45deg);
 }
 
 .details-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   border-top: 1px solid var(--line-dark);
 }
 
 .detail-section {
   display: grid;
-  grid-template-columns: 2.2rem minmax(0, 1fr);
-  gap: 1rem;
+  grid-template-columns: 2.1rem minmax(0, 1fr);
+  gap: 0.9rem;
   min-width: 0;
-  padding: clamp(1.25rem, 3vw, 2rem);
-  border-right: 1px solid var(--line-dark);
+  padding: 1.2rem 0;
   border-bottom: 1px solid var(--line-dark);
-}
-
-.detail-section:nth-child(even) {
-  border-right: 0;
 }
 
 .detail-number {
   color: var(--signal);
   font-family: var(--font-display);
-  font-size: 1rem;
 }
 
 .detail-section h3 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.55rem;
+  font-size: 1.5rem;
   font-weight: 400;
 }
 
@@ -1336,13 +1198,12 @@ const handleDetailsToggle = (event) => {
   max-width: 52ch;
   margin: 0.4rem 0 1rem;
   color: var(--paper-muted);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   line-height: 1.45;
 }
 
 .readiness-list,
 .pattern-list {
-  display: grid;
   margin: 0;
 }
 
@@ -1350,7 +1211,7 @@ const handleDetailsToggle = (event) => {
 .pattern-list > div {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.35rem 1rem;
+  gap: 0.3rem 1rem;
   align-items: baseline;
   padding: 0.7rem 0;
   border-top: 1px solid var(--line-dark);
@@ -1359,7 +1220,7 @@ const handleDetailsToggle = (event) => {
 .readiness-list dt,
 .pattern-list dt {
   color: var(--paper-muted);
-  font-size: 0.73rem;
+  font-size: 0.72rem;
 }
 
 .readiness-list dd,
@@ -1367,19 +1228,16 @@ const handleDetailsToggle = (event) => {
   margin: 0;
   color: var(--paper);
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 1.1rem;
 }
 
 .pattern-list small {
   grid-column: 1 / -1;
   color: var(--paper-dim);
-  font-size: 0.66rem;
+  font-size: 0.64rem;
 }
 
-.detail-activity,
 .process-notes {
-  display: grid;
-  gap: 0;
   max-height: 18rem;
   margin: 0;
   padding: 0;
@@ -1387,25 +1245,11 @@ const handleDetailsToggle = (event) => {
   list-style: none;
 }
 
-.detail-activity li,
 .process-notes li {
   padding: 0.7rem 0;
   border-top: 1px solid var(--line-dark);
-}
-
-.detail-activity span {
-  color: var(--signal);
-  font-family: var(--font-display);
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.detail-activity p,
-.process-notes li {
-  margin: 0.25rem 0 0;
   color: var(--paper-muted);
-  font-size: 0.73rem;
+  font-size: 0.72rem;
   line-height: 1.45;
 }
 
@@ -1416,12 +1260,12 @@ const handleDetailsToggle = (event) => {
   border-left: 0.25rem solid var(--line-dark);
   background: var(--ink-soft);
   color: var(--paper-muted);
-  font-size: 0.73rem;
+  font-size: 0.72rem;
 }
 
 .detail-error {
   border-left-color: var(--error);
-  color: #e09b91;
+  color: #e7aaa0;
 }
 
 .detail-error p {
@@ -1435,11 +1279,8 @@ const handleDetailsToggle = (event) => {
 }
 
 .detail-loading span {
-  width: 0.8rem;
-  height: 0.8rem;
-  border: 0.15rem solid var(--signal);
-  border-radius: 50%;
-  animation: route-pulse 1.7s var(--ease-out) infinite;
+  color: var(--signal);
+  font-family: var(--font-mono);
 }
 
 .load-patterns,
@@ -1447,192 +1288,129 @@ const handleDetailsToggle = (event) => {
   background: transparent;
 }
 
-@keyframes trace-route {
-  from {
-    opacity: 0;
-    transform: scaleX(0);
-  }
-  to {
-    opacity: 1;
-    transform: scaleX(1);
-  }
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
 }
 
-@keyframes route-pulse {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: scale(0.85);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
+button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
-@media (max-width: 860px) {
-  .run-hero,
-  .decision-band,
-  .route-board-heading,
-  .validation-handoff {
-    grid-template-columns: 1fr;
-  }
-
+@media (min-width: 48rem) {
   .run-hero {
-    gap: 1.5rem;
-  }
-
-  .truth-stamp {
-    max-width: 24rem;
-  }
-
-  .decision-band {
-    gap: 1.5rem;
-  }
-
-  .route-progress {
-    padding: 1.2rem 0 0;
-    border-top: 1px solid var(--line-light);
-    border-left: 0;
-  }
-
-  .plain-status {
-    justify-self: start;
-  }
-
-  .route-map {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .route-origin {
-    display: none;
-  }
-
-  .validation-destination {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 1rem;
-    align-items: center;
-  }
-
-  .validation-destination svg {
-    grid-row: 1 / span 3;
-  }
-
-  .validation-destination > span,
-  .validation-destination strong,
-  .validation-destination p {
-    grid-column: 2;
-    margin-top: 0;
-  }
-
-  .validation-handoff {
-    width: 100%;
-    clip-path: none;
-  }
-
-  .review-button {
-    justify-self: start;
-  }
-}
-
-@media (max-width: 620px) {
-  .run-hero {
-    padding: 1.5rem 1rem;
+    padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 4vw, 4rem) 0;
   }
 
   .run-hero h2 {
-    font-size: clamp(3rem, 17vw, 4.7rem);
+    font-size: clamp(4rem, 7vw, 6.6rem);
+  }
+
+  .run-truth-boundary {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin: 0 calc(clamp(1.5rem, 4vw, 4rem) * -1);
+  }
+
+  .run-truth-boundary span {
+    display: grid;
+    min-height: 3.6rem;
+    align-items: center;
+    border-right: 1px solid var(--line-dark);
+    border-bottom: 0;
   }
 
   .decision-band {
-    margin: 1rem;
-    padding: 1.2rem;
-    box-shadow: 0.38rem 0.38rem 0 var(--signal-deep);
+    grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 0.7fr);
+    gap: clamp(2rem, 5vw, 5rem);
+    align-items: center;
+    margin: clamp(1.5rem, 3vw, 2.5rem);
+    padding: clamp(1.5rem, 3vw, 2.4rem);
   }
 
-  .route-board {
-    padding: 1.8rem 1rem;
+  .run-progress {
+    align-self: stretch;
+    display: grid;
+    align-content: center;
+    padding: 0 0 0 clamp(1.25rem, 3vw, 2.5rem);
+    border-top: 0;
+    border-left: 1px solid var(--line-light);
   }
 
-  .route-lane header {
-    grid-template-columns: 1fr;
+  .run-record {
+    padding: clamp(2rem, 4vw, 4rem) clamp(1.5rem, 3vw, 2.5rem);
   }
 
-  .route-lane header > p {
-    grid-column: 1;
-    grid-row: auto;
-    margin-top: 0.4rem;
+  .record-heading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2rem;
+    align-items: end;
   }
 
-  .route-line {
-    display: none;
+  .record-layout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(18rem, 0.65fr);
+    align-items: start;
   }
 
-  .route-steps {
-    grid-template-columns: 1fr;
-    margin-top: 1rem;
-    padding-left: 1rem;
-    border-left: 0.3rem solid var(--signal);
-  }
-
-  .route-steps li,
-  .route-steps li:nth-child(2),
-  .route-steps li:nth-child(3) {
-    padding: 0.1rem 0 0.9rem;
-    text-align: left !important;
+  .meaning-boundary {
+    position: sticky;
+    top: 1rem;
   }
 
   .validation-handoff {
-    padding: 1.5rem 1rem;
-  }
-
-  .handoff-arrow {
-    width: 2.5rem;
+    grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+    gap: 1.5rem;
+    align-items: center;
+    width: min(96%, 82rem);
+    padding: 1.6rem clamp(1.5rem, 3vw, 2.8rem);
+    clip-path: polygon(0 0, 97% 0, 100% 100%, 0 100%);
   }
 
   .review-button {
-    width: 100%;
+    width: auto;
+    min-width: 12rem;
   }
 
-  .run-capability-note,
+  .live-update-alert,
+  .run-capability-note {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-right: clamp(1.5rem, 3vw, 2.5rem);
+    margin-left: clamp(1.5rem, 3vw, 2.5rem);
+  }
+
   .run-details {
-    margin-right: 1rem;
-    margin-left: 1rem;
-  }
-
-  .run-capability-note,
-  .live-update-alert {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .run-capability-note button,
-  .live-update-alert button {
-    width: 100%;
+    margin: clamp(1.5rem, 3vw, 2.75rem) clamp(1.5rem, 3vw, 2.5rem) 0;
   }
 
   .details-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .detail-section,
+  .detail-section {
+    padding: 1.5rem;
+    border-right: 1px solid var(--line-dark);
+  }
+
   .detail-section:nth-child(even) {
     border-right: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .route-stroke,
-  .plain-status i,
-  .route-waiting-mark,
-  .detail-loading span {
-    animation: none;
-  }
-
   .progress-track span,
-  .run-details summary svg {
+  .run-details summary > b {
     transition: none;
+  }
+}
+
+@media (forced-colors: active) {
+  .run-truth-boundary span:nth-child(3),
+  .state-code,
+  .meaning-boundary > p,
+  .validation-handoff {
+    border: 1px solid CanvasText;
   }
 }
 </style>

@@ -472,7 +472,7 @@
             new model outputs, not interviews, survey responses, or a sample.
           </p>
           <div class="fictional-warning">
-            0 human respondents · generated on request · not representative
+            0 human respondents · generated on request · requires outside validation
           </div>
         </header>
 
@@ -607,7 +607,7 @@
           <p class="section-kicker">Generated interaction map</p>
           <h2 id="run-map-heading">See patterns inside this run.</h2>
           <p>
-            The map describes generated interactions. It is not public opinion,
+            The map describes generated interactions. It is not human evidence,
             a population estimate, or evidence of what people believe.
           </p>
           <strong>0 human respondents · not a forecast</strong>
@@ -1457,8 +1457,8 @@ watch(
   min-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--ink-soft); backdrop-filter: none;
+  color: var(--paper);
   font-family: var(--font-sans);
 }
 
@@ -1469,9 +1469,9 @@ watch(
   z-index: 10;
   padding: 0.7rem 0.9rem;
   transform: translateY(-180%);
-  border: 2px solid var(--ink);
+  border: 1px solid rgba(242, 235, 221, 0.1);
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   font-weight: 700;
   text-decoration: none;
   transition: transform 180ms var(--ease-out);
@@ -1491,7 +1491,7 @@ watch(
   padding: clamp(1.5rem, 2.4vw, 2.4rem);
   overflow: hidden;
   border-bottom: 0.55rem solid var(--signal);
-  background: var(--ink-deep);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
@@ -1562,10 +1562,10 @@ watch(
   align-content: end;
   min-height: 8.5rem;
   padding: 0.95rem;
-  border: 3px solid var(--ink);
+  border: 1px solid rgba(242, 235, 221, 0.1);
   background: var(--signal);
-  color: var(--ink);
-  box-shadow: 0.65rem 0.65rem 0 var(--paper-strong);
+  color: var(--paper);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
 }
 
 .truth-stamp span,
@@ -1597,8 +1597,8 @@ watch(
 .followup-modes {
   display: grid;
   grid-template-columns: minmax(10rem, 0.62fr) repeat(4, minmax(0, 1fr));
-  border-bottom: 2px solid var(--ink);
-  background: var(--paper-strong);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-raised); backdrop-filter: none;
 }
 
 .mode-guide {
@@ -1606,8 +1606,8 @@ watch(
   align-content: center;
   min-height: 5rem;
   padding: 0.75rem clamp(0.8rem, 2vw, 2rem);
-  border-right: 2px solid var(--ink);
-  background: var(--ink);
+  border-right: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
@@ -1635,10 +1635,10 @@ watch(
   min-height: 5rem;
   padding: 0.75rem clamp(0.7rem, 1.5vw, 1.35rem);
   border: 0;
-  border-right: 2px solid var(--ink);
-  border-radius: 0;
-  background: var(--paper-strong);
-  color: var(--ink);
+  border-right: 1px solid rgba(242, 235, 221, 0.1);
+  border-radius: var(--radius-md);
+  background: var(--ink-raised); backdrop-filter: none;
+  color: var(--paper);
   text-align: left;
   transition:
     background-color 180ms var(--ease-out),
@@ -1653,7 +1653,7 @@ watch(
 .followup-modes button:hover,
 .followup-modes button.active {
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   transform: translateY(-0.2rem);
 }
 
@@ -1693,9 +1693,9 @@ watch(
   gap: 1.25rem 2rem;
   align-items: center;
   padding: 1.1rem clamp(1rem, 4vw, 4rem);
-  border-bottom: 3px solid var(--ink);
-  background: var(--paper-strong);
-  color: var(--ink);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-raised); backdrop-filter: none;
+  color: var(--paper);
 }
 
 .workspace-state-copy {
@@ -1719,7 +1719,7 @@ watch(
 .workspace-state p,
 .connection-state p {
   margin: 0 0 0.25rem;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-family: var(--font-display);
   font-size: 0.78rem;
   letter-spacing: 0.06em;
@@ -1741,7 +1741,7 @@ watch(
   display: block;
   max-width: 56rem;
   margin-top: 0.35rem;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.76rem;
   line-height: 1.45;
 }
@@ -1751,7 +1751,7 @@ watch(
   gap: 0.2rem;
   margin: 0.55rem 0 0;
   padding-left: 1.1rem;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.76rem;
 }
 
@@ -1761,10 +1761,10 @@ watch(
 .record-load-error button {
   min-height: 2.8rem;
   padding: 0.65rem 1rem;
-  border: 2px solid var(--ink);
-  border-radius: 0;
+  border: 1px solid rgba(242, 235, 221, 0.1);
+  border-radius: var(--radius-md);
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
@@ -1779,7 +1779,7 @@ watch(
 
 .workspace-state.is-loading {
   min-height: 8.5rem;
-  background: var(--ink);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
@@ -1820,7 +1820,7 @@ watch(
 
 .workspace-state.is-error {
   border-bottom-color: var(--error);
-  background: var(--paper);
+  background: var(--ink-soft); backdrop-filter: none;
 }
 
 .workspace-state.is-error .workspace-state-index,
@@ -1834,8 +1834,8 @@ watch(
   gap: 1rem;
   align-items: center;
   padding: 0.8rem clamp(1rem, 4vw, 4rem);
-  border-bottom: 3px solid var(--signal);
-  background: var(--ink);
+  border-bottom: 1px solid var(--signal-rule);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
@@ -1853,7 +1853,7 @@ watch(
   gap: 1rem;
   align-items: center;
   padding: 1rem clamp(1rem, 4vw, 4rem);
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   background: var(--signal-soft);
 }
 
@@ -1871,7 +1871,7 @@ watch(
 }
 
 .run-live-note span {
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.8rem;
 }
 
@@ -1883,20 +1883,20 @@ watch(
 .stop-run,
 .keep-running {
   min-height: 2.6rem;
-  border: 2px solid var(--ink);
-  border-radius: 0;
+  border: 1px solid rgba(242, 235, 221, 0.1);
+  border-radius: var(--radius-md);
   font-size: 0.72rem;
   font-weight: 700;
 }
 
 .stop-run {
-  background: var(--ink);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
 .keep-running {
   background: transparent;
-  color: var(--ink);
+  color: var(--paper);
 }
 
 .run-live-note > .inline-error {
@@ -1916,11 +1916,11 @@ watch(
   grid-template-columns: minmax(15rem, 0.55fr) minmax(0, 1.45fr);
   min-height: 36rem;
   border-top: 0.55rem solid var(--signal);
-  border-right: 3px solid var(--ink);
-  border-bottom: 3px solid var(--ink);
-  border-left: 3px solid var(--ink);
-  background: var(--paper-strong);
-  box-shadow: 0.8rem 0.8rem 0 var(--line-light);
+  border-right: 1px solid rgba(242, 235, 221, 0.1);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
+  border-left: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-raised); backdrop-filter: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .conversation-sheet.is-fictional {
@@ -1931,7 +1931,7 @@ watch(
   display: flex;
   flex-direction: column;
   padding: clamp(1.5rem, 3vw, 2.5rem);
-  background: var(--ink);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
@@ -1940,7 +1940,7 @@ watch(
 }
 
 .conversation-sheet.is-fictional .answer-boundary .section-kicker {
-  color: #e9a34d;
+  color: var(--attention);
 }
 
 .answer-boundary h2,
@@ -1971,7 +1971,7 @@ watch(
   margin-top: 1.5rem;
   justify-content: space-between;
   border: 2px solid var(--warning);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--paper);
   font-family: var(--font-display);
@@ -1983,14 +1983,14 @@ watch(
 
 .change-profile::after {
   content: "↓";
-  color: #e9a34d;
+  color: var(--attention);
   font-family: var(--font-sans);
   font-weight: 700;
 }
 
 .change-profile:hover {
   background: var(--warning);
-  color: var(--ink);
+  color: var(--paper);
 }
 
 .answer-facts {
@@ -2028,7 +2028,7 @@ watch(
   position: relative;
   z-index: 2;
   padding: 1.5rem;
-  border-bottom: 3px solid var(--ink);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   background: var(--signal-soft);
 }
 
@@ -2053,23 +2053,23 @@ watch(
 
 .close-picker {
   border: 0;
-  border-bottom: 1px solid var(--ink);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   background: transparent;
-  color: var(--ink);
+  color: var(--paper);
   font-size: 0.72rem;
 }
 
 .picker-warning {
   margin: 0.9rem 0 1.1rem;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.78rem;
 }
 
 .profile-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 2px solid var(--ink);
-  border-left: 2px solid var(--ink);
+  border-top: 1px solid rgba(242, 235, 221, 0.1);
+  border-left: 1px solid rgba(242, 235, 221, 0.1);
 }
 
 .profile-list button {
@@ -2080,17 +2080,17 @@ watch(
   min-height: 4.2rem;
   padding: 0.75rem;
   border-width: 0 2px 2px 0;
-  border-color: var(--ink);
-  border-radius: 0;
-  background: var(--paper-strong);
-  color: var(--ink);
+  border-color: var(--paper);
+  border-radius: var(--radius-md);
+  background: var(--ink-raised); backdrop-filter: none;
+  color: var(--paper);
   text-align: left;
 }
 
 .profile-list button:hover,
 .profile-list button[aria-pressed="true"] {
   background: var(--warning);
-  color: var(--ink);
+  color: var(--paper);
 }
 
 .profile-list button > span {
@@ -2108,7 +2108,7 @@ watch(
 
 .profile-list button small {
   overflow: hidden;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.66rem;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2121,9 +2121,9 @@ watch(
   align-items: start;
   justify-items: start;
   padding: 1rem;
-  border: 2px solid var(--ink);
-  background: var(--paper-strong);
-  color: var(--ink-muted);
+  border: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-raised); backdrop-filter: none;
+  color: var(--paper-muted);
   font-size: 0.78rem;
 }
 
@@ -2134,7 +2134,7 @@ watch(
 
 .profile-load-state strong,
 .record-load-error strong {
-  color: var(--ink);
+  color: var(--paper);
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 400;
@@ -2153,7 +2153,7 @@ watch(
   flex: 1;
   padding: clamp(1.2rem, 3vw, 2.5rem);
   overflow-y: auto;
-  background: var(--paper-strong);
+  background: var(--ink-raised); backdrop-filter: none;
 }
 
 .conversation-empty {
@@ -2164,7 +2164,7 @@ watch(
 }
 
 .conversation-empty .section-kicker {
-  color: var(--ink-muted);
+  color: var(--paper-muted);
 }
 
 .conversation-empty h3 {
@@ -2175,14 +2175,14 @@ watch(
 .conversation-empty > p:not(.section-kicker) {
   max-width: 53ch;
   margin: 1rem 0 0;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   line-height: 1.55;
 }
 
 .suggested-questions {
   display: grid;
   margin-top: 1.2rem;
-  border-top: 2px solid var(--ink);
+  border-top: 1px solid rgba(242, 235, 221, 0.1);
 }
 
 .suggested-questions button {
@@ -2192,7 +2192,7 @@ watch(
   border: 0;
   border-bottom: 1px solid var(--line-light);
   background: transparent;
-  color: var(--ink);
+  color: var(--paper);
   font-size: 0.78rem;
   text-align: left;
 }
@@ -2206,7 +2206,7 @@ watch(
 
 .suggested-questions button:hover {
   background: var(--signal-soft);
-  color: var(--ink);
+  color: var(--paper);
   transform: translateX(0.25rem);
 }
 
@@ -2214,9 +2214,9 @@ watch(
   max-width: 48rem;
   margin-bottom: 1.5rem;
   padding: 1rem 1.1rem;
-  border-top: 2px solid var(--ink);
+  border-top: 1px solid rgba(242, 235, 221, 0.1);
   border-bottom: 1px solid var(--line-light);
-  background: var(--paper);
+  background: var(--ink-soft); backdrop-filter: none;
 }
 
 .conversation-message.user {
@@ -2247,7 +2247,7 @@ watch(
 }
 
 .conversation-message > header time {
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-family: var(--font-mono);
   font-size: 0.6rem;
 }
@@ -2265,7 +2265,7 @@ watch(
   margin-top: 0.9rem;
   padding-top: 0.7rem;
   border-top: 1px solid var(--line-light);
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.66rem;
   font-weight: 600;
   line-height: 1.4;
@@ -2277,14 +2277,14 @@ watch(
   gap: 0.75rem;
   align-items: center;
   padding: 1rem 0;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
 }
 
 .answer-loading span {
   width: 1rem;
   height: 1rem;
   border: 2px solid var(--line-light);
-  border-top-color: var(--ink);
+  border-top-color: var(--paper);
   animation: followup-spin 800ms linear infinite;
 }
 
@@ -2295,7 +2295,7 @@ watch(
 
 .question-composer {
   padding: 1rem clamp(1.2rem, 3vw, 2.5rem);
-  border-bottom: 3px solid var(--ink);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   background: var(--signal);
 }
 
@@ -2332,10 +2332,10 @@ watch(
   width: 100%;
   min-height: 4.3rem;
   padding: 0.85rem;
-  border: 2px solid var(--ink);
-  border-radius: 0;
-  background: var(--paper-strong);
-  color: var(--ink);
+  border: 1px solid rgba(242, 235, 221, 0.1);
+  border-radius: var(--radius-md);
+  background: var(--ink-raised); backdrop-filter: none;
+  color: var(--paper);
   line-height: 1.45;
   resize: vertical;
 }
@@ -2343,11 +2343,11 @@ watch(
 .question-composer button,
 .group-composer > button {
   min-width: 7rem;
-  border: 2px solid var(--ink);
+  border: 1px solid rgba(242, 235, 221, 0.1);
   border-left: 0;
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 400;
@@ -2357,25 +2357,25 @@ watch(
 
 .question-composer button:hover:not(:disabled),
 .group-composer > button:hover:not(:disabled) {
-  background: var(--ink);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
 .question-composer button {
-  background: var(--ink);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
 .question-composer button:hover:not(:disabled) {
-  background: var(--paper-strong);
-  color: var(--ink);
+  background: var(--ink-raised); backdrop-filter: none;
+  color: var(--paper);
 }
 
 .question-composer > p:not(.composer-kicker),
 .group-composer > small {
   display: block;
   margin: 0.6rem 0 0;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.7rem;
   line-height: 1.4;
 }
@@ -2399,17 +2399,17 @@ watch(
   gap: 1rem 4rem;
   align-items: end;
   padding: clamp(1.5rem, 4vw, 3.5rem);
-  border-right: 3px solid var(--ink);
-  border-bottom: 3px solid var(--ink);
-  border-left: 3px solid var(--ink);
-  background: var(--ink);
+  border-right: 1px solid rgba(242, 235, 221, 0.1);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
+  border-left: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
 .group-intro .section-kicker,
 .run-map-sheet > header .section-kicker {
   grid-column: 1 / -1;
-  color: #e9a34d;
+  color: var(--attention);
 }
 
 .group-intro h2,
@@ -2451,13 +2451,13 @@ watch(
 
 .profile-selection > header {
   padding-bottom: 1rem;
-  border-bottom: 3px solid var(--ink);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
 }
 
 .profile-selection > header p,
 .group-composer > p {
   margin: 0 0 0.3rem;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-family: var(--font-display);
   font-size: 0.72rem;
   letter-spacing: 0.05em;
@@ -2474,7 +2474,7 @@ watch(
 .profile-checklist {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-left: 2px solid var(--ink);
+  border-left: 1px solid rgba(242, 235, 221, 0.1);
 }
 
 .profile-checklist label {
@@ -2484,9 +2484,9 @@ watch(
   align-items: center;
   min-height: 4.2rem;
   padding: 0.7rem;
-  border-right: 2px solid var(--ink);
-  border-bottom: 2px solid var(--ink);
-  background: var(--paper-strong);
+  border-right: 1px solid rgba(242, 235, 221, 0.1);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-raised); backdrop-filter: none;
   cursor: pointer;
 }
 
@@ -2497,7 +2497,7 @@ watch(
 .profile-checklist input {
   width: 1rem;
   height: 1rem;
-  accent-color: var(--ink);
+  accent-color: var(--paper);
 }
 
 .profile-checklist label > span {
@@ -2520,7 +2520,7 @@ watch(
 }
 
 .profile-checklist label > small {
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.65rem;
 }
 
@@ -2533,18 +2533,18 @@ watch(
 
 .selection-actions button {
   border: 0;
-  border-bottom: 1px solid var(--ink);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   background: transparent;
-  color: var(--ink);
+  color: var(--paper);
   font-size: 0.7rem;
 }
 
 .group-composer {
   align-self: start;
   padding: 1.4rem;
-  border: 3px solid var(--ink);
-  background: var(--paper-strong);
-  box-shadow: 0.55rem 0.55rem 0 var(--line-light);
+  border: 1px solid rgba(242, 235, 221, 0.1);
+  background: var(--ink-raised); backdrop-filter: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
 .group-composer textarea {
@@ -2555,12 +2555,12 @@ watch(
   width: 100%;
   min-height: 3.4rem;
   margin-top: 0.8rem;
-  border-left: 2px solid var(--ink);
+  border-left: 1px solid rgba(242, 235, 221, 0.1);
 }
 
 .group-results {
   padding-top: 3rem;
-  border-top: 3px solid var(--ink);
+  border-top: 1px solid rgba(242, 235, 221, 0.1);
 }
 
 .group-results > header {
@@ -2573,10 +2573,10 @@ watch(
 
 .group-results > header button {
   min-height: 2.8rem;
-  border: 2px solid var(--ink);
-  border-radius: 0;
+  border: 1px solid rgba(242, 235, 221, 0.1);
+  border-radius: var(--radius-md);
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   font-size: 0.72rem;
   font-weight: 700;
 }
@@ -2586,7 +2586,7 @@ watch(
   grid-template-columns: minmax(12rem, 0.36fr) minmax(0, 1fr);
   gap: 1.5rem 3rem;
   padding: 1.5rem 0;
-  border-top: 2px solid var(--ink);
+  border-top: 1px solid rgba(242, 235, 221, 0.1);
 }
 
 .group-results > article > header {
@@ -2611,7 +2611,7 @@ watch(
 
 .group-results > article header p {
   margin: 0.3rem 0 0;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.68rem;
 }
 
@@ -2619,7 +2619,7 @@ watch(
   grid-column: 2;
   padding-left: 0.8rem;
   border-left: 0.35rem solid var(--warning);
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.66rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -2639,22 +2639,22 @@ watch(
 
 .map-frame {
   min-height: 34rem;
-  border-right: 3px solid var(--ink);
-  border-bottom: 3px solid var(--ink);
-  border-left: 3px solid var(--ink);
+  border-right: 1px solid rgba(242, 235, 221, 0.1);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.1);
+  border-left: 1px solid rgba(242, 235, 221, 0.1);
   background: var(--ink-soft);
 }
 
 .empty-state,
 .record-empty {
   padding: 1rem 0;
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: 0.8rem;
 }
 
 .secondary-record {
   border-top: 0.55rem solid var(--signal);
-  background: var(--ink-deep);
+  background: var(--ink-deep); backdrop-filter: none;
   color: var(--paper);
 }
 
@@ -2679,7 +2679,7 @@ watch(
   height: 2rem;
   flex: 0 0 auto;
   place-items: center;
-  border: 2px solid var(--signal);
+  border: 1px solid var(--signal-rule);
   color: var(--signal);
   content: "+";
   font-size: 1.25rem;
@@ -2715,7 +2715,7 @@ watch(
 .secondary-grid > section {
   min-width: 0;
   padding: clamp(1rem, 2.5vw, 2.2rem);
-  background: var(--ink-deep);
+  background: var(--ink-deep); backdrop-filter: none;
 }
 
 .secondary-grid h2 {
@@ -2915,7 +2915,7 @@ watch(
     grid-column: 1 / -1;
     min-height: 3rem;
     border-right: 0;
-    border-bottom: 2px solid var(--ink);
+    border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   }
 
   .mode-guide small {
@@ -2927,7 +2927,7 @@ watch(
   }
 
   .followup-modes button:nth-of-type(-n + 2) {
-    border-bottom: 2px solid var(--ink);
+    border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   }
 
   .secondary-grid {
@@ -3024,7 +3024,7 @@ watch(
     column-gap: 1rem;
     min-height: 0;
     padding: 0.55rem 0.65rem;
-    box-shadow: 0.3rem 0.3rem 0 var(--paper-strong);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
   }
 
   .truth-stamp span {
@@ -3068,11 +3068,11 @@ watch(
   .followup-modes button:nth-of-type(2) {
     min-height: 3.35rem;
     padding: 0.4rem 0.55rem;
-    border-bottom: 2px solid var(--ink);
+    border-bottom: 1px solid rgba(242, 235, 221, 0.1);
   }
 
   .followup-modes button:nth-of-type(odd) {
-    border-right: 2px solid var(--ink);
+    border-right: 1px solid rgba(242, 235, 221, 0.1);
   }
 
   .followup-modes button:nth-of-type(even) {
@@ -3191,7 +3191,7 @@ watch(
   .question-composer button {
     min-width: 5rem;
     min-height: 0;
-    border-top: 2px solid var(--ink);
+    border-top: 1px solid rgba(242, 235, 221, 0.1);
     border-left: 0;
   }
 

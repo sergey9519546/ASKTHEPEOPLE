@@ -173,8 +173,14 @@ from app.services.simulation_runtime_contract import (
 class RedisEventConsumer:
     """Redis Pub/Sub subscriber for real-time scenario injection events with in-memory fallback."""
 
-    def __init__(self, simulation_id: str, redis_url: Optional[str] = None):
+    def __init__(
+        self,
+        simulation_id: str,
+        redis_url: Optional[str] = None,
+        platform: Optional[str] = None,
+    ):
         self.simulation_id = simulation_id
+        self.platform = platform
         self.channel_name = f"simulation:{simulation_id}:events"
         self.pubsub = None
         self.redis_client = None
@@ -208,7 +214,9 @@ class RedisEventConsumer:
 
         try:
             from app.services.simulation_observation_store import pop_in_memory_events
-            fallback_events = pop_in_memory_events(self.simulation_id)
+            fallback_events = pop_in_memory_events(
+                self.simulation_id, platform=self.platform
+            )
             events.extend(fallback_events)
         except Exception:
             pass
@@ -1290,7 +1298,10 @@ async def run_twitter_simulation(
             log_info(f"Rounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
     
     start_time = datetime.now()
-    event_consumer = RedisEventConsumer(simulation_id=os.path.basename(simulation_dir))
+    event_consumer = RedisEventConsumer(
+        simulation_id=os.path.basename(simulation_dir),
+        platform="twitter",
+    )
     
     for round_num in range(total_rounds):
         # Check for shutdown signal
@@ -1557,7 +1568,10 @@ async def run_reddit_simulation(
             log_info(f"Rounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
     
     start_time = datetime.now()
-    event_consumer = RedisEventConsumer(simulation_id=os.path.basename(simulation_dir))
+    event_consumer = RedisEventConsumer(
+        simulation_id=os.path.basename(simulation_dir),
+        platform="reddit",
+    )
     
     for round_num in range(total_rounds):
         # Check for shutdown signal

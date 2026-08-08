@@ -542,6 +542,6 @@ onUnmounted(stopWs);
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  background: var(--ink-deep);
+  background: var(--ink-deep); backdrop-filter: none;
 }
 </style>

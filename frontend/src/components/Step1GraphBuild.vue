@@ -72,7 +72,7 @@
               </button>
             </div>
             <div class="detail-body scrollbar-thin">
-              <div class="detail-desc text-slate-600">
+              <div class="detail-desc">
                 {{ selectedOntologyItem.description }}
               </div>
 
@@ -92,7 +92,7 @@
                       <span class="attr-name">{{ attr.name }}</span>
                       <span class="attr-type">({{ attr.type }})</span>
                     </div>
-                    <span class="attr-desc text-slate-500">{{ attr.description }}</span>
+                    <span class="attr-desc">{{ attr.description }}</span>
                   </div>
                 </div>
               </div>
@@ -123,7 +123,7 @@
                   <div
                     v-for="(conn, idx) in selectedOntologyItem.source_targets"
                     :key="idx"
-                    class="conn-item text-slate-600"
+                    class="conn-item"
                   >
                     <span class="conn-node">{{ conn.source }}</span>
                     <span class="conn-arrow">→</span>
@@ -176,7 +176,7 @@
         </div>
       </div>
 
-      <!-- Step 02: Graph Build -->
+      <!-- Step 02: Build Source Map -->
       <div
         class="step-card"
         :class="{ active: currentPhase === 1, completed: currentPhase > 1 }"
@@ -184,19 +184,20 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">02</span>
-            <span class="step-title">Connect the source material</span>
+            <span class="step-title">Source map connections</span>
           </div>
           <div class="step-status">
-            <span v-if="currentPhase > 1" class="badge success">Completed</span>
-            <span v-else-if="currentPhase === 1" class="badge processing"
-              >{{ buildProgress?.progress || 0 }}%</span
+            <span v-if="currentPhase > 1" class="badge success"
+              >COMPLETED</span
             >
-            <span v-else class="badge pending">Waiting</span>
+            <span v-else-if="currentPhase === 1" class="badge processing"
+              >MAPPING</span
+            >
           </div>
         </div>
 
         <div class="card-content">
-          <p class="api-note">SOURCE MAP</p>
+          <p class="api-note">GRAPH NETWORK · GROUNDING MATERIAL</p>
           <p class="description">
             A model connects submitted material into an inspectable map. Open
             any item to inspect the generated record. Map entries are not
@@ -206,15 +207,15 @@
           <!-- Stats Cards -->
           <div class="stats-grid">
             <div class="stat-card">
-              <span class="stat-value text-rose-500">{{ graphStats.nodes }}</span>
+              <span class="stat-value">{{ graphStats.nodes }}</span>
               <span class="stat-label">Entities</span>
             </div>
             <div class="stat-card">
-              <span class="stat-value text-blue-500">{{ graphStats.edges }}</span>
+              <span class="stat-value">{{ graphStats.edges }}</span>
               <span class="stat-label">Relations</span>
             </div>
             <div class="stat-card">
-              <span class="stat-value text-emerald-500">{{ graphStats.types }}</span>
+              <span class="stat-value">{{ graphStats.types }}</span>
               <span class="stat-label">Types</span>
             </div>
           </div>
@@ -240,7 +241,7 @@
 
         <div class="card-content">
           <p class="api-note">NEXT: SET ASSUMPTIONS</p>
-          <p class="description text-slate-500">
+          <p class="description">
             Review the map, then define how the synthetic scenario should run.
           </p>
           <button
@@ -266,22 +267,26 @@
       </div>
     </div>
 
-    <div class="activity-status" role="status" aria-live="polite">
-      <span>Current status</span>
-      <strong>{{ latestActivityMessage }}</strong>
-    </div>
-    <details v-if="systemLogs.length" class="activity-disclosure">
-      <summary>
-        Detailed activity
-        <span>{{ systemLogs.length }} {{ systemLogs.length === 1 ? "update" : "updates" }}</span>
-      </summary>
-      <div class="activity-list scrollbar-thin">
-        <div class="activity-line" v-for="(log, idx) in systemLogs" :key="idx">
-          <span class="activity-time">{{ log.time }}</span>
-          <span>{{ log.msg }}</span>
-        </div>
+    <section class="activity-record" aria-labelledby="source-progress-heading">
+      <div class="activity-status" role="status" aria-live="polite">
+        <span id="source-progress-heading">Source-map progress</span>
+        <strong>{{ latestActivityMessage }}</strong>
       </div>
-    </details>
+      <details v-if="systemLogs.length" class="activity-history">
+        <summary>
+          <span>Review progress notes</span>
+          <span class="activity-count">
+            {{ systemLogs.length }} {{ systemLogs.length === 1 ? "note" : "notes" }}
+          </span>
+        </summary>
+        <ol class="activity-list">
+          <li class="activity-line" v-for="(log, idx) in systemLogs" :key="idx">
+            <time class="activity-time">{{ log.time }}</time>
+            <span class="activity-msg">{{ log.msg }}</span>
+          </li>
+        </ol>
+      </details>
+    </section>
   </div>
 </template>
 
@@ -450,10 +455,10 @@ const handleDetailKeydown = (event) => {
 }
 
 .step-card {
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ink-soft);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 1px solid rgba(242, 235, 221, 0.08);
   border-radius: var(--radius-md);
   padding: 24px;
   transition: all 0.25s ease;
@@ -461,14 +466,14 @@ const handleDetailKeydown = (event) => {
 }
 
 .step-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(242, 235, 221, 0.15);
   transform: translateY(-1px);
 }
 
 .step-card.active {
   border-color: var(--primary);
-  box-shadow: 0 0 25px rgba(99, 102, 241, 0.15);
-  background: rgba(99, 102, 241, 0.04);
+  box-shadow: none;
+  background: var(--signal-faint);
 }
 
 .step-card.completed {
@@ -480,7 +485,7 @@ const handleDetailKeydown = (event) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.08);
   padding-bottom: 12px;
 }
 
@@ -516,24 +521,24 @@ const handleDetailKeydown = (event) => {
 }
 
 .badge.success {
-  background: rgba(16, 185, 129, 0.15);
-  color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: var(--attention-tint);
+  color: var(--attention);
+  border: 1px solid var(--attention-rule);
 }
 .badge.processing {
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: var(--signal-tint);
+  color: var(--signal-soft);
+  border: 1px solid var(--signal-rule);
 }
 .badge.accent {
   background: rgba(139, 92, 246, 0.15);
-  color: #c4b5fd;
+  color: var(--signal-soft);
   border: 1px solid rgba(139, 92, 246, 0.3);
 }
 .badge.pending {
-  background: rgba(30, 41, 59, 0.4);
+  background: var(--ink-raised);
   color: var(--text-muted);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(242, 235, 221, 0.05);
 }
 
 .api-note {
@@ -583,26 +588,40 @@ const handleDetailKeydown = (event) => {
 }
 
 .entity-tag {
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--signal-tint);
+  border: 1px solid var(--signal-rule);
   padding: 6px 12px;
   font-size: 11px;
   border-radius: var(--radius-full);
   cursor: pointer;
   transition: all 0.2s ease;
   font-weight: 600;
-  color: #a5b4fc;
+  color: var(--signal-soft);
   font-family: var(--font-sans);
   line-height: 1.2;
   text-transform: none;
   box-shadow: none;
+  animation: pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+}
+
+.entity-tag:nth-child(1) { animation-delay: 0.05s; }
+.entity-tag:nth-child(2) { animation-delay: 0.1s; }
+.entity-tag:nth-child(3) { animation-delay: 0.15s; }
+.entity-tag:nth-child(4) { animation-delay: 0.2s; }
+.entity-tag:nth-child(5) { animation-delay: 0.25s; }
+.entity-tag:nth-child(6) { animation-delay: 0.3s; }
+.entity-tag:nth-child(n+7) { animation-delay: 0.35s; }
+
+@keyframes pop-in {
+  0% { opacity: 0; transform: scale(0.8) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 .entity-tag:hover {
-  background: rgba(99, 102, 241, 0.2);
+  background: var(--signal-wash);
   border-color: var(--primary);
-  color: #c7d2fe;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3);
+  color: var(--signal-soft);
+  box-shadow: none;
 }
 
 /* Stats */
@@ -614,16 +633,16 @@ const handleDetailKeydown = (event) => {
 
 .stat-card {
   padding: 16px 12px;
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ink-raised);
+  border: 1px solid rgba(242, 235, 221, 0.08);
   border-radius: var(--radius-sm);
   text-align: center;
   transition: all 0.2s ease;
 }
 
 .stat-card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(242, 235, 221, 0.15);
+  background: var(--ink-raised);
 }
 
 .stat-value {
@@ -645,21 +664,30 @@ const handleDetailKeydown = (event) => {
 .ontology-detail-overlay {
   position: absolute;
   top: 0;
-  left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(15, 23, 42, 0.95);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  width: 420px;
+  max-width: 100%;
+  left: auto;
+  background: var(--ink-deep);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   z-index: 50;
   display: flex;
   flex-direction: column;
   padding: 24px;
-  border-radius: var(--radius-md);
+  border-left: 1px solid rgba(242, 235, 221, 0.1);
+  box-shadow: -15px 0 40px rgba(0,0,0,0.6);
+  transform: translateX(100%);
+  animation: slide-drawer-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slide-drawer-in {
+  to { transform: translateX(0); }
 }
 
 .detail-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(242, 235, 221, 0.08);
   padding-bottom: 16px;
   margin-bottom: 20px;
   display: flex;
@@ -670,9 +698,9 @@ const handleDetailKeydown = (event) => {
 .detail-type-badge {
   font-size: 9px;
   font-weight: 700;
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: var(--signal-tint);
+  color: var(--signal-soft);
+  border: 1px solid var(--signal-rule);
   padding: 3px 10px;
   border-radius: var(--radius-full);
   margin-right: 12px;
@@ -713,8 +741,8 @@ const handleDetailKeydown = (event) => {
   gap: 8px;
 }
 .attr-item {
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ink-raised);
+  border: 1px solid rgba(242, 235, 221, 0.08);
   border-radius: 6px;
   padding: 12px;
   color: var(--text-primary);
@@ -746,7 +774,7 @@ const handleDetailKeydown = (event) => {
 }
 .example-tag {
   background: rgba(139, 92, 246, 0.15);
-  color: #c4b5fd;
+  color: var(--signal-soft);
   border: 1px solid rgba(139, 92, 246, 0.3);
   padding: 4px 10px;
   border-radius: var(--radius-full);
@@ -765,8 +793,8 @@ const handleDetailKeydown = (event) => {
   gap: 10px;
   font-size: 11px;
   padding: 8px 12px;
-  background: rgba(30, 41, 59, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ink-raised);
+  border: 1px solid rgba(242, 235, 221, 0.08);
   border-radius: 6px;
   color: var(--text-primary);
 }
@@ -778,8 +806,8 @@ const handleDetailKeydown = (event) => {
 }
 
 .close-btn {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--ink-raised);
+  border: 1px solid rgba(242, 235, 221, 0.08);
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -792,9 +820,9 @@ const handleDetailKeydown = (event) => {
   transition: all 0.2s ease;
 }
 .close-btn:hover {
-  background: rgba(244, 63, 94, 0.15);
-  border-color: rgba(244, 63, 94, 0.3);
-  color: #fda4af;
+  background: var(--signal-tint);
+  border-color: var(--signal-rule);
+  color: var(--signal-soft);
 }
 
 .action-btn {
@@ -949,6 +977,10 @@ const handleDetailKeydown = (event) => {
   transform: none;
 }
 
+.step-card.active {
+  box-shadow: 0.4rem 0.4rem 0 var(--signal) !important;
+}
+
 .card-header {
   margin: calc(clamp(1rem, 2vw, 1.45rem) * -1)
     calc(clamp(1rem, 2vw, 1.45rem) * -1) 1.25rem;
@@ -1032,7 +1064,14 @@ const handleDetailKeydown = (event) => {
 }
 
 .stat-value {
+  display: inline-block;
   color: var(--signal-text) !important;
+  animation: stat-flash 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes stat-flash {
+  0% { color: var(--paper); transform: scale(1.2); text-shadow: none; }
+  100% { color: var(--signal-text); transform: scale(1); text-shadow: none; }
 }
 
 .ontology-detail-overlay {
@@ -1064,19 +1103,24 @@ const handleDetailKeydown = (event) => {
   line-height: 1.45;
 }
 
+.activity-record {
+  margin: 1.5rem clamp(0.85rem, 2vw, 1.5rem);
+  border-top: 3px solid var(--signal);
+  border-bottom: 1px solid var(--line-light);
+  background: var(--paper);
+}
+
 .activity-status {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 0.8rem;
   align-items: baseline;
-  padding: 0.85rem 1rem;
-  border-top: 1px solid var(--line-dark);
-  background: var(--ink-deep);
-  color: var(--paper);
+  padding: 1rem 0;
+  color: var(--ink);
 }
 
 .activity-status > span,
-.activity-disclosure summary {
+.activity-history summary {
   font-family: var(--font-display);
   font-size: 0.78rem;
   letter-spacing: 0.045em;
@@ -1085,55 +1129,74 @@ const handleDetailKeydown = (event) => {
 
 .activity-status strong {
   overflow: hidden;
-  color: var(--paper-muted);
-  font-size: 0.78rem;
-  font-weight: 500;
+  color: var(--ink-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.activity-disclosure {
-  border-top: 1px solid var(--line-dark);
-  background: var(--ink);
-  color: var(--paper);
+.activity-history {
+  border-top: 1px solid var(--line-light);
 }
 
-.activity-disclosure summary {
+.activity-history summary {
   display: flex;
   justify-content: space-between;
-  padding: 0.7rem 1rem;
-  color: var(--paper-muted);
+  gap: 1rem;
+  padding: 0.85rem 0;
+  color: var(--ink);
   cursor: pointer;
+  list-style: none;
 }
 
-.activity-disclosure summary span {
-  color: var(--paper-dim);
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  letter-spacing: 0;
-  text-transform: none;
+.activity-history summary::-webkit-details-marker {
+  display: none;
+}
+
+.activity-history summary::before {
+  content: "+";
+  color: var(--signal);
+  font-family: var(--font-body);
+  font-weight: 800;
+}
+
+.activity-history[open] summary::before {
+  content: "−";
+}
+
+.activity-count {
+  margin-left: auto;
+  color: var(--ink-muted);
 }
 
 .activity-list {
-  max-height: 9rem;
+  margin: 0;
+  max-height: 180px;
   overflow-y: auto;
-  padding: 0 1rem 0.75rem;
-  border-top: 1px solid var(--line-dark);
+  padding: 0 0 0.65rem;
+  list-style: none;
 }
 
 .activity-line {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.65rem;
-  padding-top: 0.45rem;
-  color: var(--paper-muted);
-  font-size: 0.72rem;
-  line-height: 1.35;
+  grid-template-columns: 5.25rem minmax(0, 1fr);
+  gap: 0.8rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--line-light) 72%, transparent);
+  color: var(--ink);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .activity-time {
-  color: var(--paper-dim);
+  color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.activity-msg {
+  color: var(--ink);
 }
 
 .ontology-detail-overlay:focus {
@@ -1152,6 +1215,11 @@ const handleDetailKeydown = (event) => {
   .activity-status {
     grid-template-columns: 1fr;
     gap: 0.2rem;
+  }
+
+  .activity-line {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
   }
 }
 </style>

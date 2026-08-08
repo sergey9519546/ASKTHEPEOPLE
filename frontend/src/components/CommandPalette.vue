@@ -242,9 +242,9 @@ onBeforeUnmount(() => {
   flex-direction: column;
   width: min(100%, 34rem);
   max-height: 60vh;
-  border: 1px solid var(--signal);
-  background: var(--paper);
-  color: var(--ink);
+  border: 1px solid var(--signal-rule);
+  background: var(--ink-soft); backdrop-filter: none;
+  color: var(--paper);
   box-shadow: 0.9rem 0.9rem 0 var(--signal-deep);
 }
 
@@ -280,7 +280,7 @@ onBeforeUnmount(() => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ink);
+  color: var(--paper);
   font-size: var(--text-md);
 }
 
@@ -291,13 +291,13 @@ onBeforeUnmount(() => {
 }
 
 .palette-input::placeholder {
-  color: var(--ink-muted);
+  color: var(--paper-muted);
 }
 
 .palette-esc {
   padding: 0.1rem var(--space-2);
   border: 1px solid var(--line-light);
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-family: var(--font-sans);
   font-size: var(--text-xs);
 }
@@ -338,7 +338,7 @@ onBeforeUnmount(() => {
 }
 
 .palette-option-group {
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-family: var(--font-display);
   font-size: var(--text-xs);
   letter-spacing: 0.05em;
@@ -355,7 +355,7 @@ onBeforeUnmount(() => {
 .palette-hint {
   margin: 0;
   padding: var(--space-3) var(--space-4);
-  color: var(--ink-muted);
+  color: var(--paper-muted);
   font-size: var(--text-xs);
   line-height: 1.5;
 }

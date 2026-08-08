@@ -15,18 +15,80 @@ _IN_MEMORY_EVENT_QUEUES: Dict[str, List[Dict[str, Any]]] = {}
 _EVENT_QUEUE_LOCK = threading.Lock()
 
 
+def _normalize_platforms(platforms: Any) -> List[str]:
+    """Normalize event platform hints for in-memory delivery."""
+    if not platforms:
+        return ["twitter", "reddit"]
+    if isinstance(platforms, str):
+        platforms = [platforms]
+    else:
+        try:
+            platforms = list(platforms)
+        except TypeError:
+            return ["twitter", "reddit"]
+
+    normalized = []
+    for value in platforms:
+        if isinstance(value, str):
+            normalized.append(value.strip().lower())
+    return normalized or ["twitter", "reddit"]
+
+
 def push_in_memory_event(simulation_id: str, event_data: Dict[str, Any]) -> None:
     """Push an injected event to the in-memory fallback event queue for simulation_id."""
+    normalized_event = dict(event_data)
+    if "platforms" not in normalized_event and "platform" not in normalized_event:
+        normalized_event["platforms"] = ["twitter", "reddit"]
+    platforms = _normalize_platforms(
+        normalized_event.get("platforms")
+        or normalized_event.get("platform")
+    )
+
+    event_entry = dict(normalized_event)
+    # Track platform-specific delivery targets so both platform loops can consume the
+    # same fallback event during an availability outage.
+    event_entry["_delivery_targets"] = platforms
+
     with _EVENT_QUEUE_LOCK:
-        if simulation_id not in _IN_MEMORY_EVENT_QUEUES:
-            _IN_MEMORY_EVENT_QUEUES[simulation_id] = []
-        _IN_MEMORY_EVENT_QUEUES[simulation_id].append(event_data)
+        _IN_MEMORY_EVENT_QUEUES.setdefault(simulation_id, []).append(event_entry)
 
 
-def pop_in_memory_events(simulation_id: str) -> List[Dict[str, Any]]:
-    """Pop and return all pending in-memory injected events for simulation_id."""
+def pop_in_memory_events(
+    simulation_id: str, platform: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    """Pop and return all pending in-memory injected events for a platform."""
     with _EVENT_QUEUE_LOCK:
-        return _IN_MEMORY_EVENT_QUEUES.pop(simulation_id, [])
+        queued_events = _IN_MEMORY_EVENT_QUEUES.get(simulation_id, [])
+        if platform is None:
+            events = _IN_MEMORY_EVENT_QUEUES.pop(simulation_id, [])
+            sanitized: List[Dict[str, Any]] = []
+            for event_entry in events:
+                sanitized_event = dict(event_entry)
+                sanitized_event.pop("_delivery_targets", None)
+                sanitized.append(sanitized_event)
+            return sanitized
+        platform_key = str(platform).lower()
+        remaining_events: List[Dict[str, Any]] = []
+        delivered_events: List[Dict[str, Any]] = []
+
+        for event_entry in queued_events:
+            targets = set(event_entry.get("_delivery_targets") or [])
+            if platform_key in targets:
+                targets.discard(platform_key)
+                delivered = dict(event_entry)
+                delivered.pop("_delivery_targets", None)
+                delivered_events.append(delivered)
+            if targets:
+                remaining = dict(event_entry)
+                remaining["_delivery_targets"] = list(targets)
+                remaining_events.append(remaining)
+
+        if remaining_events:
+            _IN_MEMORY_EVENT_QUEUES[simulation_id] = remaining_events
+        else:
+            _IN_MEMORY_EVENT_QUEUES.pop(simulation_id, None)
+
+        return delivered_events
 
 
 from .claim_boundary import synthetic_activity_disclosure

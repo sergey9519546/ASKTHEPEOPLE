@@ -102,7 +102,7 @@ const openBranch = () => {
   padding: 1rem 1.1rem;
   border: 1px solid var(--border-color, #222);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(242, 235, 221, 0.02);
 }
 
 .fork-control h3 {
@@ -166,7 +166,7 @@ const openBranch = () => {
 }
 
 .fork-error {
-  color: #ff8a8a;
+  color: var(--signal-soft);
 }
 
 .link-button {

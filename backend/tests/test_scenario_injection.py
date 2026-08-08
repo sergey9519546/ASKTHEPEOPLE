@@ -112,6 +112,34 @@ def test_redis_event_consumer_in_memory_fallback():
     assert matched[0]["payload"]["instruction"] == "Adopt an optimistic outlook on economic news."
 
 
+def test_redis_event_consumer_in_memory_fallback_isolates_platform_consumers():
+    """Test that both platform consumers receive the same fallback event when targeting both."""
+    simulation_id = "sim_test_consumer_dual_platform"
+    event_payload = {
+        "simulation_id": simulation_id,
+        "event_type": "breaking_news",
+        "payload": {"announcement": "Cross-platform fallback test"},
+        "platforms": ["twitter", "reddit"],
+        "timestamp": "2026-07-29T17:00:00Z",
+    }
+
+    push_in_memory_event(simulation_id, event_payload)
+
+    twitter_consumer = RedisEventConsumer(simulation_id=simulation_id, redis_url="memory://", platform="twitter")
+    reddit_consumer = RedisEventConsumer(simulation_id=simulation_id, redis_url="memory://", platform="reddit")
+
+    twitter_events = twitter_consumer.consume_events()
+    reddit_events = reddit_consumer.consume_events()
+
+    assert len(twitter_events) == 1
+    assert len(reddit_events) == 1
+    assert twitter_events[0]["event_type"] == "breaking_news"
+    assert reddit_events[0]["payload"]["announcement"] == "Cross-platform fallback test"
+
+    exhausted = pop_in_memory_events(simulation_id)
+    assert exhausted == []
+
+
 @pytest.mark.asyncio
 async def test_apply_injected_events_record_and_execute():
     """Test apply_injected_events writes to jsonl, records in DB, and applies OASIS actions."""
@@ -163,7 +191,7 @@ async def test_apply_injected_events_record_and_execute():
 
             assert applied_count == 2
             assert mock_apply_specs.call_count == 1
-            assert "Focus on high-growth technology stocks." in mock_agent.system_message.content
+            assert mock_agent.system_message.content == "Base system prompt."
 
         injected_jsonl = os.path.join(simulation_dir, "injected_events.jsonl")
         assert os.path.exists(injected_jsonl)
@@ -185,3 +213,60 @@ async def test_apply_injected_events_record_and_execute():
         assert db_rows[0][1] == "breaking_news"
         assert "Market surges" in db_rows[0][2]
         assert db_rows[1][1] == "persona_modification"
+
+        intervention_payload = json.loads(db_rows[1][2])
+        assert intervention_payload["_intervention"]["status"] == "applied"
+        assert intervention_payload["_intervention"]["requested_agent_ids"] == [1]
+        assert intervention_payload["_intervention"]["resolved_agent_ids"] == [1]
+
+
+@pytest.mark.asyncio
+async def test_apply_injected_events_rejects_unknown_persona_target():
+    """Test unknown persona targets are rejected but still recorded with clear outcome."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        simulation_dir = tmp_dir
+        platform = "twitter"
+        current_round = 1
+
+        ensure_observation_store(simulation_dir)
+
+        mock_env = MagicMock()
+        mock_env.agent_graph.get_agent.side_effect = KeyError("agent missing")
+
+        config = {"agents": [{"agent_id": 1, "platform_preference": "twitter"}], "time_config": {}}
+        agent_names = {1: "Agent_1"}
+
+        injected_events = [
+            {
+                "event_type": "persona_modification",
+                "payload": {"agent_id": 99, "instruction": "Injecting synthetic correction"},
+                "timestamp": "2026-07-29T16:12:00Z",
+            }
+        ]
+
+        applied_count = await apply_injected_events(
+            env=mock_env,
+            simulation_dir=simulation_dir,
+            config=config,
+            platform=platform,
+            current_round=current_round,
+            events=injected_events,
+            agent_names=agent_names,
+            manual_action_cls=MagicMock(),
+            action_type_cls=MagicMock(),
+            action_logger=None,
+        )
+
+        assert applied_count == 1
+
+        import sqlite3
+        conn = sqlite3.connect(os.path.join(simulation_dir, "simulation_observations.db"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT payload_json FROM injected_events ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+        conn.close()
+
+        payload = json.loads(row[0])
+        assert payload["_intervention"]["status"] == "rejected"
+        assert payload["_intervention"]["requested_agent_ids"] == [99]
+        assert payload["_intervention"]["resolved_agent_ids"] == []

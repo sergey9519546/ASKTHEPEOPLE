@@ -48,7 +48,30 @@
       <section id="decision" class="decision-section" aria-labelledby="decision-heading">
         <div class="decision-composer">
           <div class="question-field">
-            <label for="decision-question">The decision</label>
+            <div class="composer-header-row">
+              <label for="decision-question">The decision</label>
+              <div class="readiness-badge" :class="sourceReadiness.levelClass">
+                <span class="readiness-dot"></span>
+                <span class="readiness-text">{{ sourceReadiness.label }} ({{ sourceReadiness.score }}%)</span>
+              </div>
+            </div>
+
+            <!-- Quick-Start Archetype Chips -->
+            <div class="archetype-chips-row" aria-label="Decision starter templates">
+              <span class="chips-label">Quick Starts:</span>
+              <button
+                v-for="preset in decisionPresets"
+                :key="preset.id"
+                type="button"
+                class="archetype-chip"
+                :title="preset.description"
+                @click="applyPreset(preset)"
+              >
+                <span class="chip-icon">{{ preset.icon }}</span>
+                <span>{{ preset.label }}</span>
+              </button>
+            </div>
+
             <textarea
               id="decision-question"
               v-model="formData.simulationRequirement"
@@ -280,7 +303,8 @@
           <span>Continue from the latest saved workspace.</span>
         </header>
 
-        <div v-if="historyLoading" class="run-skeletons" aria-label="Loading recent scenario runs">
+        <div v-if="historyLoading" class="run-skeletons" role="status">
+          <span class="visually-hidden">Loading recent scenario runs</span>
           <div v-for="index in 2" :key="index" class="run-skeleton"></div>
         </div>
 
@@ -336,7 +360,8 @@
           <span>Use a prompt structure, then rewrite it for your real decision.</span>
         </header>
 
-        <div v-if="templatesLoading" class="template-skeletons" aria-label="Loading question starters">
+        <div v-if="templatesLoading" class="template-skeletons" role="status">
+          <span class="visually-hidden">Loading question starters</span>
           <div v-for="index in 2" :key="index" class="template-skeleton"></div>
         </div>
 
@@ -379,7 +404,7 @@
       </div>
       <div class="footer-disclosure">
         <span>Outputs are generated, not observed.</span>
-        <span>Do not treat them as public opinion or forecasts.</span>
+        <span>Do not treat them as observations from people or forecasts.</span>
       </div>
     </footer>
 
@@ -426,6 +451,74 @@ const fetchingUrls = ref(false);
 const urlFetchError = ref("");
 const MAX_SOURCE_FILES = 10;
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
+
+const decisionPresets = [
+  {
+    id: "transit",
+    icon: "01",
+    label: "Public Transit Fare",
+    description: "Assess commuter impact, revenue, and ridership response.",
+    requirement: "What could happen if the city increases peak-hour bus fare by 15% to fund weekend rapid transit expansion?",
+    projectName: "Transit Fare Revision",
+    context: "Focus on low-income commuters, authority revenue, traffic congestion, and community feedback."
+  },
+  {
+    id: "remote-work",
+    icon: "02",
+    label: "Hybrid Work Mandate",
+    description: "Examine team retention, productivity, and culture risks.",
+    requirement: "What could happen if our enterprise mandates 3 days in-office per week for all product and engineering teams?",
+    projectName: "Hybrid Work Policy Shift",
+    context: "Assess senior retention, team collaboration velocity, office space utilization, and hiring competitiveness."
+  },
+  {
+    id: "ai-pricing",
+    icon: "03",
+    label: "SaaS AI Tiering",
+    description: "Evaluate subscriber conversion, usage caps, and churn.",
+    requirement: "What could happen if we introduce a usage-based token quota tier for existing enterprise SaaS subscribers?",
+    projectName: "SaaS AI Tiering Strategy",
+    context: "Evaluate power-user conversion, support volume, churn risk among SMB accounts, and gross margin impact."
+  },
+  {
+    id: "healthcare",
+    icon: "04",
+    label: "Clinic Hours Expansion",
+    description: "Analyze staff workload, patient access, and ER load.",
+    requirement: "What could happen if the regional hospital system shifts primary care clinic operating hours to 7 AM – 9 PM daily?",
+    projectName: "Clinic Hours Expansion",
+    context: "Examine nurse overtime strain, emergency room load reduction, working parent access, and patient satisfaction."
+  }
+];
+
+const applyPreset = (preset) => {
+  formData.value.simulationRequirement = preset.requirement;
+  formData.value.projectName = preset.projectName;
+  formData.value.additionalContext = preset.context;
+  usePolicyAcknowledged.value = true;
+};
+
+const sourceReadiness = computed(() => {
+  const reqLen = formData.value.simulationRequirement.trim().length;
+  const fileCount = files.value.length;
+  const hasUrls = urlInput.value.trim().length > 0;
+  const ctxLen = formData.value.additionalContext.trim().length;
+
+  let score = 0;
+  if (reqLen >= 12) score += 35;
+  if (reqLen >= 60) score += 15;
+  if (fileCount > 0) score += Math.min(fileCount * 15, 30);
+  if (hasUrls) score += 10;
+  if (ctxLen > 20) score += 10;
+
+  if (score >= 75) {
+    return { score, label: "High-Precision Scenario", levelClass: "level-high" };
+  } else if (score >= 40) {
+    return { score, label: "Grounded Scenario", levelClass: "level-medium" };
+  } else {
+    return { score, label: "Initial Prompt", levelClass: "level-low" };
+  }
+});
 
 const canSubmit = computed(
   () =>
@@ -724,9 +817,7 @@ fetchHistory();
     "brand nav nav";
   min-height: 17rem;
   border-bottom: 1px solid var(--line-dark);
-  background:
-    radial-gradient(circle at 78% 20%, rgba(255, 255, 255, 0.035), transparent 32%),
-    var(--ink);
+  background: var(--ink);
 }
 
 .brand-block {
@@ -741,7 +832,7 @@ fetchHistory();
   overflow: hidden;
   border: 0;
   background: var(--signal);
-  color: var(--ink);
+  color: var(--paper);
   font-family: var(--font-display);
   font-size: clamp(3.5rem, 5.6vw, 6.6rem);
   font-weight: 900;
@@ -766,7 +857,7 @@ fetchHistory();
 
 .brand-block:hover {
   background: var(--signal-strong);
-  color: var(--ink);
+  color: var(--paper);
 }
 
 .masthead-copy {
@@ -786,7 +877,7 @@ fetchHistory();
 
 .masthead-kicker {
   margin-bottom: 0.55rem;
-  color: var(--signal);
+  color: var(--attention);
 }
 
 .masthead-copy h1 {
@@ -815,15 +906,20 @@ fetchHistory();
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0 2.4rem 1.6rem 0;
-  color: var(--paper-muted);
+  padding: 0.5rem 1rem;
+  margin: 0 2.4rem 1.6rem 0;
+  color: var(--attention);
   font-size: 0.84rem;
   white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--attention-rule);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .masthead-disclosure strong {
   color: var(--paper);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .masthead-disclosure svg {
@@ -923,9 +1019,9 @@ fetchHistory();
 .question-field textarea {
   width: 100%;
   min-height: 5.2rem;
-  padding: 0 !important;
+  padding: 0 0 0.5rem 0 !important;
   border: 0 !important;
-  border-bottom: 2px solid var(--ink) !important;
+  border-bottom: 2px solid var(--line-light) !important;
   background: transparent !important;
   color: var(--ink) !important;
   font-family: var(--font-display) !important;
@@ -934,15 +1030,18 @@ fetchHistory();
   line-height: 0.98;
   letter-spacing: -0.015em;
   resize: vertical;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .question-field textarea::placeholder {
-  color: #777368;
+  color: #a3a098;
   opacity: 1;
 }
 
 .question-field textarea:focus {
-  border-color: var(--signal-deep) !important;
+  border-color: var(--signal) !important;
+  box-shadow: none;
+  outline: none;
 }
 
 .field-helper,
@@ -1033,7 +1132,7 @@ fetchHistory();
   justify-content: flex-start;
   gap: 1rem;
   padding: 1.1rem;
-  border: 1px dashed var(--ink-muted);
+  border: 2px dashed var(--ink-muted);
   background: var(--paper-strong);
   color: var(--ink);
   text-align: left;
@@ -1041,15 +1140,22 @@ fetchHistory();
   transition:
     transform 220ms var(--ease-out),
     background-color 220ms var(--ease-out),
-    border-color 220ms var(--ease-out);
+    border-color 220ms var(--ease-out),
+    box-shadow 220ms var(--ease-out);
 }
 
 .source-dropzone:hover,
-.source-dropzone:focus-visible,
-.source-material.dragging .source-dropzone {
-  border-color: var(--ink);
+.source-dropzone:focus-visible {
+  border-color: var(--signal);
   background: var(--signal-soft);
   transform: translateY(-2px);
+}
+
+.source-material.dragging .source-dropzone {
+  border-color: var(--signal);
+  background: var(--signal-soft);
+  transform: translateY(-2px);
+  box-shadow: 0.45rem 0.45rem 0 var(--signal-deep);
 }
 
 .source-icon,
@@ -1281,8 +1387,8 @@ fetchHistory();
 .templates-section {
   padding: clamp(3.5rem, 7vw, 7.5rem) clamp(1rem, 3.4vw, 4rem);
   background:
-    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(rgba(242, 235, 221, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(242, 235, 221, 0.025) 1px, transparent 1px),
     var(--ink);
   background-size: 2.5rem 2.5rem;
   scroll-margin-top: 1rem;
@@ -1298,7 +1404,7 @@ fetchHistory();
 }
 
 .section-heading > p {
-  color: var(--signal);
+  color: var(--attention);
 }
 
 .section-heading h2 {
@@ -1438,11 +1544,32 @@ fetchHistory();
   top: 50%;
   right: 0;
   left: 6.5rem;
-  height: 0.35rem;
+  height: 0.25rem;
   background: var(--path-color);
   transform: scaleX(0);
   transform-origin: left;
   animation: draw-path 820ms var(--ease-out) forwards;
+  border-radius: 2px;
+}
+
+.path::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 6.5rem;
+  width: 3rem;
+  height: 0.25rem;
+  background: var(--paper);
+  opacity: 0;
+  animation: data-flow 3s infinite ease-in-out;
+  animation-delay: 800ms;
+}
+
+@keyframes data-flow {
+  0% { transform: translateX(0); opacity: 0; }
+  10% { opacity: 0.8; }
+  80% { opacity: 0.8; }
+  100% { transform: translateX(min(40vw, 600px)); opacity: 0; }
 }
 
 .path-b {
@@ -1450,7 +1577,7 @@ fetchHistory();
 }
 
 .path-c {
-  --path-color: var(--signal-deep);
+  --path-color: var(--attention);
 }
 
 .path-name {
@@ -1555,19 +1682,22 @@ fetchHistory();
   align-items: center;
   gap: 1.2rem;
   width: 100%;
-  min-height: 7rem;
-  padding: 1rem 0.4rem;
-  border: 0;
+  min-height: 7.5rem;
+  padding: 1.2rem 1rem;
+  margin: 0.5rem 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: var(--ink);
   text-align: left;
+  transition: all 200ms ease;
 }
 
 .run-list button:hover {
-  padding-right: 1rem;
-  padding-left: 1rem;
-  background: var(--signal-soft);
-  color: var(--ink);
+  background: var(--paper-strong);
+  border-color: var(--line-light);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.05);
 }
 
 .run-index,
@@ -1634,7 +1764,7 @@ fetchHistory();
 .template-skeleton {
   min-height: 7rem;
   background:
-    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent),
+    linear-gradient(90deg, transparent, rgba(242, 235, 221, 0.62), transparent),
     var(--paper-strong);
   background-size: 50% 100%;
   animation: skeleton-pass 1.4s ease-in-out infinite;
@@ -2111,6 +2241,102 @@ fetchHistory();
     align-items: flex-start;
     text-align: left;
   }
+}
+
+/* Quick Starts & Readiness Badge Styles */
+.composer-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.readiness-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--line-dark);
+  background: var(--ink-deep);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  transition: all var(--duration-quick) var(--ease-quick);
+}
+
+.readiness-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--paper-dim);
+}
+
+.readiness-badge.level-high {
+  border-color: var(--success);
+  color: var(--paper-strong);
+}
+.readiness-badge.level-high .readiness-dot {
+  background: var(--success);
+  box-shadow: none;
+}
+
+.readiness-badge.level-medium {
+  border-color: var(--signal);
+  color: var(--paper-strong);
+}
+.readiness-badge.level-medium .readiness-dot {
+  background: var(--signal);
+  box-shadow: none;
+}
+
+.readiness-badge.level-low {
+  border-color: var(--line-dark);
+  color: var(--paper-muted);
+}
+
+.archetype-chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+
+.chips-label {
+  color: var(--ink-muted);
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.archetype-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line-dark);
+  background: var(--ink-soft);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all var(--duration-quick) var(--ease-quick);
+}
+
+.archetype-chip:hover {
+  border-color: var(--signal);
+  background: var(--signal-tint);
+  color: var(--paper-strong);
+  transform: translateY(-1px);
+}
+
+.chip-icon {
+  color: var(--attention);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
 }
 
 @media (prefers-reduced-motion: reduce) {

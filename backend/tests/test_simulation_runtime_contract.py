@@ -235,6 +235,8 @@ def test_explicit_graph_behavior_opt_in_uses_neutral_noncausal_controls(tmp_path
     assert follow["assumption_basis"] == (
         "explicit_graph_relationship_bootstrap_opt_in"
     )
+    assert follow["action_args"]["followee_id"] == 2
+    assert "user_id" not in follow["action_args"]
     assert follow["relationship_behavior_inferred"] is False
     assert follow["record_origin"] == "graph_record_origin_unverified"
     assert follow["causal_evidence"] is False
@@ -309,3 +311,55 @@ def test_scheduled_follow_wave_cannot_use_graph_without_explicit_opt_in(
 
     assert applied == 0
     assert env.steps == []
+
+
+def test_scheduled_follow_wave_uses_followee_id_arg(tmp_path):
+    config = _config()
+    config["bootstrap_posts"] = []
+    config["network_bootstrap"]["graph_relationship_behavior_opt_in"] = True
+    config["event_schedule"] = [
+        {
+            "trigger_round": 2,
+            "platforms": ["twitter"],
+            "event_type": "follow_wave",
+            "payload": {},
+            "targeting": {},
+            "reasoning": "Follow schema guard.",
+        }
+    ]
+    write_json(
+        tmp_path / "agent_relationship_bootstrap.json",
+        [
+            {
+                "source_agent_id": 0,
+                "target_agent_id": 2,
+                "relation_type": "supports",
+                "platforms": ["twitter"],
+            }
+        ],
+    )
+    env = FakeEnv()
+
+    asyncio.run(
+        apply_scheduled_events(
+            env=env,
+            simulation_dir=str(tmp_path),
+            config=config,
+            platform="twitter",
+            current_round=2,
+            agent_names={0: "Alice", 2: "Carol"},
+            manual_action_cls=FakeManualAction,
+            action_type_cls=FakeActionType,
+        )
+    )
+
+    rows = [
+        json.loads(row)
+        for row in (tmp_path / "scheduled_events_applied.jsonl")
+        .read_text(encoding="utf-8")
+        .strip()
+        .splitlines()
+    ]
+    follow = next(row for row in rows if row["action_type"] == "FOLLOW")
+    assert follow["action_args"]["followee_id"] == 2
+    assert "user_id" not in follow["action_args"]

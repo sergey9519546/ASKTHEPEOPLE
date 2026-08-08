@@ -73,8 +73,49 @@ def test_new_public_alias_uses_kind_and_independent_uuid7_hex() -> None:
             physical_id,
             uuid7_factory=lambda: UUID("12345678-1234-4234-8234-123456789abc"),
         )
-    with pytest.raises(ValueError, match="public_alias_must_not_reveal_physical_id"):
-        new_public_id("org", physical_id, uuid7_factory=lambda: physical_id)
+
+
+def test_new_public_alias_retries_physical_uuid_collision() -> None:
+    from app.domain.identifiers import new_public_id, new_uuid7
+
+    physical_id = new_uuid7(clock=lambda: 1_700_000_000, randbits=lambda _: 0x123)
+    distinct_alias_id = new_uuid7(
+        clock=lambda: 1_700_000_001, randbits=lambda _: 0x456
+    )
+    candidate_ids: Iterator[UUID] = iter((physical_id, distinct_alias_id))
+
+    alias = new_public_id(
+        "workspace",
+        physical_id,
+        uuid7_factory=lambda: next(candidate_ids),
+    )
+
+    assert alias == f"workspace_{distinct_alias_id.hex}"
+    with pytest.raises(StopIteration):
+        next(candidate_ids)
+
+
+def test_new_public_alias_retry_is_bounded_on_physical_uuid_collisions() -> None:
+    from app.domain.identifiers import new_public_id, new_uuid7
+
+    physical_id = new_uuid7(clock=lambda: 1_700_000_000, randbits=lambda _: 0x123)
+    attempts = 0
+
+    def repeat_physical_id() -> UUID:
+        nonlocal attempts
+        attempts += 1
+        if attempts > 3:
+            raise AssertionError("public_alias_retry_was_unbounded")
+        return physical_id
+
+    with pytest.raises(ValueError, match="public_alias_retry_exhausted"):
+        new_public_id(
+            "project",
+            physical_id,
+            uuid7_factory=repeat_physical_id,
+        )
+
+    assert attempts == 3
 
 
 def test_legacy_project_alias_is_preserved_but_invalid_alias_is_rejected() -> None:

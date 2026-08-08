@@ -11,21 +11,29 @@ best-effort lifecycle beside the existing one.
 
 Authority for this task, in descending order:
 
-1. `docs/product/PRODUCT_TRUTH_CONTRACT.md` and
-   `docs/product/USE_POLICY.md`;
-2. `docs/security/*` and `docs/privacy/*`;
-3. `docs/product/METHODOLOGY.md`;
-4. `docs/release/ACCEPTANCE.md`;
-5. accepted ADRs, especially
+1. law, contractual obligation, and approved legal advice;
+2. `docs/product/PRODUCT_TRUTH_CONTRACT.md`;
+3. `docs/product/USE_POLICY.md`;
+4. `docs/security/*`;
+5. `docs/privacy/*`;
+6. `docs/product/METHODOLOGY.md`;
+7. release acceptance and accessibility requirements, especially
+   `docs/release/ACCEPTANCE.md`;
+8. accepted ADRs, especially
    `docs/architecture/adr/ADR-0003-durable-run-orchestration.md`,
    `ADR-0009-multi-tenant-isolation.md`, and
    `ADR-0012-canonical-transactional-and-object-persistence.md`;
-6. `docs/architecture/state-machines.md`,
+9. architecture and AI implementation guides, especially
+   `docs/architecture/state-machines.md`,
    `docs/architecture/data-model.md`, and the applicable AI implementation
    guides;
-7. `docs/design/*` and the content system;
-8. `docs/exec-plans/04-durable-orchestration-and-path-engine.md`;
-9. this brief.
+10. `docs/design/*` and the content system;
+11. execution plans, including
+    `docs/exec-plans/04-durable-orchestration-and-path-engine.md` and this
+    brief;
+12. `AGENTS.md`;
+13. code comments; and
+14. generated documentation.
 
 The combined normative authority packet is locked at commit `ce132a5`. Its
 version-`1.2.0` data model, ADR-0009, ADR-0012, and state-machine corrections
@@ -62,7 +70,7 @@ The CURRENT execution path is PARTIAL:
   `backend/app/services/simulation_runner.py:404-409`); task state is cached in
   process memory and Redis with a 24-hour TTL
   (`backend/app/models/task.py:36`, `backend/app/models/task.py:182`, and
-  `backend/app/models/task.py:257-267`). None is canonical production state.
+  `backend/app/models/task.py:264`). None is canonical production state.
 - `SimulationRunner` owns run state, processes, and monitor threads in class
   dictionaries (`backend/app/services/simulation_runner.py:271-274`), so a
   different worker cannot safely recover ownership.
@@ -522,8 +530,11 @@ separate, immutable, server-generated column used at every API, event-stream,
 WebSocket, log, and queue boundary. Physical UUIDs never appear in URLs,
 request/response JSON, Celery payloads, browser state, logs, or telemetry.
 
-Task 5 consumes the tenant foundation's tested `new_uuid7() -> UUID` and
-`new_public_id(kind) -> str` factories. Each row receives two independently
+Task 5 consumes the tenant foundation's current tested
+`new_uuid7() -> UUID` and
+`new_public_id(kind, physical_id, *, uuid7_factory=None) -> str` factories.
+The `physical_id` argument validates the physical UUIDv7 and permits bounded
+collision rejection; it is not alias input. Each row receives two independently
 generated RFC 9562 UUIDv7 values: the PostgreSQL `uuid` physical primary key
 and the UUIDv7 suffix encoded inside its prefixed public ID. The public suffix
 must not equal or be derived from the physical key. No row falls back to
@@ -1116,7 +1127,8 @@ The domain function is pure. It does not import Flask, Celery, SQLAlchemy,
 Redis, filesystem managers, or the legacy runner.
 
 Extend the tenant foundation's `PublicIdKind` and independent
-`new_public_id(kind)` generator with exactly `run_config`, `run`,
+`new_public_id(kind, physical_id, *, uuid7_factory=None)` generator with exactly
+`run_config`, `run`,
 `run_stage`, `run_event`, `command_receipt`, `outbox`, `artifact`, `audit`, and
 `service`. The function returns the exact aliases in the Identifier contract;
 it generates a fresh UUIDv7 suffix distinct from the row's physical UUIDv7,

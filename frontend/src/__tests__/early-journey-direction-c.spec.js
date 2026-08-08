@@ -161,6 +161,27 @@ describe("early journey accessibility and readiness contracts", () => {
     expect(wrapper.get(".readiness-note").text()).toContain("source map is empty");
   });
 
+  it("presents progress as plain-language notes instead of a system terminal", () => {
+    const wrapper = mount(Step1GraphBuild, {
+      props: {
+        currentPhase: 1,
+        projectData: { project_id: "project-1", ontology: {} },
+        graphData: { nodes: [], edges: [] },
+        systemLogs: [
+          { time: "09:41", msg: "Source reading started." },
+          { time: "09:42", msg: "Source categories are ready to review." },
+        ],
+      },
+    });
+
+    expect(wrapper.get(".activity-status").text()).toContain("Source-map progress");
+    expect(wrapper.get(".activity-history summary").text()).toContain(
+      "Review progress notes",
+    );
+    expect(wrapper.text()).not.toContain("System Terminal");
+    expect(wrapper.text()).not.toContain("$>");
+  });
+
   it("emits one resolved suggested round count after complete preparation", async () => {
     const wrapper = mount(Step2EnvSetup, {
       props: {
@@ -238,6 +259,9 @@ describe("early journey source contracts", () => {
     expect(main).toContain('@update-status="updateStepStatus"');
     expect(main).toContain(".content-area.view-graph .panel-wrapper.right");
     expect(main).toContain("display: none !important");
+    expect(main).toContain('class="mobile-workflow-picker"');
+    expect(main).toContain('aria-label="Choose an available workflow step"');
+    expect(main).not.toContain("animation: smooth-pulse");
     expect(simulation).toContain("statusLabel");
     expect(simulation).toContain("The assumptions could not be opened");
   });
@@ -264,7 +288,10 @@ describe("early journey source contracts", () => {
     );
     expect(graphPanel).toContain("Graph record · provenance unverified");
     expect(main).toContain('workbench: "Decision steps"');
-    expect(run).toContain('workbench: "Run activity"');
+    expect(run).toContain('workbench: "Run record"');
+    expect(run).toContain(':aria-pressed="viewMode === m"');
+    expect(run).not.toContain("Routes unfolding");
+    expect(run).not.toContain("animation: flash");
     expect(run).not.toContain('workbench: "Scenario paths"');
   });
 });

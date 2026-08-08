@@ -242,8 +242,8 @@ describe("Step 5 workspace resilience", () => {
   });
 });
 
-describe("flat generated-interaction route", () => {
-  it("renders plain-language channel routes with the truth boundary and closed technical details", async () => {
+describe("chronological generated run record", () => {
+  it("renders every generated record with the truth boundary and closed technical details", async () => {
     mocks.getSimulationOpinions.mockResolvedValueOnce({
       success: true,
       data: {
@@ -274,16 +274,20 @@ describe("flat generated-interaction route", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("What happened inside this run");
-    expect(wrapper.text()).toContain("0 human respondents");
-    expect(wrapper.text()).toContain("Not public opinion · not a forecast");
+    expect(wrapper.text()).toContain("Human respondents: 0");
+    expect(wrapper.text()).toContain("Does not measure people");
+    expect(wrapper.text()).toContain("Not a forecast");
     expect(wrapper.text()).toContain("Topic community");
     expect(wrapper.text()).toContain("Short-post channel");
     expect(wrapper.text()).toContain("Night-shift parent");
-    expect(wrapper.find(".route-board").exists()).toBe(true);
+    expect(wrapper.find(".run-record-layout").exists()).toBe(true);
+    expect(
+      wrapper.get('[data-testid="interaction-run-record-list"]').element.tagName,
+    ).toBe("OL");
     expect(wrapper.get(".technical-record").attributes("open")).toBeUndefined();
   });
 
-  it("keeps the last loaded route visible when refresh polling disconnects", async () => {
+  it("keeps the last loaded run record visible when a manual refresh fails", async () => {
     mocks.getSimulationOpinions.mockResolvedValueOnce({
       success: true,
       data: {
@@ -315,8 +319,8 @@ describe("flat generated-interaction route", () => {
     await flushPromises();
 
     expect(
-      wrapper.get('[data-testid="interaction-map-disconnected"]').text(),
-    ).toContain("The last loaded route remains below.");
+      wrapper.get('[data-testid="interaction-run-record-disconnected"]').text(),
+    ).toContain("The last loaded run record remains below.");
     expect(wrapper.text()).toContain("Night-shift parent");
     expect(wrapper.text()).not.toContain("private connection detail");
   });

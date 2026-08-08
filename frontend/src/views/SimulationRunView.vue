@@ -16,16 +16,18 @@
         <div
           class="view-mode-selector"
           role="group"
-          aria-label="View generated run activity or inspect supporting source material"
+          aria-label="Review the generated run record or inspect supporting source material"
         >
           <button
             v-for="m in ['workbench', 'graph', 'split']"
             :key="m"
             class="mode-btn"
             :class="{ 'is-active': viewMode === m }"
+            type="button"
+            :aria-pressed="viewMode === m"
             @click="viewMode = m"
           >
-            {{ { graph: "Source map", split: "Compare", workbench: "Run activity" }[m] }}
+            {{ { graph: "Source map", split: "Compare", workbench: "Run record" }[m] }}
           </button>
         </div>
       </div>
@@ -77,7 +79,7 @@
         :style="rightPanelStyle"
         :aria-hidden="viewMode === 'graph'"
         :inert="viewMode === 'graph'"
-        aria-label="Generated run activity"
+        aria-label="Generated run record"
       >
         <div class="workbench-frame">
           <div class="wb-content">
@@ -171,7 +173,7 @@ const rightPanelStyle = computed(() => {
 const statusText = computed(() => {
   if (currentStatus.value === "error") return "Needs attention";
   if (currentStatus.value === "completed") return "Run complete";
-  return "Routes unfolding";
+  return "Run in progress";
 });
 
 const isSimulating = computed(() => currentStatus.value === "processing");
@@ -469,8 +471,7 @@ onUnmounted(stopGraphRefresh);
 }
 
 .status-box.processing .status-dot {
-  background: var(--signal);
-  animation: flash 1.5s var(--ease-out) infinite alternate;
+  background: var(--attention);
 }
 
 .status-box.completed .status-dot {
@@ -479,11 +480,6 @@ onUnmounted(stopGraphRefresh);
 
 .status-box.error .status-dot {
   background: var(--error);
-}
-
-@keyframes flash {
-  from { opacity: 0.3; }
-  to { opacity: 1; }
 }
 
 .workbench-viewport {

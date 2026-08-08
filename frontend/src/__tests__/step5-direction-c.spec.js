@@ -88,14 +88,19 @@ describe("Step 5 Direction C interaction contracts", () => {
     expect(step5).not.toContain('aria-haspopup="listbox"');
   });
 
-  it("renders the generated-interaction map as flat civic wayfinding", () => {
-    expect(opinionMap).toContain("Generated interaction route");
+  it("renders generated interactions as a chronological semantic run record", () => {
+    expect(opinionMap).toContain("Run record / generated activity");
     expect(opinionMap).toContain("What happened inside this run");
-    expect(opinionMap).toContain("0 human respondents");
-    expect(opinionMap).toContain("Not public opinion · not a forecast");
-    expect(opinionMap).toContain('class="route-board"');
+    expect(opinionMap).toContain("Human respondents: 0");
+    expect(opinionMap).toContain("Does not measure people");
+    expect(opinionMap).toContain("Not a forecast");
+    expect(opinionMap).toContain('class="interaction-run-record-list"');
+    expect(opinionMap).toContain('data-origin="synthetic-generated"');
+    expect(opinionMap).toContain('data-testid="latest-record-inspector"');
     expect(opinionMap).toContain('class="technical-record"');
-    expect(opinionMap).toContain("closed by default");
+    expect(opinionMap).toContain("Initial load plus manual refresh");
+    expect(opinionMap).not.toContain("setInterval");
+    expect(opinionMap).not.toMatch(/animation:\s*[^;]*infinite/i);
     expect(opinionMap).not.toMatch(/\b3D\b/i);
     expect(opinionMap).not.toMatch(/\bcube\b/i);
     expect(opinionMap).not.toMatch(/\bSTANCE\b/);

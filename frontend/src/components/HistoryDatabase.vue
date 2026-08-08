@@ -94,17 +94,17 @@
 
         <!-- Content Area -->
         <div class="card-content-block">
-          <h3 class="requirement-title text-rose-500">
+          <h3 class="requirement-title">
             {{ getShortRequirement(project.simulation_requirement) }}
           </h3>
-          <p class="requirement-preview text-slate-500">
+          <p class="requirement-preview">
             {{ truncate(project.simulation_requirement, 70) }}
           </p>
         </div>
 
         <!-- Footer -->
         <footer class="card-footer-row">
-          <div class="timestamp-group text-slate-400">
+          <div class="timestamp-group">
             <span class="date-text">{{ formatDate(project.created_at) }}</span>
             <span class="time-text">{{ formatTime(project.created_at) }}</span>
           </div>
@@ -124,7 +124,7 @@
       aria-live="polite"
     >
       <div class="spinner" aria-hidden="true"></div>
-      <span class="loading-label text-slate-400">Retrieving simulation runs...</span>
+      <span class="loading-label">Retrieving simulation runs...</span>
     </div>
 
     <!-- Modal: Project Details & Playback -->
@@ -153,7 +153,7 @@
                     <span class="status-dot" aria-hidden="true"></span>
                     {{ formatIteration(selectedProject) }}
                   </div>
-                  <span class="creation-stamp text-slate-400"
+                  <span class="creation-stamp"
                     >{{ formatDate(selectedProject.created_at) }} @
                     {{ formatTime(selectedProject.created_at) }}</span
                   >
@@ -181,7 +181,7 @@
                 <h4 class="section-heading" id="simulation-objective-heading">
                   Simulation Objective
                 </h4>
-                <div class="requirement-box text-slate-700">
+                <div class="requirement-box">
                   {{
                     selectedProject.simulation_requirement ||
                     "No objective defined"
@@ -217,14 +217,14 @@
                       aria-hidden="true"
                       >{{ getShortExt(file.filename) }}</span
                     >
-                    <span class="modal-filename text-slate-700" aria-hidden="true">{{
+                    <span class="modal-filename" aria-hidden="true">{{
                       file.filename
                     }}</span>
                   </div>
                 </div>
                 <div
                   v-else
-                  class="modal-no-assets text-slate-400"
+                  class="modal-no-assets"
                   aria-label="No assets detected"
                 >
                   No assets detected
@@ -237,7 +237,7 @@
               class="modal-playback-divider"
               aria-label="Synthetic playback section"
             >
-              <span class="playback-label text-slate-400">Replay Pipeline</span>
+              <span class="playback-label">Replay Pipeline</span>
             </div>
 
             <nav class="modal-navigation-grid" aria-label="Phase navigation">
@@ -247,7 +247,7 @@
                 :disabled="!selectedProject.project_id"
                 aria-label="Navigate to Phase 01: Graph Archive"
               >
-                <span class="step-num text-rose-500">PHASE 01</span>
+                <span class="step-num">PHASE 01</span>
                 <span class="action-label">Graph Archive</span>
               </button>
               <button
@@ -255,7 +255,7 @@
                 @click="jumpToSetup"
                 aria-label="Navigate to Phase 02: Environment Configuration"
               >
-                <span class="step-num text-blue-500">PHASE 02</span>
+                <span class="step-num">PHASE 02</span>
                 <span class="action-label">Environment Config</span>
               </button>
               <button
@@ -264,7 +264,7 @@
                 :disabled="!selectedProject.report_id"
                 aria-label="Navigate to Phase 04: Report Synthesis"
               >
-                <span class="step-num text-emerald-500">PHASE 04</span>
+                <span class="step-num">PHASE 04</span>
                 <span class="action-label">Report Synthesis</span>
               </button>
             </nav>
@@ -544,7 +544,7 @@ onUnmounted(() => {
   height: 280px;
   border: 1px solid var(--line);
   background: var(--bg-base);
-  border-radius: 0;
+  border-radius: var(--radius-md);
   padding: 16px;
   cursor: pointer;
   box-shadow: none;
@@ -590,13 +590,13 @@ onUnmounted(() => {
   font-size: 8px;
   font-weight: 700;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(242, 235, 221, 0.03);
 }
 .flag.active {
   background: var(--accent-color);
-  color: #fff;
+  color: var(--ink);
   border-color: var(--accent-color);
-  box-shadow: 0 0 8px var(--accent-glow);
+  box-shadow: none;
 }
 
 .card-preview-area {
@@ -615,7 +615,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(242, 235, 221, 0.05);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   margin-bottom: 4px;
@@ -626,15 +626,15 @@ onUnmounted(() => {
   font-family: var(--font-mono);
   font-size: 7px;
   font-weight: 700;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(242, 235, 221, 0.1);
   color: var(--text-secondary);
   padding: 1px 3px;
   border-radius: 2px;
 }
-.type-tag.pdf { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-.type-tag.xls { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.type-tag.doc { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-.type-tag.ppt { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.type-tag.pdf { background: var(--signal-tint); color: var(--signal-soft); }
+.type-tag.xls { background: var(--attention-tint); color: var(--attention); }
+.type-tag.doc { background: var(--signal-tint); color: var(--signal-strong); }
+.type-tag.ppt { background: var(--attention-tint); color: var(--attention); }
 
 .filename-text {
   font-size: 9px;
@@ -713,11 +713,11 @@ onUnmounted(() => {
 }
 
 .state-complete {
-  color: #34d399;
+  color: var(--attention);
 }
 .state-complete .status-indicator {
-  background: #34d399;
-  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+  background: var(--attention);
+  box-shadow: none;
 }
 .state-active {
   color: var(--accent-color);
@@ -766,7 +766,7 @@ onUnmounted(() => {
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(12px);
+  backdrop-filter: none;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -818,7 +818,7 @@ onUnmounted(() => {
   padding: 2px 8px;
   border-radius: 20px;
   border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(242, 235, 221, 0.05);
 }
 .creation-stamp {
   font-size: 10px;
@@ -826,7 +826,7 @@ onUnmounted(() => {
 }
 
 .close-modal-btn {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(242, 235, 221, 0.1);
   color: var(--text-primary);
   border: none;
   width: 28px;
@@ -840,7 +840,7 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 .close-modal-btn:hover {
-  background: rgba(255, 69, 0, 0.2);
+  background: var(--signal-wash);
   color: var(--accent-color);
 }
 
@@ -882,7 +882,7 @@ onUnmounted(() => {
   padding: 8px 12px;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(242, 235, 221, 0.03);
   color: var(--text-primary);
 }
 .file-extension-pill {
@@ -890,13 +890,13 @@ onUnmounted(() => {
   font-size: 8px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(242, 235, 221, 0.1);
   color: var(--text-secondary);
 }
-.file-extension-pill.pdf { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-.file-extension-pill.xls { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-.file-extension-pill.doc { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-.file-extension-pill.ppt { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.file-extension-pill.pdf { background: var(--signal-tint); color: var(--signal-soft); }
+.file-extension-pill.xls { background: var(--attention-tint); color: var(--attention); }
+.file-extension-pill.doc { background: var(--signal-tint); color: var(--signal-strong); }
+.file-extension-pill.ppt { background: var(--attention-tint); color: var(--attention); }
 
 .modal-playback-divider {
   display: flex;
@@ -936,7 +936,7 @@ onUnmounted(() => {
   flex: 1;
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(242, 235, 221, 0.05);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -948,9 +948,9 @@ onUnmounted(() => {
 }
 .nav-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 20px rgba(255, 69, 0, 0.2);
+  box-shadow: var(--shadow-sm);
   border-color: var(--accent-color);
-  background: rgba(255, 69, 0, 0.1);
+  background: var(--signal-tint);
 }
 .nav-btn:disabled {
   opacity: 0.3;

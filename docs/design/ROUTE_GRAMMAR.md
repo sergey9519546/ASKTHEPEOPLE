@@ -211,7 +211,7 @@ Secondary action: `Ask about this brief`
 
 ### Step 7 — Prepare human validation
 
-The charcoal route ends before this step. The screen uses a separate white transfer field.
+The charcoal route ends before this step. The screen uses a separate light-cream transfer field.
 
 Primary action: `Create research handoff`
 
@@ -287,14 +287,14 @@ The rail may be sticky only if `scroll-padding-top` and focus tests prove it nev
 
 - **Warm paper:** user decisions, forms, review, editorial brief.
 - **Charcoal:** synthetic route field, run process, diagnostics.
-- **White transfer field:** external research handoff and the boundary where the synthetic system ends.
+- **Light-cream transfer field:** external research handoff and the boundary where the synthetic system ends.
 
 This creates a stable visual narrative:
 
 ```text
-PAPER — DEFINE AND REVIEW
+CREAM — DEFINE AND REVIEW
 CHARCOAL — EXPLORE SYNTHETIC POSSIBILITIES
-WHITE — LEAVE THE SYNTHETIC SYSTEM AND VALIDATE
+LIGHT CREAM — LEAVE THE SYNTHETIC SYSTEM AND VALIDATE
 ```
 
 Do not use these surfaces merely as decorative alternation.

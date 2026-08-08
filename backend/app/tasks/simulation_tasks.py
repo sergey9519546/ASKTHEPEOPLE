@@ -194,6 +194,28 @@ def run_simulation_task(
             raise RuntimeError(final_state.error or "Simulation execution failed")
 
         result_dict = final_state.to_dict()
+        if final_state.runner_status == RunnerStatus.STOPPED:
+            cancel_progress = min(
+                100,
+                int(
+                    (final_state.current_round / max(1, final_state.total_rounds))
+                    * 100
+                ),
+            )
+            if effective_task_id:
+                task_manager.cancel_task(
+                    effective_task_id,
+                    result=result_dict,
+                    progress=cancel_progress,
+                )
+            return {
+                "success": True,
+                "simulation_id": simulation_id,
+                "task_id": effective_task_id,
+                "status": "cancelled",
+                "result": result_dict,
+            }
+
         if effective_task_id:
             task_manager.complete_task(effective_task_id, result=result_dict)
 

@@ -12,6 +12,7 @@ from uuid import RFC_4122, UUID
 
 _MAX_UUID7_UNIX_MILLISECONDS = (1 << 48) - 1
 _UUID7_RANDOM_BITS = 74
+_PUBLIC_ALIAS_MAX_ATTEMPTS = 3
 
 PublicIdKind = Literal["org", "user", "workspace", "project"]
 
@@ -74,16 +75,18 @@ def new_public_id(
     if physical_id.version != 7 or physical_id.variant != RFC_4122:
         raise ValueError("physical_id_must_be_uuid7")
 
-    alias_id = (uuid7_factory or new_uuid7)()
-    if (
-        type(alias_id) is not UUID
-        or alias_id.version != 7
-        or alias_id.variant != RFC_4122
-    ):
-        raise ValueError("public_alias_must_use_uuid7")
-    if alias_id == physical_id:
-        raise ValueError("public_alias_must_not_reveal_physical_id")
-    return f"{_PUBLIC_ID_PREFIXES[kind]}_{alias_id.hex}"
+    issue_uuid7 = uuid7_factory or new_uuid7
+    for _ in range(_PUBLIC_ALIAS_MAX_ATTEMPTS):
+        alias_id = issue_uuid7()
+        if (
+            type(alias_id) is not UUID
+            or alias_id.version != 7
+            or alias_id.variant != RFC_4122
+        ):
+            raise ValueError("public_alias_must_use_uuid7")
+        if alias_id != physical_id:
+            return f"{_PUBLIC_ID_PREFIXES[kind]}_{alias_id.hex}"
+    raise ValueError("public_alias_retry_exhausted")
 
 
 def validate_legacy_project_public_id(value: str) -> str:

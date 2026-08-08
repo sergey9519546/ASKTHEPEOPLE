@@ -25,6 +25,8 @@ from ...utils.logger import get_logger
 from ...utils.input_policy import InputPolicyError, PREPARE_ENTITY_MAX
 from ...models.project import ProjectManager
 
+from app.api.schemas import CreateSimulationRequest, PrepareSimulationRequest, validate_schema
+
 logger = get_logger('askthepeople.api.simulation')
 
 
@@ -41,6 +43,7 @@ ALLOWED_PLATFORMS = {
 
 @simulation_bp.route('/create', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
+@validate_schema(CreateSimulationRequest)
 def create_simulation():
     """
     Create new simulation
@@ -71,7 +74,7 @@ def create_simulation():
     """
     try:
         data = request.get_json() or {}
-        
+
         project_id = data.get('project_id')
         if not project_id:
             return jsonify({
@@ -116,6 +119,7 @@ def create_simulation():
 
 @simulation_bp.route('/prepare', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
+@validate_schema(PrepareSimulationRequest)
 def prepare_simulation():
     """
     Prepare simulation environment (asynchronous task, LLM intelligently generates all parameters)

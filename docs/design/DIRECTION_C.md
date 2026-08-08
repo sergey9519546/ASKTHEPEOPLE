@@ -35,8 +35,9 @@ and branching. It MUST NOT communicate probability, popularity, sample size,
 corroboration, or prediction.
 
 The visual system is successful only when the user forms the correct product
-model. Black, paper, yellow, compressed display type, and route lines are not
-sufficient on their own.
+model. Charcoal, cream, editorial red, compressed display type, and route
+lines are not sufficient on their own. Yellow is an attention accent, not the
+primary brand or action color.
 
 ## Design principles
 
@@ -220,7 +221,7 @@ Secondary action: `Ask about this brief`
 
 ### Step 7 — Prepare human validation
 
-The charcoal route ends before this step. The screen uses a separate white transfer field.
+The charcoal route ends before this step. The screen uses a separate light-cream transfer field.
 
 Primary action: `Create research handoff`
 
@@ -296,14 +297,14 @@ The rail may be sticky only if `scroll-padding-top` and focus tests prove it nev
 
 - **Warm paper:** user decisions, forms, review, editorial brief.
 - **Charcoal:** synthetic route field, run process, diagnostics.
-- **White transfer field:** external research handoff and the boundary where the synthetic system ends.
+- **Light-cream transfer field:** external research handoff and the boundary where the synthetic system ends.
 
 This creates a stable visual narrative:
 
 ```text
-PAPER — DEFINE AND REVIEW
+CREAM — DEFINE AND REVIEW
 CHARCOAL — EXPLORE SYNTHETIC POSSIBILITIES
-WHITE — LEAVE THE SYNTHETIC SYSTEM AND VALIDATE
+LIGHT CREAM — LEAVE THE SYNTHETIC SYSTEM AND VALIDATE
 ```
 
 Do not use these surfaces merely as decorative alternation.
@@ -316,12 +317,13 @@ Do not use these surfaces merely as decorative alternation.
 |---|---:|---|
 | `--ink` | `#111313` | Main dark field and primary text |
 | `--paper` | `#F2EBDD` | Forms and reading surfaces |
-| `--transfer` | `#FFFFFF` | Human-validation boundary |
-| `--signal` | `#FFD51D` | Current step, active route, single primary action |
-| `--route-teal` | `#36B9A6` | Secondary route family |
-| `--route-orange` | `#F47721` | Secondary route family |
-| `--text-dark-secondary` | `#A6A39B` | Secondary text on charcoal |
-| `--text-paper-secondary` | `#68665F` | Secondary text on paper |
+| `--paper-transfer` | `#F7F0E2` | Human-validation boundary |
+| `--signal` | `#F04B3D` | Current step, active route, brand field, single primary action |
+| `--signal-strong` | `#FF5D4F` | Hover or pressed action field |
+| `--signal-deep` | `#982D24` | Accessible red text on cream and hard-offset action shadow |
+| `--attention` | `#FFD51D` | Focus, warning, and small attention marks only |
+| `--text-dark-secondary` | `#C7C0B3` | Secondary text on charcoal |
+| `--text-paper-secondary` | `#646761` | Secondary text on paper |
 | `--error-paper` | `#B42318` | Error on paper |
 | `--error-dark` | `#E75B52` | Error on charcoal |
 | `--rule-dark` | `#2A2E2E` | Dark-field rules |
@@ -367,7 +369,7 @@ Rules:
 - Base corner radius: `0`.
 - Small functional radius allowed only for native focus clarity: maximum `2px`.
 - Borders: 1px and 2px hard rules.
-- Active step: 4px yellow edge or full yellow field.
+- Active step: 4px editorial-red edge or full red field.
 - No glass, blur, gradients, glows, rounded floating cards, pill-heavy controls, or soft elevation system.
 - A single 4px hard-offset document shadow may be used on paper surfaces.
 - Use asymmetry through grid, folios, extended rules, and inspector placement—not random card offsets.
@@ -564,7 +566,7 @@ Required:
 - semantic headings and landmarks;
 - list view equivalent for every route fact;
 - full keyboard operation;
-- visible two-color focus treatment across dark and paper fields;
+- visible yellow-and-ink focus treatment across dark and cream fields;
 - no focused element obscured by sticky UI;
 - 44×44 CSS px product standard for primary pointer targets, even though WCAG AA permits a smaller minimum in defined cases; 44×44 is the enhanced target.([WCAG 2.2 Target Size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html))
 - no color-only meaning;

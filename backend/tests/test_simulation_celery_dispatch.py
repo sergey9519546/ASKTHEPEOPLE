@@ -110,6 +110,64 @@ def test_simulation_start_returns_202_accepted(api_client, monkeypatch):
     assert "data" in json_data
 
 
+def test_simulation_start_dispatch_failure_fails_task_without_running_in_request(
+    api_client, monkeypatch
+):
+    """A broker failure must fail closed at the HTTP dispatch seam.
+
+    The request process does not own OASIS execution. If Celery cannot accept
+    the job, callers receive a stable service-unavailable response and the
+    client-facing task record becomes terminal instead of running OASIS inside
+    the request process.
+    """
+    sim_id = "sim_dispatch_unavailable"
+    state = SimpleNamespace(
+        simulation_id=sim_id,
+        status=SimulationStatus.READY,
+        graph_id="source-graph",
+    )
+
+    class FakeManager:
+        def get_simulation(self, sid):
+            return state if sid == sim_id else None
+
+        def _save_simulation_state(self, _saved_state):
+            raise AssertionError("dispatch failure must not persist RUNNING")
+
+    def reject_dispatch(**_kwargs):
+        raise ConnectionError("broker unavailable")
+
+    def reject_direct_runner(**_kwargs):
+        raise AssertionError("request route must not run OASIS directly")
+
+    from app.tasks.simulation_tasks import run_simulation_task
+
+    monkeypatch.setattr(execution_api, "SimulationManager", FakeManager)
+    monkeypatch.setattr(
+        execution_api, "_check_simulation_prepared", lambda _sid: (True, {})
+    )
+    monkeypatch.setattr(run_simulation_task, "delay", reject_dispatch)
+    monkeypatch.setattr(
+        SimulationRunner, "start_simulation", reject_direct_runner
+    )
+
+    response = api_client.post(
+        "/api/simulation/start",
+        json={"simulation_id": sim_id, "platform": "parallel"},
+    )
+
+    assert response.status_code == 503
+    payload = response.get_json()
+    assert payload["success"] is False
+    assert payload["code"] == "simulation_dispatch_unavailable"
+    assert payload["task_id"]
+    task = TaskManager().get_task(payload["task_id"])
+    assert task is not None
+    assert task.status == TaskStatus.FAILED
+    assert task.public_error == "simulation_dispatch_unavailable"
+    assert state.status == SimulationStatus.READY
+
+
 def test_run_simulation_task_executes_and_updates_task_manager(monkeypatch):
     """Verify run_simulation_task Celery wrapper initializes and completes execution."""
     sim_id = "sim_task_test"
@@ -146,6 +204,50 @@ def test_run_simulation_task_executes_and_updates_task_manager(monkeypatch):
     assert updated_task is not None
     assert updated_task.status == TaskStatus.COMPLETED
     assert updated_task.progress == 100
+
+
+def test_run_simulation_task_records_cooperative_stop_as_cancelled(monkeypatch):
+    """A manually stopped run is terminal cancellation, not completion."""
+    sim_id = "sim_task_stopped"
+    task_id = "task_stopped_uuid_123"
+    stopped_state = SimulationRunState(
+        simulation_id=sim_id,
+        runner_status=RunnerStatus.STOPPED,
+        total_rounds=10,
+        current_round=4,
+        started_at="2026-08-08T00:00:00",
+        completed_at="2026-08-08T00:04:00",
+    )
+
+    monkeypatch.setattr(
+        SimulationRunner, "start_simulation", lambda **_kwargs: stopped_state
+    )
+    monkeypatch.setattr(
+        SimulationRunner, "get_run_state", lambda _sid: stopped_state
+    )
+
+    task_manager = TaskManager()
+    task_manager.create_task(
+        "simulation_run",
+        metadata={"simulation_id": sim_id},
+        task_id=task_id,
+    )
+
+    result = run_simulation_task.apply(
+        kwargs={
+            "simulation_id": sim_id,
+            "task_id": task_id,
+            "platform": "parallel",
+        }
+    ).get()
+
+    assert result["success"] is True
+    assert result["status"] == "cancelled"
+    cancelled = task_manager.get_task(task_id)
+    assert cancelled is not None
+    assert cancelled.status == TaskStatus.CANCELLED
+    assert cancelled.progress == 40
+    assert cancelled.result["runner_status"] == RunnerStatus.STOPPED.value
 
 
 def test_run_simulation_task_failed_runner_path_fails_once_with_specific_error(monkeypatch):

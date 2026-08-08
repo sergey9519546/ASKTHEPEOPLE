@@ -64,11 +64,16 @@ class TaskStatus(str, Enum):
     PROCESSING = "processing"    # Processing
     COMPLETED = "completed"      # Completed
     FAILED = "failed"            # Failed
+    CANCELLED = "cancelled"      # Cooperatively stopped by request
 
 
-# A task that has completed or failed is done. Later writes may still add
+# A task that has completed, failed, or been cancelled is done. Later writes may still add
 # detail, but they must not move it back to pending/processing.
-_TERMINAL_STATUSES = frozenset({TaskStatus.COMPLETED, TaskStatus.FAILED})
+_TERMINAL_STATUSES = frozenset({
+    TaskStatus.COMPLETED,
+    TaskStatus.FAILED,
+    TaskStatus.CANCELLED,
+})
 
 
 @dataclass
@@ -288,7 +293,7 @@ class TaskManager:
         PROCESSING) task already exists with the same key, that task's id is
         returned instead of creating a new one. This dedupes double-submits
         (network retry, double-click) per ADR-0003. A task that has reached a
-        terminal state (COMPLETED/FAILED) with the same key does NOT block a
+        terminal state (COMPLETED/FAILED/CANCELLED) with the same key does NOT block a
         fresh submission — the caller is explicitly re-running.
         """
         # Idempotency dedup: look for a matching in-flight task first.
@@ -378,6 +383,7 @@ class TaskManager:
                     "PROGRESS": TaskStatus.PROCESSING,
                     "SUCCESS": TaskStatus.COMPLETED,
                     "FAILURE": TaskStatus.FAILED,
+                    "REVOKED": TaskStatus.CANCELLED,
                 }
                 status = state_map.get(res.state, TaskStatus.PROCESSING)
                 meta = res.info if isinstance(res.info, dict) else {}
@@ -591,6 +597,31 @@ class TaskManager:
                 before={"status": prior.value},
                 after={"status": TaskStatus.FAILED.value, "public_error": public_error},
             )
+
+    def cancel_task(
+        self,
+        task_id: str,
+        *,
+        result: Optional[Dict] = None,
+        progress: Optional[int] = None,
+    ) -> None:
+        """Record a cooperative stop without mislabeling it as completion."""
+        prior = self._status_of(task_id)
+        self.update_task(
+            task_id,
+            status=TaskStatus.CANCELLED,
+            progress=progress,
+            message="Task cancelled",
+            result=result,
+        )
+        if prior is not None and prior != TaskStatus.CANCELLED:
+            _audit(
+                action="task.cancelled",
+                entity_type="task",
+                entity_id=task_id,
+                before={"status": prior.value},
+                after={"status": TaskStatus.CANCELLED.value},
+            )
     
     def list_tasks(self, task_type: Optional[str] = None) -> list:
         """List tasks from Redis and memory."""
@@ -642,7 +673,7 @@ class TaskManager:
         ]
     
     def cleanup_old_tasks(self, max_age_hours: int = 24):
-        """Retire stale completed/failed tasks from the in-memory dict and the
+        """Retire stale terminal tasks from the in-memory dict and the
         Redis index. Returns the number of in-process tasks retired.
 
         Runs from a periodic Celery beat task (see ``cleanup_old_tasks_task``
@@ -654,7 +685,7 @@ class TaskManager:
         with self._task_lock:
             old_ids = [
                 tid for tid, task in self._tasks.items()
-                if task.created_at < cutoff and task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]
+                if task.created_at < cutoff and task.status in _TERMINAL_STATUSES
             ]
             for tid in old_ids:
                 del self._tasks[tid]
@@ -678,7 +709,7 @@ class TaskManager:
                     t = self._load_from_redis(tid)
                     if t is None or (
                         t.created_at < cutoff
-                        and t.status in (TaskStatus.COMPLETED, TaskStatus.FAILED)
+                        and t.status in _TERMINAL_STATUSES
                     ):
                         r.delete(f"task:{tid}")
                         r.zrem(TASK_INDEX_KEY, tid)

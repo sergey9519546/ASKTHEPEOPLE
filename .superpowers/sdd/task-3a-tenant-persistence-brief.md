@@ -121,13 +121,12 @@ Implementation starts from these facts, not from TARGET diagrams:
 Any line movement discovered during implementation must be recorded with fresh
 `file:line` evidence in the implementation report.
 
-## 5. Normative relationship clarification — approval required first
+## 5. Normative relationship contract — resolved; named approval open
 
-`docs/architecture/data-model.md` says every tenant row carries
-`organization_id`; ADR-0012 says every tenant row carries `workspace_id`; the
-CURRENT Task 3 name “workspace” is a per-project experience manifest. These
-statements are incomplete together. Checkpoint 3A-0 must amend the normative
-documents to approve this exact model before migration code lands:
+Authority commit `ce132a5` amended the normative data model, ADR-0009,
+ADR-0012, privacy map, runbook, and release acceptance. It resolved the earlier
+incomplete organization/workspace statements by binding this exact model. No
+normative tenancy-relationship conflict remains:
 
 ```text
 ORGANIZATION 1 --- * WORKSPACE 1 --- * PROJECT
@@ -162,22 +161,28 @@ ORGANIZATION_MEMBERSHIP  WORKSPACE_MEMBERSHIP
 8. A decision is a future child of project. Task 3a does not create a decision
    row or derive a decision ID.
 
-Required authority edits at Checkpoint 3A-0:
+Normative edits completed by `ce132a5`:
 
-- modify `docs/architecture/data-model.md` relationship diagram, identity and
-  tenancy rules, common columns, and database acceptance;
-- modify ADR-0009 to approve organization plus workspace scope and the
-  membership bootstrap resolver;
-- modify ADR-0012 to approve the `core` schema, physical/public ID split,
+- `docs/architecture/data-model.md` now binds the relationship diagram,
+  identity and tenancy rules, common columns, and database acceptance;
+- ADR-0009 now binds organization plus workspace scope and the membership
+  bootstrap resolver;
+- ADR-0012 now binds the `core` schema, physical/public ID split,
   schema-fingerprint adoption, and no-fallback cutover;
-- update `docs/privacy/DATA_MAP.md` for OIDC subject, memberships, backfill and
-  audit data;
-- update `docs/release/RUNBOOK.md` and `docs/release/ACCEPTANCE.md` with the
-  exact migration, shadow, cutover, database-role, restore, and rollback
-  evidence in this brief.
+- `docs/privacy/DATA_MAP.md` now covers OIDC subject, memberships, backfill,
+  and audit data; and
+- `docs/release/RUNBOOK.md` and `docs/release/ACCEPTANCE.md` now bind the
+  migration, shadow, cutover, database-role, restore, and rollback evidence.
 
-Until those edits pass `python tools/validate_docs.py` and receive named owner
-approval, all remaining checkpoints are blocked.
+The packet passes `python tools/validate_docs.py`, but named Architecture,
+Security, Privacy, Persistence, and Release approvals are not recorded. A pure,
+dependency-free Checkpoint 3A-1 domain kernel may land disabled for review
+while the specification remains **PROPOSED / REVISION REQUIRED**. That review
+slice is not approval and must not be wired into routes, workers, persistence,
+configuration, or production behavior. No canonical persistence or
+integration may begin, and no Checkpoint 3A-2-or-later rollout or production
+acceptance may occur, until all five named approvals are recorded with current
+implementation evidence.
 
 ## 6. Identifier contract
 
@@ -848,11 +853,16 @@ under the same configuration and must not become a weaker OIDC/RLS path.
 
 Each checkpoint gets a fresh implementer, spec review, quality review, focused
 verification, and a separate commit. Do not begin a later checkpoint with a
-failing earlier gate.
+failing earlier gate. The sole exception is the disabled, pure-domain
+Checkpoint 3A-1 review slice described in section 5; it does not satisfy or
+bypass Checkpoint 3A-0.
 
 ### Checkpoint 3A-0 — authority packet
 
-**Modify:**
+**Normative status:** resolved by `ce132a5`; named approval record remains
+open.
+
+**Completed normative files:**
 
 ```text
 docs/architecture/data-model.md
@@ -863,11 +873,14 @@ docs/release/RUNBOOK.md
 docs/release/ACCEPTANCE.md
 ```
 
-**Deliver:** the exact relationship, ID, membership, migration-adoption,
-cutover, and honest completion boundary in sections 5–15.
+**Delivered normatively:** the exact relationship, ID, membership,
+migration-adoption, cutover, and honest completion boundary in sections 5–15.
 
-**Gate:** docs validator returns zero warnings/errors and all five owners record
-approval. No app code.
+**Remaining gate:** rerun the docs validator with zero warnings/errors on the
+exact implementation head and record the five named owner approvals. The pure
+3A-1 kernel may exist disabled for review, but no production wiring, canonical
+persistence/integration, Checkpoint 3A-2-or-later rollout, or production
+acceptance is authorized before that gate closes.
 
 ### Checkpoint 3A-1 — identifiers and authorization domain
 
@@ -884,6 +897,9 @@ backend/tests/domain/test_actor_context.py
 
 **Deliver:** RFC 9562 UUIDv7, public aliases, strict roles/capabilities, policy
 v1, and frozen ActorContext. No database or Flask import in domain modules.
+This checkpoint may land only as a disabled, dependency-free review kernel
+while 3A-0 approvals remain open. Passing domain tests do not authorize
+production integration or promote the specification from PROPOSED.
 
 ### Checkpoint 3A-2 — migration lineage and core schema
 

@@ -1,7 +1,7 @@
 ---
 title: "Product Truth Contract"
 status: "Normative"
-version: "1.2.0"
+version: "1.2.1"
 owner: "Product + Research + Engineering"
 last_reviewed: "2026-08-08"
 review_cycle: "Quarterly"
@@ -264,6 +264,34 @@ External-human-evidence relations and decision-owner-conclusion lineage are
 deferred to a later, separately reviewed contract version. No v2 writer may
 invent them. Implement the v2 matrix in a domain validator and test both every
 allowed triple and the complete Cartesian complement.
+
+The following unique machine-readable blocks bind comparison cardinality and
+the first-slice capability boundary across the authority packet. They do not
+authorize implementation; `LATER_RELEASE` and `DEFERRED` require separate
+specification, review, tests, and release approval.
+
+<!-- authority-policy:decision-workspace-comparison/v1:start -->
+```json
+{
+  "policy_id": "decision-workspace-comparison/v1",
+  "availability": "LATER_RELEASE",
+  "input_count": 2,
+  "viewport_override": false
+}
+```
+<!-- authority-policy:decision-workspace-comparison/v1:end -->
+
+<!-- authority-policy:decision-workspace-first-slice/v1:start -->
+```json
+{
+  "policy_id": "decision-workspace-first-slice/v1",
+  "changed_condition_injection": "DEFERRED",
+  "external_human_evidence_import": "DEFERRED",
+  "interactive_research_handoff": "DEFERRED",
+  "decision_owner_conclusion_workflow": "DEFERRED"
+}
+```
+<!-- authority-policy:decision-workspace-first-slice/v1:end -->
 
 ## Decision-owner conclusion
 
