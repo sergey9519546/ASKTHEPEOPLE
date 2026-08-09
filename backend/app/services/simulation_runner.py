@@ -6,7 +6,6 @@ Runs simulations in the background, records Agent actions, and supports real-tim
 import os
 import sys
 import json
-import math
 import time
 import asyncio
 import threading
@@ -22,7 +21,6 @@ from queue import Queue
 
 from ..config import Config
 from ..utils.logger import get_logger
-from ..utils.input_policy import SIMULATION_ROUNDS_MAX
 from .zep_graph_memory_updater import ZepGraphMemoryManager
 from .simulation_ipc import SimulationIPCClient, CommandType, IPCResponse
 from .simulation_observation_store import sync_observation_store
@@ -31,6 +29,7 @@ from .simulation_preflight import (
     run_preflight,
 )
 from .run_attempt_store import RunAttemptStore, StaleRunAttempt
+from .simulation_limits import resolve_total_rounds
 
 logger = get_logger('askthepeople.simulation_runner')
 
@@ -39,39 +38,6 @@ _cleanup_registered = False
 
 # Platform detection
 IS_WINDOWS = sys.platform == 'win32'
-
-
-def resolve_total_rounds(
-    time_config: Dict[str, Any],
-    requested_max: int | None = None,
-) -> int:
-    """Resolve a positive run length under the global computational ceiling."""
-    try:
-        total_hours = float(time_config.get("total_simulation_hours", 72))
-        minutes_per_round = float(time_config.get("minutes_per_round", 30))
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            "total_simulation_hours and minutes_per_round must be numbers"
-        ) from exc
-    if not math.isfinite(total_hours) or total_hours <= 0:
-        raise ValueError("total_simulation_hours must be a positive finite number")
-    if not math.isfinite(minutes_per_round) or minutes_per_round <= 0:
-        raise ValueError("minutes_per_round must be a positive finite number")
-
-    effective_limit = SIMULATION_ROUNDS_MAX
-    if requested_max is not None:
-        if isinstance(requested_max, bool):
-            raise ValueError("requested max rounds must be an integer")
-        try:
-            req_int = int(requested_max)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("requested max rounds must be an integer") from exc
-        if req_int <= 0:
-            raise ValueError("requested max rounds must be positive")
-        effective_limit = min(effective_limit, req_int)
-
-    calc_rounds = math.ceil((total_hours * 60.0) / minutes_per_round)
-    return max(1, min(calc_rounds, effective_limit))
 
 
 class RunnerStatus(str, Enum):
@@ -278,6 +244,45 @@ class SimulationRunner:
         os.path.dirname(__file__),
         '../../scripts'
     )
+
+    @staticmethod
+    def build_runtime_command(
+        script_path: str,
+        config_path: str,
+        platform: str,
+        max_rounds: int | None,
+    ) -> List[str]:
+        """Build the command for the single production OASIS engine."""
+        if os.path.basename(os.fspath(script_path)) != "run_parallel_simulation.py":
+            raise ValueError(
+                "Production runtime must use run_parallel_simulation.py"
+            )
+        if platform not in {"twitter", "reddit", "parallel"}:
+            raise ValueError(f"Unsupported simulation platform: {platform}")
+
+        command = [
+            sys.executable,
+            os.fspath(script_path),
+            "--config",
+            os.fspath(config_path),
+        ]
+        if platform == "twitter":
+            command.append("--twitter-only")
+        elif platform == "reddit":
+            command.append("--reddit-only")
+
+        if max_rounds is not None:
+            if isinstance(max_rounds, bool):
+                raise ValueError("max_rounds must be a positive integer")
+            try:
+                normalized_max_rounds = int(max_rounds)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("max_rounds must be a positive integer") from exc
+            if normalized_max_rounds <= 0:
+                raise ValueError("max_rounds must be a positive integer")
+            command.extend(["--max-rounds", str(normalized_max_rounds)])
+
+        return command
     
     # In-memory run state
     _run_states: Dict[str, SimulationRunState] = {}
@@ -568,6 +573,8 @@ class SimulationRunner:
                 "Synthetic graph writes are unsupported; generated activity "
                 "remains in the simulation observation store."
             )
+        if platform not in {"twitter", "reddit", "parallel"}:
+            raise ValueError(f"Unsupported simulation platform: {platform}")
 
         sim_dir = cls._get_run_state_dir(simulation_id)
         if not os.path.exists(sim_dir):
@@ -596,15 +603,7 @@ class SimulationRunner:
         # Initialize run state
         time_config = config.get("time_config", {})
         total_hours = time_config.get("total_simulation_hours", 72)
-        minutes_per_round = time_config.get("minutes_per_round", 30)
-        total_rounds = int(total_hours * 60 / minutes_per_round)
-        
-        # Truncate if max_rounds specified
-        if max_rounds is not None and max_rounds > 0:
-            original_rounds = total_rounds
-            total_rounds = min(total_rounds, max_rounds)
-            if total_rounds < original_rounds:
-                logger.info(f"Rounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
+        total_rounds = resolve_total_rounds(config, max_rounds)
         
         state = SimulationRunState(
             simulation_id=simulation_id,
@@ -645,15 +644,14 @@ class SimulationRunner:
             cls._follower_engines.pop(simulation_id, None)
             cls._follower_agents.pop(simulation_id, None)
 
-        # Determine which script to run (located in backend/scripts/)
+        # All production modes use the same runtime implementation. Platform
+        # flags only select which loop that implementation activates.
+        script_name = "run_parallel_simulation.py"
         if platform == "twitter":
-            script_name = "run_twitter_simulation.py"
             state.twitter_running = True
         elif platform == "reddit":
-            script_name = "run_reddit_simulation.py"
             state.reddit_running = True
         else:
-            script_name = "run_parallel_simulation.py"
             state.twitter_running = True
             state.reddit_running = True
         
@@ -694,15 +692,12 @@ class SimulationRunner:
             #   reddit/actions.jsonl  - Reddit action log
             #   simulation.log        - Main process log
             
-            cmd = [
-                sys.executable,  # Python interpreter
+            cmd = cls.build_runtime_command(
                 script_path,
-                "--config", config_path,  # Full config file path
-            ]
-            
-            # Add max_rounds to command line args if specified
-            if max_rounds is not None and max_rounds > 0:
-                cmd.extend(["--max-rounds", str(max_rounds)])
+                config_path,
+                platform,
+                max_rounds,
+            )
             
             # Create main log file (prevents stdout/stderr blocking)
             main_log_path = os.path.join(sim_dir, "simulation.log")

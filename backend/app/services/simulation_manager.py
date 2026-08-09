@@ -860,21 +860,25 @@ class SimulationManager:
         sim_dir = self._get_simulation_dir(simulation_id)
         config_path = os.path.join(sim_dir, "simulation_config.json")
         scripts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../scripts'))
+        parallel_script = os.path.join(scripts_dir, "run_parallel_simulation.py")
+        parallel_command = (
+            f'python "{parallel_script}" --config "{config_path}"'
+        )
         
         return {
             "simulation_dir": sim_dir,
             "scripts_dir": scripts_dir,
             "config_file": config_path,
             "commands": {
-                "twitter": f"python {scripts_dir}/run_twitter_simulation.py --config {config_path}",
-                "reddit": f"python {scripts_dir}/run_reddit_simulation.py --config {config_path}",
-                "parallel": f"python {scripts_dir}/run_parallel_simulation.py --config {config_path}",
+                "twitter": f"{parallel_command} --twitter-only",
+                "reddit": f"{parallel_command} --reddit-only",
+                "parallel": parallel_command,
             },
             "instructions": (
                 f"1. Activate conda env: conda activate askthepeople\n"
                 f"2. Run simulation (script located at {scripts_dir}):\n"
-                f"   - Run Twitter separately: python {scripts_dir}/run_twitter_simulation.py --config {config_path}\n"
-                f"   - Run Reddit separately: python {scripts_dir}/run_reddit_simulation.py --config {config_path}\n"
-                f"   - Run both platforms in parallel: python {scripts_dir}/run_parallel_simulation.py --config {config_path}"
+                f"   - Run Twitter separately: {parallel_command} --twitter-only\n"
+                f"   - Run Reddit separately: {parallel_command} --reddit-only\n"
+                f"   - Run both platforms in parallel: {parallel_command}"
             )
         }

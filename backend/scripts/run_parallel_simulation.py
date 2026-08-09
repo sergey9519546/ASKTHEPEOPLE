@@ -157,6 +157,7 @@ def init_logging_for_simulation(simulation_dir: str):
 
 from action_logger import SimulationLogManager, PlatformActionLogger
 from app.config import Config
+from app.services.simulation_limits import resolve_total_rounds
 from app.services.simulation_runtime_contract import (
     apply_bootstrap_actions,
     apply_injected_events,
@@ -1286,16 +1287,14 @@ async def run_twitter_simulation(
     
     # Main simulation loop
     time_config = config.get("time_config", {})
-    total_hours = time_config.get("total_simulation_hours", 72)
-    minutes_per_round = time_config.get("minutes_per_round", 30)
-    total_rounds = (total_hours * 60) // minutes_per_round
-    
-    # Truncate rounds if max_rounds is specified
-    if max_rounds is not None and max_rounds > 0:
-        original_rounds = total_rounds
-        total_rounds = min(total_rounds, max_rounds)
-        if total_rounds < original_rounds:
-            log_info(f"Rounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
+    minutes_per_round = float(time_config.get("minutes_per_round", 30))
+    configured_rounds = resolve_total_rounds(config)
+    total_rounds = resolve_total_rounds(config, max_rounds)
+    if total_rounds < configured_rounds:
+        log_info(
+            f"Rounds truncated: {configured_rounds} -> {total_rounds} "
+            f"(max_rounds={max_rounds})"
+        )
     
     start_time = datetime.now()
     event_consumer = RedisEventConsumer(
@@ -1311,8 +1310,8 @@ async def run_twitter_simulation(
             break
         
         simulated_minutes = round_num * minutes_per_round
-        simulated_hour = (simulated_minutes // 60) % 24
-        simulated_day = simulated_minutes // (60 * 24) + 1
+        simulated_hour = int((simulated_minutes // 60) % 24)
+        simulated_day = int(simulated_minutes // (60 * 24) + 1)
 
         # Record round start regardless of active agents
         if action_logger:
@@ -1556,16 +1555,14 @@ async def run_reddit_simulation(
     
     # Main simulation loop
     time_config = config.get("time_config", {})
-    total_hours = time_config.get("total_simulation_hours", 72)
-    minutes_per_round = time_config.get("minutes_per_round", 30)
-    total_rounds = (total_hours * 60) // minutes_per_round
-    
-    # Truncate rounds if max_rounds is specified
-    if max_rounds is not None and max_rounds > 0:
-        original_rounds = total_rounds
-        total_rounds = min(total_rounds, max_rounds)
-        if total_rounds < original_rounds:
-            log_info(f"Rounds truncated: {original_rounds} -> {total_rounds} (max_rounds={max_rounds})")
+    minutes_per_round = float(time_config.get("minutes_per_round", 30))
+    configured_rounds = resolve_total_rounds(config)
+    total_rounds = resolve_total_rounds(config, max_rounds)
+    if total_rounds < configured_rounds:
+        log_info(
+            f"Rounds truncated: {configured_rounds} -> {total_rounds} "
+            f"(max_rounds={max_rounds})"
+        )
     
     start_time = datetime.now()
     event_consumer = RedisEventConsumer(
@@ -1581,8 +1578,8 @@ async def run_reddit_simulation(
             break
         
         simulated_minutes = round_num * minutes_per_round
-        simulated_hour = (simulated_minutes // 60) % 24
-        simulated_day = simulated_minutes // (60 * 24) + 1
+        simulated_hour = int((simulated_minutes // 60) % 24)
+        simulated_day = int(simulated_minutes // (60 * 24) + 1)
 
         # Record round start regardless of active agents
         if action_logger:
@@ -1790,16 +1787,19 @@ async def main():
     time_config = config.get("time_config", {})
     total_hours = time_config.get('total_simulation_hours', 72)
     minutes_per_round = time_config.get('minutes_per_round', 30)
-    config_total_rounds = (total_hours * 60) // minutes_per_round
+    config_total_rounds = resolve_total_rounds(config)
+    execution_total_rounds = resolve_total_rounds(config, args.max_rounds)
     
     log_manager.info(f"Simulation parameters:")
     log_manager.info(f"  - Total simulation duration: {total_hours}hours")
     log_manager.info(f"  - Minutes per round: {minutes_per_round}minutes")
     log_manager.info(f"  - Configured Total rounds: {config_total_rounds}")
-    if args.max_rounds:
+    if args.max_rounds is not None:
         log_manager.info(f"  - Max rounds limit: {args.max_rounds}")
-        if args.max_rounds < config_total_rounds:
-            log_manager.info(f"  - Actual execution rounds: {args.max_rounds} (Truncated)")
+        if execution_total_rounds < config_total_rounds:
+            log_manager.info(
+                f"  - Actual execution rounds: {execution_total_rounds} (Truncated)"
+            )
     log_manager.info(f"  - Agent count: {len(config.get('agent_configs', []))}")
     
     log_manager.info("Log structure:")

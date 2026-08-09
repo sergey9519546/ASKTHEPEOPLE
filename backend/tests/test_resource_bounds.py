@@ -1,4 +1,5 @@
 import io
+import inspect
 import sys
 from types import SimpleNamespace
 
@@ -10,8 +11,8 @@ from app.api.routes import prep_routes
 from app.config import Config
 from app.models.project import ProjectManager
 from app.models.task import TaskManager, TaskStatus
+from app.services.simulation_limits import resolve_total_rounds
 from app.services.simulation_manager import SimulationStatus
-from app.services.simulation_runner import resolve_total_rounds
 from app.utils.file_parser import (
     FileParser,
     FileParserLimitError,
@@ -28,6 +29,7 @@ from app.utils.input_policy import (
     SIMULATION_ROUNDS_MAX,
 )
 from app.utils.zep_paging import fetch_all_edges, fetch_all_nodes
+from scripts import run_parallel_simulation as parallel_runtime
 
 
 def test_chunk_overlap_cannot_prevent_forward_progress():
@@ -260,24 +262,48 @@ def test_ontology_upload_rejects_excessive_extracted_text(
 def test_generated_time_configuration_cannot_bypass_round_limit():
     assert resolve_total_rounds(
         {
-            "total_simulation_hours": 10_000,
-            "minutes_per_round": 1,
+            "time_config": {
+                "total_simulation_hours": 10_000,
+                "minutes_per_round": 1,
+            }
         }
     ) == SIMULATION_ROUNDS_MAX
     assert resolve_total_rounds(
         {
-            "total_simulation_hours": 10_000,
-            "minutes_per_round": 1,
+            "time_config": {
+                "total_simulation_hours": 10_000,
+                "minutes_per_round": 1,
+            }
         },
-        requested_max=25,
+        max_rounds=25,
     ) == 25
+    assert resolve_total_rounds(
+        {
+            "time_config": {
+                "total_simulation_hours": 1,
+                "minutes_per_round": 40,
+            }
+        }
+    ) == 2
     with pytest.raises(ValueError, match="minutes_per_round"):
         resolve_total_rounds(
             {
-                "total_simulation_hours": 72,
-                "minutes_per_round": 0,
+                "time_config": {
+                    "total_simulation_hours": 72,
+                    "minutes_per_round": 0,
+                }
             }
         )
+
+
+def test_production_runtime_uses_shared_round_resolution_in_both_loops_and_main():
+    for runtime_entrypoint in (
+        parallel_runtime.run_twitter_simulation,
+        parallel_runtime.run_reddit_simulation,
+        parallel_runtime.main,
+    ):
+        source = inspect.getsource(runtime_entrypoint)
+        assert "resolve_total_rounds(" in source
 
 
 def test_graph_task_polling_never_returns_nested_tracebacks(api_client):

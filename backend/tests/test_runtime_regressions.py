@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -322,6 +323,137 @@ def test_load_run_state_is_pure_for_active_persisted_state(monkeypatch, tmp_path
     assert loaded.owner_id == "worker-1"
     assert loaded.fencing_token == 7
     assert state_path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("platform", "platform_args"),
+    [
+        ("twitter", ["--twitter-only"]),
+        ("reddit", ["--reddit-only"]),
+        ("parallel", []),
+    ],
+)
+def test_runtime_command_builder_uses_one_production_engine(
+    tmp_path,
+    platform,
+    platform_args,
+):
+    script_path = str(tmp_path / "run_parallel_simulation.py")
+    config_path = str(tmp_path / "simulation_config.json")
+
+    command = SimulationRunner.build_runtime_command(
+        script_path,
+        config_path,
+        platform,
+        max_rounds=7,
+    )
+
+    assert command == [
+        sys.executable,
+        script_path,
+        "--config",
+        config_path,
+        *platform_args,
+        "--max-rounds",
+        "7",
+    ]
+    assert "--no-wait" not in command
+
+
+def test_runtime_command_builder_rejects_invalid_platform_and_legacy_script(tmp_path):
+    config_path = str(tmp_path / "simulation_config.json")
+    parallel_script = str(tmp_path / "run_parallel_simulation.py")
+
+    with pytest.raises(ValueError, match="Unsupported simulation platform"):
+        SimulationRunner.build_runtime_command(
+            parallel_script,
+            config_path,
+            "mastodon",
+            max_rounds=None,
+        )
+
+    with pytest.raises(ValueError, match="run_parallel_simulation.py"):
+        SimulationRunner.build_runtime_command(
+            str(tmp_path / "run_twitter_simulation.py"),
+            config_path,
+            "twitter",
+            max_rounds=None,
+        )
+
+
+@pytest.mark.parametrize("platform", ["twitter", "reddit", "parallel"])
+def test_start_simulation_selects_parallel_runtime_for_every_platform(
+    monkeypatch,
+    tmp_path,
+    platform,
+):
+    simulation_id = f"sim-runtime-{platform}"
+    (tmp_path / "simulation_config.json").write_text(
+        json.dumps(
+            {
+                "time_config": {
+                    "total_simulation_hours": 1,
+                    "minutes_per_round": 40,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def capture_command(script_path, config_path, selected_platform, max_rounds):
+        captured.update(
+            script_path=script_path,
+            config_path=config_path,
+            platform=selected_platform,
+            max_rounds=max_rounds,
+        )
+        raise RuntimeError("runtime command captured")
+
+    monkeypatch.setattr(SimulationRunner, "_run_attempt_store", RunAttemptStore())
+    monkeypatch.setattr(SimulationRunner, "_run_states", {})
+    monkeypatch.setattr(SimulationRunner, "_processes", {})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "build_runtime_command",
+        staticmethod(capture_command),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: None,
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "run_preflight",
+        lambda _simulation_dir: {"status": "passed"},
+    )
+
+    with pytest.raises(RuntimeError, match="runtime command captured"):
+        SimulationRunner.start_simulation(
+            simulation_id,
+            platform=platform,
+            max_rounds=None,
+            owner_id=f"worker-{platform}",
+        )
+
+    assert os.path.basename(captured["script_path"]) == "run_parallel_simulation.py"
+    assert captured["config_path"] == str(tmp_path / "simulation_config.json")
+    assert captured["platform"] == platform
+    assert captured["max_rounds"] is None
+    assert SimulationRunner._run_states[simulation_id].total_rounds == 2
 
 
 def test_get_run_state_always_prefers_durable_state_over_cached_reference(

@@ -81,6 +81,23 @@ def client():
         yield test_client
 
 
+def test_generated_run_instructions_use_the_unified_production_engine():
+    run_instructions = SimulationManager().get_run_instructions(
+        "sim_unified_runtime_instructions"
+    )
+    commands = run_instructions["commands"]
+    parallel_command = (
+        f'python "{os.path.join(run_instructions["scripts_dir"], "run_parallel_simulation.py")}" '
+        f'--config "{run_instructions["config_file"]}"'
+    )
+
+    assert commands["twitter"] == f"{parallel_command} --twitter-only"
+    assert commands["reddit"] == f"{parallel_command} --reddit-only"
+    assert commands["parallel"] == parallel_command
+    assert "run_twitter_simulation.py" not in run_instructions["instructions"]
+    assert "run_reddit_simulation.py" not in run_instructions["instructions"]
+
+
 def test_async_simulation_start_returns_202_accepted(client, monkeypatch):
     """Verify POST /api/simulation/start dispatches asynchronously and returns HTTP 202 Accepted."""
     sim_id = "sim_integration_start_202"
