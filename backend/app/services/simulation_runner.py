@@ -13,6 +13,7 @@ import threading
 import subprocess
 import signal
 import atexit
+import uuid
 from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -29,6 +30,7 @@ from .simulation_preflight import (
     assert_decision_lens_execution_admission,
     run_preflight,
 )
+from .run_attempt_store import RunAttemptStore, StaleRunAttempt
 
 logger = get_logger('askthepeople.simulation_runner')
 
@@ -184,6 +186,12 @@ class SimulationRunState:
     # Process ID (for stopping)
     process_pid: Optional[int] = None
 
+    # Durable runtime ownership
+    attempt_id: Optional[str] = None
+    owner_id: Optional[str] = None
+    fencing_token: Optional[int] = None
+    heartbeat_at: Optional[str] = None
+
     # Follower action counts (populated when enable_followers=True)
     follower_twitter_count: int = 0
     follower_reddit_count: int = 0
@@ -227,6 +235,10 @@ class SimulationRunState:
             "completed_at": self.completed_at,
             "error": self.error,
             "process_pid": self.process_pid,
+            "attempt_id": self.attempt_id,
+            "owner_id": self.owner_id,
+            "fencing_token": self.fencing_token,
+            "heartbeat_at": self.heartbeat_at,
             "follower_twitter_count": self.follower_twitter_count,
             "follower_reddit_count": self.follower_reddit_count,
         }
@@ -281,6 +293,8 @@ class SimulationRunner:
     # Follower engine state (populated by start_simulation when enable_followers=True)
     _follower_engines: Dict[str, Any] = {}   # simulation_id -> FollowerEngine
     _follower_agents: Dict[str, List] = {}   # simulation_id -> List[FollowerAgent]
+    _run_attempt_store = RunAttemptStore()
+    _run_attempt_ttl_seconds = 30.0
 
     @classmethod
     def _release_runtime_resources(cls, simulation_id: str) -> None:
@@ -368,6 +382,10 @@ class SimulationRunner:
                 completed_at=data.get("completed_at"),
                 error=data.get("error"),
                 process_pid=data.get("process_pid"),
+                attempt_id=data.get("attempt_id"),
+                owner_id=data.get("owner_id"),
+                fencing_token=data.get("fencing_token"),
+                heartbeat_at=data.get("heartbeat_at"),
             )
             
             # Load recent actions
@@ -385,12 +403,6 @@ class SimulationRunner:
                     success=a.get("success", True),
                 ))
 
-            if state.runner_status in [RunnerStatus.RUNNING, RunnerStatus.STARTING, RunnerStatus.STOPPING]:
-                cls._mark_interrupted(
-                    simulation_id,
-                    state,
-                    "interrupted by restart before the runtime completed",
-                )
             return state
         except Exception as e:
             logger.error(f"Failed to load run state: {str(e)}")
@@ -401,14 +413,67 @@ class SimulationRunner:
         """Save run state to file"""
         sim_dir = cls._get_run_state_dir(state.simulation_id)
         os.makedirs(sim_dir, exist_ok=True)
-        state_file = os.path.join(sim_dir, "run_state.json")
-        
-        data = state.to_detail_dict()
-        
-        with open(state_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        
+        if state.attempt_id is not None:
+            if state.fencing_token is None:
+                raise StaleRunAttempt("owned run state is missing its fencing token")
+            cls._run_attempt_store.assert_owner(
+                sim_dir, state.attempt_id, state.fencing_token
+            )
+        cls._persist_run_state(state, sim_dir)
         cls._run_states[state.simulation_id] = state
+
+    @classmethod
+    def _persist_run_state(
+        cls, state: SimulationRunState, sim_dir: Optional[str] = None
+    ) -> None:
+        """Atomically persist state after ownership has been established."""
+        sim_dir = sim_dir or cls._get_run_state_dir(state.simulation_id)
+        os.makedirs(sim_dir, exist_ok=True)
+        state_file = os.path.join(sim_dir, "run_state.json")
+        temp_file = f"{state_file}.{uuid.uuid4().hex}.tmp"
+        data = state.to_detail_dict()
+        fd = os.open(temp_file, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, ensure_ascii=False, indent=2)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temp_file, state_file)
+        except BaseException:
+            try:
+                os.unlink(temp_file)
+            except FileNotFoundError:
+                pass
+            raise
+
+    @classmethod
+    def reconcile_stale_run(
+        cls, simulation_id: str
+    ) -> Optional[SimulationRunState]:
+        """Persist an interrupted terminal state for an expired active attempt."""
+        sim_dir = cls._get_run_state_dir(simulation_id)
+        expired = cls._run_attempt_store.expire_if_stale(sim_dir)
+        if expired is None:
+            return None
+
+        state = cls._load_run_state(simulation_id)
+        if state is None or state.runner_status not in {
+            RunnerStatus.STARTING,
+            RunnerStatus.RUNNING,
+            RunnerStatus.PAUSED,
+            RunnerStatus.STOPPING,
+        }:
+            return None
+
+        state.runner_status = RunnerStatus.INTERRUPTED
+        state.twitter_running = False
+        state.reddit_running = False
+        state.completed_at = datetime.now().isoformat()
+        state.updated_at = state.completed_at
+        state.error = "run-attempt heartbeat expired"
+        cls._persist_run_state(state, sim_dir)
+        return state
     
     @classmethod
     def start_simulation(
@@ -422,6 +487,7 @@ class SimulationRunner:
         enable_followers: bool = False,
         follower_count: int = 100,
         follower_distribution: Optional[Dict[str, float]] = None,
+        owner_id: Optional[str] = None,
     ) -> SimulationRunState:
         """
         Start simulation
@@ -447,17 +513,10 @@ class SimulationRunner:
             raise ValueError(f"Simulation does not exist: {simulation_id}")
         assert_decision_lens_execution_admission(sim_dir)
 
-        # Check if already running
-        existing = cls.get_run_state(simulation_id)
+        # A live process in this worker is an immediate local conflict. Cross-
+        # process ownership is decided by the durable attempt store below.
         running_process = cls._processes.get(simulation_id)
-        if (
-            existing
-            and existing.runner_status in [
-                RunnerStatus.RUNNING,
-                RunnerStatus.STARTING,
-                RunnerStatus.STOPPING,
-            ]
-        ) or (running_process is not None and running_process.poll() is None):
+        if running_process is not None and running_process.poll() is None:
             raise ValueError(f"Simulation already running: {simulation_id}")
         
         # Load simulation config
@@ -493,8 +552,6 @@ class SimulationRunner:
             total_simulation_hours=total_hours,
             started_at=datetime.now().isoformat(),
         )
-        
-        cls._save_run_state(state)
         
         # Create updater if graph memory update enabled
         if enable_graph_memory_update:
@@ -544,16 +601,32 @@ class SimulationRunner:
         if not os.path.exists(script_path):
             raise ValueError(f"Script does not exist: {script_path}")
         
-        # Create action queue
-        action_queue = Queue()
-        cls._action_queues[simulation_id] = action_queue
-        
         # Bound before the try so the failure handler can tell "never opened"
         # from "opened but not yet owned by cls._stdout_files".
         main_log_file = None
+        attempt = None
+        process = None
 
         # Start simulation process
         try:
+            effective_owner_id = owner_id or (
+                f"runner-{os.getpid()}-{uuid.uuid4().hex}"
+            )
+            attempt = cls._run_attempt_store.acquire(
+                sim_dir,
+                simulation_id,
+                effective_owner_id,
+                cls._run_attempt_ttl_seconds,
+            )
+            state.attempt_id = attempt.attempt_id
+            state.owner_id = attempt.owner_id
+            state.fencing_token = attempt.fencing_token
+            state.heartbeat_at = attempt.heartbeat_at
+            cls._save_run_state(state)
+
+            action_queue = Queue()
+            cls._action_queues[simulation_id] = action_queue
+
             # Command with full paths.
             # Log structure:
             #   twitter/actions.jsonl - Twitter action log
@@ -624,6 +697,15 @@ class SimulationRunner:
             logger.info(f"Simulation started successfully: {simulation_id}, pid={process.pid}, platform={platform}")
             
         except Exception as e:
+            if process is not None and process.poll() is None:
+                try:
+                    cls._terminate_process(process, simulation_id)
+                except Exception as terminate_exc:
+                    logger.error(
+                        "Failed to terminate child after startup failure for %s: %s",
+                        simulation_id,
+                        terminate_exc,
+                    )
             # main_log_file is only handed to cls._stdout_files once Popen has
             # succeeded, so a failure between opening it and registering it
             # would otherwise leak the handle and leave the log locked.
@@ -634,7 +716,21 @@ class SimulationRunner:
                     pass
             state.runner_status = RunnerStatus.FAILED
             state.error = str(e)
-            cls._save_run_state(state)
+            if attempt is not None:
+                try:
+                    cls._save_run_state(state)
+                    cls._run_attempt_store.release(
+                        sim_dir,
+                        attempt.attempt_id,
+                        attempt.fencing_token,
+                        RunnerStatus.FAILED.value,
+                    )
+                except StaleRunAttempt:
+                    logger.warning(
+                        "Startup failure lost run-attempt ownership: %s",
+                        simulation_id,
+                    )
+            cls._release_runtime_resources(simulation_id)
             raise
 
         return state
@@ -656,6 +752,7 @@ class SimulationRunner:
         
         twitter_position = 0
         reddit_position = 0
+        lost_ownership = False
 
         # Build follower round callback (no-op when followers not enabled)
         def _follower_round_callback(round_num: int, platform: str, sim_dir: str) -> None:
@@ -681,6 +778,13 @@ class SimulationRunner:
 
         try:
             while process.poll() is None:  # Process still running
+                attempt = cls._run_attempt_store.heartbeat(
+                    sim_dir,
+                    state.attempt_id,
+                    state.fencing_token,
+                    cls._run_attempt_ttl_seconds,
+                )
+                state.heartbeat_at = attempt.heartbeat_at
                 # Read Twitter action log
                 if os.path.exists(twitter_actions_log):
                     twitter_position = cls._read_action_log(
@@ -730,11 +834,28 @@ class SimulationRunner:
                 logger.error(f"Simulation failed: {simulation_id}, error={state.error}")
             
         except Exception as exc:
+            if process.poll() is None:
+                try:
+                    cls._terminate_process(process, simulation_id)
+                except Exception as terminate_exc:
+                    logger.error(
+                        "Failed to terminate child after monitor error for %s: %s",
+                        simulation_id,
+                        terminate_exc,
+                    )
             if state.runner_status in (RunnerStatus.STOPPING, RunnerStatus.STOPPED):
                 state.runner_status = RunnerStatus.STOPPED
                 state.error = None
                 logger.info(
                     "Simulation monitor exited during an intentional stop: %s",
+                    simulation_id,
+                )
+            elif isinstance(exc, StaleRunAttempt):
+                lost_ownership = True
+                state.runner_status = RunnerStatus.INTERRUPTED
+                state.error = "run-attempt heartbeat expired"
+                logger.warning(
+                    "Simulation monitor lost run-attempt ownership: %s",
                     simulation_id,
                 )
             else:
@@ -755,18 +876,40 @@ class SimulationRunner:
                 RunnerStatus.FAILED,
             ):
                 state.completed_at = state.completed_at or datetime.now().isoformat()
-            try:
-                cls._save_run_state(state)
-                sync_observation_store(
-                    sim_dir,
-                    run_state=state.to_detail_dict(),
-                )
-            except Exception as exc:
-                logger.error(
-                    "Failed to persist terminal run state for %s: %s",
-                    simulation_id,
-                    exc,
-                )
+            if not lost_ownership:
+                try:
+                    if state.attempt_id is not None and state.fencing_token is not None:
+                        attempt = cls._run_attempt_store.heartbeat(
+                            sim_dir,
+                            state.attempt_id,
+                            state.fencing_token,
+                            cls._run_attempt_ttl_seconds,
+                        )
+                        state.heartbeat_at = attempt.heartbeat_at
+                    cls._save_run_state(state)
+                    sync_observation_store(
+                        sim_dir,
+                        run_state=state.to_detail_dict(),
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "Failed to persist terminal run state for %s: %s",
+                        simulation_id,
+                        exc,
+                    )
+                if state.attempt_id is not None and state.fencing_token is not None:
+                    try:
+                        cls._run_attempt_store.release(
+                            sim_dir,
+                            state.attempt_id,
+                            state.fencing_token,
+                            state.runner_status.value,
+                        )
+                    except StaleRunAttempt:
+                        logger.warning(
+                            "Terminal run no longer owns its attempt: %s",
+                            simulation_id,
+                        )
             cls._release_runtime_resources(simulation_id)
 
         logger.info(

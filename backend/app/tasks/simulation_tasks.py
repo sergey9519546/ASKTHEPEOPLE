@@ -3,14 +3,20 @@ Celery Simulation Tasks
 Background execution wrapper for OASIS simulations.
 """
 
+import os
 import time
 from typing import Dict, Any, Optional
 from ..celery_app import celery_app
 from ..models.task import TaskManager, TaskStatus
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
+from ..config import Config
 from ..utils.logger import get_logger
 
 logger = get_logger('askthepeople.tasks.simulation_tasks')
+
+
+class SimulationInterruptedError(RuntimeError):
+    """A run stopped because its durable owner heartbeat expired."""
 
 
 # Deterministic failure types that a retry can never fix. Retrying them only
@@ -131,6 +137,7 @@ def run_simulation_task(
             follower_count=follower_count,
             follower_distribution=follower_distribution,
             source_graph_id=source_graph_id,
+            owner_id=effective_task_id,
         )
 
         # Monitor execution until complete, failed, or stopped
@@ -179,7 +186,12 @@ def run_simulation_task(
                         }
                     )
 
-            if status in [RunnerStatus.COMPLETED, RunnerStatus.STOPPED, RunnerStatus.FAILED]:
+            if status in [
+                RunnerStatus.COMPLETED,
+                RunnerStatus.STOPPED,
+                RunnerStatus.INTERRUPTED,
+                RunnerStatus.FAILED,
+            ]:
                 break
 
             time.sleep(0.5)
@@ -192,6 +204,10 @@ def run_simulation_task(
             # call (in the except) would clobber this specific message with a
             # generic wrapper.
             raise RuntimeError(final_state.error or "Simulation execution failed")
+        if final_state.runner_status == RunnerStatus.INTERRUPTED:
+            raise SimulationInterruptedError(
+                final_state.error or "Simulation execution was interrupted"
+            )
 
         result_dict = final_state.to_dict()
         if final_state.runner_status == RunnerStatus.STOPPED:
@@ -239,7 +255,16 @@ def run_simulation_task(
             raise self.retry(exc=exc, countdown=int(2 ** self.request.retries))
         logger.error(f"Celery task run_simulation_task failed: {exc}", exc_info=True)
         if effective_task_id:
-            task_manager.fail_task(effective_task_id, error=str(exc))
+            public_error = (
+                "simulation_interrupted"
+                if isinstance(exc, SimulationInterruptedError)
+                else "task_failed"
+            )
+            task_manager.fail_task(
+                effective_task_id,
+                error=str(exc),
+                public_error=public_error,
+            )
         raise
 
 
@@ -523,5 +548,43 @@ def cleanup_old_tasks_task(max_age_hours: int = 24):
         # A periodic cleanup failure must not crash the beat scheduler.
         logger.error("cleanup_old_tasks_task failed: %s", exc, exc_info=True)
         return {"success": False, "error": str(exc)}
+
+
+@celery_app.task(name="tasks.reconcile_stale_simulation_runs")
+def reconcile_stale_simulation_runs_task(limit: int = 100):
+    """Reconcile at most ``limit`` simulation directories per beat tick."""
+    bounded_limit = max(1, min(int(limit), 1000))
+    base_dir = Config.OASIS_SIMULATION_DATA_DIR
+    if not os.path.isdir(base_dir):
+        return {"success": True, "scanned": 0, "reconciled": 0, "errors": 0}
+
+    scanned = 0
+    reconciled = 0
+    errors = 0
+    with os.scandir(base_dir) as entries:
+        for entry in entries:
+            if scanned >= bounded_limit:
+                break
+            if not entry.is_dir(follow_symlinks=False):
+                continue
+            scanned += 1
+            try:
+                if SimulationRunner.reconcile_stale_run(entry.name) is not None:
+                    reconciled += 1
+            except Exception as exc:
+                errors += 1
+                logger.error(
+                    "Failed to reconcile stale simulation run %s: %s",
+                    entry.name,
+                    exc,
+                    exc_info=True,
+                )
+
+    return {
+        "success": errors == 0,
+        "scanned": scanned,
+        "reconciled": reconciled,
+        "errors": errors,
+    }
 
 

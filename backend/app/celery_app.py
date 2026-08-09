@@ -51,6 +51,11 @@ celery_app.conf.update(
             'schedule': 3600.0,  # hourly, matching the former thread interval
             'kwargs': {'max_age_hours': 24},
         },
+        'reconcile-stale-simulation-runs': {
+            'task': 'tasks.reconcile_stale_simulation_runs',
+            'schedule': 30.0,
+            'kwargs': {'limit': 100},
+        },
     },
 )
 

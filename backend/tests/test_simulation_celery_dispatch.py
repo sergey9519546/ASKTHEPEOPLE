@@ -15,7 +15,10 @@ from app.celery_app import celery_app
 from app.models.task import TaskManager, TaskStatus, Task
 from app.services.simulation_manager import SimulationManager, SimulationStatus
 from app.services.simulation_runner import SimulationRunner, RunnerStatus, SimulationRunState
-from app.tasks.simulation_tasks import run_simulation_task
+from app.tasks.simulation_tasks import (
+    reconcile_stale_simulation_runs_task,
+    run_simulation_task,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -206,6 +209,34 @@ def test_run_simulation_task_executes_and_updates_task_manager(monkeypatch):
     assert updated_task.progress == 100
 
 
+def test_run_simulation_task_passes_task_id_as_attempt_owner(monkeypatch):
+    sim_id = "sim_owner_test"
+    task_id = "task_owner_uuid_123"
+    captured = {}
+    completed = SimulationRunState(
+        simulation_id=sim_id,
+        runner_status=RunnerStatus.COMPLETED,
+        total_rounds=1,
+        current_round=1,
+    )
+
+    def start_simulation(**kwargs):
+        captured.update(kwargs)
+        return completed
+
+    monkeypatch.setattr(SimulationRunner, "start_simulation", start_simulation)
+    monkeypatch.setattr(SimulationRunner, "get_run_state", lambda _sid: completed)
+    TaskManager().create_task(
+        "simulation_run", metadata={"simulation_id": sim_id}, task_id=task_id
+    )
+
+    run_simulation_task.apply(
+        kwargs={"simulation_id": sim_id, "task_id": task_id}
+    ).get()
+
+    assert captured["owner_id"] == task_id
+
+
 def test_run_simulation_task_records_cooperative_stop_as_cancelled(monkeypatch):
     """A manually stopped run is terminal cancellation, not completion."""
     sim_id = "sim_task_stopped"
@@ -299,6 +330,81 @@ def test_run_simulation_task_failed_runner_path_fails_once_with_specific_error(m
     failed = task_manager.get_task(task_id)
     assert failed.status == TaskStatus.FAILED
     assert failed.error == runner_error
+
+
+def test_run_simulation_task_interrupted_path_fails_once_with_public_code(monkeypatch):
+    sim_id = "sim_interrupted_path"
+    task_id = "task_interrupted_once"
+    interrupted = SimulationRunState(
+        simulation_id=sim_id,
+        runner_status=RunnerStatus.INTERRUPTED,
+        total_rounds=8,
+        current_round=3,
+        error="run-attempt heartbeat expired",
+    )
+    monkeypatch.setattr(
+        SimulationRunner, "start_simulation", lambda **_kwargs: interrupted
+    )
+    monkeypatch.setattr(
+        SimulationRunner, "get_run_state", lambda _sid: interrupted
+    )
+
+    manager = TaskManager()
+    manager.create_task(
+        "simulation_run", metadata={"simulation_id": sim_id}, task_id=task_id
+    )
+    fail_calls = []
+    original_fail = manager.fail_task
+
+    def counting_fail(tid, error, **kwargs):
+        fail_calls.append((tid, error, kwargs))
+        return original_fail(tid, error, **kwargs)
+
+    monkeypatch.setattr(manager, "fail_task", counting_fail)
+
+    with pytest.raises(RuntimeError, match="heartbeat expired"):
+        run_simulation_task.apply(
+            kwargs={"simulation_id": sim_id, "task_id": task_id}
+        )
+
+    assert len(fail_calls) == 1
+    failed = manager.get_task(task_id)
+    assert failed.status == TaskStatus.FAILED
+    assert failed.public_error == "simulation_interrupted"
+
+
+def test_celery_beat_registers_bounded_stale_run_reconciliation():
+    schedule = celery_app.conf.beat_schedule["reconcile-stale-simulation-runs"]
+
+    assert schedule["task"] == "tasks.reconcile_stale_simulation_runs"
+    assert 0 < schedule["kwargs"]["limit"] <= 1000
+
+
+def test_stale_run_reconciliation_task_scans_only_the_requested_limit(
+    monkeypatch, tmp_path
+):
+    for simulation_id in ("sim-1", "sim-2", "sim-3"):
+        (tmp_path / simulation_id).mkdir()
+    visited = []
+    monkeypatch.setattr(
+        "app.tasks.simulation_tasks.Config.OASIS_SIMULATION_DATA_DIR",
+        str(tmp_path),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "reconcile_stale_run",
+        lambda simulation_id: visited.append(simulation_id),
+    )
+
+    result = reconcile_stale_simulation_runs_task.run(limit=2)
+
+    assert result == {
+        "success": True,
+        "scanned": 2,
+        "reconciled": 0,
+        "errors": 0,
+    }
+    assert len(visited) == 2
 
 
 def test_task_manager_redis_and_memory_fallback():
