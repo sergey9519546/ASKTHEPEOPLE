@@ -342,7 +342,7 @@ class SimulationRunner:
         """Load authoritative run state; dictionaries hold control references only."""
         state = cls._load_run_state(simulation_id)
         if state:
-            cls._run_states[simulation_id] = state
+            cls._run_states.setdefault(simulation_id, state)
         return state
 
     @classmethod
@@ -488,6 +488,56 @@ class SimulationRunner:
             return None
         cls._run_states[simulation_id] = state
         return state
+
+    @classmethod
+    def _guard_failed_startup_child(
+        cls,
+        simulation_id: str,
+        sim_dir: str,
+        process: subprocess.Popen,
+        state: SimulationRunState,
+        attempt,
+    ) -> None:
+        """Retain the attempt lease until a failed-startup child is confirmed dead."""
+        heartbeat_interval = min(
+            1.0,
+            max(0.01, cls._run_attempt_ttl_seconds / 3),
+        )
+        termination_timeout = min(
+            5.0,
+            max(0.1, cls._run_attempt_ttl_seconds / 3),
+        )
+
+        while process.poll() is None:
+            renewed = cls._run_attempt_store.heartbeat(
+                sim_dir,
+                attempt.attempt_id,
+                attempt.fencing_token,
+                cls._run_attempt_ttl_seconds,
+            )
+            state.heartbeat_at = renewed.heartbeat_at
+            try:
+                cls._terminate_process(
+                    process,
+                    simulation_id,
+                    timeout=termination_timeout,
+                )
+            except Exception as terminate_exc:
+                logger.error(
+                    "Failed to terminate child after startup failure for %s: %s",
+                    simulation_id,
+                    terminate_exc,
+                )
+            if process.poll() is None:
+                time.sleep(heartbeat_interval)
+
+        renewed = cls._run_attempt_store.heartbeat(
+            sim_dir,
+            attempt.attempt_id,
+            attempt.fencing_token,
+            cls._run_attempt_ttl_seconds,
+        )
+        state.heartbeat_at = renewed.heartbeat_at
     
     @classmethod
     def start_simulation(
@@ -711,17 +761,14 @@ class SimulationRunner:
             logger.info(f"Simulation started successfully: {simulation_id}, pid={process.pid}, platform={platform}")
             
         except Exception as e:
-            child_alive = False
-            if process is not None and process.poll() is None:
-                try:
-                    cls._terminate_process(process, simulation_id)
-                except Exception as terminate_exc:
-                    logger.error(
-                        "Failed to terminate child after startup failure for %s: %s",
-                        simulation_id,
-                        terminate_exc,
-                    )
-                child_alive = process.poll() is None
+            if process is not None and process.poll() is None and attempt is not None:
+                cls._guard_failed_startup_child(
+                    simulation_id,
+                    sim_dir,
+                    process,
+                    state,
+                    attempt,
+                )
             # main_log_file is only handed to cls._stdout_files once Popen has
             # succeeded, so a failure between opening it and registering it
             # would otherwise leak the handle and leave the log locked.
@@ -735,26 +782,18 @@ class SimulationRunner:
             if attempt is not None:
                 try:
                     cls._save_run_state(state)
-                    if not child_alive:
-                        cls._run_attempt_store.release(
-                            sim_dir,
-                            attempt.attempt_id,
-                            attempt.fencing_token,
-                            RunnerStatus.FAILED.value,
-                        )
+                    cls._run_attempt_store.release(
+                        sim_dir,
+                        attempt.attempt_id,
+                        attempt.fencing_token,
+                        RunnerStatus.FAILED.value,
+                    )
                 except StaleRunAttempt:
                     logger.warning(
                         "Startup failure lost run-attempt ownership: %s",
                         simulation_id,
                     )
-            if not child_alive:
-                cls._release_runtime_resources(simulation_id)
-            else:
-                logger.error(
-                    "Startup child remains alive; retaining ownership and control "
-                    "references for %s",
-                    simulation_id,
-                )
+            cls._release_runtime_resources(simulation_id)
             raise
 
         return state

@@ -2,6 +2,8 @@
 
 import json
 import os
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -22,7 +24,7 @@ from app.services.simulation_runner import (
     SimulationRunState,
     SimulationRunner,
 )
-from app.services.run_attempt_store import RunAttemptStore
+from app.services.run_attempt_store import RunAttemptHeld, RunAttemptStore
 from app.services.zep_entity_reader import EntityNode
 from scripts.run_parallel_simulation import ParallelIPCHandler
 
@@ -352,6 +354,134 @@ def test_get_run_state_always_prefers_durable_state_over_cached_reference(
 
     assert loaded.runner_status == RunnerStatus.COMPLETED
     assert loaded.current_round == 4
+    assert SimulationRunner._run_states[simulation_id] is cached
+
+
+def test_get_run_state_preserves_control_reference_used_by_stop(monkeypatch, tmp_path):
+    simulation_id = "sim-durable-stop-reference"
+    durable = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        current_round=7,
+    )
+    control = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        current_round=1,
+    )
+
+    class LiveProcess:
+        pid = 123
+        returncode = None
+
+        def __init__(self):
+            self.running = True
+
+        def poll(self):
+            return None if self.running else self.returncode
+
+    process = LiveProcess()
+    (tmp_path / "run_state.json").write_text(
+        json.dumps(durable.to_detail_dict()), encoding="utf-8"
+    )
+    saved_statuses = []
+    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: control})
+    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_save_run_state",
+        classmethod(
+            lambda _cls, state: saved_statuses.append(state.runner_status)
+        ),
+    )
+
+    def terminate(fake_process, _simulation_id):
+        fake_process.running = False
+        fake_process.returncode = -15
+
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_terminate_process",
+        staticmethod(terminate),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "sync_observation_store",
+        lambda _path, run_state: None,
+    )
+
+    snapshot = SimulationRunner.get_run_state(simulation_id)
+    stopped = SimulationRunner.stop_simulation(simulation_id)
+
+    assert snapshot.current_round == 7
+    assert stopped is control
+    assert control.runner_status == RunnerStatus.STOPPED
+    assert process.poll() == -15
+    assert saved_statuses == [RunnerStatus.STOPPING, RunnerStatus.STOPPED]
+
+
+def test_get_run_state_preserves_control_reference_used_by_monitor(
+    monkeypatch, tmp_path
+):
+    simulation_id = "sim-durable-monitor-reference"
+    durable = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        current_round=7,
+    )
+    control = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.STOPPING,
+        current_round=1,
+    )
+    process = SimpleNamespace(poll=lambda: -15, returncode=-15)
+    (tmp_path / "run_state.json").write_text(
+        json.dumps(durable.to_detail_dict()), encoding="utf-8"
+    )
+    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: control})
+    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_save_run_state",
+        classmethod(lambda _cls, _state: None),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "sync_observation_store",
+        lambda _path, run_state: None,
+    )
+
+    snapshot = SimulationRunner.get_run_state(simulation_id)
+    monitored = SimulationRunner._monitor_simulation(simulation_id)
+
+    assert snapshot.current_round == 7
+    assert monitored is control
+    assert control.runner_status == RunnerStatus.STOPPED
+    assert control.error is None
 
 
 def test_reconcile_stale_run_interrupts_without_inspecting_processes(
@@ -699,7 +829,7 @@ def test_startup_failure_terminates_child_before_releasing_attempt(
     assert simulation_id not in SimulationRunner._processes
 
 
-def test_startup_cleanup_keeps_ownership_while_child_remains_alive(
+def test_startup_failure_heartbeats_ownership_until_child_exits(
     monkeypatch, tmp_path
 ):
     simulation_id = "sim-startup-child-alive"
@@ -716,13 +846,24 @@ def test_startup_cleanup_keeps_ownership_while_child_remains_alive(
     )
     store = RunAttemptStore()
 
-    class LiveProcess:
+    spawned = threading.Event()
+
+    class DelayedExitProcess:
         pid = 9876
+        returncode = None
+
+        def __init__(self):
+            self.started_at = None
 
         def poll(self):
+            if self.started_at is None:
+                return None
+            if time.monotonic() - self.started_at >= 0.8:
+                self.returncode = -9
+                return self.returncode
             return None
 
-    process = LiveProcess()
+    process = DelayedExitProcess()
 
     class BrokenMonitorThread:
         def __init__(self, **_kwargs):
@@ -732,6 +873,7 @@ def test_startup_cleanup_keeps_ownership_while_child_remains_alive(
             raise RuntimeError("monitor thread failed to start")
 
     monkeypatch.setattr(SimulationRunner, "_run_attempt_store", store)
+    monkeypatch.setattr(SimulationRunner, "_run_attempt_ttl_seconds", 0.2)
     monkeypatch.setattr(SimulationRunner, "_run_states", {})
     monkeypatch.setattr(SimulationRunner, "_processes", {})
     monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
@@ -756,30 +898,59 @@ def test_startup_cleanup_keeps_ownership_while_child_remains_alive(
         "run_preflight",
         lambda _simulation_dir: {"status": "passed"},
     )
+    def spawn(*_args, **_kwargs):
+        process.started_at = time.monotonic()
+        spawned.set()
+        return process
+
+    monkeypatch.setattr(simulation_runner_module.subprocess, "Popen", spawn)
     monkeypatch.setattr(
-        simulation_runner_module.subprocess,
-        "Popen",
-        lambda *_args, **_kwargs: process,
+        simulation_runner_module,
+        "threading",
+        SimpleNamespace(Thread=BrokenMonitorThread),
     )
-    monkeypatch.setattr(
-        simulation_runner_module.threading, "Thread", BrokenMonitorThread
-    )
+    termination_calls = []
+
+    def fail_termination(*_args, **_kwargs):
+        termination_calls.append(time.monotonic())
+        raise OSError("alive")
+
     monkeypatch.setattr(
         SimulationRunner,
         "_terminate_process",
-        staticmethod(lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("alive"))),
+        staticmethod(fail_termination),
     )
 
-    with pytest.raises(RuntimeError, match="monitor thread failed to start"):
-        SimulationRunner.start_simulation(simulation_id, owner_id="worker-1")
+    errors = []
 
-    handle = SimulationRunner._stdout_files.get(simulation_id)
+    def start():
+        try:
+            SimulationRunner.start_simulation(simulation_id, owner_id="worker-1")
+        except BaseException as exc:
+            errors.append(exc)
+
+    starter = threading.Thread(target=start, daemon=True)
+    starter.start()
+    assert spawned.wait(timeout=1)
+
     try:
-        assert store.read(str(tmp_path)).status == "active"
-        assert SimulationRunner._processes[simulation_id] is process
+        time.sleep(0.45)
+        assert process.poll() is None
+        with pytest.raises(RunAttemptHeld):
+            store.acquire(str(tmp_path), simulation_id, "worker-2", 0.2)
     finally:
+        starter.join(timeout=2)
+        handle = SimulationRunner._stdout_files.get(simulation_id)
         if handle:
             handle.close()
+
+    assert not starter.is_alive()
+    assert len(errors) == 1
+    assert isinstance(errors[0], RuntimeError)
+    assert str(errors[0]) == "monitor thread failed to start"
+    assert termination_calls
+    assert store.read(str(tmp_path)).status == RunnerStatus.FAILED.value
+    assert simulation_id not in SimulationRunner._processes
 
 
 def test_live_injection_returns_pubsub_contract(monkeypatch):

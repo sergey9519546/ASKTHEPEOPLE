@@ -2,6 +2,8 @@
 
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -223,9 +225,36 @@ def test_stale_reconciliation_is_ordered_and_rejects_newer_attempt(
     assert json.loads((identity_dir / "run_state.json").read_text("utf-8")) == newer_state
 
 
-def test_acquire_recovers_conservatively_stale_lock(monkeypatch, tmp_path):
+def _write_lock_record(lock_path, pid, token):
+    lock_path.write_text(
+        json.dumps({"pid": pid, "token": token}),
+        encoding="ascii",
+    )
+
+
+def test_lock_owner_record_contains_pid_and_unique_token(tmp_path):
+    store = RunAttemptStore()
     lock_path = tmp_path / ".run_attempt.lock"
-    lock_path.write_text("dead-worker", encoding="ascii")
+
+    with store._lock(str(tmp_path)):
+        first = json.loads(lock_path.read_text(encoding="ascii"))
+    with store._lock(str(tmp_path)):
+        second = json.loads(lock_path.read_text(encoding="ascii"))
+
+    assert isinstance(first, dict)
+    assert first["pid"] == os.getpid()
+    assert first["token"]
+    assert second["pid"] == os.getpid()
+    assert second["token"] != first["token"]
+
+
+def test_acquire_recovers_aged_lock_when_recorded_owner_is_dead(
+    monkeypatch, tmp_path
+):
+    departed = subprocess.Popen([sys.executable, "-c", "pass"])
+    departed.wait(timeout=5)
+    lock_path = tmp_path / ".run_attempt.lock"
+    _write_lock_record(lock_path, departed.pid, "abandoned-token")
     old = time.time() - 3600
     os.utime(lock_path, (old, old))
     monkeypatch.setattr(run_attempt_store_module, "_LOCK_TIMEOUT_SECONDS", 0.02)
@@ -236,3 +265,33 @@ def test_acquire_recovers_conservatively_stale_lock(monkeypatch, tmp_path):
 
     assert attempt.owner_id == "worker-2"
     assert not lock_path.exists()
+
+
+def test_acquire_does_not_steal_aged_lock_from_live_owner(monkeypatch, tmp_path):
+    lock_path = tmp_path / ".run_attempt.lock"
+    _write_lock_record(lock_path, os.getpid(), "live-owner-token")
+    old = time.time() - 3600
+    os.utime(lock_path, (old, old))
+    monkeypatch.setattr(run_attempt_store_module, "_LOCK_TIMEOUT_SECONDS", 0.02)
+
+    with pytest.raises(RunAttemptHeld):
+        RunAttemptStore().acquire(
+            str(tmp_path), "sim-live-stale-lock", "worker-2", 30
+        )
+
+    assert json.loads(lock_path.read_text(encoding="ascii")) == {
+        "pid": os.getpid(),
+        "token": "live-owner-token",
+    }
+
+
+def test_lock_holder_does_not_unlink_successor_token(tmp_path):
+    store = RunAttemptStore()
+    lock_path = tmp_path / ".run_attempt.lock"
+    successor = {"pid": os.getpid(), "token": "successor-token"}
+
+    with store._lock(str(tmp_path)):
+        _write_lock_record(lock_path, successor["pid"], successor["token"])
+
+    assert lock_path.exists()
+    assert json.loads(lock_path.read_text(encoding="ascii")) == successor

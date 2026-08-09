@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import math
 import os
@@ -22,6 +23,97 @@ _STALE_LOCK_AGE_SECONDS = 60.0
 _TERMINAL_STATUSES = frozenset(
     {"completed", "failed", "stopped", "interrupted", "expired"}
 )
+
+
+def _pid_is_alive(pid: int) -> bool:
+    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
+        return False
+
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        process_query_limited_information = 0x1000
+        still_active = 259
+        access_denied = 5
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [
+            wintypes.DWORD,
+            wintypes.BOOL,
+            wintypes.DWORD,
+        ]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        handle = kernel32.OpenProcess(
+            process_query_limited_information,
+            False,
+            pid,
+        )
+        if not handle:
+            return ctypes.get_last_error() == access_denied
+        try:
+            exit_code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return True
+            return exit_code.value == still_active
+        finally:
+            kernel32.CloseHandle(handle)
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError as exc:
+        return exc.errno != errno.ESRCH
+    return True
+
+
+def _read_lock_record(lock_path: str) -> tuple[int, str] | None:
+    try:
+        with open(lock_path, "r", encoding="ascii") as handle:
+            data = json.load(handle)
+    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    pid = data.get("pid")
+    token = data.get("token")
+    if (
+        isinstance(pid, bool)
+        or not isinstance(pid, int)
+        or pid <= 0
+        or not isinstance(token, str)
+        or not token
+    ):
+        return None
+    return pid, token
+
+
+def _unlink_lock_if_token_matches(lock_path: str, expected_token: str) -> bool:
+    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+    while True:
+        record = _read_lock_record(lock_path)
+        if record is None or record[1] != expected_token:
+            return False
+        try:
+            os.unlink(lock_path)
+        except FileNotFoundError:
+            return False
+        except PermissionError:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(_LOCK_RETRY_SECONDS)
+            continue
+        return True
 
 
 @dataclass(frozen=True)
@@ -323,6 +415,7 @@ class RunAttemptStore:
         os.makedirs(simulation_dir, exist_ok=True)
         lock_path = os.path.join(simulation_dir, _LOCK_FILENAME)
         deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+        lock_token = uuid.uuid4().hex
         while True:
             try:
                 fd = os.open(
@@ -334,15 +427,17 @@ class RunAttemptStore:
             except (FileExistsError, PermissionError) as exc:
                 if not os.path.exists(lock_path):
                     raise
+                record = _read_lock_record(lock_path)
                 try:
                     lock_age = time.time() - os.path.getmtime(lock_path)
                 except FileNotFoundError:
                     continue
-                if lock_age >= _STALE_LOCK_AGE_SECONDS:
-                    try:
-                        os.unlink(lock_path)
-                    except FileNotFoundError:
-                        pass
+                if (
+                    record is not None
+                    and lock_age >= _STALE_LOCK_AGE_SECONDS
+                    and not _pid_is_alive(record[0])
+                    and _unlink_lock_if_token_matches(lock_path, record[1])
+                ):
                     continue
                 if time.monotonic() >= deadline:
                     raise RunAttemptHeld(
@@ -352,10 +447,11 @@ class RunAttemptStore:
 
         try:
             with os.fdopen(fd, "w", encoding="ascii") as handle:
-                handle.write(str(os.getpid()))
+                json.dump(
+                    {"pid": os.getpid(), "token": lock_token},
+                    handle,
+                    separators=(",", ":"),
+                )
             yield
         finally:
-            try:
-                os.unlink(lock_path)
-            except FileNotFoundError:
-                pass
+            _unlink_lock_if_token_matches(lock_path, lock_token)
