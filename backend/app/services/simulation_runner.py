@@ -596,15 +596,15 @@ class SimulationRunner:
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
 
+        total_rounds = resolve_total_rounds(config, max_rounds)
+        time_config = config.get("time_config", {})
+        total_hours = time_config.get("total_simulation_hours", 72)
+
         preflight = run_preflight(sim_dir)
         if preflight.get("status") != "passed":
             raise ValueError(f"Preflight failed: {preflight.get('failed_checks', [])}")
         
         # Initialize run state
-        time_config = config.get("time_config", {})
-        total_hours = time_config.get("total_simulation_hours", 72)
-        total_rounds = resolve_total_rounds(config, max_rounds)
-        
         state = SimulationRunState(
             simulation_id=simulation_id,
             runner_status=RunnerStatus.STARTING,

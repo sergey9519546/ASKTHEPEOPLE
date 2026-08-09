@@ -359,6 +359,20 @@ def test_runtime_command_builder_uses_one_production_engine(
     ]
     assert "--no-wait" not in command
 
+    command_without_limit = SimulationRunner.build_runtime_command(
+        script_path,
+        config_path,
+        platform,
+        max_rounds=None,
+    )
+    assert command_without_limit == [
+        sys.executable,
+        script_path,
+        "--config",
+        config_path,
+        *platform_args,
+    ]
+
 
 def test_runtime_command_builder_rejects_invalid_platform_and_legacy_script(tmp_path):
     config_path = str(tmp_path / "simulation_config.json")
@@ -379,6 +393,53 @@ def test_runtime_command_builder_rejects_invalid_platform_and_legacy_script(tmp_
             "twitter",
             max_rounds=None,
         )
+
+
+@pytest.mark.parametrize(
+    ("config", "error"),
+    [
+        ([], "simulation config must be an object"),
+        ({"time_config": []}, "time_config must be an object"),
+        (
+            {
+                "time_config": {
+                    "total_simulation_hours": "many",
+                    "minutes_per_round": 30,
+                }
+            },
+            "must be numbers",
+        ),
+    ],
+)
+def test_runner_uses_shared_timing_validation_before_time_config_access(
+    monkeypatch,
+    tmp_path,
+    config,
+    error,
+):
+    simulation_id = "sim-invalid-timing"
+    (tmp_path / "simulation_config.json").write_text(
+        json.dumps(config),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: None,
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "run_preflight",
+        lambda _simulation_dir: {"status": "passed"},
+    )
+
+    with pytest.raises(ValueError, match=error):
+        SimulationRunner.start_simulation(simulation_id)
 
 
 @pytest.mark.parametrize("platform", ["twitter", "reddit", "parallel"])

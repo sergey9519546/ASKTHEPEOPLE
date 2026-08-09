@@ -1195,6 +1195,11 @@ async def run_twitter_simulation(
     max_rounds: Optional[int] = None
 ) -> PlatformSimulation:
     """Run Twitter simulation"""
+    configured_rounds = resolve_total_rounds(config)
+    total_rounds = resolve_total_rounds(config, max_rounds)
+    time_config = config.get("time_config", {})
+    minutes_per_round = float(time_config.get("minutes_per_round", 30))
+
     result = PlatformSimulation()
     
     def log_info(msg):
@@ -1285,11 +1290,6 @@ async def run_twitter_simulation(
     if action_logger:
         action_logger.log_round_end(0, initial_action_count)
     
-    # Main simulation loop
-    time_config = config.get("time_config", {})
-    minutes_per_round = float(time_config.get("minutes_per_round", 30))
-    configured_rounds = resolve_total_rounds(config)
-    total_rounds = resolve_total_rounds(config, max_rounds)
     if total_rounds < configured_rounds:
         log_info(
             f"Rounds truncated: {configured_rounds} -> {total_rounds} "
@@ -1463,6 +1463,11 @@ async def run_reddit_simulation(
     max_rounds: Optional[int] = None
 ) -> PlatformSimulation:
     """Run Reddit simulation"""
+    configured_rounds = resolve_total_rounds(config)
+    total_rounds = resolve_total_rounds(config, max_rounds)
+    time_config = config.get("time_config", {})
+    minutes_per_round = float(time_config.get("minutes_per_round", 30))
+
     result = PlatformSimulation()
     
     def log_info(msg):
@@ -1553,11 +1558,6 @@ async def run_reddit_simulation(
     if action_logger:
         action_logger.log_round_end(0, initial_action_count)
     
-    # Main simulation loop
-    time_config = config.get("time_config", {})
-    minutes_per_round = float(time_config.get("minutes_per_round", 30))
-    configured_rounds = resolve_total_rounds(config)
-    total_rounds = resolve_total_rounds(config, max_rounds)
     if total_rounds < configured_rounds:
         log_info(
             f"Rounds truncated: {configured_rounds} -> {total_rounds} "
@@ -1766,6 +1766,12 @@ async def main():
         sys.exit(1)
     
     config = load_config(args.config)
+    config_total_rounds = resolve_total_rounds(config)
+    execution_total_rounds = resolve_total_rounds(config, args.max_rounds)
+    time_config = config.get("time_config", {})
+    total_hours = time_config.get('total_simulation_hours', 72)
+    minutes_per_round = time_config.get('minutes_per_round', 30)
+
     simulation_dir = os.path.dirname(args.config) or "."
     wait_for_commands = not args.no_wait
     
@@ -1783,12 +1789,6 @@ async def main():
     log_manager.info(f"Simulation ID: {config.get('simulation_id', 'unknown')}")
     log_manager.info(f"Wait-for-command mode: {'Enabled' if wait_for_commands else 'Disabled'}")
     log_manager.info("=" * 60)
-    
-    time_config = config.get("time_config", {})
-    total_hours = time_config.get('total_simulation_hours', 72)
-    minutes_per_round = time_config.get('minutes_per_round', 30)
-    config_total_rounds = resolve_total_rounds(config)
-    execution_total_rounds = resolve_total_rounds(config, args.max_rounds)
     
     log_manager.info(f"Simulation parameters:")
     log_manager.info(f"  - Total simulation duration: {total_hours}hours")

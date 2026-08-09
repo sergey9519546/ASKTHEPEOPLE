@@ -1,5 +1,4 @@
 import io
-import inspect
 import sys
 from types import SimpleNamespace
 
@@ -11,6 +10,7 @@ from app.api.routes import prep_routes
 from app.config import Config
 from app.models.project import ProjectManager
 from app.models.task import TaskManager, TaskStatus
+from app.services import simulation_limits as simulation_limits_module
 from app.services.simulation_limits import resolve_total_rounds
 from app.services.simulation_manager import SimulationStatus
 from app.utils.file_parser import (
@@ -296,14 +296,263 @@ def test_generated_time_configuration_cannot_bypass_round_limit():
         )
 
 
-def test_production_runtime_uses_shared_round_resolution_in_both_loops_and_main():
-    for runtime_entrypoint in (
+def _mock_parallel_platform_runtime(monkeypatch, applied_rounds):
+    class FakeGraph:
+        def get_agents(self):
+            return []
+
+    class FakeGuard:
+        def verify(self, _agent_graph):
+            return None
+
+    class FakeEnvironment:
+        def __init__(self, agent_graph):
+            self.agent_graph = agent_graph
+
+        async def reset(self):
+            return None
+
+    graph = FakeGraph()
+
+    async def generate_agent_graph(**_kwargs):
+        return graph
+
+    async def apply_bootstrap(**_kwargs):
+        return 0
+
+    async def apply_scheduled(**kwargs):
+        applied_rounds.append((kwargs["platform"], kwargs["current_round"]))
+        return 0
+
+    monkeypatch.setattr(
+        parallel_runtime,
+        "create_model",
+        lambda *_args, **_kwargs: (object(), {"semaphore": 1}),
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "load_decision_lens_runtime_adapters",
+        lambda _simulation_dir: [],
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "generate_decision_lens_agent_graph",
+        generate_agent_graph,
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "InstructionIntegrityGuard",
+        SimpleNamespace(capture=lambda _graph: FakeGuard()),
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "apply_network_topology",
+        lambda _graph, _config: None,
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "build_agent_name_lookup",
+        lambda _config: {},
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "oasis",
+        SimpleNamespace(
+            DefaultPlatformType=SimpleNamespace(TWITTER="twitter", REDDIT="reddit"),
+            make=lambda **kwargs: FakeEnvironment(kwargs["agent_graph"]),
+        ),
+    )
+    monkeypatch.setattr(parallel_runtime, "apply_bootstrap_actions", apply_bootstrap)
+    monkeypatch.setattr(parallel_runtime, "apply_scheduled_events", apply_scheduled)
+    monkeypatch.setattr(
+        parallel_runtime,
+        "fetch_new_actions_from_db",
+        lambda _db_path, last_rowid, _agent_names: ([], last_rowid),
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "RedisEventConsumer",
+        lambda **_kwargs: SimpleNamespace(consume_events=lambda: []),
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "bootstrap_boost_agent_ids",
+        lambda *_args: [],
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "scheduled_event_boost_agent_ids",
+        lambda *_args: [],
+    )
+    monkeypatch.setattr(
+        parallel_runtime,
+        "get_active_agents_for_round",
+        lambda *_args, **_kwargs: [],
+    )
+    monkeypatch.setattr(parallel_runtime, "_shutdown_event", None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("platform", "runtime_entrypoint"),
+    [
+        ("twitter", parallel_runtime.run_twitter_simulation),
+        ("reddit", parallel_runtime.run_reddit_simulation),
+    ],
+)
+@pytest.mark.parametrize(
+    ("time_config", "global_cap", "max_rounds", "expected_rounds"),
+    [
+        (
+            {"total_simulation_hours": 1, "minutes_per_round": 40},
+            10,
+            None,
+            2,
+        ),
+        (
+            {"total_simulation_hours": 8, "minutes_per_round": 60},
+            3,
+            None,
+            3,
+        ),
+        (
+            {"total_simulation_hours": 8, "minutes_per_round": 60},
+            20,
+            2,
+            2,
+        ),
+    ],
+    ids=["ceil", "global-cap", "explicit-max"],
+)
+async def test_platform_loops_apply_exactly_the_resolved_round_count(
+    monkeypatch,
+    tmp_path,
+    platform,
+    runtime_entrypoint,
+    time_config,
+    global_cap,
+    max_rounds,
+    expected_rounds,
+):
+    applied_rounds = []
+    _mock_parallel_platform_runtime(monkeypatch, applied_rounds)
+    monkeypatch.setattr(
+        simulation_limits_module,
+        "SIMULATION_ROUNDS_MAX",
+        global_cap,
+    )
+
+    await runtime_entrypoint(
+        {"time_config": {**time_config, "reflection_interval_rounds": 0}},
+        str(tmp_path),
+        max_rounds=max_rounds,
+    )
+
+    assert applied_rounds == [
+        (platform, round_num) for round_num in range(1, expected_rounds + 1)
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "runtime_entrypoint",
+    [
         parallel_runtime.run_twitter_simulation,
         parallel_runtime.run_reddit_simulation,
-        parallel_runtime.main,
-    ):
-        source = inspect.getsource(runtime_entrypoint)
-        assert "resolve_total_rounds(" in source
+    ],
+)
+@pytest.mark.parametrize(
+    ("config", "error"),
+    [
+        ([], "simulation config must be an object"),
+        ({"time_config": []}, "time_config must be an object"),
+        (
+            {
+                "time_config": {
+                    "total_simulation_hours": "many",
+                    "minutes_per_round": 30,
+                }
+            },
+            "must be numbers",
+        ),
+    ],
+)
+async def test_platform_loops_validate_timing_before_runtime_initialization(
+    monkeypatch,
+    tmp_path,
+    runtime_entrypoint,
+    config,
+    error,
+):
+    def fail_if_initialized(*_args, **_kwargs):
+        raise AssertionError("runtime initialized before timing validation")
+
+    monkeypatch.setattr(parallel_runtime, "create_model", fail_if_initialized)
+
+    with pytest.raises(ValueError, match=error):
+        await runtime_entrypoint(config, str(tmp_path))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("config", "error"),
+    [
+        ([], "simulation config must be an object"),
+        ({"time_config": []}, "time_config must be an object"),
+        (
+            {
+                "time_config": {
+                    "total_simulation_hours": "many",
+                    "minutes_per_round": 30,
+                }
+            },
+            "must be numbers",
+        ),
+    ],
+)
+async def test_parallel_main_uses_shared_timing_validation(
+    monkeypatch,
+    tmp_path,
+    config,
+    error,
+):
+    config_path = tmp_path / "simulation_config.json"
+    config_path.write_text("{}", encoding="utf-8")
+
+    class QuietLogManager:
+        def __init__(self, _simulation_dir):
+            pass
+
+        def get_twitter_logger(self):
+            return None
+
+        def get_reddit_logger(self):
+            return None
+
+        def info(self, _message):
+            return None
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "run_parallel_simulation.py",
+            "--config",
+            str(config_path),
+            "--twitter-only",
+            "--no-wait",
+        ],
+    )
+    monkeypatch.setattr(parallel_runtime, "load_config", lambda _path: config)
+    monkeypatch.setattr(
+        parallel_runtime,
+        "init_logging_for_simulation",
+        lambda _simulation_dir: None,
+    )
+    monkeypatch.setattr(parallel_runtime, "SimulationLogManager", QuietLogManager)
+
+    with pytest.raises(ValueError, match=error):
+        await parallel_runtime.main()
 
 
 def test_graph_task_polling_never_returns_nested_tracebacks(api_client):
