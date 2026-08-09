@@ -2,6 +2,8 @@
 
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -309,3 +311,43 @@ def test_concurrent_recoverers_never_overlap_critical_sections(tmp_path):
 
     assert all(not contender.is_alive() for contender in contenders)
     assert max_active == 1
+
+
+def test_kernel_lock_blocks_another_process_and_releases_after_crash(
+    monkeypatch, tmp_path
+):
+    ready_path = tmp_path / "holder.ready"
+    holder_script = "\n".join(
+        [
+            "import pathlib, sys, time",
+            "from app.services.run_attempt_store import RunAttemptStore",
+            "with RunAttemptStore()._lock(sys.argv[1]):",
+            "    pathlib.Path(sys.argv[2]).write_text('ready', encoding='ascii')",
+            "    time.sleep(30)",
+        ]
+    )
+    holder = subprocess.Popen(
+        [sys.executable, "-c", holder_script, str(tmp_path), str(ready_path)]
+    )
+    try:
+        deadline = time.monotonic() + 5
+        while not ready_path.exists() and holder.poll() is None:
+            if time.monotonic() >= deadline:
+                pytest.fail("subprocess did not acquire the kernel lock")
+            time.sleep(0.01)
+        assert holder.poll() is None
+
+        monkeypatch.setattr(run_attempt_store_module, "_LOCK_TIMEOUT_SECONDS", 0.05)
+        with pytest.raises(RunAttemptHeld):
+            RunAttemptStore().acquire(
+                str(tmp_path), "sim-process-contention", "worker-2", 30
+            )
+
+        holder.kill()
+        holder.wait(timeout=5)
+        with RunAttemptStore()._lock(str(tmp_path)):
+            pass
+    finally:
+        if holder.poll() is None:
+            holder.kill()
+            holder.wait(timeout=5)
