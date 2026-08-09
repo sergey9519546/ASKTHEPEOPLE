@@ -18,6 +18,7 @@ _COUNTER_FILENAME = "run_attempt_counter.json"
 _LOCK_FILENAME = ".run_attempt.lock"
 _LOCK_TIMEOUT_SECONDS = 2.0
 _LOCK_RETRY_SECONDS = 0.01
+_STALE_LOCK_AGE_SECONDS = 60.0
 _TERMINAL_STATUSES = frozenset(
     {"completed", "failed", "stopped", "interrupted", "expired"}
 )
@@ -148,6 +149,66 @@ class RunAttemptStore:
                 simulation_dir, attempt_id, fencing_token, _utc_now()
             )
 
+    def write_owned_run_state(
+        self,
+        simulation_dir: str,
+        attempt_id: str,
+        fencing_token: int,
+        payload: dict,
+    ) -> None:
+        """Validate ownership and replace run state under one lock."""
+        with self._lock(simulation_dir):
+            self._assert_owner_unlocked(
+                simulation_dir, attempt_id, fencing_token, _utc_now()
+            )
+            if (
+                payload.get("attempt_id") != attempt_id
+                or payload.get("fencing_token") != fencing_token
+            ):
+                raise StaleRunAttempt(
+                    "run-state payload does not match the active attempt"
+                )
+            self._write_json_atomic(
+                os.path.join(simulation_dir, "run_state.json"), payload
+            )
+
+    def reconcile_stale_run_state(
+        self,
+        simulation_dir: str,
+        attempt_id: str,
+        fencing_token: int,
+        payload: dict,
+        now: datetime | None = None,
+    ) -> RunAttempt | None:
+        """Write interrupted state before expiring the same stale attempt."""
+        effective_now = self._normalize_now(now)
+        with self._lock(simulation_dir):
+            current = self._read_unlocked(simulation_dir)
+            if (
+                current is None
+                or current.status != "active"
+                or current.attempt_id != attempt_id
+                or current.fencing_token != fencing_token
+                or _parse_timestamp(current.expires_at) > effective_now
+            ):
+                return None
+
+            state_path = os.path.join(simulation_dir, "run_state.json")
+            persisted_state = self._read_json_unlocked(state_path)
+            if (
+                persisted_state is None
+                or persisted_state.get("attempt_id") != current.attempt_id
+                or persisted_state.get("fencing_token") != current.fencing_token
+                or payload.get("attempt_id") != current.attempt_id
+                or payload.get("fencing_token") != current.fencing_token
+            ):
+                return None
+
+            self._write_json_atomic(state_path, payload)
+            expired = replace(current, status="expired")
+            self._write_attempt_unlocked(simulation_dir, expired)
+            return expired
+
     def release(
         self,
         simulation_dir: str,
@@ -170,11 +231,7 @@ class RunAttemptStore:
         simulation_dir: str,
         now: datetime | None = None,
     ) -> RunAttempt | None:
-        effective_now = now or _utc_now()
-        if effective_now.tzinfo is None:
-            effective_now = effective_now.replace(tzinfo=timezone.utc)
-        else:
-            effective_now = effective_now.astimezone(timezone.utc)
+        effective_now = self._normalize_now(now)
 
         with self._lock(simulation_dir):
             current = self._read_unlocked(simulation_dir)
@@ -222,6 +279,20 @@ class RunAttemptStore:
         with open(path, "r", encoding="utf-8") as handle:
             return int(json.load(handle).get("fencing_token", 0))
 
+    @staticmethod
+    def _read_json_unlocked(path: str) -> dict | None:
+        if not os.path.exists(path):
+            return None
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
+
+    @staticmethod
+    def _normalize_now(now: datetime | None) -> datetime:
+        effective_now = now or _utc_now()
+        if effective_now.tzinfo is None:
+            return effective_now.replace(tzinfo=timezone.utc)
+        return effective_now.astimezone(timezone.utc)
+
     def _write_attempt_unlocked(
         self, simulation_dir: str, attempt: RunAttempt
     ) -> None:
@@ -260,7 +331,19 @@ class RunAttemptStore:
                     0o600,
                 )
                 break
-            except FileExistsError as exc:
+            except (FileExistsError, PermissionError) as exc:
+                if not os.path.exists(lock_path):
+                    raise
+                try:
+                    lock_age = time.time() - os.path.getmtime(lock_path)
+                except FileNotFoundError:
+                    continue
+                if lock_age >= _STALE_LOCK_AGE_SECONDS:
+                    try:
+                        os.unlink(lock_path)
+                    except FileNotFoundError:
+                        pass
+                    continue
                 if time.monotonic() >= deadline:
                     raise RunAttemptHeld(
                         f"timed out acquiring run-attempt lock for {simulation_dir}"

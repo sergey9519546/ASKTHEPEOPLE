@@ -407,6 +407,31 @@ def test_stale_run_reconciliation_task_scans_only_the_requested_limit(
     assert len(visited) == 2
 
 
+def test_stale_run_reconciliation_task_rotates_sorted_cursor(
+    monkeypatch, tmp_path
+):
+    for simulation_id in ("sim-3", "sim-1", "sim-2"):
+        (tmp_path / simulation_id).mkdir()
+    visited = []
+    monkeypatch.setattr(
+        "app.tasks.simulation_tasks.Config.OASIS_SIMULATION_DATA_DIR",
+        str(tmp_path),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "reconcile_stale_run",
+        lambda simulation_id: visited.append(simulation_id),
+    )
+
+    first = reconcile_stale_simulation_runs_task.run(limit=2)
+    second = reconcile_stale_simulation_runs_task.run(limit=2)
+
+    assert first["scanned"] == 2
+    assert second["scanned"] == 2
+    assert visited == ["sim-1", "sim-2", "sim-3", "sim-1"]
+    assert (tmp_path / ".stale_run_reconcile_cursor.json").exists()
+
+
 def test_task_manager_redis_and_memory_fallback():
     """Verify TaskManager creates, updates, and retrieves tasks correctly."""
     tm = TaskManager()

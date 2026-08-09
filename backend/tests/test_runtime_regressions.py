@@ -322,6 +322,38 @@ def test_load_run_state_is_pure_for_active_persisted_state(monkeypatch, tmp_path
     assert state_path.read_bytes() == before
 
 
+def test_get_run_state_always_prefers_durable_state_over_cached_reference(
+    monkeypatch, tmp_path
+):
+    simulation_id = "sim-durable-first"
+    durable = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.COMPLETED,
+        current_round=4,
+        total_rounds=4,
+    )
+    cached = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        current_round=1,
+        total_rounds=4,
+    )
+    (tmp_path / "run_state.json").write_text(
+        json.dumps(durable.to_detail_dict()), encoding="utf-8"
+    )
+    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: cached})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+
+    loaded = SimulationRunner.get_run_state(simulation_id)
+
+    assert loaded.runner_status == RunnerStatus.COMPLETED
+    assert loaded.current_round == 4
+
+
 def test_reconcile_stale_run_interrupts_without_inspecting_processes(
     monkeypatch, tmp_path
 ):
@@ -426,6 +458,108 @@ def test_monitor_heartbeats_state_then_releases_terminal_attempt(
     assert terminal_attempt.status == RunnerStatus.COMPLETED.value
 
 
+def test_monitor_does_not_release_attempt_when_terminal_state_save_fails(
+    monkeypatch, tmp_path
+):
+    simulation_id = "sim-terminal-save-fails"
+    state = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        attempt_id="attempt-1",
+        owner_id="worker-1",
+        fencing_token=1,
+    )
+    releases = []
+
+    class FakeStore:
+        def heartbeat(self, *_args):
+            return SimpleNamespace(heartbeat_at="2026-08-08T00:00:00+00:00")
+
+        def release(self, *args):
+            releases.append(args)
+
+    process = SimpleNamespace(poll=lambda: 0, returncode=0)
+    monkeypatch.setattr(SimulationRunner, "_run_attempt_store", FakeStore())
+    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: state})
+    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_save_run_state",
+        classmethod(lambda _cls, _state: (_ for _ in ()).throw(OSError("disk full"))),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "sync_observation_store",
+        lambda *_args, **_kwargs: None,
+    )
+
+    SimulationRunner._monitor_simulation(simulation_id)
+
+    assert releases == []
+
+
+def test_monitor_releases_after_terminal_save_when_projection_fails(
+    monkeypatch, tmp_path
+):
+    simulation_id = "sim-projection-fails"
+    state = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        attempt_id="attempt-1",
+        owner_id="worker-1",
+        fencing_token=1,
+    )
+    releases = []
+
+    class FakeStore:
+        def heartbeat(self, *_args):
+            return SimpleNamespace(heartbeat_at="2026-08-08T00:00:00+00:00")
+
+        def release(self, *args):
+            releases.append(args)
+
+    process = SimpleNamespace(poll=lambda: 0, returncode=0)
+    monkeypatch.setattr(SimulationRunner, "_run_attempt_store", FakeStore())
+    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: state})
+    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        SimulationRunner, "_save_run_state", classmethod(lambda _cls, _state: None)
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "sync_observation_store",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("projection failed")),
+    )
+
+    SimulationRunner._monitor_simulation(simulation_id)
+
+    assert len(releases) == 1
+
+
 def test_monitor_terminates_child_after_losing_heartbeat_ownership(
     monkeypatch, tmp_path
 ):
@@ -513,7 +647,7 @@ def test_startup_failure_terminates_child_before_releasing_attempt(
         terminated = False
 
         def poll(self):
-            return None
+            return -15 if self.terminated else None
 
     process = FakeProcess()
 
@@ -563,6 +697,89 @@ def test_startup_failure_terminates_child_before_releasing_attempt(
     assert process.terminated is True
     assert store.read(str(tmp_path)).status == RunnerStatus.FAILED.value
     assert simulation_id not in SimulationRunner._processes
+
+
+def test_startup_cleanup_keeps_ownership_while_child_remains_alive(
+    monkeypatch, tmp_path
+):
+    simulation_id = "sim-startup-child-alive"
+    (tmp_path / "simulation_config.json").write_text(
+        json.dumps(
+            {
+                "time_config": {
+                    "total_simulation_hours": 1,
+                    "minutes_per_round": 30,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = RunAttemptStore()
+
+    class LiveProcess:
+        pid = 9876
+
+        def poll(self):
+            return None
+
+    process = LiveProcess()
+
+    class BrokenMonitorThread:
+        def __init__(self, **_kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("monitor thread failed to start")
+
+    monkeypatch.setattr(SimulationRunner, "_run_attempt_store", store)
+    monkeypatch.setattr(SimulationRunner, "_run_states", {})
+    monkeypatch.setattr(SimulationRunner, "_processes", {})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "assert_decision_lens_execution_admission",
+        lambda _simulation_dir: None,
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "run_preflight",
+        lambda _simulation_dir: {"status": "passed"},
+    )
+    monkeypatch.setattr(
+        simulation_runner_module.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: process,
+    )
+    monkeypatch.setattr(
+        simulation_runner_module.threading, "Thread", BrokenMonitorThread
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_terminate_process",
+        staticmethod(lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("alive"))),
+    )
+
+    with pytest.raises(RuntimeError, match="monitor thread failed to start"):
+        SimulationRunner.start_simulation(simulation_id, owner_id="worker-1")
+
+    handle = SimulationRunner._stdout_files.get(simulation_id)
+    try:
+        assert store.read(str(tmp_path)).status == "active"
+        assert SimulationRunner._processes[simulation_id] is process
+    finally:
+        if handle:
+            handle.close()
 
 
 def test_live_injection_returns_pubsub_contract(monkeypatch):

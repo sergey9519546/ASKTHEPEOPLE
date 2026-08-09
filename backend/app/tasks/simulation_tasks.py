@@ -3,8 +3,11 @@ Celery Simulation Tasks
 Background execution wrapper for OASIS simulations.
 """
 
+import json
 import os
 import time
+import uuid
+from bisect import bisect_right
 from typing import Dict, Any, Optional
 from ..celery_app import celery_app
 from ..models.task import TaskManager, TaskStatus
@@ -13,6 +16,8 @@ from ..config import Config
 from ..utils.logger import get_logger
 
 logger = get_logger('askthepeople.tasks.simulation_tasks')
+
+_RECONCILE_CURSOR_FILENAME = ".stale_run_reconcile_cursor.json"
 
 
 class SimulationInterruptedError(RuntimeError):
@@ -558,27 +563,46 @@ def reconcile_stale_simulation_runs_task(limit: int = 100):
     if not os.path.isdir(base_dir):
         return {"success": True, "scanned": 0, "reconciled": 0, "errors": 0}
 
+    simulation_ids = []
+    with os.scandir(base_dir) as entries:
+        simulation_ids = sorted(
+            entry.name for entry in entries if entry.is_dir(follow_symlinks=False)
+        )
+    if not simulation_ids:
+        return {"success": True, "scanned": 0, "reconciled": 0, "errors": 0}
+
+    cursor_path = os.path.join(base_dir, _RECONCILE_CURSOR_FILENAME)
+    cursor = _read_reconcile_cursor(cursor_path)
+    start = bisect_right(simulation_ids, cursor) if cursor else 0
+    if start >= len(simulation_ids):
+        start = 0
+    selected = [
+        simulation_ids[(start + offset) % len(simulation_ids)]
+        for offset in range(min(bounded_limit, len(simulation_ids)))
+    ]
+
     scanned = 0
     reconciled = 0
     errors = 0
-    with os.scandir(base_dir) as entries:
-        for entry in entries:
-            if scanned >= bounded_limit:
-                break
-            if not entry.is_dir(follow_symlinks=False):
-                continue
-            scanned += 1
-            try:
-                if SimulationRunner.reconcile_stale_run(entry.name) is not None:
-                    reconciled += 1
-            except Exception as exc:
-                errors += 1
-                logger.error(
-                    "Failed to reconcile stale simulation run %s: %s",
-                    entry.name,
-                    exc,
-                    exc_info=True,
-                )
+    for simulation_id in selected:
+        scanned += 1
+        try:
+            if SimulationRunner.reconcile_stale_run(simulation_id) is not None:
+                reconciled += 1
+        except Exception as exc:
+            errors += 1
+            logger.error(
+                "Failed to reconcile stale simulation run %s: %s",
+                simulation_id,
+                exc,
+                exc_info=True,
+            )
+
+    try:
+        _write_reconcile_cursor(cursor_path, selected[-1])
+    except Exception as exc:
+        errors += 1
+        logger.error("Failed to persist stale-run cursor: %s", exc, exc_info=True)
 
     return {
         "success": errors == 0,
@@ -586,5 +610,32 @@ def reconcile_stale_simulation_runs_task(limit: int = 100):
         "reconciled": reconciled,
         "errors": errors,
     }
+
+
+def _read_reconcile_cursor(path: str) -> str | None:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            value = json.load(handle).get("last_simulation_id")
+            return value if isinstance(value, str) else None
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def _write_reconcile_cursor(path: str, simulation_id: str) -> None:
+    temp_path = f"{path}.{uuid.uuid4().hex}.tmp"
+    fd = os.open(temp_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump({"last_simulation_id": simulation_id}, handle)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    except BaseException:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
+        raise
 
 
