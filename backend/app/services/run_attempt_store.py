@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import errno
 import json
 import math
 import os
@@ -19,101 +18,43 @@ _COUNTER_FILENAME = "run_attempt_counter.json"
 _LOCK_FILENAME = ".run_attempt.lock"
 _LOCK_TIMEOUT_SECONDS = 2.0
 _LOCK_RETRY_SECONDS = 0.01
-_STALE_LOCK_AGE_SECONDS = 60.0
 _TERMINAL_STATUSES = frozenset(
     {"completed", "failed", "stopped", "interrupted", "expired"}
 )
 
 
-def _pid_is_alive(pid: int) -> bool:
-    if isinstance(pid, bool) or not isinstance(pid, int) or pid <= 0:
-        return False
-
+def _try_lock_fd(fd: int) -> bool:
+    """Acquire one kernel-managed byte without blocking."""
+    os.lseek(fd, 0, os.SEEK_SET)
     if os.name == "nt":
-        import ctypes
-        from ctypes import wintypes
+        import msvcrt
 
-        process_query_limited_information = 0x1000
-        still_active = 259
-        access_denied = 5
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.OpenProcess.argtypes = [
-            wintypes.DWORD,
-            wintypes.BOOL,
-            wintypes.DWORD,
-        ]
-        kernel32.OpenProcess.restype = wintypes.HANDLE
-        kernel32.GetExitCodeProcess.argtypes = [
-            wintypes.HANDLE,
-            ctypes.POINTER(wintypes.DWORD),
-        ]
-        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
-        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
-        kernel32.CloseHandle.restype = wintypes.BOOL
-
-        handle = kernel32.OpenProcess(
-            process_query_limited_information,
-            False,
-            pid,
-        )
-        if not handle:
-            return ctypes.get_last_error() == access_denied
         try:
-            exit_code = wintypes.DWORD()
-            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
-                return True
-            return exit_code.value == still_active
-        finally:
-            kernel32.CloseHandle(handle)
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+
+    import fcntl
 
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
         return False
-    except PermissionError:
-        return True
-    except OSError as exc:
-        return exc.errno != errno.ESRCH
     return True
 
 
-def _read_lock_record(lock_path: str) -> tuple[int, str] | None:
-    try:
-        with open(lock_path, "r", encoding="ascii") as handle:
-            data = json.load(handle)
-    except (FileNotFoundError, OSError, UnicodeError, json.JSONDecodeError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    pid = data.get("pid")
-    token = data.get("token")
-    if (
-        isinstance(pid, bool)
-        or not isinstance(pid, int)
-        or pid <= 0
-        or not isinstance(token, str)
-        or not token
-    ):
-        return None
-    return pid, token
+def _unlock_fd(fd: int) -> None:
+    os.lseek(fd, 0, os.SEEK_SET)
+    if os.name == "nt":
+        import msvcrt
 
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+        return
 
-def _unlink_lock_if_token_matches(lock_path: str, expected_token: str) -> bool:
-    deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
-    while True:
-        record = _read_lock_record(lock_path)
-        if record is None or record[1] != expected_token:
-            return False
-        try:
-            os.unlink(lock_path)
-        except FileNotFoundError:
-            return False
-        except PermissionError:
-            if time.monotonic() >= deadline:
-                return False
-            time.sleep(_LOCK_RETRY_SECONDS)
-            continue
-        return True
+    import fcntl
+
+    fcntl.flock(fd, fcntl.LOCK_UN)
 
 
 @dataclass(frozen=True)
@@ -416,42 +357,45 @@ class RunAttemptStore:
         lock_path = os.path.join(simulation_dir, _LOCK_FILENAME)
         deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
         lock_token = uuid.uuid4().hex
+        fd = None
         while True:
             try:
                 fd = os.open(
                     lock_path,
-                    os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+                    os.O_CREAT | os.O_EXCL | os.O_RDWR,
                     0o600,
                 )
-                break
-            except (FileExistsError, PermissionError) as exc:
-                if not os.path.exists(lock_path):
-                    raise
-                record = _read_lock_record(lock_path)
+            except FileExistsError:
                 try:
-                    lock_age = time.time() - os.path.getmtime(lock_path)
-                except FileNotFoundError:
-                    continue
-                if (
-                    record is not None
-                    and lock_age >= _STALE_LOCK_AGE_SECONDS
-                    and not _pid_is_alive(record[0])
-                    and _unlink_lock_if_token_matches(lock_path, record[1])
-                ):
-                    continue
-                if time.monotonic() >= deadline:
-                    raise RunAttemptHeld(
-                        f"timed out acquiring run-attempt lock for {simulation_dir}"
-                    ) from exc
-                time.sleep(_LOCK_RETRY_SECONDS)
+                    fd = os.open(lock_path, os.O_RDWR)
+                except (FileNotFoundError, PermissionError):
+                    fd = None
+            except PermissionError:
+                fd = None
+
+            if fd is not None and _try_lock_fd(fd):
+                break
+            if fd is not None:
+                os.close(fd)
+                fd = None
+            if time.monotonic() >= deadline:
+                raise RunAttemptHeld(
+                    f"timed out acquiring run-attempt lock for {simulation_dir}"
+                )
+            time.sleep(_LOCK_RETRY_SECONDS)
 
         try:
-            with os.fdopen(fd, "w", encoding="ascii") as handle:
-                json.dump(
-                    {"pid": os.getpid(), "token": lock_token},
-                    handle,
-                    separators=(",", ":"),
-                )
+            payload = json.dumps(
+                {"pid": os.getpid(), "token": lock_token},
+                separators=(",", ":"),
+            ).encode("ascii")
+            os.lseek(fd, 0, os.SEEK_SET)
+            os.write(fd, payload)
+            os.ftruncate(fd, len(payload))
+            os.fsync(fd)
             yield
         finally:
-            _unlink_lock_if_token_matches(lock_path, lock_token)
+            try:
+                _unlock_fd(fd)
+            finally:
+                os.close(fd)

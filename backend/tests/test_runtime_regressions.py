@@ -357,6 +357,31 @@ def test_get_run_state_always_prefers_durable_state_over_cached_reference(
     assert SimulationRunner._run_states[simulation_id] is cached
 
 
+def test_get_run_state_does_not_create_process_local_control_reference(
+    monkeypatch, tmp_path
+):
+    simulation_id = "sim-durable-read-only"
+    durable = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+    )
+    (tmp_path / "run_state.json").write_text(
+        json.dumps(durable.to_detail_dict()), encoding="utf-8"
+    )
+    control_references = {}
+    monkeypatch.setattr(SimulationRunner, "_run_states", control_references)
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        classmethod(lambda _cls, _simulation_id: str(tmp_path)),
+    )
+
+    loaded = SimulationRunner.get_run_state(simulation_id)
+
+    assert loaded.runner_status == RunnerStatus.RUNNING
+    assert control_references == {}
+
+
 def test_get_run_state_preserves_control_reference_used_by_stop(monkeypatch, tmp_path):
     simulation_id = "sim-durable-stop-reference"
     durable = SimulationRunState(

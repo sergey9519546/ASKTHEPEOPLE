@@ -339,11 +339,8 @@ class SimulationRunner:
 
     @classmethod
     def get_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:
-        """Load authoritative run state; dictionaries hold control references only."""
-        state = cls._load_run_state(simulation_id)
-        if state:
-            cls._run_states.setdefault(simulation_id, state)
-        return state
+        """Return an authoritative snapshot without creating control state."""
+        return cls._load_run_state(simulation_id)
 
     @classmethod
     def _load_run_state(cls, simulation_id: str) -> Optional[SimulationRunState]:

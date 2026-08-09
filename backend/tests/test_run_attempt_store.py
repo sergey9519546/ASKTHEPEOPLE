@@ -2,8 +2,6 @@
 
 import json
 import os
-import subprocess
-import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -225,73 +223,89 @@ def test_stale_reconciliation_is_ordered_and_rejects_newer_attempt(
     assert json.loads((identity_dir / "run_state.json").read_text("utf-8")) == newer_state
 
 
-def _write_lock_record(lock_path, pid, token):
-    lock_path.write_text(
-        json.dumps({"pid": pid, "token": token}),
-        encoding="ascii",
-    )
-
-
 def test_lock_owner_record_contains_pid_and_unique_token(tmp_path):
     store = RunAttemptStore()
     lock_path = tmp_path / ".run_attempt.lock"
 
     with store._lock(str(tmp_path)):
-        first = json.loads(lock_path.read_text(encoding="ascii"))
+        pass
+    first = json.loads(lock_path.read_text(encoding="ascii"))
     with store._lock(str(tmp_path)):
-        second = json.loads(lock_path.read_text(encoding="ascii"))
+        pass
+    second = json.loads(lock_path.read_text(encoding="ascii"))
 
     assert isinstance(first, dict)
     assert first["pid"] == os.getpid()
     assert first["token"]
     assert second["pid"] == os.getpid()
     assert second["token"] != first["token"]
+    assert lock_path.exists()
 
 
-def test_acquire_recovers_aged_lock_when_recorded_owner_is_dead(
-    monkeypatch, tmp_path
-):
-    departed = subprocess.Popen([sys.executable, "-c", "pass"])
-    departed.wait(timeout=5)
+def test_acquire_recovers_empty_lock_file_from_create_write_crash(tmp_path):
     lock_path = tmp_path / ".run_attempt.lock"
-    _write_lock_record(lock_path, departed.pid, "abandoned-token")
-    old = time.time() - 3600
-    os.utime(lock_path, (old, old))
-    monkeypatch.setattr(run_attempt_store_module, "_LOCK_TIMEOUT_SECONDS", 0.02)
+    lock_path.touch()
 
     attempt = RunAttemptStore().acquire(
-        str(tmp_path), "sim-stale-lock", "worker-2", 30
+        str(tmp_path), "sim-empty-lock", "worker-2", 30
     )
 
     assert attempt.owner_id == "worker-2"
-    assert not lock_path.exists()
+    assert json.loads(lock_path.read_text(encoding="ascii"))["pid"] == os.getpid()
 
 
-def test_acquire_does_not_steal_aged_lock_from_live_owner(monkeypatch, tmp_path):
-    lock_path = tmp_path / ".run_attempt.lock"
-    _write_lock_record(lock_path, os.getpid(), "live-owner-token")
-    old = time.time() - 3600
-    os.utime(lock_path, (old, old))
-    monkeypatch.setattr(run_attempt_store_module, "_LOCK_TIMEOUT_SECONDS", 0.02)
-
-    with pytest.raises(RunAttemptHeld):
-        RunAttemptStore().acquire(
-            str(tmp_path), "sim-live-stale-lock", "worker-2", 30
-        )
-
-    assert json.loads(lock_path.read_text(encoding="ascii")) == {
-        "pid": os.getpid(),
-        "token": "live-owner-token",
-    }
-
-
-def test_lock_holder_does_not_unlink_successor_token(tmp_path):
+def test_aged_live_kernel_lock_cannot_be_stolen(monkeypatch, tmp_path):
     store = RunAttemptStore()
     lock_path = tmp_path / ".run_attempt.lock"
-    successor = {"pid": os.getpid(), "token": "successor-token"}
+    entered = threading.Event()
+    release = threading.Event()
 
-    with store._lock(str(tmp_path)):
-        _write_lock_record(lock_path, successor["pid"], successor["token"])
+    def hold_lock():
+        with store._lock(str(tmp_path)):
+            old = time.time() - 3600
+            os.utime(lock_path, (old, old))
+            entered.set()
+            release.wait(timeout=2)
 
-    assert lock_path.exists()
-    assert json.loads(lock_path.read_text(encoding="ascii")) == successor
+    holder = threading.Thread(target=hold_lock)
+    holder.start()
+    assert entered.wait(timeout=1)
+
+    try:
+        monkeypatch.setattr(run_attempt_store_module, "_LOCK_TIMEOUT_SECONDS", 0.02)
+        with pytest.raises(RunAttemptHeld):
+            store.acquire(str(tmp_path), "sim-live-lock", "worker-2", 30)
+    finally:
+        release.set()
+        holder.join(timeout=2)
+
+    assert not holder.is_alive()
+
+
+def test_concurrent_recoverers_never_overlap_critical_sections(tmp_path):
+    store = RunAttemptStore()
+    active = 0
+    max_active = 0
+    gate = threading.Barrier(3)
+    state_guard = threading.Lock()
+
+    def contend():
+        nonlocal active, max_active
+        gate.wait(timeout=2)
+        with store._lock(str(tmp_path)):
+            with state_guard:
+                active += 1
+                max_active = max(max_active, active)
+            time.sleep(0.03)
+            with state_guard:
+                active -= 1
+
+    contenders = [threading.Thread(target=contend) for _ in range(2)]
+    for contender in contenders:
+        contender.start()
+    gate.wait(timeout=2)
+    for contender in contenders:
+        contender.join(timeout=2)
+
+    assert all(not contender.is_alive() for contender in contenders)
+    assert max_active == 1
