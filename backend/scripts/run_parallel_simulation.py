@@ -156,12 +156,13 @@ def init_logging_for_simulation(simulation_dir: str):
 
 
 from action_logger import SimulationLogManager, PlatformActionLogger
-from app.config import Config
+from app.services.run_attempt_store import RunAttemptStore, StaleRunAttempt
+from app.services.runtime_control_store import RuntimeControlStore
 from app.services.simulation_limits import resolve_total_rounds
 from app.services.simulation_runtime_contract import (
     apply_bootstrap_actions,
-    apply_injected_events,
     apply_reflection_round,
+    apply_runtime_control,
     apply_scheduled_events,
     bootstrap_boost_agent_ids,
     build_agent_name_lookup,
@@ -169,60 +170,6 @@ from app.services.simulation_runtime_contract import (
     scheduled_event_boost_agent_ids,
     select_active_agent_ids,
 )
-
-
-class RedisEventConsumer:
-    """Redis Pub/Sub subscriber for real-time scenario injection events with in-memory fallback."""
-
-    def __init__(
-        self,
-        simulation_id: str,
-        redis_url: Optional[str] = None,
-        platform: Optional[str] = None,
-    ):
-        self.simulation_id = simulation_id
-        self.platform = platform
-        self.channel_name = f"simulation:{simulation_id}:events"
-        self.pubsub = None
-        self.redis_client = None
-        url = redis_url or getattr(Config, 'REDIS_URL', '')
-        try:
-            if url and not url.startswith("memory://"):
-                import redis
-                self.redis_client = redis.from_url(url, socket_timeout=1.0, socket_connect_timeout=1.0, decode_responses=True)
-                self.pubsub = self.redis_client.pubsub()
-                self.pubsub.subscribe(self.channel_name)
-        except Exception:
-            pass
-
-    def consume_events(self) -> List[Dict[str, Any]]:
-        events = []
-        if self.pubsub:
-            try:
-                while True:
-                    msg = self.pubsub.get_message(ignore_subscribe_messages=True, timeout=0.01)
-                    if not msg:
-                        break
-                    if isinstance(msg, dict) and msg.get("type") == "message":
-                        data_str = msg.get("data")
-                        if data_str:
-                            try:
-                                events.append(json.loads(data_str))
-                            except json.JSONDecodeError:
-                                pass
-            except Exception:
-                pass
-
-        try:
-            from app.services.simulation_observation_store import pop_in_memory_events
-            fallback_events = pop_in_memory_events(
-                self.simulation_id, platform=self.platform
-            )
-            events.extend(fallback_events)
-        except Exception:
-            pass
-
-        return events
 
 try:
     from camel.models import ModelFactory
@@ -1170,6 +1117,11 @@ class PlatformSimulation:
         self.agent_graph = None
         self.instruction_guard = None
         self.total_actions = 0
+        self.completed_rounds = 0
+        self.stop_requested = False
+        self.control_store = None
+        self.agent_names = {}
+        self.action_logger = None
 
 
 async def integrity_checked_step(env, integrity_guard, actions):
@@ -1185,6 +1137,181 @@ async def integrity_checked_step(env, integrity_guard, actions):
         await env.step(actions)
     finally:
         integrity_guard.verify(env.agent_graph)
+
+
+def _load_runtime_control_store(simulation_dir: str) -> RuntimeControlStore:
+    attempt = RunAttemptStore().read(simulation_dir)
+    if attempt is None or attempt.status != "active":
+        raise RuntimeError("active runtime attempt is unavailable")
+    return RuntimeControlStore(
+        simulation_dir,
+        attempt_id=attempt.attempt_id,
+        fencing_token=attempt.fencing_token,
+    )
+
+
+async def _process_runtime_controls(
+    *,
+    control_store: RuntimeControlStore,
+    platform: str,
+    env: Any,
+    simulation_dir: str,
+    config: Dict[str, Any],
+    current_round: int,
+    agent_names: Dict[int, str],
+    action_logger: Optional[PlatformActionLogger],
+    poll_interval: float = 0.25,
+) -> str:
+    """Consume current-attempt controls at a round or post-loop boundary."""
+    persisted_state = control_store.get_platform_states().get(platform, {})
+    paused = (
+        persisted_state.get("attempt_id") == control_store.attempt_id
+        and persisted_state.get("fencing_token") == control_store.fencing_token
+        and persisted_state.get("status") == "paused"
+    )
+
+    while True:
+        RunAttemptStore().assert_owner(
+            simulation_dir,
+            control_store.attempt_id,
+            control_store.fencing_token,
+        )
+        command = control_store.claim_next(platform)
+        if command is None:
+            if paused:
+                if _shutdown_event and _shutdown_event.is_set():
+                    return "shutdown"
+                await asyncio.sleep(max(0.0, poll_interval))
+                continue
+            return "continue"
+
+        command_type = command["command_type"]
+        control_context = {
+            "control_id": command["control_id"],
+            "attempt_id": command["attempt_id"],
+            "fencing_token": command["fencing_token"],
+            "platform": platform,
+            "round_num": current_round,
+        }
+        try:
+            if command_type in {"inject_post", "inject_event"}:
+                result = await apply_runtime_control(
+                    env=env,
+                    simulation_dir=simulation_dir,
+                    config=config,
+                    platform=platform,
+                    command_type=command_type,
+                    args=command.get("args") or {},
+                    agent_names=agent_names,
+                    manual_action_cls=ManualAction,
+                    action_type_cls=ActionType,
+                    round_num=current_round,
+                    action_logger=action_logger,
+                    control_context=control_context,
+                )
+                if int(result.get("applied_count", 0)) <= 0:
+                    raise RuntimeError("runtime control produced no runtime effect")
+                control_store.write_platform_state(
+                    platform,
+                    {
+                        "status": "paused" if paused else "running",
+                        "round_num": current_round,
+                        "last_control_id": command["control_id"],
+                        "last_command_type": command_type,
+                    },
+                )
+                control_store.complete(platform, command, result)
+                continue
+
+            if command_type == "pause_after_round":
+                if paused:
+                    raise RuntimeError("runtime platform is already paused")
+                paused = True
+                result = {"state": "paused", "round_num": current_round}
+                control_store.write_platform_state(
+                    platform,
+                    {
+                        "status": "paused",
+                        "round_num": current_round,
+                        "last_control_id": command["control_id"],
+                        "last_command_type": command_type,
+                    },
+                )
+                control_store.complete(platform, command, result)
+                continue
+
+            if command_type == "resume":
+                if not paused:
+                    raise RuntimeError("runtime platform is not paused")
+                paused = False
+                result = {"state": "running", "round_num": current_round}
+                control_store.write_platform_state(
+                    platform,
+                    {
+                        "status": "running",
+                        "round_num": current_round,
+                        "last_control_id": command["control_id"],
+                        "last_command_type": command_type,
+                    },
+                )
+                control_store.complete(platform, command, result)
+                continue
+
+            if command_type == "stop":
+                decision = "stop"
+                result = {
+                    "state": "stopped",
+                    "decision": decision,
+                    "round_num": current_round,
+                }
+                control_store.write_platform_state(
+                    platform,
+                    {
+                        "status": "stopped",
+                        "decision": decision,
+                        "round_num": current_round,
+                        "last_control_id": command["control_id"],
+                        "last_command_type": command_type,
+                    },
+                )
+                control_store.complete(platform, command, result)
+                return decision
+
+            raise RuntimeError(f"unsupported runtime control: {command_type}")
+        except Exception as exc:
+            control_store.fail(platform, command, str(exc))
+
+
+async def _process_post_loop_controls(
+    *,
+    config: Dict[str, Any],
+    simulation_dir: str,
+    twitter_result: Optional[PlatformSimulation],
+    reddit_result: Optional[PlatformSimulation],
+) -> bool:
+    jobs = []
+    for platform, result in (
+        ("twitter", twitter_result),
+        ("reddit", reddit_result),
+    ):
+        if result is None:
+            continue
+        jobs.append(
+            _process_runtime_controls(
+                control_store=result.control_store,
+                platform=platform,
+                env=result.env,
+                simulation_dir=simulation_dir,
+                config=config,
+                current_round=result.completed_rounds,
+                agent_names=result.agent_names,
+                action_logger=result.action_logger,
+            )
+        )
+    if not jobs:
+        return False
+    outcomes = await asyncio.gather(*jobs)
+    return "stop" in outcomes
 
 
 async def run_twitter_simulation(
@@ -1297,12 +1424,29 @@ async def run_twitter_simulation(
         )
     
     start_time = datetime.now()
-    event_consumer = RedisEventConsumer(
-        simulation_id=os.path.basename(simulation_dir),
-        platform="twitter",
+    control_store = _load_runtime_control_store(simulation_dir)
+    result.control_store = control_store
+    result.agent_names = agent_names
+    result.action_logger = action_logger
+    control_store.write_platform_state(
+        "twitter", {"status": "running", "round_num": 0}
     )
     
     for round_num in range(total_rounds):
+        control_outcome = await _process_runtime_controls(
+            control_store=control_store,
+            platform="twitter",
+            env=result.env,
+            simulation_dir=simulation_dir,
+            config=config,
+            current_round=result.completed_rounds,
+            agent_names=agent_names,
+            action_logger=action_logger,
+        )
+        if control_outcome == "stop":
+            result.stop_requested = True
+            break
+
         # Check for shutdown signal
         if _shutdown_event and _shutdown_event.is_set():
             if main_logger:
@@ -1316,21 +1460,6 @@ async def run_twitter_simulation(
         # Record round start regardless of active agents
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
-        
-        injected_events = event_consumer.consume_events()
-        if injected_events:
-            await apply_injected_events(
-                env=result.env,
-                simulation_dir=simulation_dir,
-                config=config,
-                platform="twitter",
-                current_round=round_num + 1,
-                events=injected_events,
-                agent_names=agent_names,
-                manual_action_cls=ManualAction,
-                action_type_cls=ActionType,
-                action_logger=action_logger,
-            )
         
         scheduled_count = await apply_scheduled_events(
             env=result.env,
@@ -1372,6 +1501,7 @@ async def run_twitter_simulation(
             event_boost_agent_ids=list(sorted(set(event_boost_agent_ids))),
         )
         
+        result.completed_rounds = round_num + 1
         if not active_agent_ids:
             # Record round end even if no active agents (actions_count=0)
             if action_logger:
@@ -1443,8 +1573,14 @@ async def run_twitter_simulation(
     
     # Note: Do not close environment, keep it for Interview
     
+    if not result.stop_requested:
+        control_store.write_platform_state(
+            "twitter",
+            {"status": "completed", "round_num": result.completed_rounds},
+        )
+
     if action_logger:
-        action_logger.log_simulation_end(total_rounds, total_actions)
+        action_logger.log_simulation_end(result.completed_rounds, total_actions)
 
     result.instruction_guard.verify(result.agent_graph)
     
@@ -1565,12 +1701,29 @@ async def run_reddit_simulation(
         )
     
     start_time = datetime.now()
-    event_consumer = RedisEventConsumer(
-        simulation_id=os.path.basename(simulation_dir),
-        platform="reddit",
+    control_store = _load_runtime_control_store(simulation_dir)
+    result.control_store = control_store
+    result.agent_names = agent_names
+    result.action_logger = action_logger
+    control_store.write_platform_state(
+        "reddit", {"status": "running", "round_num": 0}
     )
     
     for round_num in range(total_rounds):
+        control_outcome = await _process_runtime_controls(
+            control_store=control_store,
+            platform="reddit",
+            env=result.env,
+            simulation_dir=simulation_dir,
+            config=config,
+            current_round=result.completed_rounds,
+            agent_names=agent_names,
+            action_logger=action_logger,
+        )
+        if control_outcome == "stop":
+            result.stop_requested = True
+            break
+
         # Check for shutdown signal
         if _shutdown_event and _shutdown_event.is_set():
             if main_logger:
@@ -1584,21 +1737,6 @@ async def run_reddit_simulation(
         # Record round start regardless of active agents
         if action_logger:
             action_logger.log_round_start(round_num + 1, simulated_hour)
-        
-        injected_events = event_consumer.consume_events()
-        if injected_events:
-            await apply_injected_events(
-                env=result.env,
-                simulation_dir=simulation_dir,
-                config=config,
-                platform="reddit",
-                current_round=round_num + 1,
-                events=injected_events,
-                agent_names=agent_names,
-                manual_action_cls=ManualAction,
-                action_type_cls=ActionType,
-                action_logger=action_logger,
-            )
         
         scheduled_count = await apply_scheduled_events(
             env=result.env,
@@ -1640,6 +1778,7 @@ async def run_reddit_simulation(
             event_boost_agent_ids=list(sorted(set(event_boost_agent_ids))),
         )
         
+        result.completed_rounds = round_num + 1
         if not active_agent_ids:
             # Record round end even if no active agents (actions_count=0)
             if action_logger:
@@ -1712,8 +1851,14 @@ async def run_reddit_simulation(
     
     # Note: Do not close environment, keep it for Interview
     
+    if not result.stop_requested:
+        control_store.write_platform_state(
+            "reddit",
+            {"status": "completed", "round_num": result.completed_rounds},
+        )
+
     if action_logger:
-        action_logger.log_simulation_end(total_rounds, total_actions)
+        action_logger.log_simulation_end(result.completed_rounds, total_actions)
 
     result.instruction_guard.verify(result.agent_graph)
     
@@ -1830,8 +1975,13 @@ async def main():
     log_manager.info("=" * 60)
     log_manager.info(f"Simulation loop complete! Total elapsed time: {total_elapsed:.1f}s")
     
-    # Whether to enter command-wait mode
-    if wait_for_commands:
+    stopped_run = bool(
+        (twitter_result and twitter_result.stop_requested)
+        or (reddit_result and reddit_result.stop_requested)
+    )
+
+    # A consumed durable stop skips the interview wait entirely.
+    if wait_for_commands and not stopped_run:
         log_manager.info("")
         log_manager.info("=" * 60)
         log_manager.info("Entering wait-for-command mode - environment kept running")
@@ -1857,6 +2007,15 @@ async def main():
         # Wait for command loop (using global _shutdown_event)
         try:
             while not _shutdown_event.is_set():
+                if await _process_post_loop_controls(
+                    config=config,
+                    simulation_dir=simulation_dir,
+                    twitter_result=twitter_result,
+                    reddit_result=reddit_result,
+                ):
+                    stopped_run = True
+                    break
+
                 should_continue = await ipc_handler.process_commands()
                 if not should_continue:
                     break
@@ -1871,6 +2030,8 @@ async def main():
         except asyncio.CancelledError:
             print("\nTask cancelled")
         except InstructionIntegrityViolation:
+            raise
+        except StaleRunAttempt:
             raise
         except Exception as e:
             print(f"\nCommand processing error: {e}")
