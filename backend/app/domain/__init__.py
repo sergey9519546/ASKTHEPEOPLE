@@ -79,6 +79,24 @@ from .source_ingestion import (
     validate_deletion_completion,
     validate_source_state_pair,
 )
+from .possible_path import (
+    BranchBasisRef,
+    Consideration,
+    DisconfirmingCondition,
+    MissingInformation,
+    PathArtifactStatus,
+    PathBriefGate,
+    PathConflict,
+    PathReviewDisposition,
+    PathReviewItem,
+    PathSetArtifact,
+    PathSetReview,
+    PathStep as CanonicalPathStep,
+    PossiblePath as CanonicalPossiblePath,
+    ValidationQuestion,
+    compute_path_content_sha256,
+    compute_path_distinctness_sha256,
+)
 
 __all__ = [
     "FOUNDATION_POLICY_VERSION",
