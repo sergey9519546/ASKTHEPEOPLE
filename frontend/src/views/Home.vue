@@ -1,5 +1,6 @@
 <template>
   <div class="public-signal-home">
+    <ThreeScenarioCanvas />
     <TruthRail />
     <a class="skip-link" href="#decision">Skip to the decision</a>
 
@@ -419,6 +420,7 @@ import { getTemplates } from "../api/graph";
 import { getSimulationHistory } from "../api/simulation";
 import { fetchSourceUrls } from "../api/sources.js";
 import SettingsModal from "../components/SettingsModal.vue";
+import ThreeScenarioCanvas from "../components/ThreeScenarioCanvas.vue";
 import TruthRail from "../components/TruthRail.vue";
 import {
   closeSettings,
@@ -785,6 +787,8 @@ fetchHistory();
 
 <style scoped>
 .public-signal-home {
+  position: relative;
+  overflow: hidden;
   min-height: 100dvh;
   background: var(--ink);
   color: var(--paper);
@@ -808,6 +812,8 @@ fetchHistory();
 }
 
 .signal-masthead {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: minmax(15rem, 20vw) minmax(0, 1fr) auto;
   grid-template-areas:
@@ -815,7 +821,8 @@ fetchHistory();
     "brand nav nav";
   min-height: 17rem;
   border-bottom: 1px solid var(--line-dark);
-  background: var(--ink);
+  background: rgba(6, 11, 20, 0.75);
+  backdrop-filter: blur(12px);
 }
 
 .brand-block {
@@ -2275,7 +2282,8 @@ fetchHistory();
 }
 .readiness-badge.level-high .readiness-dot {
   background: var(--success);
-  box-shadow: none;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  animation: readinessPulse 2s infinite ease-in-out;
 }
 
 .readiness-badge.level-medium {
@@ -2284,7 +2292,13 @@ fetchHistory();
 }
 .readiness-badge.level-medium .readiness-dot {
   background: var(--signal);
-  box-shadow: none;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+  animation: readinessPulse 2s infinite ease-in-out;
+}
+
+@keyframes readinessPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.65; transform: scale(1.18); }
 }
 
 .readiness-badge.level-low {
