@@ -260,7 +260,7 @@ class SimulationManager:
             # Simple UPSERT — insert if not exists, update state + version if it does.
             with _storage.engine.begin() as conn:
                 conn.execute(_text("""
-                    INSERT INTO runs (
+                    INSERT INTO dw_runs (
                         id, public_id, organization_id, workspace_id,
                         run_config_id, state, version, stop_fence,
                         human_respondents, is_forecast, output_origin,
@@ -274,7 +274,7 @@ class SimulationManager:
                     ON CONFLICT (id) DO UPDATE SET
                         state = EXCLUDED.state,
                         updated_at = EXCLUDED.updated_at,
-                        version = runs.version + 1
+                        version = dw_runs.version + 1
                 """), {
                     "id": run_uuid,
                     "public_id": f"run_{state.simulation_id}",

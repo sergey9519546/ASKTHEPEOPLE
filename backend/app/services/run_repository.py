@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import text
+from sqlalchemy import text, create_engine
 from sqlalchemy.engine import Engine
 
 from ..config import Config
@@ -46,6 +46,15 @@ from ..domain.run_attempt import (
 logger = logging.getLogger(__name__)
 
 
+def _ensure_psycopg_driver(url: str) -> str:
+    """Same conversion as ProjectRepository — force psycopg3 driver."""
+    if url.startswith("postgresql://") and "+" not in url.split("://", 1)[0]:
+        return "postgresql+psycopg://" + url[len("postgresql://"):]
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url[len("postgres://"):]
+    return url
+
+
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -53,13 +62,18 @@ def _utc_now() -> datetime:
 class RunRepository:
     """PostgreSQL repository for durable runs, stages, and events."""
 
+    _engine: Optional[Engine] = None
+
     @classmethod
     def _get_engine(cls) -> Engine:
-        from .supabase_client import is_storage_configured
-        if not is_storage_configured():
-            raise RuntimeError("canonical_store_not_configured")
-        from .supabase_client import storage
-        return storage.engine
+        if cls._engine is None:
+            database_url = Config.DATABASE_URL
+            if not database_url or database_url.startswith("sqlite"):
+                raise RuntimeError("canonical_store_not_configured")
+            cls._engine = create_engine(
+                _ensure_psycopg_driver(database_url), future=True
+            )
+        return cls._engine
 
     # --- create --- #
 
@@ -80,7 +94,7 @@ class RunRepository:
             # Generate a public ID in the domain's format.
             public_id = f"run_{run_id.hex}"
             conn.execute(text("""
-                INSERT INTO runs (
+                INSERT INTO dw_runs (
                     id, public_id, organization_id, workspace_id,
                     run_config_id, parent_run_id, state, version,
                     current_stage_code, stop_fence,
@@ -114,7 +128,7 @@ class RunRepository:
         engine = cls._get_engine()
         with engine.connect() as conn:
             row = conn.execute(text("""
-                SELECT * FROM runs WHERE id = :id
+                SELECT * FROM dw_runs WHERE id = :id
             """), {"id": run_id}).mappings().first()
             return dict(row) if row else None
 
@@ -124,7 +138,7 @@ class RunRepository:
         engine = cls._get_engine()
         with engine.connect() as conn:
             row = conn.execute(text("""
-                SELECT * FROM runs WHERE public_id = :public_id
+                SELECT * FROM dw_runs WHERE public_id = :public_id
             """), {"public_id": public_id}).mappings().first()
             return dict(row) if row else None
 
@@ -138,13 +152,13 @@ class RunRepository:
         with engine.connect() as conn:
             if workspace_id:
                 rows = conn.execute(text("""
-                    SELECT * FROM runs
+                    SELECT * FROM dw_runs
                     WHERE organization_id = :org_id AND workspace_id = :ws_id
                     ORDER BY created_at DESC LIMIT :limit
                 """), {"org_id": organization_id, "ws_id": workspace_id, "limit": limit})
             else:
                 rows = conn.execute(text("""
-                    SELECT * FROM runs
+                    SELECT * FROM dw_runs
                     WHERE organization_id = :org_id
                     ORDER BY created_at DESC LIMIT :limit
                 """), {"org_id": organization_id, "limit": limit})
@@ -176,7 +190,7 @@ class RunRepository:
         with engine.begin() as conn:
             # Lock the row for the duration of the transaction.
             current = conn.execute(text("""
-                SELECT * FROM runs WHERE id = :id FOR UPDATE
+                SELECT * FROM dw_runs WHERE id = :id FOR UPDATE
             """), {"id": run_id}).mappings().first()
             if not current:
                 raise ValueError("run_not_found")
@@ -212,7 +226,7 @@ class RunRepository:
 
             # Optimistic-concurrency CAS write.
             result = conn.execute(text("""
-                UPDATE runs SET
+                UPDATE dw_runs SET
                     state = :new_state,
                     version = :new_version,
                     updated_at = :now
@@ -230,7 +244,7 @@ class RunRepository:
             # Record the transition event in the same transaction.
             event_id = uuid4()
             conn.execute(text("""
-                INSERT INTO run_events (
+                INSERT INTO dw_run_events (
                     id, run_id, command, from_state, to_state,
                     next_version, event_type,
                     actor_type, actor_id,
@@ -261,7 +275,7 @@ class RunRepository:
 
             # Return the updated row.
             updated = conn.execute(text("""
-                SELECT * FROM runs WHERE id = :id
+                SELECT * FROM dw_runs WHERE id = :id
             """), {"id": run_id}).mappings().first()
             return dict(updated)
 
@@ -277,7 +291,7 @@ class RunRepository:
         engine = cls._get_engine()
         with engine.connect() as conn:
             rows = conn.execute(text("""
-                SELECT * FROM run_events
+                SELECT * FROM dw_run_events
                 WHERE run_id = :run_id AND next_version > :after_version
                 ORDER BY next_version ASC LIMIT :limit
             """), {"run_id": run_id, "after_version": after_version, "limit": limit})

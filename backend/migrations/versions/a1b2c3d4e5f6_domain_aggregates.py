@@ -30,7 +30,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # ---- Run control plane (Task 5, domain/run_attempt.py) ---- #
 
-    op.create_table('runs',
+    op.create_table('dw_runs',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('public_id', sa.String(64), nullable=False),
         sa.Column('organization_id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
@@ -48,11 +48,11 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_runs_public_id', 'runs', ['public_id'], unique=True)
-    op.create_index('ix_runs_org_workspace', 'runs', ['organization_id', 'workspace_id'])
-    op.create_index('ix_runs_state', 'runs', ['state'])
+    op.create_index('ix_runs_public_id', 'dw_runs', ['public_id'], unique=True)
+    op.create_index('ix_runs_org_workspace', 'dw_runs', ['organization_id', 'workspace_id'])
+    op.create_index('ix_runs_state', 'dw_runs', ['state'])
 
-    op.create_table('run_stages',
+    op.create_table('dw_run_stages',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('run_id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('stage_code', sa.String(64), nullable=False),
@@ -66,10 +66,10 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_run_stages_run', 'run_stages', ['run_id'])
-    op.create_index('ix_run_stages_run_stage_attempt', 'run_stages', ['run_id', 'stage_code', 'attempt_number'], unique=True)
+    op.create_index('ix_run_stages_run', 'dw_run_stages', ['run_id'])
+    op.create_index('ix_run_stages_run_stage_attempt', 'dw_run_stages', ['run_id', 'stage_code', 'attempt_number'], unique=True)
 
-    op.create_table('run_events',
+    op.create_table('dw_run_events',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('run_id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('command', sa.String(64), nullable=False),
@@ -85,12 +85,12 @@ def upgrade() -> None:
         sa.Column('occurred_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_run_events_run', 'run_events', ['run_id'])
-    op.create_index('ix_run_events_idempotency', 'run_events', ['run_id', 'idempotency_key'], unique=True)
+    op.create_index('ix_run_events_run', 'dw_run_events', ['run_id'])
+    op.create_index('ix_run_events_idempotency', 'dw_run_events', ['run_id', 'idempotency_key'], unique=True)
 
     # ---- Source ingestion (Task 4, domain/source_ingestion.py) ---- #
 
-    op.create_table('sources',
+    op.create_table('dw_sources',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('public_id', sa.String(64), nullable=False),
         sa.Column('organization_id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
@@ -104,10 +104,10 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_sources_public_id', 'sources', ['public_id'], unique=True)
-    op.create_index('ix_sources_org_workspace_project', 'sources', ['organization_id', 'workspace_id', 'project_id'])
+    op.create_index('ix_sources_public_id', 'dw_sources', ['public_id'], unique=True)
+    op.create_index('ix_sources_org_workspace_project', 'dw_sources', ['organization_id', 'workspace_id', 'project_id'])
 
-    op.create_table('source_versions',
+    op.create_table('dw_source_versions',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('public_id', sa.String(64), nullable=False),
         sa.Column('organization_id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
@@ -137,11 +137,11 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_source_versions_public_id', 'source_versions', ['public_id'], unique=True)
-    op.create_index('ix_source_versions_source', 'source_versions', ['source_id'])
-    op.create_index('ix_source_versions_state', 'source_versions', ['state'])
+    op.create_index('ix_source_versions_public_id', 'dw_source_versions', ['public_id'], unique=True)
+    op.create_index('ix_source_versions_source', 'dw_source_versions', ['source_id'])
+    op.create_index('ix_source_versions_state', 'dw_source_versions', ['state'])
 
-    op.create_table('source_segments',
+    op.create_table('dw_source_segments',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('public_id', sa.String(64), nullable=False),
         sa.Column('organization_id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
@@ -154,9 +154,9 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_source_segments_version', 'source_segments', ['source_version_id'])
+    op.create_index('ix_source_segments_version', 'dw_source_segments', ['source_version_id'])
 
-    op.create_table('source_candidates',
+    op.create_table('dw_source_candidates',
         sa.Column('id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column('public_id', sa.String(64), nullable=False),
         sa.Column('organization_id', sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
@@ -173,15 +173,15 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )
-    op.create_index('ix_source_candidates_version', 'source_candidates', ['source_version_id'])
-    op.create_index('ix_source_candidates_disposition', 'source_candidates', ['disposition'])
+    op.create_index('ix_source_candidates_version', 'dw_source_candidates', ['source_version_id'])
+    op.create_index('ix_source_candidates_disposition', 'dw_source_candidates', ['disposition'])
 
 
 def downgrade() -> None:
-    op.drop_table('source_candidates')
-    op.drop_table('source_segments')
-    op.drop_table('source_versions')
-    op.drop_table('sources')
-    op.drop_table('run_events')
-    op.drop_table('run_stages')
-    op.drop_table('runs')
+    op.drop_table('dw_source_candidates')
+    op.drop_table('dw_source_segments')
+    op.drop_table('dw_source_versions')
+    op.drop_table('dw_sources')
+    op.drop_table('dw_run_events')
+    op.drop_table('dw_run_stages')
+    op.drop_table('dw_runs')

@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
+from sqlalchemy import create_engine
 
 from ..config import Config
 from ..domain.source_ingestion import SourceIngestionState
@@ -30,13 +31,19 @@ def _utc_now() -> datetime:
 class SourceRepository:
     """PostgreSQL repository for the source-ingestion aggregate."""
 
+    _engine: Optional[Engine] = None
+
     @classmethod
     def _get_engine(cls) -> Engine:
-        from .supabase_client import is_storage_configured
-        if not is_storage_configured():
-            raise RuntimeError("canonical_store_not_configured")
-        from .supabase_client import storage
-        return storage.engine
+        if cls._engine is None:
+            database_url = Config.DATABASE_URL
+            if not database_url or database_url.startswith("sqlite"):
+                raise RuntimeError("canonical_store_not_configured")
+            from .run_repository import _ensure_psycopg_driver
+            cls._engine = create_engine(
+                _ensure_psycopg_driver(database_url), future=True
+            )
+        return cls._engine
 
     # --- source --- #
 
@@ -57,7 +64,7 @@ class SourceRepository:
         engine = cls._get_engine()
         with engine.begin() as conn:
             conn.execute(text("""
-                INSERT INTO sources (
+                INSERT INTO dw_sources (
                     id, public_id, organization_id, workspace_id, project_id,
                     display_name, current_version_id, version,
                     created_by_actor_id, created_at, updated_at
@@ -79,7 +86,7 @@ class SourceRepository:
         engine = cls._get_engine()
         with engine.connect() as conn:
             row = conn.execute(text("""
-                SELECT * FROM sources WHERE id = :id
+                SELECT * FROM dw_sources WHERE id = :id
             """), {"id": source_id}).mappings().first()
             return dict(row) if row else None
 
@@ -88,7 +95,7 @@ class SourceRepository:
         engine = cls._get_engine()
         with engine.connect() as conn:
             row = conn.execute(text("""
-                SELECT * FROM sources WHERE public_id = :public_id
+                SELECT * FROM dw_sources WHERE public_id = :public_id
             """), {"public_id": public_id}).mappings().first()
             return dict(row) if row else None
 
@@ -100,7 +107,7 @@ class SourceRepository:
         engine = cls._get_engine()
         with engine.connect() as conn:
             rows = conn.execute(text("""
-                SELECT * FROM sources
+                SELECT * FROM dw_sources
                 WHERE organization_id = :org_id
                   AND workspace_id = :ws_id
                   AND project_id = :project_id
@@ -134,7 +141,7 @@ class SourceRepository:
         engine = cls._get_engine()
         with engine.begin() as conn:
             conn.execute(text("""
-                INSERT INTO source_versions (
+                INSERT INTO dw_source_versions (
                     id, public_id, organization_id, workspace_id, project_id,
                     source_id, version_number, state,
                     original_filename_display, declared_media_type,
@@ -167,7 +174,7 @@ class SourceRepository:
             })
             # Point the source's current_version_id at the new version.
             conn.execute(text("""
-                UPDATE sources SET current_version_id = :version_id, updated_at = :now
+                UPDATE dw_sources SET current_version_id = :version_id, updated_at = :now
                 WHERE id = :source_id
             """), {"version_id": version_id, "source_id": source_id, "now": now})
         return cls.get_source_version(version_id)
@@ -177,7 +184,7 @@ class SourceRepository:
         engine = cls._get_engine()
         with engine.connect() as conn:
             row = conn.execute(text("""
-                SELECT * FROM source_versions WHERE id = :id
+                SELECT * FROM dw_source_versions WHERE id = :id
             """), {"id": version_id}).mappings().first()
             return dict(row) if row else None
 
@@ -219,12 +226,12 @@ class SourceRepository:
         set_clause = ", ".join(set_parts)
         with engine.begin() as conn:
             result = conn.execute(text(f"""
-                UPDATE source_versions SET {set_clause}
+                UPDATE dw_source_versions SET {set_clause}
                 WHERE id = :id AND version = :expected_version
             """), params)
             if result.rowcount != 1:
                 raise RuntimeError("source_version_conflict")
             row = conn.execute(text("""
-                SELECT * FROM source_versions WHERE id = :id
+                SELECT * FROM dw_source_versions WHERE id = :id
             """), {"id": version_id}).mappings().first()
             return dict(row)
