@@ -224,6 +224,22 @@ class Config:
     DECISION_LENS_V1_ENABLED = os.environ.get(
         'DECISION_LENS_V1_ENABLED', 'True'
     ).lower() == 'true'
+
+    # Source ingestion V1 — controlled TXT source ingestion and review
+    # (Task 4). Disabled by default; the domain kernel exists but is not
+    # wired to production routes, persistence, or workers. Enabling in
+    # production requires all Task 4 §5 production blockers to be resolved.
+    SOURCE_INGESTION_V1_ENABLED = os.environ.get(
+        'SOURCE_INGESTION_V1_ENABLED', 'False'
+    ).lower() == 'true'
+    # Comma-separated enabled formats. Only 'txt' is eligible for V1; empty
+    # means no formats are accepted even if the master flag is on.
+    SOURCE_INGESTION_V1_FORMATS = [
+        f.strip().lower()
+        for f in os.environ.get('SOURCE_INGESTION_V1_FORMATS', '').split(',')
+        if f.strip()
+    ]
+
     # OASIS Platform Available Actions Configuration
     OASIS_TWITTER_ACTIONS = [
         'CREATE_POST', 'LIKE_POST', 'REPOST', 'FOLLOW', 'DO_NOTHING', 'QUOTE_POST'
@@ -345,4 +361,25 @@ class Config:
                 "Set CORS_ORIGINS to an explicit comma-separated allowlist, e.g. "
                 "CORS_ORIGINS=https://your-app.vercel.app"
             )
+        # Source ingestion V1 production gate (Task 4 §5). The domain kernel
+        # may exist behind the flag, but enabling it in production requires
+        # the full ingestion boundary (PostgreSQL, object storage, isolated
+        # scanner, tenant auth, transactional outbox). Refuse startup if the
+        # flag is on in production — no production blocker may be absent.
+        if not cls.DEBUG and cls.SOURCE_INGESTION_V1_ENABLED:
+            errors.append(
+                "SOURCE_INGESTION_V1_ENABLED=true is not allowed in production. "
+                "The source-ingestion boundary (quarantine, scanning, isolated "
+                "parsing, tenant auth, object storage, outbox) is not complete. "
+                "See Task 4 §5 production blockers."
+            )
+        # If formats are configured but include anything other than 'txt',
+        # reject — only TXT is eligible for V1.
+        if cls.SOURCE_INGESTION_V1_FORMATS:
+            invalid = [f for f in cls.SOURCE_INGESTION_V1_FORMATS if f != 'txt']
+            if invalid:
+                errors.append(
+                    f"SOURCE_INGESTION_V1_FORMATS contains unsupported format(s) "
+                    f"{invalid}. V1 supports txt only."
+                )
         return errors

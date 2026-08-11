@@ -19,3 +19,11 @@ from . import entity_routes
 from . import read_routes
 from . import workspace_routes
 from . import decision_lens_routes
+
+# Source ingestion V1 (Task 4). The routes are disabled by default
+# (SOURCE_INGESTION_V1_ENABLED=false); every mutating endpoint returns 503
+# UNAVAILABLE until the §5 production blockers are resolved. The capability
+# endpoint is always available so the frontend can discover server support.
+from . import source_routes
+from .. import simulation_bp as _sim_bp  # noqa: E402
+source_routes.register_source_routes(_sim_bp)

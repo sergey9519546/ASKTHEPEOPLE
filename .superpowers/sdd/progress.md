@@ -4,7 +4,14 @@
 - Task 2: complete (commits 27254e9..edd24b5, review clean; 1379 focused/API tests pass).
 - Task 3: complete (commits 9800e68..0eae7bd, review clean; 21 focused and
   1379 contract regression tests pass).
-- Task 4: not started.
+- Task 4: Checkpoint 4A complete (domain kernel, commit 54ade9c, 81 focused
+  tests). Checkpoint 4B complete (config flags + gated API routes +
+  capability endpoint + 14 route tests; every mutating endpoint returns 503
+  UNAVAILABLE while SOURCE_INGESTION_V1_ENABLED=false; production gate
+  refuses the flag when DEBUG=false). Remaining: §5 production blockers
+  (PostgreSQL source aggregate, object storage, isolated scanner/parser
+  worker, transactional outbox, deletion ledger/worker, tenant auth).
+- Task 5: not started.
 - Task 5: not started.
 - Task 6: not started.
 - Task 7: not started.
