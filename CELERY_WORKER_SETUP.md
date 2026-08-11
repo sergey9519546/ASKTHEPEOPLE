@@ -1,4 +1,10 @@
-# Celery Worker Setup for Production
+# STATUS: DEPRECATED / DO NOT USE
+
+> This legacy worker guide predates the reviewed single-host TRANSITION
+> topology and is retained for audit only. Follow
+> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+
+# Celery Worker Setup for Production (Historical)
 
 ## Problem Summary
 

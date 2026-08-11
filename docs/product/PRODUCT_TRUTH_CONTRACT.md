@@ -399,29 +399,29 @@ CURRENT / PARTIAL / TARGET legend.
 
 The HTTP layer enforces the disclosure layer on every `/api/*` response:
 
-- `Cache-Control: no-store` for `/api/*` and `/health`
-  ([`app/__init__.py:193-195`](../../backend/app/__init__.py:193))
+- `Cache-Control: no-store` for `/api/*`, `/health`, and every `/health/*`
+  ([`app/__init__.py:290-293`](../../backend/app/__init__.py:290))
   prevents caching of synthetic output.
 - `apply_security_headers` after-request hook adds CSP, X-Content-Type-Options,
   X-Frame-Options DENY, Referrer-Policy no-referrer, Permissions-Policy
   (all sensitive features disabled), COOP same-origin, CORP same-origin, and
   HSTS in production
-  ([`app/__init__.py:149-196`](../../backend/app/__init__.py:149)).
+  ([`app/__init__.py:246-293`](../../backend/app/__init__.py:246)).
 - `strip_traceback_in_production` removes internal `traceback` keys and
   replaces 5xx `error` strings with `internal_server_error` so internal paths,
   credentials, or upstream API error bodies leaked via `str(e)` cannot reach
   clients
-  ([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+  ([`app/__init__.py:295-326`](../../backend/app/__init__.py:295)).
 - `require_auth` middleware enforces a constant-time bearer-token comparison
   via `hmac.compare_digest` on every `/api/*` request when `APP_TOKEN` is set
-  ([`app/__init__.py:125-141`](../../backend/app/__init__.py:125)).
+  ([`app/__init__.py:222-238`](../../backend/app/__init__.py:222)).
 - Production CORS lockdown refuses `CORS_ORIGINS='*'` in non-debug mode and
   falls back to `http://127.0.0.1`
-  ([`app/__init__.py:74-82`](../../backend/app/__init__.py:74)).
+  ([`app/__init__.py:126-145`](../../backend/app/__init__.py:126)).
 - The `log_request` middleware never logs request bodies, so settings,
   provider-test, and source-upload requests cannot leak keys, source text, or
   PII into DEBUG file logs
-  ([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
+  ([`app/__init__.py:208-220`](../../backend/app/__init__.py:208)).
 
 These mechanisms protect the disclosure layer at the wire. They are **not** a
 substitute for the in-product Truth Rail UI required by this contract — see
@@ -432,9 +432,9 @@ substitute for the in-product Truth Rail UI required by this contract — see
 `create_app()` is fail-closed: if `REQUIRE_APP_AUTH` is set and `APP_TOKEN` is
 missing or weak, application creation raises `RuntimeError` and the process
 refuses to start
-([`app/__init__.py:30-39`](../../backend/app/__init__.py:30)).
+([`app/__init__.py:89-105`](../../backend/app/__init__.py:89)).
 The constant-time comparison is at
-[`app/__init__.py:140`](../../backend/app/__init__.py:140).
+[`app/__init__.py:237`](../../backend/app/__init__.py:237).
 
 **Gap:** there is no per-resource object-level authorization. A valid
 `APP_TOKEN` is allowed to operate on every simulation, project, report, and

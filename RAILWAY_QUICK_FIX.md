@@ -1,5 +1,10 @@
 # Railway Deployment Quick Fix
 
+> **STATUS: DEPRECATED / DO NOT USE**
+> This legacy incident note is retained for audit only. Adding variables does
+> not repair canonical persistence or coordinated web/worker/beat deployment.
+> Follow [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+
 ## Current Status
 - ✅ App deployed at https://askthepeople-production-8325.up.railway.app/
 - ✅ Backend running
@@ -24,11 +29,11 @@ Click your service → "Variables" tab → Add these:
 SECRET_KEY=<generate: python -c "import secrets; print(secrets.token_urlsafe(32))">
 APP_TOKEN=<generate: python -c "import secrets; print(secrets.token_urlsafe(32))">
 REQUIRE_APP_AUTH=false
-LLM_API_KEY=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
+LLM_API_KEY=<set-in-provider-secret-store>
 LLM_BASE_URL=https://integrate.api.nvidia.com/v1
 LLM_MODEL_NAME=meta/llama-3.1-8b-instruct
-ZEP_API_KEY=z_dev_hy5V2LqnmBLo8X6h5zBXZxHlZw-5Y7JTJ_3pzWmEBPQ
-BRAVE_SEARCH_API_KEY=BSA_gkzIc09c0080d7bzGRzz9bHZuci
+ZEP_API_KEY=<set-in-provider-secret-store>
+BRAVE_SEARCH_API_KEY=<set-in-provider-secret-store>
 CORS_ORIGINS=https://askthepeople-production-8325.up.railway.app
 FLASK_DEBUG=false
 ```

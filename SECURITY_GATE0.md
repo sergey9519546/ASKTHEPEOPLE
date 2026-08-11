@@ -1,4 +1,10 @@
-# Security P0 Fixes - Gate 0 (Phase 1.2)
+# STATUS: HISTORICAL / NOT RELEASE EVIDENCE
+
+> This earlier gate snapshot is not current deployment authorization. Follow
+> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md) and the normative
+> security documentation under `docs/security/`.
+
+# Security P0 Fixes - Gate 0 (Phase 1.2, Historical)
 
 ## Summary
 

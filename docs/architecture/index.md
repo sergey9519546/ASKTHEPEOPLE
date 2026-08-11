@@ -142,17 +142,58 @@ All implemented at the request/response seam in
   features disabled, Cross-Origin-Opener-Policy: same-origin,
   Cross-Origin-Resource-Policy: same-origin, and HSTS when forwarded-proto is
   https
-  ([`apply_security_headers` after-request hook](../../backend/app/__init__.py:149-196)).
-- `Cache-Control: no-store` for `/api/*` and `/health`
-  ([`create_app` after-request](../../backend/app/__init__.py:193-195)).
+  ([`apply_security_headers` after-request hook](../../backend/app/__init__.py:246-293)).
+- `Cache-Control: no-store` for `/api/*`, `/health`, and every `/health/*`
+  ([`create_app` after-request](../../backend/app/__init__.py:290-293)).
 - Production stripping of `traceback` and 5xx `error` strings
-  ([`strip_traceback_in_production` after-request](../../backend/app/__init__.py:198-226)).
+  ([`strip_traceback_in_production` after-request](../../backend/app/__init__.py:295-326)).
 - No request body logging in any debug path
-  ([`log_request` before-request](../../backend/app/__init__.py:111-123)).
+  ([`log_request` before-request](../../backend/app/__init__.py:208-220)).
 - `SafePathError` → `400 {"success": false, "error": "invalid_id"}`
-  ([`create_app` error handler](../../backend/app/__init__.py:263-267)).
+  ([`create_app` error handler](../../backend/app/__init__.py:362-366)).
 - `RateLimitExceeded` → `429 {"success": false, "error": "rate_limit_exceeded"}`
-  ([`create_app` error handler](../../backend/app/__init__.py:254-261)).
+  ([`create_app` error handler](../../backend/app/__init__.py:351-360)).
+
+`/health` is provider-independent liveness. `/health/readiness` additionally
+declares `scope: web` and requires the cached ZEP dependency status to be
+current and available; failure returns 503 and marks only
+`web_graph_backed` unavailable while leaving canonical records intact
+([`api/health.py:124-190`](../../backend/app/api/health.py:124),
+[`services/zep_dependency_status.py:118-231`](../../backend/app/services/zep_dependency_status.py:118)).
+The process-local probe performs only `project.get()` with a two-second timeout,
+caches success for 30 seconds and failure for 10 seconds, and never accepts a
+stale success. ZEP remains a derived, rebuildable index rather than a canonical
+store. A context-scoped filter suppresses `httpx` and `httpcore` transport
+records only while that probe runs; application diagnostics remain enabled
+([`services/zep_dependency_status.py:48-74`](../../backend/app/services/zep_dependency_status.py:48),
+[`services/zep_dependency_status.py:178-204`](../../backend/app/services/zep_dependency_status.py:178)).
+This web readiness result does not establish worker-provider reachability.
+
+The worker has a separate **CURRENT availability attestation**, not a
+process-only liveness response. Its HTTP `/health` returns 200 only after
+Celery emits `worker_ready`, and only while a heartbeat-refreshed marker still
+matches the expected live worker process and the immutable 40- or 64-character
+runtime revision. Missing, malformed, stale, mismatched, or shutdown markers
+return 503. Both response states contain exactly `status`, `service`, and
+`revision`; they contain no dependency value, process identifier, exception,
+or provider result
+([`worker_health.py:61-151`](../../backend/scripts/worker_health.py:61),
+[`celery_app.py:84-130`](../../backend/app/celery_app.py:84)).
+
+Before broker connection, the worker bootstep performs a pure no-network
+configuration validation for the graph/report task boundary. It requires the
+ZEP and primary LLM keys, explicit non-memory Redis coordination, Redis-backed
+Celery broker/result URLs (which may inherit the same Redis URL), and an
+immutable runtime revision. After validating the dedicated marker target, the
+bootstep clears any stale marker before broker connection. The wrapper binds
+the health process to the actual Celery PID and removes both marker and health
+process on exit
+([`worker_startup.py:56-159`](../../backend/app/utils/worker_startup.py:56),
+[`celery_app.py:84-145`](../../backend/app/celery_app.py:84),
+[`worker_wrapper.sh:6-57`](../../backend/scripts/worker_wrapper.sh:6)).
+This attestation proves that the configured worker reached Celery readiness;
+it still does not prove live provider reachability. That stronger technical
+seam requires the protected fictional canary in the release runbook.
 - In-memory rate limiter (CURRENT); Redis-backed rate limiter is **TARGET** per
   [`adr/ADR-0012-canonical-transactional-and-object-persistence.md`](adr/ADR-0012-canonical-transactional-and-object-persistence.md).
 
@@ -191,29 +232,47 @@ reads and writes this JSON directly. **Defects:**
 
 Source: [`backend/app/models/task.py`](../../backend/app/models/task.py).
 
-`TaskManager` ([`models/task.py:114`](../../backend/app/models/task.py:114))
-is a process-local singleton with a thread-safe in-memory dict
-(`_tasks: Dict[str, Task]`) plus a best-effort Redis snapshot
-([`_save_to_redis` / `_load_from_redis`](../../backend/app/models/task.py:152-175))
-plus a Celery result-backend fallback
-([`get_task` chain](../../backend/app/models/task.py:202-250)). Lifecycle is a
-4-state enum at [`models/task.py:21-26`](../../backend/app/models/task.py:21):
+`TaskManager` ([`models/task.py:236`](../../backend/app/models/task.py:236))
+retains a process-local cache, but idempotent task admission is now shared:
+the semantic payload is hashed and the reservation plus task record are
+created in one Redis `WATCH`/`MULTI` transaction
+([`models/task.py:413-596`](../../backend/app/models/task.py:413)). A matching
+in-flight request returns the reserved task ID across processes; a mismatched
+payload conflicts; and a matching reservation whose task expired can create a
+new task without overwriting another record. Updates use optimistic Redis CAS
+and fail after bounded contention instead of falling through to an
+unconditional write
+([`models/task.py:842-1035`](../../backend/app/models/task.py:842)). Lifecycle is
+a 5-state enum at [`models/task.py:94-101`](../../backend/app/models/task.py:94):
 
 ```text
 PENDING → PROCESSING → COMPLETED
-                  └──→ FAILED
+                  ├──→ FAILED
+                  └──→ CANCELLED
 ```
 
-**Defects:**
+Report generation has a **TRANSITION** worker fence: one Redis-backed owner can
+claim a queued report task, and report checkpoints re-check that owner before
+writes
+([`models/task.py:662-791`](../../backend/app/models/task.py:662),
+[`report_tasks.py:159-220`](../../backend/app/tasks/report_tasks.py:159),
+[`report_tasks.py:329-339`](../../backend/app/tasks/report_tasks.py:329)). A
+duplicate delivery fails without entering report generation or downgrading the
+owner's task.
 
-- The in-memory `_tasks` dict is process-local and will not survive
-  multi-worker or restart.
-- `_save_to_redis` swallows all exceptions
-  ([`models/task.py:160-162`](../../backend/app/models/task.py:160)) —
-  durability is best-effort.
-- The hourly cleanup worker `_task_cleanup_worker` is a daemon thread
-  ([`app/__init__.py:229-239`](../../backend/app/__init__.py:229)) — same
-  pattern as the audit's P0 finding on in-process threads.
+**Remaining defects / TARGET gaps:**
+
+- The fence is intentionally fail-closed, not a complete renewable lease. It
+  has no durable heartbeat, expiry/recovery transition, monotonic fencing
+  token, or transactional artifact writer. A worker crash can therefore leave
+  the report task in `PROCESSING`; automatic takeover remains unsafe until the
+  TARGET job/lease tables and fenced artifact writes exist.
+- Non-idempotent task creation and legacy progress paths still permit a
+  process-local fallback when Redis is absent; those paths are not canonical
+  durable workflow state. Redis records also expire after 24 hours.
+- The process-local `_tasks` cache and Celery result fallback are not the
+  TARGET PostgreSQL job/event history and cannot establish replay or disaster
+  recovery.
 - Tenant isolation in `TaskManager` is absent. **TARGET** per
   [`adr/ADR-0009-multi-tenant-isolation.md`](adr/ADR-0009-multi-tenant-isolation.md).
 
@@ -362,7 +421,7 @@ in [`docs/exec-plans/`](../exec-plans/README.md):
 |---|---|---|---|
 | 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL — secrets hardened, MIME/magic-byte upload validation wired onto the live route, path-traversal/SSRF defenses, source-as-data prompt guard in place. Open P0s: multi-tenant isolation (deferred; needs a user-identity model), privacy/retention architecture, source-rights attestation. |
 | 1 | Typed API boundary | `askthepeople-architect` | CURRENT — `simulation.py` is now a 518-line helper module; all 41 routes live in `api/routes/` (prep, execution, interview, export, entity, read). No thread/subprocess/SQLite-directory-scan violations remain in routes; the `/posts` and `/comments` handlers now dispatch to a `simulation_activity_reader` service rather than opening SQLite inline. The typed request/response schema layer and `app/application/`+`app/domain/` packages remain gate 1 work. |
-| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — the cleanup daemon thread is replaced by a Celery beat job; Celery tasks now classify exceptions and retry only transient failures with backoff; the prepare route accepts an `Idempotency-Key` that dedupes double-submits. Open: leases/fencing tokens, heartbeats, push-based (non-polling) event delivery, the four independent state machines, and the process-local `TaskManager`/`SimulationRunner` state that blocks multi-worker. |
+| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — cleanup runs in Celery beat; Celery tasks classify transient retries; idempotent task admission uses an atomic cross-process Redis reservation with payload-conflict and missing-record recovery semantics; task updates fail closed after CAS contention; report deliveries use a durable single-owner execution fence. Open: renewable leases, heartbeats, monotonic fencing tokens enforced by artifact persistence, recovery/takeover, push-based event delivery, the four independent state machines, and process-local `SimulationRunner` ownership. |
 | 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL — atomic writes (`save_project`, `save_extracted_text`) and source sha256 hashing at ingest are in; run-artifact digests exist. Open: PostgreSQL/object-storage canonical store (schema is dead scaffolding), soft-delete/audit-log, provenance-edge write-time validation. |
 | 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED — observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting. Runbook and incident-response docs are concrete but the procedures are unimplemented. |
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL — CoT scrubbing is IMPLEMENTED (ADR-0010); a versioned prompt registry and a single OpenAI-compatible adapter exist; a narrow eval suite passes in CI. Open: most prompts still inlined, model-release gating, failure-mode catalogue, adversarial/sensitivity evals. |

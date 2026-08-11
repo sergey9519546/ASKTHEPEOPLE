@@ -211,12 +211,41 @@ npm run verify
 
 ### Container
 
+This path requires Docker Compose 2.24 or newer so a missing runtime env file
+fails closed through the long-form `env_file.required` contract.
+
 ```bash
-docker compose up --build
+set -euo pipefail
+umask 077
+test ! -e .env.transition
+test ! -e .env.transition.build
+install -m 600 .env.transition.example .env.transition
+install -m 600 .env.transition.build.example .env.transition.build
+printf 'BUILD_REVISION=%s\n' "$(git rev-parse HEAD)" > .env.transition.build
+# Fill required blanks with newly issued credentials and strong secrets;
+# boost/search keys are optional.
+python3 backend/scripts/validate_transition_build_identity.py \
+  --build-env .env.transition.build
+python3 backend/scripts/prepare_transition_storage.py
+env -u BUILD_REVISION docker compose \
+  --env-file .env.transition.build config --quiet
+env -u BUILD_REVISION docker compose \
+  --env-file .env.transition.build up --build -d
 ```
 
-For the production topology, required secrets, persistence, health checks, and
-release process, see [Deployment](docs/DEPLOYMENT.md).
+This is a **TRANSITION single-host demo topology**: web, worker, beat, and Redis
+share one host and one uploads mount. Compose interpolation uses only the
+ignored `.env.transition.build`; containers receive secrets only from the
+separate mode-0600 `.env.transition`. Neither path uses the developer `.env`.
+The identity preflight also refuses staged, tracked, or untracked worktree
+changes so the image cannot claim a clean commit while containing different
+source. A separate storage preflight claims only the dedicated ignored
+`.transition-data/uploads` store; it never mounts normal development uploads.
+A zero-recurring-bill host does not guarantee zero end-to-end cost:
+model, memory, and search provider tiers must be checked before every connected
+demo. This is not production or canonical-persistence evidence. For its
+restrictions, required secrets, cost boundary, verification, and release
+process, see the [release runbook](docs/release/RUNBOOK.md).
 
 ## Documentation
 

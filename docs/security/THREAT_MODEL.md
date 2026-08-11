@@ -442,17 +442,25 @@ outer security boundary:
   X-Frame-Options DENY, Referrer-Policy no-referrer, Permissions-
   Policy (all sensitive features disabled), COOP same-origin, CORP
   same-origin, HSTS
-  ([`app/__init__.py:149-196`](../../backend/app/__init__.py:149)).
-- `Cache-Control: no-store` for `/api/*` and `/health`
-  ([`app/__init__.py:193-195`](../../backend/app/__init__.py:193)).
+  ([`app/__init__.py:246-293`](../../backend/app/__init__.py:246)).
+- `Cache-Control: no-store` for `/api/*`, `/health`, and every `/health/*`
+  ([`app/__init__.py:290-293`](../../backend/app/__init__.py:290)).
 - Production stripping of `traceback` and 5xx `error` strings
-  ([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+  ([`app/__init__.py:295-326`](../../backend/app/__init__.py:295)).
 - `SafePathError` → `400 {"success": false, "error": "invalid_id"}`
-  ([`app/__init__.py:263-267`](../../backend/app/__init__.py:263)).
+  ([`app/__init__.py:362-366`](../../backend/app/__init__.py:362)).
 - `RateLimitExceeded` → `429` with a stable error code
-  ([`app/__init__.py:254-261`](../../backend/app/__init__.py:254)).
+  ([`app/__init__.py:351-360`](../../backend/app/__init__.py:351)).
 - No request body logging in any debug path
-  ([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
+  ([`app/__init__.py:208-220`](../../backend/app/__init__.py:208)).
+- ZEP readiness performs only a bounded `project.get()` and discards its
+  response. The cache contains status metadata only; public responses and logs
+  contain stable reason codes rather than credentials, provider bodies,
+  project metadata, endpoints, or exception text. A context-scoped filter
+  suppresses `httpx` and `httpcore` transport records only during the probe;
+  application diagnostics are not suppressed
+  ([`services/zep_dependency_status.py:48-74`](../../backend/app/services/zep_dependency_status.py:48),
+  [`services/zep_dependency_status.py:178-204`](../../backend/app/services/zep_dependency_status.py:178)).
 - Per-IP rate limiting via `flask-limiter`; storage defaults to
   `memory://` (single-worker only) and is overridden solely by an explicit
   `RATELIMIT_STORAGE_URI` — see

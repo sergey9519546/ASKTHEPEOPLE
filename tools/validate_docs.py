@@ -376,7 +376,8 @@ def main() -> int:
             "Backfill batch/binding",
         ),
         "runbook": (
-            "Railway remains the canonical deployment host",
+            "No canonical deployment host is currently",
+            "Railway, Render, Vercel, Sites",
             "comparison code performs zero writes",
             "A database outage in\ncanonical mode is an availability incident, not permission to fall back.",
         ),

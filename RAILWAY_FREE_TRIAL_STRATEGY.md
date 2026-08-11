@@ -1,4 +1,10 @@
-# Railway Free Trial Strategy — Maximize $5 Credits
+# STATUS: DEPRECATED / DO NOT USE
+
+> This legacy cost guide is retained for audit only. Its split-service advice
+> is unsafe for the current filesystem-backed state. Follow
+> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+
+# Railway Free Trial Strategy — Historical
 
 You have $5 free trial credits. Don't waste them.
 

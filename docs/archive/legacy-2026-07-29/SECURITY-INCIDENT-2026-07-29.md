@@ -11,39 +11,79 @@ complete.
 
 A full-history, value-redacted review found that public commit
 `65403183ba37cefbcc73d23d9fdf666750db3ddc` replaced placeholders in
-`.env.example` with three credential-shaped provider values for one revision.
+`.env.example` with credential-shaped provider values for one revision.
 That commit is an ancestor of `origin/main`, and the GitHub repository is
 public.
 
-Safe exact-value comparisons were performed without printing values:
+Safe boolean-only comparisons were performed without displaying credential
+material. The affected configured-variable set is:
 
-- The historical Zep credential exactly matched the current local and Railway
-  production value at discovery time.
-- The historical Brave credential exactly matched the current local and
-  Railway production value at discovery time.
-- The historical OpenAI-compatible LLM credential did not match the current
-  local value. It must still be treated as compromised unless provider-side
-  revocation is independently confirmed.
+- `ZEP_API_KEY`;
+- `LLM_API_KEY`;
+- `LLM_BOOST_API_KEY`; and
+- `BRAVE_SEARCH_API_KEY`.
+
+At the latest audit, each configured local value matched credential material
+present in public history. All four values MUST be treated as compromised.
+This comparison does not prove provider-side revocation, replacement, or
+deployment state.
 
 The current `.env` is ignored and was not itself committed. That does not undo
 the historical exposure.
 
+## Public legacy deployment observation — 2026-08-11
+
+An anonymous read-only probe of the previously documented Railway origin found
+that it was still publicly reachable. `/health` returned HTTP 200 with
+`status=degraded`, `revision=unknown`, and a degraded database component;
+`/health/readiness` returned HTTP 503 with the database component in error.
+`/health/revision` served the frontend HTML shell rather than an immutable
+revision response. This proves a stale, unhealthy public deployment remains;
+it does not reveal which provider credentials or service variables that
+deployment holds. Repository sentinels cannot disable an already-connected
+provider dashboard. The Railway project and every legacy Vercel/Render
+integration MUST be disabled by an authorized operator and the public origin
+must be independently rechecked before containment can close.
+
+## Current containment — UNCOMMITTED / NOT RELEASED
+
+The current working tree redacts known provider-shaped literals and tightens
+the scanner policy so documentation, examples, and deployment guides cannot
+silently bypass provider-secret detection. This containment is uncommitted and
+has not been released or deployed. Public Git history still contains the
+exposed credential material. A clean current-tree scan is necessary evidence,
+but it cannot close the historical exposure or establish provider-side
+containment.
+
 ## Immediate containment order
 
-1. Revoke the exposed Zep and Brave credentials in their provider consoles.
-2. Revoke or confirm prior revocation of the historical LLM credential.
-3. Issue new credentials with the narrowest available scopes and limits.
-4. Update local secret storage and Railway variables through their secure
+1. Revoke every affected Zep, primary-LLM, boost-LLM, and search credential in
+   its provider console.
+2. Issue replacement credentials with the narrowest available scopes and
+   limits.
+3. Update local secret storage and deployment variables through their secure
    interfaces. Never paste replacements into source, chat, logs, issues, or
    workflow output.
-5. Restart/redeploy only after `APP_TOKEN`, exact origins, the replacement
-   provider credentials, and the hardened revision are configured.
+4. Independently verify provider-side revocation and rotation for all four
+   variables before enabling provider-connected testing.
+5. Restart/redeploy both web and worker services only after `APP_TOKEN`, exact
+   origins, replacement provider credentials, and the hardened immutable
+   revision are configured.
 6. Review provider usage, billing, and audit logs from the first public commit
-   date through containment.
-7. Run the improved secret scan across all refs and retain the redacted result.
+   date through the later of the web-service and worker-service restarts that
+   removed the exposed credentials. Preserve the review as restricted incident
+   evidence.
+7. Run the improved secret scan across all refs and retain only its redacted
+   result.
    This verification is complete: the clean-checkout-equivalent tree scan had
    zero findings, while the fully redacted all-ref history scan found exactly
-   the three known historical provider credentials and failed closed.
+   the known historical provider credentials and failed closed.
+8. After rotation evidence and immutable deployment identity are independently
+   verified, run the protected harmless Zep canary defined in the release
+   runbook. The canary MUST create an isolated graph, register the approved
+   PascalCase ontology, ingest only the harmless fixture, verify nodes and
+   edges, and delete the graph. A failed or incomplete cleanup is an incident,
+   not permission to retry blindly.
 
 Rotation comes before history rewriting. Rewriting Git history cannot make a
 published credential secret again.
@@ -78,10 +118,13 @@ all-ref history scan before resuming normal work.
 ## Release gate
 
 Public production, staging with provider access, and provider-connected local
-testing are **NO-GO** until rotation is independently verified. History cleanup,
-usage review, hardened deployment, and live authenticated smoke tests remain
-required before the incident can be closed. The corrected CI history gate now
-intentionally blocks on this incident; it must not be bypassed or allowlisted.
+testing are **NO-GO** until all four affected credentials are revoked and
+rotated, usage is reviewed through the later web/worker restart, rotation and
+deployment identity are independently verified, and the protected harmless
+canary passes with cleanup confirmed. History cleanup, hardened deployment,
+and live authenticated smoke tests remain required before the incident can be
+closed. The corrected CI history gate now intentionally blocks on this
+incident; it must not be bypassed or allowlisted.
 
 No credential values, prefixes, suffixes, or hashes are recorded in this
 document.

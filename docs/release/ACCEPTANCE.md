@@ -735,9 +735,9 @@ are CURRENT, PARTIAL, or TARGET.
 **Key file:line references for the evidence items:**
 
 - **Commit and deployment identifiers:** every doc carries
-  `baseline_commit: 8b616dc7...` and the build revision is read
-  from `RAILWAY_GIT_COMMIT_SHA` or `BUILD_REVISION` at
-  [`backend/app/__init__.py:300-303`](../../backend/app/__init__.py:300).
+  `baseline_commit: 8b616dc7...`; container identity is read from the
+  root-owned image revision file and any platform/runtime value must agree
+  ([`backend/app/utils/build_revision.py`](../../backend/app/utils/build_revision.py)).
 - **Database and schema versions:** PostgreSQL is TARGET (gate 3);
   current canonical store is filesystem JSON +
   `backend/uploads/`.

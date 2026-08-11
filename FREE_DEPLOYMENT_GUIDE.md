@@ -1,5 +1,11 @@
 # Free Deployment Guide ($0/month)
 
+> **STATUS: DEPRECATED / DO NOT USE**
+> This legacy pricing and topology guide is retained for audit only. Its service
+> limits and deployment instructions are not current release evidence. Follow
+> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md) and re-verify every host's
+> official current limits before selecting infrastructure.
+
 You have $5 Railway trial credits. You need **free long-term hosting**.
 
 ## 🎯 Best Free Option: Fly.io Free Tier
@@ -152,11 +158,11 @@ CMD ["/usr/local/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.con
 ```bash
 fly secrets set SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 fly secrets set APP_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-fly secrets set LLM_API_KEY=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
+fly secrets set LLM_API_KEY=<set-in-provider-secret-store>
 fly secrets set LLM_BASE_URL=https://integrate.api.nvidia.com/v1
 fly secrets set LLM_MODEL_NAME=meta/llama-3.1-8b-instruct
-fly secrets set ZEP_API_KEY=z_dev_hy5V2LqnmBLo8X6h5zBXZxHlZw-5Y7JTJ_3pzWmEBPQ
-fly secrets set BRAVE_SEARCH_API_KEY=BSA_gkzIc09c0080d7bzGRzz9bHZuci
+fly secrets set ZEP_API_KEY=<set-in-provider-secret-store>
+fly secrets set BRAVE_SEARCH_API_KEY=<set-in-provider-secret-store>
 fly secrets set CORS_ORIGINS=https://askthepeople.fly.dev
 ```
 

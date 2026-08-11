@@ -910,8 +910,16 @@ satisfies the "PostgreSQL is the target system of record" rule in
 | Filesystem JSON | `backend/uploads/reports/{report_id}/...` | Generated report | CURRENT |
 | SQLite (per platform) | `backend/uploads/simulations/{simulation_id}/reddit_simulation.db` and `twitter_simulation.db` | Per-action records | CURRENT, opened by an audit-flagged path-escape route |
 | Redis | `task:{task_id}` keys with 24h TTL, plus `tasks:all` set | `Task` aggregate | CURRENT, best-effort |
-| ZEP Cloud | external graph memory service | Entity / relationship graph, optional | CURRENT |
+| ZEP Cloud | external graph memory service | Entity / relationship graph; required for enabled graph-backed capabilities, derived and noncanonical | CURRENT |
 | NetworkX | in-process | Intermediate graph computation | CURRENT |
+
+The current web readiness contract marks only `web_graph_backed` unavailable
+when ZEP cannot be reached; it does not substitute a fallback graph or make ZEP
+canonical ([`api/health.py:160-190`](../../backend/app/api/health.py:160)). The
+Celery worker independently refuses a missing key through a no-network startup
+validator ([`utils/worker_startup.py:8-17`](../../backend/app/utils/worker_startup.py:8),
+[`celery_app.py:65-77`](../../backend/app/celery_app.py:65)); that check does not
+prove worker-provider reachability.
 
 See [`docs/architecture/index.md`](index.md) §"State and persistence" for
 the per-substrate defect list.

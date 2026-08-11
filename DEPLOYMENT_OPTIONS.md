@@ -1,4 +1,13 @@
-# Deployment Cost Analysis — Railway vs Alternatives
+# STATUS: DEPRECATED / DO NOT USE
+
+This historical cost comparison does not describe the current repository or a
+safe release topology. It predates the canonical-persistence, worker
+attestation, credential-rotation, and migration gates. Follow
+[`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md) instead. Until those gates
+are closed, the only supported zero-cost target is the explicitly labelled
+single-host TRANSITION demo topology with fictional, non-sensitive data.
+
+# Deployment Cost Analysis — Railway vs Alternatives (historical)
 
 ## Current Setup: Railway
 

@@ -1,5 +1,12 @@
 # Railway Deployment Checklist - Copy & Paste Guide
 
+> **STATUS: DEPRECATED / DO NOT USE**
+> This legacy checklist is retained for audit only and does not describe an
+> approved deployment topology. Follow [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+> Deployment remains blocked until provider credentials are rotated, canonical
+> cross-process persistence exists, and web, worker, beat, and migrations are
+> deployed and verified at one revision.
+
 This checklist gives you EXACT values to copy-paste into Railway. No guessing.
 
 ## Step 1: Generate Secret Keys (Run These Locally)
@@ -50,7 +57,7 @@ APP_TOKEN=<paste the value from Step 1>
 From your local `.env` file, copy these values to Railway:
 
 ```
-LLM_API_KEY=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
+LLM_API_KEY=<set-in-provider-secret-store>
 ```
 
 ```
@@ -62,7 +69,7 @@ LLM_MODEL_NAME=meta/llama-3.1-8b-instruct
 ```
 
 ```
-LLM_BOOST_API_KEY=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
+LLM_BOOST_API_KEY=<set-in-provider-secret-store>
 ```
 
 ```
@@ -76,13 +83,13 @@ LLM_BOOST_MODEL_NAME=meta/llama-3.1-8b-instruct
 ### Zep (from your .env):
 
 ```
-ZEP_API_KEY=z_dev_hy5V2LqnmBLo8X6h5zBXZxHlZw-5Y7JTJ_3pzWmEBPQ
+ZEP_API_KEY=<set-in-provider-secret-store>
 ```
 
 ### Optional but recommended (from your .env):
 
 ```
-BRAVE_SEARCH_API_KEY=BSA_gkzIc09c0080d7bzGRzz9bHZuci
+BRAVE_SEARCH_API_KEY=<set-in-provider-secret-store>
 ```
 
 ### Production Settings:

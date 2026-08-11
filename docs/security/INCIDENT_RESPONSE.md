@@ -1,13 +1,13 @@
 ---
 title: "Incident Response"
 status: "Operational"
-version: "1.1.0"
+version: "1.1.1"
 owner: "Security Incident Commander"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-08-11"
 review_cycle: "Quarterly exercise"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
-baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation' / SECURITY-INCIDENT-2026-07-29 (archived)"
+baseline_audit: "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §5 P1 'Inconsistent request validation' / SECURITY-INCIDENT-2026-07-29 (OPEN / CRITICAL)"
 applies_to: "every confirmed or reasonably suspected compromise of confidentiality, integrity, availability, tenant isolation, source/export access, model/prompt/tool behavior, or truth contract"
 ---
 
@@ -322,10 +322,12 @@ compromise, missing export disclosure, malware parser escape, and model drift.
 ## Project-specific incident-response status (baseline `8b616dc7`)
 
 The current code does **not** have a dedicated incident-class table
-or a runbook-driven response procedure. The legacy
+or a runbook-driven response procedure. The
 [`SECURITY-INCIDENT-2026-07-29.md`](../archive/legacy-2026-07-29/SECURITY-INCIDENT-2026-07-29.md)
-(archived) records the prior in-repo incident. Reaching the contract
-requires the canonical persistence layer plus the durable
+record remains **OPEN / CRITICAL** and imposes a provider-connected release
+**NO-GO**. Its location under the legacy archive preserves repository-history
+provenance; it does not mean the incident is closed or inactive. Reaching the
+contract requires the canonical persistence layer plus the durable
 orchestration layer.
 
 ### Incident class registration — TARGET

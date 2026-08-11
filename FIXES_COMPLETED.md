@@ -1,4 +1,10 @@
-# Five Verified Fixes - COMPLETED ✅
+# STATUS: HISTORICAL / NOT RELEASE EVIDENCE
+
+> This snapshot is not a current deployment or release claim. Follow
+> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md) and its active NO-GO
+> gates.
+
+# Five Verified Fixes - COMPLETED (Historical)
 
 **Date:** 2026-08-03  
 **Branch:** `fix/five-verified-defects`  

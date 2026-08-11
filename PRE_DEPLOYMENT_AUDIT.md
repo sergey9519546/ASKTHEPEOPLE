@@ -1,4 +1,11 @@
-# Pre-Deployment Audit — What We Have vs What We Need
+# STATUS: DEPRECATED / DO NOT USE
+
+This audit is retained only as historical evidence. Its production-ready
+claims are superseded by [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md),
+the current release acceptance contract, and the repository architecture
+status. Do not use it to authorize a deployment.
+
+# Pre-Deployment Audit — What We Have vs What We Need (historical)
 
 ## ✅ STRONG — Production Ready
 

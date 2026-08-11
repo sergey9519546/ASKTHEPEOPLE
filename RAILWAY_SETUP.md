@@ -1,4 +1,9 @@
-# Railway Production Setup Guide
+# STATUS: DEPRECATED / DO NOT USE
+
+> This legacy setup guide is retained for audit only. It does not implement the
+> approved topology. Follow [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+
+# Railway Production Setup Guide (Historical)
 
 This guide walks through setting up ASKTHEPEOPLE on Railway with proper Celery worker configuration.
 

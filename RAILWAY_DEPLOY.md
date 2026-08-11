@@ -1,5 +1,10 @@
 # Railway Deployment Guide
 
+> **STATUS: DEPRECATED / DO NOT USE**
+> This legacy guide is retained for audit only. It does not deploy or verify the
+> web, worker, beat, migration, and canonical-storage seams as one release.
+> Follow [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+
 ## Prerequisites
 1. Railway CLI installed: `npm i -g @railway/cli`
 2. Railway account connected: `railway login`
@@ -34,7 +39,7 @@ railway variables set SECRET_KEY=$(openssl rand -base64 48)
 railway variables set APP_TOKEN=$(openssl rand -base64 48)
 
 # LLM Configuration (using your provided a6api key)
-railway variables set LLM_API_KEY="sk-aN8EZ7qcGxONUUDO3ltndrsZdvxm1MXQi2wr2iLi8gYXa1hQ"
+railway variables set LLM_API_KEY="<set-in-provider-secret-store>"
 railway variables set LLM_BASE_URL="https://api.a6api.com/v1"
 
 # Zep Configuration (you'll need to provide your Zep API key)
@@ -220,4 +225,3 @@ The `/health` endpoint returns component status:
 | DATABASE_URL | Optional | postgresql+asyncpg://... |
 | REDIS_URL | Optional | redis://... |
 | CELERY_BROKER_URL | Optional | (defaults to REDIS_URL) |
-

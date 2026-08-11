@@ -1,5 +1,11 @@
 # ASKTHEPEOPLE: Production-Ready Implementation - COMPLETE ✅
 
+> **STATUS: DEPRECATED / DO NOT USE**
+> This historical summary is contradicted by the current migration, persistence,
+> credential, and worker-topology audits. It is not a release approval or an
+> evidence bundle. Follow [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md)
+> and [`docs/release/ACCEPTANCE.md`](docs/release/ACCEPTANCE.md).
+
 **Date:** August 3, 2026  
 **Timeline:** 2-4 weeks of work completed in ~12 hours via parallel agent execution  
 **Status:** Ready for Railway deployment
@@ -379,7 +385,7 @@ railway variables set SECRET_KEY=$(openssl rand -base64 48)
 railway variables set APP_TOKEN=$(openssl rand -base64 48)
 
 # LLM Configuration
-railway variables set LLM_API_KEY="sk-aN8EZ7qcGxONUUDO3ltndrsZdvxm1MXQi2wr2iLi8gYXa1hQ"
+railway variables set LLM_API_KEY="<set-in-provider-secret-store>"
 railway variables set LLM_BASE_URL="https://api.a6api.com/v1"
 
 # Zep Configuration (REQUIRED - obtain from zep.ai)

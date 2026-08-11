@@ -1,4 +1,10 @@
-# Frontend Upload Flow Fix - Implementation Summary
+# STATUS: DEPRECATED / DO NOT USE
+
+> This implementation snapshot is retained for audit only. Its deployment
+> instructions are not current release authorization. Follow
+> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+
+# Frontend Upload Flow Fix - Implementation Summary (Historical)
 
 ## Date: 2026-08-03
 ## Status: ✅ COMPLETED
