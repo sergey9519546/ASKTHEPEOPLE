@@ -1316,9 +1316,14 @@ class ReportAgent:
                 
         except ReportGenerationCancelled:
             raise
-        except Exception as e:
-            logger.error(f"Tool execution failed: {tool_name}, error: {str(e)}")
-            return f"Tool execution failed: {str(e)}"
+        except Exception as exc:
+            logger.error(
+                "Tool execution failed: tool=%s, error_type=%s",
+                tool_name,
+                type(exc).__name__,
+                extra={"privacy_safe": True},
+            )
+            return "Tool execution failed"
     
     # Valid tool names set, used for validation during bare JSON parsing
     VALID_TOOL_NAMES = {
@@ -1508,8 +1513,12 @@ class ReportAgent:
             
         except ReportGenerationCancelled:
             raise
-        except Exception as e:
-            logger.error(f"Outline planning failed: {str(e)}")
+        except Exception as exc:
+            logger.error(
+                "Outline planning failed: error_type=%s",
+                type(exc).__name__,
+                extra={"privacy_safe": True},
+            )
             # Return a truth-preserving default outline.
             return self._ensure_required_outline_sections(ReportOutline(
                 title="Synthetic Scenario Exploration Report",
@@ -1618,7 +1627,11 @@ class ReportAgent:
 
             # Check if LLM response is None (API exception or empty content)
             if response is None:
-                logger.warning(f"Section {section.title} iteration {iteration + 1}: LLM returned None")
+                logger.warning(
+                    "Report section LLM returned None: section=%s, iteration=%s",
+                    section_index,
+                    iteration + 1,
+                )
                 # If iterations left, add message and retry
                 if iteration < max_iterations - 1:
                     messages.append({"role": "assistant", "content": "(empty response)"})
@@ -1627,7 +1640,10 @@ class ReportAgent:
                 # Last iteration also returns None, break loop and enter forced closure
                 break
 
-            logger.debug(f"LLM response: {response[:200]}...")
+            logger.debug(
+                "LLM response received: response_length=%s",
+                len(response),
+            )
 
             # Parse once, reuse result
             tool_calls = self._parse_tool_calls(response)
@@ -1638,8 +1654,11 @@ class ReportAgent:
             if has_tool_calls and has_final_answer:
                 conflict_retries += 1
                 logger.warning(
-                    f"Section {section.title} round {iteration+1}: "
-                    f"LLM output both tool call and Final Answer (Conflict #{conflict_retries})"
+                    "Report section format conflict: section=%s, iteration=%s, "
+                    "conflict_count=%s",
+                    section_index,
+                    iteration + 1,
+                    conflict_retries,
                 )
 
                 if conflict_retries <= 2:
@@ -1659,8 +1678,10 @@ class ReportAgent:
                 else:
                     # Third time: degrade, truncate to first tool call and execute
                     logger.warning(
-                        f"Section {section.title}: {conflict_retries} sequential conflicts, "
-                        "degrading to truncated execution of the first tool call"
+                        "Report section conflicts exceeded limit: section=%s, "
+                        "conflict_count=%s",
+                        section_index,
+                        conflict_retries,
                     )
                     first_tool_end = response.find('</tool_call>')
                     if first_tool_end != -1:
@@ -1824,7 +1845,10 @@ class ReportAgent:
             return final_answer
         
         # Max iterations reached, force content generation
-        logger.warning(f"Section {section.title} reached max iterations; forcing generation")
+        logger.warning(
+            "Report section reached max iterations: section=%s",
+            section_index,
+        )
         messages.append({"role": "user", "content": REACT_FORCE_FINAL_MSG})
         
         response = self.llm.chat(
@@ -1836,7 +1860,11 @@ class ReportAgent:
 
         # Check if LLM returned None during forced closure
         if response is None:
-            logger.error(f"Section {section.title} forced closure LLM returned None, using default error message")
+            logger.error(
+                "Report section forced closure returned None: section=%s",
+                section_index,
+                extra={"privacy_safe": True},
+            )
             final_answer = "(This section failed to generate: LLM returned empty response, please try again later)"
         elif "Final Answer:" in response:
             final_answer = strip_reasoning_scaffold(response.split("Final Answer:")[-1])
@@ -2109,13 +2137,17 @@ class ReportAgent:
                 self.console_logger = None
             raise
         except Exception as e:
-            logger.error(f"Report generation failed: {str(e)}")
+            logger.error(
+                "Report generation failed: error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             report.status = ReportStatus.FAILED
-            report.error = str(e) if Config.DEBUG else "Report generation failed"
+            report.error = "report_generation_failed"
             
             # Record error log
             if self.report_logger:
-                self.report_logger.log_error(str(e), "failed")
+                self.report_logger.log_error("report_generation_failed", "failed")
             
             # Save failed status
             try:
@@ -2125,11 +2157,7 @@ class ReportAgent:
                         report_id,
                         "failed",
                         -1,
-                        (
-                            f"Report generation failed: {str(e)}"
-                            if Config.DEBUG
-                            else "Report generation failed"
-                        ),
+                        "Report generation failed",
                         completed_sections=completed_section_titles
                     )
             except Exception:

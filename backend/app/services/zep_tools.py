@@ -549,21 +549,32 @@ class ZepToolsService:
                 last_exception = e
                 if not self._is_retryable(e):
                     logger.error(
-                        "Zep %s failed with a non-retryable error (status=%s): %s",
+                        "Zep operation failed: operation=%s, "
+                        "code=zep_operation_failed, error_type=%s",
                         operation_name,
-                        getattr(e, "status_code", None),
-                        str(e)[:200],
+                        type(e).__name__,
+                        extra={"privacy_safe": True},
                     )
                     raise
                 if attempt < max_retries - 1:
                     logger.warning(
-                        f"Zep {operation_name} attempt {attempt + 1} failed: {str(e)[:100]}, "
-                        f"{delay:.1f} seconds before retrying..."
+                        "Zep operation retrying: operation=%s, "
+                        "code=zep_operation_retry, error_type=%s, attempt=%s",
+                        operation_name,
+                        type(e).__name__,
+                        attempt + 1,
+                        extra={"privacy_safe": True},
                     )
                     time.sleep(delay)
                     delay *= 2
                 else:
-                    logger.error(f"Zep {operation_name} after {max_retries} attempts and still failed: {str(e)}")
+                    logger.error(
+                        "Zep operation exhausted retries: operation=%s, "
+                        "code=zep_operation_failed, error_type=%s",
+                        operation_name,
+                        type(e).__name__,
+                        extra={"privacy_safe": True},
+                    )
         
         raise last_exception
     
@@ -649,7 +660,12 @@ class ZepToolsService:
             )
             
         except Exception as e:
-            logger.warning(f"Zep Search API failed, falling back to local search: {str(e)}")
+            logger.warning(
+                "Zep search failed; using local fallback: "
+                "code=zep_search_failed, error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             # Fallback: Use local keyword matching search
             return self._local_search(graph_id, query, limit, scope)
     
@@ -747,7 +763,12 @@ class ZepToolsService:
             logger.info(f"Local search completed: Found {len(facts)} relevant facts")
             
         except Exception as e:
-            logger.error(f"Local search failed: {str(e)}")
+            logger.error(
+                "Local graph search failed: code=local_graph_search_failed, "
+                "error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
         
         return SearchResult(
             facts=facts,
@@ -902,7 +923,12 @@ class ZepToolsService:
                 attributes=node.attributes or {}
             )
         except Exception as e:
-            logger.error(f"Failed to get node detail: {str(e)}")
+            logger.error(
+                "Node detail retrieval failed: code=zep_node_get_failed, "
+                "error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             return None
     
     def get_node_edges(self, graph_id: str, node_uuid: str) -> List[EdgeInfo]:
@@ -934,7 +960,12 @@ class ZepToolsService:
             return result
             
         except Exception as e:
-            logger.warning(f"Failed to retrieve node edges: {str(e)}")
+            logger.warning(
+                "Node edge retrieval failed: code=zep_node_edges_failed, "
+                "error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             return []
     
     def get_entities_by_type(
@@ -1231,7 +1262,11 @@ class ZepToolsService:
                         "related_facts": related_facts  # Full output, no truncation
                     })
             except Exception as e:
-                logger.debug(f"Failed to get node {uuid}: {e}")
+                logger.debug(
+                    "Insight node retrieval failed: code=zep_node_get_failed, "
+                    "error_type=%s",
+                    type(e).__name__,
+                )
                 continue
         
         result.entity_insights = entity_insights
@@ -1304,7 +1339,12 @@ Return the list of sub-queries in JSON format."""
             return [str(sq) for sq in sub_queries[:max_queries]]
             
         except Exception as e:
-            logger.warning(f"Failed to generate sub-queries: {str(e)}, using fallback")
+            logger.warning(
+                "Sub-query generation failed; using fallback: "
+                "code=subquery_generation_failed, error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             # Fallback: return variants based on the original query
             return [
                 query,
@@ -1567,12 +1607,12 @@ Return the list of sub-queries in JSON format."""
             
             # Check if API call was successful
             if not api_result.get("success", False):
-                error_msg = api_result.get("error", "Unknown error")
-                logger.warning(f"Synthetic perspective probe failed: {error_msg}")
-                result.summary = (
-                    f"Synthetic perspective probe failed: {error_msg}. "
-                    "Check the OASIS simulation environment."
+                logger.warning(
+                    "Synthetic perspective probe failed: "
+                    "code=synthetic_probe_failed, error_type=ProviderResponse",
+                    extra={"privacy_safe": True},
                 )
+                result.summary = "Synthetic perspective probe failed. Try again later."
                 return result
             
             # Step 5: Parse generated platform records.
@@ -1656,19 +1696,25 @@ Return the list of sub-queries in JSON format."""
             
         except ValueError as e:
             # Simulation environment not running
-            logger.warning(f"Synthetic perspective probe unavailable: {e}")
+            logger.warning(
+                "Synthetic perspective probe unavailable: "
+                "code=synthetic_probe_unavailable, error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             result.summary = (
-                f"Synthetic perspective probe failed: {str(e)}. "
-                "The OASIS simulation environment may be closed."
+                "Synthetic perspective probe is unavailable. The simulation "
+                "environment may be closed."
             )
             return result
         except Exception as e:
-            logger.error(f"Synthetic perspective probe exception: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            result.summary = (
-                f"Synthetic perspective probe error: {str(e)}"
+            logger.error(
+                "Synthetic perspective probe failed: "
+                "code=synthetic_probe_failed, error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
             )
+            result.summary = "Synthetic perspective probe failed. Try again later."
             return result
         
         # Step 6: Summarize patterns within generated records.
@@ -1726,7 +1772,12 @@ Return the list of sub-queries in JSON format."""
                 logger.info(f"Loaded {len(profiles)} personas from reddit_profiles.json")
                 return profiles
             except Exception as e:
-                logger.warning(f"Failed to read reddit_profiles.json: {e}")
+                logger.warning(
+                    "Generated profile read failed: source=reddit, "
+                    "code=profile_read_failed, error_type=%s",
+                    type(e).__name__,
+                    extra={"privacy_safe": True},
+                )
         
         # Try reading Twitter CSV format
         twitter_profile_path = os.path.join(sim_dir, "twitter_profiles.csv")
@@ -1746,7 +1797,12 @@ Return the list of sub-queries in JSON format."""
                 logger.info(f"Loaded {len(profiles)} personas from twitter_profiles.csv")
                 return profiles
             except Exception as e:
-                logger.warning(f"Failed to read twitter_profiles.csv: {e}")
+                logger.warning(
+                    "Generated profile read failed: source=twitter, "
+                    "code=profile_read_failed, error_type=%s",
+                    type(e).__name__,
+                    extra={"privacy_safe": True},
+                )
         
         return profiles
     
@@ -1835,7 +1891,12 @@ the fictional modelling assumption behind the selection."""
             return selected_agents, valid_indices, reasoning
             
         except Exception as e:
-            logger.warning(f"LLM selection failed, using fallback: {e}")
+            logger.warning(
+                "Generated profile selection failed; using fallback: "
+                "code=profile_selection_failed, error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             # Fallback: select the first N
             selected = profiles[:max_agents]
             indices = list(range(min(max_agents, len(profiles))))
@@ -1895,7 +1956,12 @@ Generate 3-5 conditional scenario-probe prompts."""
             )
             
         except Exception as e:
-            logger.warning(f"Failed to generate questions: {e}")
+            logger.warning(
+                "Synthetic probe question generation failed: "
+                "code=question_generation_failed, error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             return [
                 (
                     "Within this fictional scenario, what response path does "
@@ -1959,7 +2025,12 @@ or a forecast." """
             return summary
             
         except Exception as e:
-            logger.warning(f"Failed to generate summary: {e}")
+            logger.warning(
+                "Synthetic probe summary generation failed: "
+                "code=summary_generation_failed, error_type=%s",
+                type(e).__name__,
+                extra={"privacy_safe": True},
+            )
             names = ", ".join(i.agent_name for i in interviews)
             return (
                 "Fictional generated scenario records; 0 human respondents; "

@@ -4,15 +4,15 @@ Reads nodes from the Zep graph and filters those that match predefined entity ty
 """
 
 import time
-from typing import Dict, Any, List, Optional, Set, Callable, TypeVar
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Set, TypeVar
 
 from zep_cloud.client import Zep
 
 from ..config import Config
-from .claim_boundary import graph_record_disclosure
 from ..utils.logger import get_logger
-from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
+from ..utils.zep_paging import fetch_all_edges, fetch_all_nodes
+from .claim_boundary import graph_record_disclosure
 
 logger = get_logger('askthepeople.zep_entity_reader')
 
@@ -121,17 +121,26 @@ class ZepEntityReader:
         for attempt in range(max_retries):
             try:
                 return func()
-            except Exception as e:
-                last_exception = e
+            except Exception as exc:
+                last_exception = exc
                 if attempt < max_retries - 1:
                     logger.warning(
-                        f"Zep {operation_name} attempt {attempt + 1} failed: {str(e)[:100]}, "
-                        f"retrying in {delay:.1f}s..."
+                        "Zep %s attempt %s failed; exception_type=%s; "
+                        "retrying in %.1fs",
+                        operation_name,
+                        attempt + 1,
+                        type(exc).__name__,
+                        delay,
                     )
                     time.sleep(delay)
                     delay *= 2  # Exponential backoff
                 else:
-                    logger.error(f"Zep {operation_name} failed after {max_retries} attempts: {str(e)}")
+                    logger.error(
+                        "Zep %s failed after %s attempts; exception_type=%s",
+                        operation_name,
+                        max_retries,
+                        type(exc).__name__,
+                    )
         
         raise last_exception
     
@@ -201,27 +210,27 @@ class ZepEntityReader:
             List of edges
         """
         try:
-            # Call Zep API with retry mechanism
             edges = self._call_with_retry(
-                func=lambda: self.client.graph.node.get_entity_edges(node_uuid=node_uuid),
-                operation_name=f"get_node_edges(node={node_uuid[:8]}...)"
+                func=lambda: self.client.graph.node.get_entity_edges(
+                    node_uuid=node_uuid
+                ),
+                operation_name=f"get_node_edges(node={node_uuid[:8]}...)",
             )
-            
-            edges_data = []
-            for edge in edges:
-                edges_data.append(_disclose_related_edge({
-                    "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
-                    "name": edge.name or "",
-                    "fact": edge.fact or "",
-                    "source_node_uuid": edge.source_node_uuid,
-                    "target_node_uuid": edge.target_node_uuid,
-                    "attributes": edge.attributes or {},
-                }))
-            
-            return edges_data
-        except Exception as e:
-            logger.warning(f"Failed to retrieve edges for node {node_uuid}: {str(e)}")
-            return []
+        except Exception:
+            raise RuntimeError("graph_entity_edge_read_unavailable") from None
+
+        edges_data = []
+        for edge in edges:
+            edges_data.append(_disclose_related_edge({
+                "uuid": getattr(edge, 'uuid_', None) or getattr(edge, 'uuid', ''),
+                "name": edge.name or "",
+                "fact": edge.fact or "",
+                "source_node_uuid": edge.source_node_uuid,
+                "target_node_uuid": edge.target_node_uuid,
+                "attributes": edge.attributes or {},
+            }))
+
+        return edges_data
     
     def filter_defined_entities(
         self, 
@@ -356,70 +365,63 @@ class ZepEntityReader:
         Returns:
             EntityNode or None
         """
-        try:
-            # Get node with retry mechanism
-            node = self._call_with_retry(
-                func=lambda: self.client.graph.node.get(uuid_=entity_uuid),
-                operation_name=f"get_node_details(uuid={entity_uuid[:8]}...)"
-            )
-            
-            if not node:
-                return None
-            
-            # Get node edges
-            edges = self.get_node_edges(entity_uuid)
-            
-            # Get all nodes for associated lookup
-            all_nodes = self.get_all_nodes(graph_id)
-            node_map = {n["uuid"]: n for n in all_nodes}
-            
-            # Process related edges and nodes
-            related_edges = []
-            related_node_uuids = set()
-            
-            for edge in edges:
-                if edge["source_node_uuid"] == entity_uuid:
-                    related_edges.append({
-                        "direction": "outgoing",
-                        "edge_name": edge["name"],
-                        "fact": edge["fact"],
-                        "target_node_uuid": edge["target_node_uuid"],
-                    })
-                    related_node_uuids.add(edge["target_node_uuid"])
-                else:
-                    related_edges.append({
-                        "direction": "incoming",
-                        "edge_name": edge["name"],
-                        "fact": edge["fact"],
-                        "source_node_uuid": edge["source_node_uuid"],
-                    })
-                    related_node_uuids.add(edge["source_node_uuid"])
-            
-            # Get associated node info
-            related_nodes = []
-            for related_uuid in related_node_uuids:
-                if related_uuid in node_map:
-                    related_node = node_map[related_uuid]
-                    related_nodes.append({
-                        "uuid": related_node["uuid"],
-                        "name": related_node["name"],
-                        "labels": related_node["labels"],
-                        "summary": related_node.get("summary", ""),
-                    })
-            
-            return EntityNode(
-                uuid=getattr(node, 'uuid_', None) or getattr(node, 'uuid', ''),
-                name=node.name or "",
-                labels=node.labels or [],
-                summary=node.summary or "",
-                attributes=node.attributes or {},
-                related_edges=related_edges,
-                related_nodes=related_nodes,
-            )
-            
-        except Exception as e:
-            logger.error(f"Failed to retrieve entity {entity_uuid}: {str(e)}")
+        # A node UUID is globally addressable in Zep. Establish membership from
+        # the graph-scoped collection before making any node-specific request,
+        # and derive the disclosed node only from that collection.
+        all_nodes = self.get_all_nodes(graph_id)
+        node_map = {node["uuid"]: node for node in all_nodes}
+        node = node_map.get(entity_uuid)
+        if node is None:
             return None
+
+        # Entity-edge lookups are globally addressable in Zep. Only the
+        # graph-scoped edge inventory may contribute context to this response.
+        edges = self.get_all_edges(graph_id)
+        related_edges = []
+        related_node_uuids = set()
+
+        for edge in edges:
+            source_uuid = edge["source_node_uuid"]
+            target_uuid = edge["target_node_uuid"]
+            if source_uuid not in node_map or target_uuid not in node_map:
+                continue
+            if source_uuid == entity_uuid:
+                related_edges.append({
+                    "direction": "outgoing",
+                    "edge_name": edge["name"],
+                    "fact": edge["fact"],
+                    "target_node_uuid": target_uuid,
+                })
+                related_node_uuids.add(target_uuid)
+            elif target_uuid == entity_uuid:
+                related_edges.append({
+                    "direction": "incoming",
+                    "edge_name": edge["name"],
+                    "fact": edge["fact"],
+                    "source_node_uuid": source_uuid,
+                })
+                related_node_uuids.add(source_uuid)
+
+        related_nodes = []
+        for related_uuid in related_node_uuids:
+            if related_uuid in node_map:
+                related_node = node_map[related_uuid]
+                related_nodes.append({
+                    "uuid": related_node["uuid"],
+                    "name": related_node["name"],
+                    "labels": related_node["labels"],
+                    "summary": related_node.get("summary", ""),
+                })
+
+        return EntityNode(
+            uuid=node["uuid"],
+            name=node["name"],
+            labels=node["labels"],
+            summary=node["summary"],
+            attributes=node["attributes"],
+            related_edges=related_edges,
+            related_nodes=related_nodes,
+        )
     
     def get_entities_by_type(
         self, 

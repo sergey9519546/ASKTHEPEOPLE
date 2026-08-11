@@ -120,7 +120,7 @@ class TestGenerateReport:
 
         # Assertions
         assert report.status == ReportStatus.FAILED
-        assert "API Error" in report.error
+        assert report.error == "report_generation_failed"
 
         # Verify it still tried to save the failed report
         mock_report_manager.save_report.assert_called()
@@ -128,7 +128,7 @@ class TestGenerateReport:
             "test_error_report",
             "failed",
             -1,
-            "Report generation failed: API Error",
+            "Report generation failed",
             completed_sections=[],
         )
 

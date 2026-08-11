@@ -3,10 +3,11 @@ Graph Building Service
 Endpoint 2: Build Standalone Graph using Zep API
 """
 
-import os
-import uuid
+import hashlib
+import re
 import time
-import threading
+import uuid
+from collections.abc import Sequence
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass
 
@@ -14,13 +15,9 @@ from zep_cloud.client import Zep
 from zep_cloud import EpisodeData, EntityEdgeSourceTarget
 
 from ..config import Config
-from ..models.task import TaskManager, TaskStatus
-from ..utils.logger import get_logger
+from ..utils.task_retry import retry_transient_operation
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 from .text_processor import TextProcessor
-
-logger = get_logger("askthepeople.graph_builder")
-
 
 @dataclass
 class GraphInfo:
@@ -39,166 +36,184 @@ class GraphInfo:
         }
 
 
+class GraphBuildProviderError(RuntimeError):
+    """Stable provider failure annotated with whether a whole-task retry is safe."""
+
+    def __init__(self, code: str, *, graph_id: str, retry_safe: bool):
+        super().__init__(code)
+        self.graph_id = graph_id
+        self.retry_safe = retry_safe
+
+
+def _graph_owner_marker(graph_id: str) -> str:
+    """Return the exact non-secret ownership marker for a server graph ID."""
+    digest = hashlib.sha256(f"source-graph:{graph_id}".encode()).hexdigest()
+    return f"source_graph_owner:{digest}"
+
+
+def _is_uuid(value: object) -> bool:
+    """Accept only provider acknowledgements with a real UUID identifier."""
+    if not isinstance(value, str):
+        return False
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
+
+
+def _to_pascal_case(value: str) -> str:
+    """Normalize separators without corrupting an existing PascalCase name."""
+    normalized = re.sub(r"[^a-zA-Z0-9\s_]", "", value)
+    parts = [part for part in normalized.replace(" ", "_").split("_") if part]
+    return "".join(part[:1].upper() + part[1:] for part in parts)
+
+
 class GraphBuilderService:
-    """
-    Graph Building Service
-    Responsible for calling Zep API to build knowledge graph
-    """
-    
+    """Build a Zep-derived source graph without owning background execution."""
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or Config.ZEP_API_KEY
         if not self.api_key:
             raise ValueError("ZEP_API_KEY not configured")
-        
+
         self.client = Zep(api_key=self.api_key)
-        self.task_manager = TaskManager()
-    
-    def build_graph_async(
+
+    def build_graph(
         self,
-        text: str,
-        ontology: Dict[str, Any],
-        graph_name: str = "ASKTHEPEOPLE Graph",
-        chunk_size: int = 500,
-        chunk_overlap: int = 50,
-        batch_size: int = 3
-    ) -> str:
-        """
-        Asynchronously build graph
-        
-        Args:
-            text: Input text
-            ontology: Ontology definition (from Endpoint 1 output)
-            graph_name: Graph name
-            chunk_size: Text chunk size
-            chunk_overlap: Chunk overlap size
-            batch_size: Number of chunks sent per batch
-            
-        Returns:
-            Task ID
-        """
-        # Create task
-        task_id = self.task_manager.create_task(
-            task_type="graph_build",
-            metadata={
-                "graph_name": graph_name,
-                "chunk_size": chunk_size,
-                "text_length": len(text),
-            }
-        )
-        
-        # Execute building in background thread
-        thread = threading.Thread(
-            target=self._build_graph_worker,
-            args=(task_id, text, ontology, graph_name, chunk_size, chunk_overlap, batch_size)
-        )
-        thread.daemon = True
-        thread.start()
-        
-        return task_id
-    
-    def _build_graph_worker(
-        self,
-        task_id: str,
+        *,
+        graph_id: str,
         text: str,
         ontology: Dict[str, Any],
         graph_name: str,
         chunk_size: int,
         chunk_overlap: int,
-        batch_size: int
-    ):
-        """Graph building worker thread"""
+        batch_size: int = 3,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
+    ) -> Dict[str, Any]:
+        """Build a source graph synchronously for a Celery-owned worker.
+
+        The caller owns input loading, persistence, and task lifecycle.  This
+        operation only performs the provider sequence and returns serializable
+        derived graph information; it never starts a local worker thread.
+        """
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("extracted source text is required")
+        if not isinstance(ontology, dict):
+            raise ValueError("ontology must be a mapping")
+
+        def report(progress: int, message: str) -> None:
+            if progress_callback:
+                progress_callback(progress, message)
+
         try:
-            self.task_manager.update_task(
-                task_id,
-                status=TaskStatus.PROCESSING,
-                progress=5,
-                message="Starting graph building..."
-            )
-            
-            # 1. Create graph
-            graph_id = self.create_graph(graph_name)
-            self.task_manager.update_task(
-                task_id,
-                progress=10,
-                message=f"Graph created: {graph_id}"
-            )
-            
-            # 2. Set ontology
+            # Creation and ontology assignment are keyed by the caller's stable
+            # graph ID, so replaying this phase cannot create a second graph.
+            self.create_graph(graph_id, graph_name)
+            report(10, "Graph created")
+
             self.set_ontology(graph_id, ontology)
-            self.task_manager.update_task(
-                task_id,
-                progress=15,
-                message="Ontology set"
+            report(15, "Ontology configured")
+        except GraphBuildProviderError:
+            raise
+        except Exception as exc:
+            raise GraphBuildProviderError(
+                "graph_create_phase_failed",
+                graph_id=graph_id,
+                retry_safe=True,
+            ) from exc
+
+        chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
+        total_chunks = len(chunks)
+        report(20, f"Prepared {total_chunks} source chunks")
+        if not chunks:
+            raise GraphBuildProviderError(
+                "graph_episode_submission_unconfirmed",
+                graph_id=graph_id,
+                retry_safe=False,
             )
-            
-            # 3. Text chunking
-            chunks = TextProcessor.split_text(text, chunk_size, chunk_overlap)
-            total_chunks = len(chunks)
-            self.task_manager.update_task(
-                task_id,
-                progress=20,
-                message=f"Text split into {total_chunks} chunks"
-            )
-            
-            # 4. Send data in batches
+
+        try:
+            # Episode submission is not idempotent. Any failure from this point
+            # is ambiguous and must terminate instead of replaying the build.
             episode_uuids = self.add_text_batches(
-                graph_id, chunks, batch_size,
-                lambda msg, prog: self.task_manager.update_task(
-                    task_id,
-                    progress=20 + int(prog * 0.4),  # 20-60%
-                    message=msg
-                )
+                graph_id,
+                chunks,
+                batch_size,
+                lambda message, fraction: report(20 + int(fraction * 40), message),
             )
-            
-            # 5. Wait for Zep processing to complete
-            self.task_manager.update_task(
-                task_id,
-                progress=60,
-                message="Waiting for Zep to process data..."
-            )
-            
+            report(60, "Waiting for graph processing")
             self._wait_for_episodes(
                 episode_uuids,
-                lambda msg, prog: self.task_manager.update_task(
-                    task_id,
-                    progress=60 + int(prog * 0.3),  # 60-90%
-                    message=msg
-                )
+                lambda message, fraction: report(60 + int(fraction * 30), message),
             )
-            
-            # 6. Get Graph Information
-            self.task_manager.update_task(
-                task_id,
-                progress=90,
-                message="Getting Graph Information..."
-            )
-            
+
+            report(90, "Reading graph information")
             graph_info = self._get_graph_info(graph_id)
-            
-            # Complete
-            self.task_manager.complete_task(task_id, {
-                "graph_id": graph_id,
-                "graph_info": graph_info.to_dict(),
-                "chunks_processed": total_chunks,
-            })
-            
-        except Exception as e:
-            logger.error("Graph build task failed: %s", e)
-            self.task_manager.fail_task(
-                task_id,
-                "graph_build_failed",
-                public_error="graph_build_failed",
-            )
+        except GraphBuildProviderError:
+            raise
+        except Exception as exc:
+            raise GraphBuildProviderError(
+                "graph_post_mutation_failed",
+                graph_id=graph_id,
+                retry_safe=False,
+            ) from exc
+        report(100, "Graph build complete")
+        return {
+            "success": True,
+            "graph_id": graph_id,
+            "graph_info": graph_info.to_dict(),
+            "chunks_processed": total_chunks,
+        }
     
-    def create_graph(self, name: str) -> str:
+    def create_graph(self, graph_id: str, name: str) -> str:
         """Create Zep graph (public method)"""
-        graph_id = f"atp_{uuid.uuid4().hex[:16]}"
-        
-        self.client.graph.create(
-            graph_id=graph_id,
-            name=name,
-            description="ASKTHEPEOPLE Social Simulation Graph"
-        )
+        marker = _graph_owner_marker(graph_id)
+        try:
+            self.client.graph.create(
+                graph_id=graph_id,
+                name=name,
+                description=marker,
+            )
+        except Exception as exc:
+            if getattr(exc, "status_code", None) != 409:
+                raise
+
+            # A conflict is reusable only when it is provably the empty graph
+            # created by an earlier delivery of this exact task identity.
+            try:
+                graph = retry_transient_operation(
+                    lambda: self.client.graph.get(graph_id=graph_id),
+                    max_attempts=3,
+                )
+                description = (
+                    graph.get("description")
+                    if isinstance(graph, dict)
+                    else getattr(graph, "description", None)
+                )
+                if description != marker:
+                    raise RuntimeError("unsafe graph create conflict")
+                episode_response = retry_transient_operation(
+                    lambda: self.client.graph.episode.get_by_graph_id(
+                        graph_id=graph_id,
+                        lastn=1,
+                    ),
+                    max_attempts=3,
+                )
+                episodes = getattr(episode_response, "episodes", episode_response)
+                is_empty_sequence = (
+                    isinstance(episodes, Sequence)
+                    and not isinstance(episodes, (str, bytes))
+                    and len(episodes) == 0
+                )
+                if not is_empty_sequence:
+                    raise RuntimeError("unsafe graph create conflict")
+            except Exception as verify_exc:
+                raise GraphBuildProviderError(
+                    "graph_create_conflict_unsafe",
+                    graph_id=graph_id,
+                    retry_safe=False,
+                ) from verify_exc
         
         return graph_id
     
@@ -222,15 +237,10 @@ class GraphBuilderService:
                 return f"entity_{attr_name}"
             return attr_name
         
-        def to_pascal_case(s: str) -> str:
-            import re
-            s = re.sub(r'[^a-zA-Z0-9\s_]', '', s)
-            return ''.join(word.capitalize() for word in s.replace(' ', '_').split('_') if word)
-
         # Dynamically create entity types
         entity_types = {}
         for entity_def in ontology.get("entity_types", []):
-            name = to_pascal_case(entity_def["name"])
+            name = _to_pascal_case(entity_def["name"])
             description = entity_def.get("description", f"A {name} entity.")
             
             # Create attribute dictionary and type annotations (required by Pydantic v2)
@@ -254,7 +264,7 @@ class GraphBuilderService:
         # Dynamically create edge types
         edge_definitions = {}
         for edge_def in ontology.get("edge_types", []):
-            name = to_pascal_case(edge_def["name"])
+            name = _to_pascal_case(edge_def["name"])
             description = edge_def.get("description", f"A {name} relationship.")
             
             # Create attribute dictionary and type annotations
@@ -281,8 +291,8 @@ class GraphBuilderService:
             for st in edge_def.get("source_targets", []):
                 source_targets.append(
                     EntityEdgeSourceTarget(
-                        source=to_pascal_case(st.get("source", "Entity")),
-                        target=to_pascal_case(st.get("target", "Entity"))
+                        source=_to_pascal_case(st.get("source", "Entity")),
+                        target=_to_pascal_case(st.get("target", "Entity"))
                     )
                 )
             
@@ -307,6 +317,12 @@ class GraphBuilderService:
         """Add text to graph in batches, return list of all episode uuids"""
         episode_uuids = []
         total_chunks = len(chunks)
+        if total_chunks == 0:
+            raise GraphBuildProviderError(
+                "graph_episode_submission_unconfirmed",
+                graph_id=graph_id,
+                retry_safe=False,
+            )
         
         for i in range(0, total_chunks, batch_size):
             batch_chunks = chunks[i:i + batch_size]
@@ -333,19 +349,37 @@ class GraphBuilderService:
                     episodes=episodes
                 )
                 
-                # Collect returned episode uuids
-                if batch_result and isinstance(batch_result, list):
-                    for ep in batch_result:
-                        ep_uuid = getattr(ep, 'uuid_', None) or getattr(ep, 'uuid', None)
-                        if ep_uuid:
-                            episode_uuids.append(ep_uuid)
+                if (
+                    not isinstance(batch_result, Sequence)
+                    or isinstance(batch_result, (str, bytes))
+                    or not batch_result
+                ):
+                    raise GraphBuildProviderError(
+                        "graph_episode_submission_unconfirmed",
+                        graph_id=graph_id,
+                        retry_safe=False,
+                    )
+
+                batch_uuids = [
+                    getattr(ep, "uuid_", None) or getattr(ep, "uuid", None)
+                    for ep in batch_result
+                ]
+                if len(batch_uuids) != len(batch_chunks) or any(
+                    not _is_uuid(ep_uuid) for ep_uuid in batch_uuids
+                ):
+                    raise GraphBuildProviderError(
+                        "graph_episode_submission_unconfirmed",
+                        graph_id=graph_id,
+                        retry_safe=False,
+                    )
+                episode_uuids.extend(batch_uuids)
                 
                 # Avoid sending requests too fast
                 time.sleep(1)
                 
-            except Exception as e:
+            except Exception:
                 if progress_callback:
-                    progress_callback(f"Batch {batch_num} failed to send: {str(e)}", 0)
+                    progress_callback(f"Batch {batch_num} could not be submitted", 0)
                 raise
         
         return episode_uuids
@@ -371,27 +405,33 @@ class GraphBuilderService:
             progress_callback(f"Starting to wait for {total_episodes} text chunks to process...", 0)
         
         while pending_episodes:
-            if time.time() - start_time > timeout:
+            if time.time() - start_time >= timeout:
                 if progress_callback:
                     progress_callback(
                         f"Some text blocks timed out, completed {completed_count}/{total_episodes}",
                         completed_count / total_episodes
                     )
-                break
+                raise RuntimeError("graph_processing_timeout")
             
             # Check processing status of each episode
             for ep_uuid in list(pending_episodes):
                 try:
-                    episode = self.client.graph.episode.get(uuid_=ep_uuid)
+                    episode = retry_transient_operation(
+                        lambda: self.client.graph.episode.get(uuid_=ep_uuid),
+                        max_attempts=3,
+                    )
                     is_processed = getattr(episode, 'processed', False)
                     
                     if is_processed:
                         pending_episodes.remove(ep_uuid)
                         completed_count += 1
                         
-                except Exception as e:
-                    # Ignore single query error and continue
-                    pass
+                except Exception as exc:
+                    raise GraphBuildProviderError(
+                        "graph_processing_failed",
+                        graph_id="",
+                        retry_safe=False,
+                    ) from exc
 
             elapsed = int(time.time() - start_time)
             if progress_callback:
