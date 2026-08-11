@@ -19,6 +19,8 @@ from werkzeug.exceptions import HTTPException
 from .config import Config, credential_validation_error
 from .extensions import sock
 from .utils.logger import setup_logger, get_logger
+from .utils.response import get_public_safe_error_code
+from .utils.build_revision import resolve_deployed_revision
 
 # Sentry SDK for error tracking
 try:
@@ -79,7 +81,7 @@ def create_app(config_class=Config):
             integrations=[FlaskIntegration()],
             traces_sample_rate=float(os.getenv('SENTRY_TRACES_SAMPLE_RATE', '0.1')),
             environment=os.getenv('SENTRY_ENVIRONMENT', 'production'),
-            release=os.getenv('RAILWAY_GIT_COMMIT_SHA') or os.getenv('BUILD_REVISION'),
+            release=resolve_deployed_revision() or None,
             before_send=_scrub_pii_from_sentry,
         )
         logger = get_logger('askthepeople.sentry')
@@ -286,7 +288,7 @@ def create_app(config_class=Config):
                     "max-age=31536000; includeSubDomains",
                 )
 
-        if request.path == "/health" or request.path.startswith("/api/"):
+        if request.path.startswith("/health") or request.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
             response.headers["Pragma"] = "no-cache"
         return response
@@ -313,7 +315,10 @@ def create_app(config_class=Config):
                     # Scrub the error string on 5xx — str(e) commonly leaks
                     # internal hostnames, file paths, and upstream API bodies.
                     if response.status_code >= 500 and 'error' in data:
-                        data['error'] = 'internal_server_error'
+                        data['error'] = (
+                            get_public_safe_error_code(response)
+                            or 'internal_server_error'
+                        )
                         mutated = True
                     if mutated:
                         response.set_data(json.dumps(data, ensure_ascii=False))

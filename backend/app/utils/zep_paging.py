@@ -15,6 +15,7 @@ from zep_cloud import InternalServerError
 from zep_cloud.client import Zep
 
 from .logger import get_logger
+from .task_retry import is_retryable_task_exception
 
 logger = get_logger('askthepeople.zep_paging')
 
@@ -43,16 +44,28 @@ def _fetch_page_with_retry(
     for attempt in range(max_retries):
         try:
             return api_call(*args, **kwargs)
-        except (ConnectionError, TimeoutError, OSError, InternalServerError) as e:
+        except Exception as e:
+            if not (
+                isinstance(e, (OSError, InternalServerError))
+                or is_retryable_task_exception(e)
+            ):
+                raise
             last_exception = e
             if attempt < max_retries - 1:
                 logger.warning(
-                    f"Zep {page_description} attempt {attempt + 1} failed: {str(e)[:100]}, retrying in {delay:.1f}s..."
+                    "Zep %s attempt %s failed; retrying in %.1fs",
+                    page_description,
+                    attempt + 1,
+                    delay,
                 )
                 time.sleep(delay)
                 delay *= 2
             else:
-                logger.error(f"Zep {page_description} failed after {max_retries} attempts: {str(e)}")
+                logger.error(
+                    "Zep %s failed after %s attempts",
+                    page_description,
+                    max_retries,
+                )
 
     assert last_exception is not None
     raise last_exception

@@ -39,22 +39,11 @@ _INSECURE_CREDENTIAL_MARKERS = (
     "test-only",
 )
 
-# CI smoke test keys that are intentionally weak but allowed for build validation
-_CI_SMOKE_TEST_KEYS = {
-    "build-validation-model-key",
-    "build-validation-zep-key",
-}
-
-
 def credential_validation_error(name: str, value: str | None) -> str | None:
     """Return a safe validation error for a private application credential."""
     if not value:
         return f"{name} is required"
     normalized = value.strip()
-    
-    # Allow CI smoke test keys to pass validation
-    if normalized in _CI_SMOKE_TEST_KEYS:
-        return None
     
     if len(normalized) < _MIN_PRIVATE_CREDENTIAL_LENGTH:
         return (
@@ -279,6 +268,41 @@ class Config:
     # For sync SQLAlchemy with psycopg3, use postgresql:// or postgresql+psycopg://
     # Falls back to SQLite for local development if DATABASE_URL not set
     DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///./askthepeople.db')
+
+    # ============================================================
+    # Supabase — Postgres + Storage backend (ADR-0012)
+    # ============================================================
+    # When SUPABASE_URL is set, the backend expects the rest of the
+    # Supabase env vars and a non-sqlite DATABASE_URL. The
+    # USE_SUPABASE_PERSISTENCE master switch keeps the legacy
+    # filesystem path available for local dev / tests that don't want
+    # to talk to a real Supabase project.
+    SUPABASE_URL = os.environ.get('SUPABASE_URL')
+    SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY')
+    SUPABASE_SERVICE_ROLE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY')
+    # Bucket names are operator-configurable so prod / dev / different
+    # workspaces can isolate their uploads + reports. They must be
+    # PRIVATE on the Supabase side; signed URLs are the only access path.
+    SUPABASE_STORAGE_BUCKET_UPLOADS = os.environ.get(
+        'SUPABASE_STORAGE_BUCKET_UPLOADS', 'askthepeople-uploads',
+    )
+    SUPABASE_STORAGE_BUCKET_REPORTS = os.environ.get(
+        'SUPABASE_STORAGE_BUCKET_REPORTS', 'askthepeople-reports',
+    )
+    # Default false: local dev keeps using filesystem + the existing
+    # SQLite. Set to true in production once the Supabase project is
+    # provisioned and the alembic head revision is applied.
+    USE_SUPABASE_PERSISTENCE = os.environ.get(
+        'USE_SUPABASE_PERSISTENCE', 'False',
+    ).lower() == 'true'
+    # S3-compatible local stand-in for Supabase Storage in dev when the
+    # full local Supabase stack is not available (the full stack uses
+    # Docker secrets which fail on some Windows hosts; MinIO + Postgres
+    # alone is a clean dev path that exercises the same code paths).
+    SUPABASE_S3_ENDPOINT = os.environ.get('SUPABASE_S3_ENDPOINT')
+    SUPABASE_S3_ACCESS_KEY = os.environ.get('SUPABASE_S3_ACCESS_KEY')
+    SUPABASE_S3_SECRET_KEY = os.environ.get('SUPABASE_S3_SECRET_KEY')
+    SUPABASE_S3_REGION = os.environ.get('SUPABASE_S3_REGION', 'us-east-1')
     
     # Convert postgres:// to postgresql:// (common in deployment platforms like Heroku/Railway)
     if DATABASE_URL.startswith('postgres://'):
@@ -291,13 +315,12 @@ class Config:
         """Validate necessary configurations"""
         errors = []
         
-        # Allow CI smoke test keys to pass validation
         llm_key = cls.LLM_API_KEY
         zep_key = cls.ZEP_API_KEY
         
-        if not llm_key or (llm_key not in _CI_SMOKE_TEST_KEYS and not llm_key.strip()):
+        if not llm_key or not llm_key.strip():
             errors.append("LLM_API_KEY is not configured")
-        if not zep_key or (zep_key not in _CI_SMOKE_TEST_KEYS and not zep_key.strip()):
+        if not zep_key or not zep_key.strip():
             errors.append("ZEP_API_KEY is not configured")
         if cls.REQUIRE_APP_AUTH and not cls.APP_TOKEN:
             errors.append(

@@ -4,14 +4,17 @@ Used to track long-running tasks (like simulation, graph building, report genera
 Distributed task state manager backed by Redis / Celery result backend.
 """
 
-import uuid
+import hashlib
 import json
+import os
 import threading
 import time
+import uuid
+from contextlib import contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Dict, Any, Optional, List
-from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
 from ..config import Config
 from ..utils.logger import get_logger
@@ -55,7 +58,38 @@ REDIS_RETRY_INTERVAL_SECONDS = 30.0
 # loop settles well inside this.
 _MAX_UPDATE_ATTEMPTS = 5
 
+# Idempotency keys can contain user-controlled text. Hashing keeps that text
+# out of Redis key names and gives every process the same bounded key.
+_IDEMPOTENCY_RESERVATION_PREFIX = "tasks:idempotency:v1:"
+_IDEMPOTENCY_RESERVATION_VERSION = 1
+
 _TERMINAL_STATUSES = frozenset()  # populated below, after TaskStatus exists
+
+
+class TaskStateError(RuntimeError):
+    """Stable fail-closed error for shared task-state operations."""
+
+
+class TaskStateContentionError(TaskStateError):
+    def __init__(self) -> None:
+        super().__init__("task_state_contention")
+
+
+class TaskStateUnavailable(TaskStateError):
+    def __init__(self, code: str = "task_state_unavailable") -> None:
+        super().__init__(code)
+
+
+class TaskIdempotencyConflict(TaskStateError):
+    def __init__(self) -> None:
+        super().__init__("idempotency_key_conflict")
+
+
+class TaskExecutionConflict(TaskStateError):
+    """Another delivery owns the durable task-execution fence."""
+
+    def __init__(self, code: str = "task_execution_in_progress") -> None:
+        super().__init__(code)
 
 
 class TaskStatus(str, Enum):
@@ -92,6 +126,8 @@ class Task:
     metadata: Dict = field(default_factory=dict)  # Additional metadata
     progress_detail: Dict = field(default_factory=dict)  # Detailed progress information
     idempotency_key: Optional[str] = None  # ADR-0003: dedupes double-submits
+    idempotency_fingerprint: Optional[str] = None
+    execution_owner: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to an internal dictionary, including diagnostic details."""
@@ -109,6 +145,8 @@ class Task:
             "public_error": self.public_error,
             "metadata": self.metadata,
             "idempotency_key": self.idempotency_key,
+            "idempotency_fingerprint": self.idempotency_fingerprint,
+            "execution_owner": self.execution_owner,
         }
 
     def to_public_dict(self) -> Dict[str, Any]:
@@ -118,6 +156,8 @@ class Task:
             payload["error"] = self.public_error or "task_failed"
         else:
             payload["error"] = None
+        # The worker token is an internal fencing credential, never API data.
+        payload.pop("execution_owner", None)
         return payload
 
     @classmethod
@@ -144,8 +184,8 @@ class Task:
         raw_status = d.get("status", TaskStatus.PENDING)
         try:
             status = TaskStatus(raw_status)
-        except ValueError:
-            status = TaskStatus.PENDING
+        except (TypeError, ValueError):
+            raise TaskStateUnavailable("task_status_invalid") from None
 
         return cls(
             task_id=d["task_id"],
@@ -161,7 +201,37 @@ class Task:
             metadata=d.get("metadata", {}),
             progress_detail=d.get("progress_detail", {}),
             idempotency_key=d.get("idempotency_key"),
+            idempotency_fingerprint=d.get("idempotency_fingerprint"),
+            execution_owner=d.get("execution_owner"),
         )
+
+
+@dataclass(frozen=True)
+class TaskExecutionFence:
+    """A report-writer guard bound to one durable task execution owner.
+
+    This is deliberately not a renewable lease. It prevents concurrent
+    deliveries and re-checks ownership at report checkpoints, but a worker
+    crash leaves the task fail-closed in PROCESSING until an operator or a
+    future durable orchestrator performs an explicit recovery transition.
+    """
+
+    manager: "TaskManager"
+    task_id: str
+    owner: str
+
+    @property
+    def cancelled(self) -> bool:
+        return False
+
+    def checkpoint(self) -> None:
+        self.manager.assert_task_execution_owner(self.task_id, self.owner)
+
+    @contextmanager
+    def write_guard(self, *, allow_cancelled: bool = False):
+        del allow_cancelled
+        self.checkpoint()
+        yield
 
 
 class TaskManager:
@@ -240,6 +310,24 @@ class TaskManager:
         self._redis_retry_at = 0.0
         return client
 
+    @staticmethod
+    def _durable_redis_required() -> bool:
+        """Return whether this process was explicitly configured for Redis.
+
+        Local development may use the legacy in-process task view. A deployed
+        process that was given a Redis transport must never silently fall back
+        to that view after a dependency failure.
+        """
+        return any(
+            isinstance(value, str)
+            and value.strip().lower().startswith(("redis://", "rediss://"))
+            for value in (
+                os.environ.get("REDIS_URL"),
+                os.environ.get("CELERY_BROKER_URL"),
+                os.environ.get("CELERY_RESULT_BACKEND"),
+            )
+        )
+
     def _drop_redis(self, exc: Exception) -> None:
         """Discard a client that failed mid-operation so the next call re-probes."""
         logger.warning("Redis operation failed; falling back to process-local state: %s", exc)
@@ -254,18 +342,20 @@ class TaskManager:
             return created.timestamp()
         return time.time()
 
-    def _save_to_redis(self, task: Task):
+    def _save_to_redis(self, task: Task) -> bool:
         """Write the task record and index it, in one round trip."""
         r = self._get_redis()
         if r is None:
-            return
+            return False
         try:
             pipe = r.pipeline()
             pipe.set(f"task:{task.task_id}", json.dumps(task.to_dict()), ex=TASK_TTL_SECONDS)
             pipe.zadd(TASK_INDEX_KEY, {task.task_id: self._index_score(task)})
             pipe.execute()
+            return True
         except Exception as e:
             self._drop_redis(e)
+            return False
 
     def _load_from_redis(self, task_id: str) -> Optional[Task]:
         """Load task from Redis."""
@@ -280,35 +370,217 @@ class TaskManager:
             self._drop_redis(e)
         return None
 
+    @staticmethod
+    def _idempotency_reservation_key(idempotency_key: str) -> str:
+        digest = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()
+        return f"{_IDEMPOTENCY_RESERVATION_PREFIX}{digest}"
+
+    @staticmethod
+    def _idempotency_fingerprint(
+        task_type: str,
+        identity: Dict[str, Any],
+    ) -> str:
+        """Hash the semantic request identity, excluding generated task ids."""
+        try:
+            canonical = json.dumps(
+                {"task_type": task_type, "identity": identity},
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            )
+        except (TypeError, ValueError):
+            raise ValueError("idempotency_identity_invalid") from None
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _parse_idempotency_reservation(raw: str) -> Dict[str, str]:
+        try:
+            reservation = json.loads(raw)
+        except (TypeError, ValueError):
+            raise TaskStateUnavailable("task_idempotency_state_invalid") from None
+        if (
+            not isinstance(reservation, dict)
+            or reservation.get("version") != _IDEMPOTENCY_RESERVATION_VERSION
+            or not isinstance(reservation.get("task_id"), str)
+            or not reservation["task_id"]
+            or not isinstance(reservation.get("fingerprint"), str)
+            or len(reservation["fingerprint"]) != 64
+        ):
+            raise TaskStateUnavailable("task_idempotency_state_invalid")
+        return reservation
+
+    def _validate_reservation_for_task(
+        self,
+        reader,
+        task: Task,
+    ) -> tuple[str, str] | None:
+        """Return the live reservation key/value or fail on any divergence."""
+        if task.idempotency_key is None:
+            return None
+        if not task.idempotency_fingerprint:
+            raise TaskStateUnavailable("task_idempotency_state_invalid")
+        reservation_key = self._idempotency_reservation_key(task.idempotency_key)
+        raw_reservation = reader.get(reservation_key)
+        if not raw_reservation:
+            raise TaskStateUnavailable("task_idempotency_state_invalid")
+        reservation = self._parse_idempotency_reservation(raw_reservation)
+        if (
+            reservation["task_id"] != task.task_id
+            or reservation["fingerprint"] != task.idempotency_fingerprint
+        ):
+            raise TaskStateUnavailable("task_idempotency_state_invalid")
+        return reservation_key, raw_reservation
+
+    def _create_idempotent_in_redis(
+        self,
+        client,
+        task: Task,
+    ) -> tuple[Task, bool]:
+        """Atomically reserve an idempotency identity and create its task.
+
+        The reservation and task record share one MULTI/EXEC. A missing task
+        behind a valid, matching reservation is recoverable (for example when
+        the record expired at the TTL boundary); malformed or mismatched state
+        fails closed.
+        """
+        if not task.idempotency_key or not task.idempotency_fingerprint:
+            raise ValueError("idempotency_identity_invalid")
+
+        reservation_key = self._idempotency_reservation_key(task.idempotency_key)
+        candidate_key = f"task:{task.task_id}"
+        reservation_json = json.dumps(
+            {
+                "version": _IDEMPOTENCY_RESERVATION_VERSION,
+                "task_id": task.task_id,
+                "fingerprint": task.idempotency_fingerprint,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+
+        try:
+            for _ in range(_MAX_UPDATE_ATTEMPTS):
+                with client.pipeline() as pipe:
+                    try:
+                        pipe.watch(reservation_key)
+                        raw_reservation = pipe.get(reservation_key)
+                        existing_task = None
+                        if raw_reservation:
+                            reservation = self._parse_idempotency_reservation(
+                                raw_reservation
+                            )
+                            if (
+                                reservation["fingerprint"]
+                                != task.idempotency_fingerprint
+                            ):
+                                raise TaskIdempotencyConflict()
+
+                            existing_key = f"task:{reservation['task_id']}"
+                            pipe.watch(existing_key, candidate_key)
+                            raw_existing = pipe.get(existing_key)
+                            if raw_existing:
+                                try:
+                                    existing_task = Task.from_dict(
+                                        json.loads(raw_existing)
+                                    )
+                                except (TypeError, ValueError, KeyError):
+                                    raise TaskStateUnavailable(
+                                        "task_idempotency_state_invalid"
+                                    ) from None
+                                if (
+                                    existing_task.idempotency_key
+                                    != task.idempotency_key
+                                    or existing_task.idempotency_fingerprint
+                                    != task.idempotency_fingerprint
+                                ):
+                                    raise TaskStateUnavailable(
+                                        "task_idempotency_state_invalid"
+                                    )
+                                if existing_task.status in (
+                                    TaskStatus.PENDING,
+                                    TaskStatus.PROCESSING,
+                                ):
+                                    return existing_task, False
+                        else:
+                            pipe.watch(candidate_key)
+
+                        # A terminal/missing prior task permits a same-payload
+                        # rerun, but never by overwriting an existing candidate.
+                        raw_candidate = pipe.get(candidate_key)
+                        if raw_candidate:
+                            if (
+                                existing_task is None
+                                or existing_task.task_id != task.task_id
+                            ):
+                                raise TaskStateUnavailable("task_id_conflict")
+                            # Reusing a terminal task id would destroy history.
+                            raise TaskStateUnavailable("task_id_conflict")
+
+                        pipe.multi()
+                        pipe.set(
+                            candidate_key,
+                            json.dumps(task.to_dict()),
+                            ex=TASK_TTL_SECONDS,
+                        )
+                        pipe.set(
+                            reservation_key,
+                            reservation_json,
+                            ex=TASK_TTL_SECONDS,
+                        )
+                        pipe.zadd(
+                            TASK_INDEX_KEY,
+                            {task.task_id: self._index_score(task)},
+                        )
+                        pipe.execute()
+                        return task, True
+                    except WatchError:
+                        continue
+            raise TaskStateContentionError()
+        except TaskStateError:
+            raise
+        except Exception as exc:
+            self._drop_redis(exc)
+            raise TaskStateUnavailable() from None
+
     def create_task(
         self,
         task_type: str,
         metadata: Optional[Dict] = None,
         task_id: Optional[str] = None,
         idempotency_key: Optional[str] = None,
+        idempotency_identity: Optional[Dict[str, Any]] = None,
     ) -> str:
         """Create and retain a task.
 
-        If ``idempotency_key`` is supplied and an in-flight (PENDING or
-        PROCESSING) task already exists with the same key, that task's id is
-        returned instead of creating a new one. This dedupes double-submits
-        (network retry, double-click) per ADR-0003. A task that has reached a
-        terminal state (COMPLETED/FAILED/CANCELLED) with the same key does NOT block a
-        fresh submission — the caller is explicitly re-running.
+        If ``idempotency_key`` is supplied, Redis is mandatory. The key's
+        semantic identity and task record are reserved in one transaction. A
+        matching in-flight request returns the reserved id; a different
+        identity conflicts. A matching terminal or expired task permits a new
+        task id, so an explicit rerun never overwrites the prior record.
         """
-        # Idempotency dedup: look for a matching in-flight task first.
-        if idempotency_key:
-            with self._task_lock:
-                for existing in self._tasks.values():
-                    if (
-                        existing.idempotency_key == idempotency_key
-                        and existing.status
-                        in (TaskStatus.PENDING, TaskStatus.PROCESSING)
-                    ):
-                        return existing.task_id
-
         task_id = task_id or str(uuid.uuid4())
+        durable_redis_required = self._durable_redis_required()
+        if (
+            not idempotency_key
+            and durable_redis_required
+            and self._get_redis() is None
+        ):
+            raise TaskStateUnavailable()
         now = datetime.now()
+        task_metadata = metadata or {}
+        idempotency_fingerprint = None
+        if idempotency_key:
+            identity = (
+                idempotency_identity
+                if idempotency_identity is not None
+                else task_metadata
+            )
+            if not isinstance(identity, dict):
+                raise ValueError("idempotency_identity_invalid")
+            idempotency_fingerprint = self._idempotency_fingerprint(
+                task_type,
+                identity,
+            )
 
         task = Task(
             task_id=task_id,
@@ -316,13 +588,35 @@ class TaskManager:
             status=TaskStatus.PENDING,
             created_at=now,
             updated_at=now,
-            metadata=metadata or {},
+            metadata=task_metadata,
             idempotency_key=idempotency_key,
+            idempotency_fingerprint=idempotency_fingerprint,
         )
+
+        if idempotency_key:
+            redis_client = self._get_redis()
+            if redis_client is None:
+                # Process-local dedupe is not an idempotency guarantee: two web
+                # or worker processes would each admit a different task.
+                raise TaskStateUnavailable()
+            durable_task, created = self._create_idempotent_in_redis(
+                redis_client,
+                task,
+            )
+            with self._task_lock:
+                self._tasks[durable_task.task_id] = durable_task
+            if not created:
+                return durable_task.task_id
+            task = durable_task
 
         with self._task_lock:
             self._tasks[task_id] = task
-        self._save_to_redis(task)
+        if not idempotency_key:
+            persisted = self._save_to_redis(task)
+            if durable_redis_required and not persisted:
+                with self._task_lock:
+                    self._tasks.pop(task_id, None)
+                raise TaskStateUnavailable()
 
         _audit(
             action="task.created",
@@ -340,22 +634,191 @@ class TaskManager:
 
         Used by route handlers to decide whether a submission is a duplicate
         of one already running, so they can skip enqueueing a second worker
-        job (ADR-0003 idempotency keys). Only the process-local dict is
-        consulted; cross-process dedup relies on the shared Redis snapshot
-        that ``_save_to_redis`` writes, which a sibling worker's TaskManager
-        loads on ``get_task``.
+        job (ADR-0003 idempotency keys). The lookup follows the same durable
+        Redis reservation used by ``create_task``; it never scans a local dict.
         """
         if not idempotency_key:
             return None
-        with self._task_lock:
-            for task in self._tasks.values():
-                if (
-                    task.idempotency_key == idempotency_key
-                    and task.status
-                    in (TaskStatus.PENDING, TaskStatus.PROCESSING)
-                ):
-                    return task.task_id
-        return None
+        redis_client = self._get_redis()
+        if redis_client is None:
+            raise TaskStateUnavailable()
+        try:
+            raw_reservation = redis_client.get(
+                self._idempotency_reservation_key(idempotency_key)
+            )
+            if not raw_reservation:
+                return None
+            reservation = self._parse_idempotency_reservation(raw_reservation)
+            raw_task = redis_client.get(f"task:{reservation['task_id']}")
+            if not raw_task:
+                return None
+            task = Task.from_dict(json.loads(raw_task))
+            if (
+                task.idempotency_key != idempotency_key
+                or task.idempotency_fingerprint != reservation["fingerprint"]
+            ):
+                raise TaskStateUnavailable("task_idempotency_state_invalid")
+            if task.status in (TaskStatus.PENDING, TaskStatus.PROCESSING):
+                with self._task_lock:
+                    self._tasks[task.task_id] = task
+                return task.task_id
+            return None
+        except TaskStateError:
+            raise
+        except Exception as exc:
+            self._drop_redis(exc)
+            raise TaskStateUnavailable() from None
+
+    @staticmethod
+    def _validate_execution_identity(
+        task: Task,
+        *,
+        expected_task_type: Optional[str],
+        expected_idempotency_key: Optional[str],
+        expected_metadata: Optional[Dict[str, Any]],
+    ) -> None:
+        if expected_task_type is not None and task.task_type != expected_task_type:
+            raise TaskExecutionConflict("task_execution_identity_mismatch")
+        if (
+            expected_idempotency_key is not None
+            and task.idempotency_key != expected_idempotency_key
+        ):
+            raise TaskExecutionConflict("task_execution_identity_mismatch")
+        if expected_metadata is not None:
+            if not isinstance(task.metadata, dict) or any(
+                task.metadata.get(key) != value
+                for key, value in expected_metadata.items()
+            ):
+                raise TaskExecutionConflict("task_execution_identity_mismatch")
+
+    def claim_task_execution(
+        self,
+        task_id: str,
+        owner: str,
+        *,
+        expected_task_type: Optional[str] = None,
+        expected_idempotency_key: Optional[str] = None,
+        expected_metadata: Optional[Dict[str, Any]] = None,
+        progress: Optional[int] = None,
+        message: Optional[str] = None,
+    ) -> Task:
+        """Atomically claim one task delivery for a single worker owner.
+
+        A second owner never proceeds while the task is PROCESSING. The claim
+        is durable and checked again by ``TaskExecutionFence`` around report
+        checkpoints and writes. There is intentionally no automatic takeover:
+        without a durable heartbeat/fencing-token store, takeover would permit
+        a paused worker to resume and write concurrently.
+        """
+        if not isinstance(owner, str) or not owner:
+            raise ValueError("task_execution_owner_invalid")
+        redis_client = self._get_redis()
+        if redis_client is None:
+            raise TaskStateUnavailable()
+
+        key = f"task:{task_id}"
+        try:
+            for _ in range(_MAX_UPDATE_ATTEMPTS):
+                with redis_client.pipeline() as pipe:
+                    try:
+                        pipe.watch(key)
+                        raw = pipe.get(key)
+                        if not raw:
+                            raise TaskExecutionConflict("task_execution_not_found")
+                        try:
+                            task = Task.from_dict(json.loads(raw))
+                        except (TypeError, ValueError, KeyError):
+                            raise TaskStateUnavailable(
+                                "task_state_invalid"
+                            ) from None
+                        reservation_state = None
+                        if task.idempotency_key is not None:
+                            reservation_key = self._idempotency_reservation_key(
+                                task.idempotency_key
+                            )
+                            pipe.watch(reservation_key)
+                            reservation_state = self._validate_reservation_for_task(
+                                pipe,
+                                task,
+                            )
+                        self._validate_execution_identity(
+                            task,
+                            expected_task_type=expected_task_type,
+                            expected_idempotency_key=expected_idempotency_key,
+                            expected_metadata=expected_metadata,
+                        )
+
+                        if task.status is TaskStatus.COMPLETED:
+                            return task
+                        if task.status in (TaskStatus.FAILED, TaskStatus.CANCELLED):
+                            raise TaskExecutionConflict("task_execution_terminal")
+                        if task.status is TaskStatus.PROCESSING:
+                            if task.execution_owner == owner:
+                                return task
+                            raise TaskExecutionConflict()
+
+                        task.status = TaskStatus.PROCESSING
+                        task.execution_owner = owner
+                        if progress is not None:
+                            task.progress = progress
+                        if message is not None:
+                            task.message = message
+                        task.updated_at = datetime.now()
+                        pipe.multi()
+                        pipe.set(
+                            key,
+                            json.dumps(task.to_dict()),
+                            ex=TASK_TTL_SECONDS,
+                        )
+                        if reservation_state is not None:
+                            reservation_key, raw_reservation = reservation_state
+                            pipe.set(
+                                reservation_key,
+                                raw_reservation,
+                                ex=TASK_TTL_SECONDS,
+                            )
+                        pipe.zadd(
+                            TASK_INDEX_KEY,
+                            {task.task_id: self._index_score(task)},
+                        )
+                        pipe.execute()
+                        with self._task_lock:
+                            self._tasks[task.task_id] = task
+                        return task
+                    except WatchError:
+                        continue
+            raise TaskStateContentionError()
+        except TaskStateError:
+            raise
+        except Exception as exc:
+            self._drop_redis(exc)
+            raise TaskStateUnavailable() from None
+
+    def assert_task_execution_owner(self, task_id: str, owner: str) -> Task:
+        """Fail unless Redis still records this live owner as the writer."""
+        redis_client = self._get_redis()
+        if redis_client is None:
+            raise TaskStateUnavailable()
+        try:
+            raw = redis_client.get(f"task:{task_id}")
+            if not raw:
+                raise TaskExecutionConflict("task_execution_not_found")
+            task = Task.from_dict(json.loads(raw))
+            self._validate_reservation_for_task(redis_client, task)
+            if (
+                task.status is not TaskStatus.PROCESSING
+                or task.execution_owner != owner
+            ):
+                raise TaskExecutionConflict("task_execution_fence_lost")
+            return task
+        except TaskStateError:
+            raise
+        except Exception as exc:
+            self._drop_redis(exc)
+            raise TaskStateUnavailable() from None
+
+    def execution_fence(self, task_id: str, owner: str) -> TaskExecutionFence:
+        return TaskExecutionFence(self, task_id, owner)
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """Get task from Redis, memory, or Celery backend."""
@@ -417,7 +880,8 @@ class TaskManager:
         result: Optional[Dict] = None,
         error: Optional[str] = None,
         public_error: Optional[str] = None,
-        progress_detail: Optional[Dict] = None
+        progress_detail: Optional[Dict] = None,
+        expected_execution_owner: Optional[str] = None,
     ):
         """Apply a partial update to a task, atomically with respect to Redis.
 
@@ -442,11 +906,18 @@ class TaskManager:
 
         r = self._get_redis()
         if r is not None:
-            task = self._update_in_redis(r, task_id, changes)
-            if task is not None:
-                with self._task_lock:
-                    self._tasks[task_id] = task
-                return
+            task = self._update_in_redis(
+                r,
+                task_id,
+                changes,
+                expected_execution_owner=expected_execution_owner,
+            )
+            with self._task_lock:
+                self._tasks[task_id] = task
+            return
+
+        if self._durable_redis_required():
+            raise TaskStateUnavailable()
 
         # No Redis (or it just dropped): process-local update. Correct for the
         # single-process dev/test runtime; across processes the caller has
@@ -454,8 +925,17 @@ class TaskManager:
         with self._task_lock:
             task = self._tasks.get(task_id)
             if task is None:
+                if expected_execution_owner is not None:
+                    raise TaskExecutionConflict("task_execution_not_found")
                 task = self._new_placeholder(task_id, changes)
             else:
+                if task.idempotency_key is not None:
+                    raise TaskStateUnavailable()
+                if (
+                    expected_execution_owner is not None
+                    and task.execution_owner != expected_execution_owner
+                ):
+                    raise TaskExecutionConflict("task_execution_fence_lost")
                 self._apply(task, changes)
             self._tasks[task_id] = task
         self._save_to_redis(task)
@@ -473,16 +953,12 @@ class TaskManager:
 
     @staticmethod
     def _apply(task: Task, changes: Dict[str, Any]) -> None:
-        """Write supplied fields onto `task`, refusing to un-finish it."""
-        new_status = changes.get("status")
-        if (
-            new_status is not None
-            and task.status in _TERMINAL_STATUSES
-            and new_status not in _TERMINAL_STATUSES
-        ):
-            # A late in-flight progress update must not resurrect a finished
-            # task. Its other fields still apply.
-            changes = {k: v for k, v in changes.items() if k != "status"}
+        """Write supplied fields without changing an established terminal envelope."""
+        if task.status in _TERMINAL_STATUSES:
+            # A late delivery must not downgrade, cancel, or partially rewrite
+            # an already terminal record. Ignore the whole transition so its
+            # coupled progress/message/result/error fields remain consistent.
+            return
 
         for name, value in changes.items():
             setattr(task, name, value)
@@ -509,9 +985,14 @@ class TaskManager:
         return task
 
     def _update_in_redis(
-        self, client, task_id: str, changes: Dict[str, Any]
-    ) -> Optional[Task]:
-        """Read-modify-write the record under WATCH; None if Redis is unusable.
+        self,
+        client,
+        task_id: str,
+        changes: Dict[str, Any],
+        *,
+        expected_execution_owner: Optional[str] = None,
+    ) -> Task:
+        """Read-modify-write the record under WATCH or fail closed.
 
         WATCH/MULTI/EXEC turns the sequence into an optimistic transaction: if
         another process writes the key between the read and the exec, EXEC fails
@@ -524,14 +1005,42 @@ class TaskManager:
                     try:
                         pipe.watch(key)
                         raw = pipe.get(key)
+                        reservation_state = None
                         if raw:
                             task = Task.from_dict(json.loads(raw))
+                            if task.idempotency_key is not None:
+                                reservation_key = self._idempotency_reservation_key(
+                                    task.idempotency_key
+                                )
+                                pipe.watch(reservation_key)
+                                reservation_state = (
+                                    self._validate_reservation_for_task(pipe, task)
+                                )
+                            if (
+                                expected_execution_owner is not None
+                                and task.execution_owner
+                                != expected_execution_owner
+                            ):
+                                raise TaskExecutionConflict(
+                                    "task_execution_fence_lost"
+                                )
                             self._apply(task, changes)
                         else:
+                            if expected_execution_owner is not None:
+                                raise TaskExecutionConflict(
+                                    "task_execution_not_found"
+                                )
                             task = self._new_placeholder(task_id, changes)
 
                         pipe.multi()
                         pipe.set(key, json.dumps(task.to_dict()), ex=TASK_TTL_SECONDS)
+                        if reservation_state is not None:
+                            reservation_key, raw_reservation = reservation_state
+                            pipe.set(
+                                reservation_key,
+                                raw_reservation,
+                                ex=TASK_TTL_SECONDS,
+                            )
                         pipe.zadd(TASK_INDEX_KEY, {task_id: self._index_score(task)})
                         pipe.execute()
                         return task
@@ -539,17 +1048,25 @@ class TaskManager:
                         continue
 
             logger.warning(
-                "Task %s update contended past %d attempts; retrying without "
-                "the transaction would risk losing a concurrent write",
+                "Task %s update contended past %d attempts; refusing an "
+                "unconditional fallback write",
                 task_id,
                 _MAX_UPDATE_ATTEMPTS,
             )
-            return None
+            raise TaskStateContentionError()
+        except TaskStateError:
+            raise
         except Exception as exc:
             self._drop_redis(exc)
-            return None
+            raise TaskStateUnavailable() from None
     
-    def complete_task(self, task_id: str, result: Dict):
+    def complete_task(
+        self,
+        task_id: str,
+        result: Dict,
+        *,
+        execution_owner: Optional[str] = None,
+    ):
         """Mark task as complete"""
         prior = self._status_of(task_id)
         self.update_task(
@@ -557,12 +1074,18 @@ class TaskManager:
             status=TaskStatus.COMPLETED,
             progress=100,
             message="Task completed",
-            result=result
+            result=result,
+            expected_execution_owner=execution_owner,
         )
         # Only audit a real transition. If prior is None the task never
         # existed (update_task created a placeholder); auditing it would
         # fabricate a transition event for a phantom entity.
-        if prior is not None and prior != TaskStatus.COMPLETED:
+        current = self._status_of(task_id)
+        if (
+            prior is not None
+            and prior != TaskStatus.COMPLETED
+            and current is TaskStatus.COMPLETED
+        ):
             _audit(
                 action="task.completed",
                 entity_type="task",
@@ -577,6 +1100,7 @@ class TaskManager:
         error: str,
         *,
         public_error: str = "task_failed",
+        execution_owner: Optional[str] = None,
     ):
         """Mark task as failed"""
         prior = self._status_of(task_id)
@@ -586,10 +1110,16 @@ class TaskManager:
             message="Task failed",
             error=error,
             public_error=public_error,
+            expected_execution_owner=execution_owner,
         )
         # Only audit a real transition for a task that actually existed
         # (see complete_task above).
-        if prior is not None and prior != TaskStatus.FAILED:
+        current = self._status_of(task_id)
+        if (
+            prior is not None
+            and prior != TaskStatus.FAILED
+            and current is TaskStatus.FAILED
+        ):
             _audit(
                 action="task.failed",
                 entity_type="task",
@@ -614,7 +1144,12 @@ class TaskManager:
             message="Task cancelled",
             result=result,
         )
-        if prior is not None and prior != TaskStatus.CANCELLED:
+        current = self._status_of(task_id)
+        if (
+            prior is not None
+            and prior != TaskStatus.CANCELLED
+            and current is TaskStatus.CANCELLED
+        ):
             _audit(
                 action="task.cancelled",
                 entity_type="task",

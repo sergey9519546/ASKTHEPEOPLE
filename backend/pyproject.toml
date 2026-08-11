@@ -21,6 +21,13 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
     "psycopg[binary]>=3.2.0",  # PostgreSQL driver for SQLAlchemy 2 sync
+    # Supabase — Storage + Auth client (Postgres goes through SQLAlchemy/psycopg)
+    "supabase>=2.6.0",
+    "gotrue>=2.6.0",  # transitive but pinned for safety; supabase-py re-exports
+    # S3-compatible client (used against MinIO in local dev; supabase-py
+    # Storage path is used in cloud). Not required in production where
+    # supabase-py talks to the Supabase Storage HTTP API.
+    "minio>=7.2.0",
     # LLM-Related
     "openai>=1.0.0",
     # Zep Cloud
