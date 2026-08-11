@@ -530,7 +530,7 @@ const loadProject = async () => {
       response.data.graph_id
     ) {
       currentPhase.value = 2;
-      await loadGraph(response.data.graph_id);
+      await loadGraph(response.data.project_id, response.data.graph_id);
     }
   } catch (caughtError) {
     error.value = caughtError.message || "This workspace could not be loaded.";
@@ -605,7 +605,7 @@ const fetchGraphData = async () => {
     if (!projectResponse.success || !projectResponse.data?.graph_id) {
       return;
     }
-    const graphResponse = await getGraphData(projectResponse.data.graph_id);
+    const graphResponse = await getGraphData(projectResponse.data.project_id, projectResponse.data.graph_id);
     if (graphResponse.success) {
       graphData.value = graphResponse.data;
     } else {
@@ -658,7 +658,7 @@ const pollTaskStatus = async (taskId) => {
       const projectResponse = await getProject(currentProjectId.value);
       if (projectResponse.success && projectResponse.data?.graph_id) {
         projectData.value = projectResponse.data;
-        await loadGraph(projectResponse.data.graph_id);
+        await loadGraph(projectResponse.data.project_id, projectResponse.data.graph_id);
       }
     } else if (task.status === "failed") {
       stopPolling();
@@ -674,10 +674,10 @@ const pollTaskStatus = async (taskId) => {
   }
 };
 
-const loadGraph = async (graphId) => {
+const loadGraph = async (projectId, graphId) => {
   graphLoading.value = true;
   try {
-    const response = await getGraphData(graphId);
+    const response = await getGraphData(projectId, graphId);
     if (response.success) {
       graphData.value = response.data;
     } else {
@@ -691,7 +691,9 @@ const loadGraph = async (graphId) => {
 };
 
 const refreshGraph = () => {
-  if (projectData.value?.graph_id) loadGraph(projectData.value.graph_id);
+  if (projectData.value?.project_id && projectData.value?.graph_id) {
+    loadGraph(projectData.value.project_id, projectData.value.graph_id);
+  }
 };
 
 const stopPolling = () => {

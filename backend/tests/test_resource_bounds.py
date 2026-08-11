@@ -11,6 +11,8 @@ from app.config import Config
 from app.models.project import ProjectManager
 from app.models.task import TaskManager, TaskStatus
 from app.services import simulation_limits as simulation_limits_module
+from app.services.run_attempt_store import RunAttemptStore
+from app.services.runtime_control_store import RuntimeControlStore
 from app.services.simulation_limits import resolve_total_rounds
 from app.services.simulation_manager import SimulationStatus
 from app.utils.file_parser import (
@@ -205,6 +207,8 @@ def test_prepare_rejects_graphs_with_too_many_profile_entities(
         prep_routes.ProjectManager,
         "get_project",
         lambda _project_id: SimpleNamespace(
+            graph_id="source-graph",
+            status="graph_completed",
             simulation_requirement="What paths could follow?"
         ),
     )
@@ -230,15 +234,6 @@ def test_ontology_upload_rejects_excessive_extracted_text(
 ):
     monkeypatch.setattr(ProjectManager, "PROJECTS_DIR", str(tmp_path / "projects"))
 
-    class FakeOntologyGenerator:
-        def generate(self, **_kwargs):
-            return {
-                "entity_types": [],
-                "edge_types": [],
-                "analysis_summary": "",
-            }
-
-    monkeypatch.setattr(graph_api, "OntologyGenerator", FakeOntologyGenerator)
     response = api_client.post(
         "/api/graph/ontology/generate",
         data={
@@ -257,6 +252,53 @@ def test_ontology_upload_rejects_excessive_extracted_text(
     assert response.status_code == 413
     assert response.get_json()["error"] == "extracted_text_too_large"
     assert ProjectManager.list_projects() == []
+
+
+def test_ontology_upload_binds_task_manager_id_to_celery_delivery(
+    api_client,
+    monkeypatch,
+    tmp_path,
+):
+    from app.tasks import graph_tasks
+
+    dispatched = []
+
+    class _TaskManager:
+        def create_task(self, *_args, **_kwargs):
+            return "ontology-task-1"
+
+    monkeypatch.setattr(ProjectManager, "PROJECTS_DIR", str(tmp_path / "projects"))
+    monkeypatch.setattr(graph_api, "TaskManager", _TaskManager)
+    monkeypatch.setattr(
+        graph_tasks.generate_ontology_task,
+        "apply_async",
+        lambda **kwargs: dispatched.append(kwargs),
+    )
+
+    response = api_client.post(
+        "/api/graph/ontology/generate",
+        data={
+            "simulation_requirement": "What paths could follow?",
+            "project_name": "Bounded upload",
+            "intended_use": "scenario_planning",
+            "use_policy_acknowledged": "true",
+            "files": (io.BytesIO(b"harmless source"), "source.txt"),
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 202
+    assert dispatched == [
+        {
+            "kwargs": {
+                "project_id": response.get_json()["data"]["project_id"],
+                "text": "\n\n=== source.txt ===\nharmless source",
+                "requirements": "What paths could follow?",
+                "task_id": "ontology-task-1",
+            },
+            "task_id": "ontology-task-1",
+        }
+    ]
 
 
 def test_generated_time_configuration_cannot_bypass_round_limit():
@@ -296,7 +338,11 @@ def test_generated_time_configuration_cannot_bypass_round_limit():
         )
 
 
-def _mock_parallel_platform_runtime(monkeypatch, applied_rounds):
+def _mock_parallel_platform_runtime(
+    monkeypatch,
+    applied_rounds,
+    control_store=None,
+):
     class FakeGraph:
         def get_agents(self):
             return []
@@ -323,6 +369,24 @@ def _mock_parallel_platform_runtime(monkeypatch, applied_rounds):
     async def apply_scheduled(**kwargs):
         applied_rounds.append((kwargs["platform"], kwargs["current_round"]))
         return 0
+
+    def load_control_store(simulation_dir):
+        if control_store is not None:
+            return control_store
+        attempts = RunAttemptStore()
+        attempt = attempts.read(simulation_dir)
+        if attempt is None:
+            attempt = attempts.acquire(
+                simulation_dir,
+                "sim-resource-bounds",
+                "worker-resource-bounds",
+                30,
+            )
+        return RuntimeControlStore(
+            simulation_dir,
+            attempt_id=attempt.attempt_id,
+            fencing_token=attempt.fencing_token,
+        )
 
     monkeypatch.setattr(
         parallel_runtime,
@@ -371,8 +435,8 @@ def _mock_parallel_platform_runtime(monkeypatch, applied_rounds):
     )
     monkeypatch.setattr(
         parallel_runtime,
-        "RedisEventConsumer",
-        lambda **_kwargs: SimpleNamespace(consume_events=lambda: []),
+        "_load_runtime_control_store",
+        load_control_store,
     )
     monkeypatch.setattr(
         parallel_runtime,
@@ -451,6 +515,55 @@ async def test_platform_loops_apply_exactly_the_resolved_round_count(
     assert applied_rounds == [
         (platform, round_num) for round_num in range(1, expected_rounds + 1)
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("platform", "runtime_entrypoint"),
+    [
+        ("twitter", parallel_runtime.run_twitter_simulation),
+        ("reddit", parallel_runtime.run_reddit_simulation),
+    ],
+)
+async def test_first_runtime_control_boundary_records_zero_completed_rounds(
+    monkeypatch,
+    tmp_path,
+    platform,
+    runtime_entrypoint,
+):
+    applied_rounds = []
+    attempt = RunAttemptStore().acquire(
+        str(tmp_path),
+        "sim-resource-bounds",
+        "worker-resource-bounds",
+        30,
+    )
+    store = RuntimeControlStore(
+        str(tmp_path),
+        attempt_id=attempt.attempt_id,
+        fencing_token=attempt.fencing_token,
+    )
+    control = store.enqueue("stop", {}, [platform])
+    _mock_parallel_platform_runtime(monkeypatch, applied_rounds, store)
+
+    result = await runtime_entrypoint(
+        {
+            "time_config": {
+                "total_simulation_hours": 1,
+                "minutes_per_round": 60,
+                "reflection_interval_rounds": 0,
+            }
+        },
+        str(tmp_path),
+    )
+
+    assert result.stop_requested is True
+    assert result.completed_rounds == 0
+    assert applied_rounds == []
+    status = store.get_status(control["control_id"])
+    assert status["status"] == "completed"
+    receipt = status["platform_statuses"][platform]
+    assert receipt["result"]["round_num"] == 0
 
 
 @pytest.mark.asyncio

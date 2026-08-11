@@ -16,9 +16,12 @@ from app.models.task import TaskManager, TaskStatus, Task
 from app.services.simulation_manager import SimulationManager, SimulationStatus
 from app.services.simulation_runner import SimulationRunner, RunnerStatus, SimulationRunState
 from app.tasks.simulation_tasks import (
+    finalize_decision_lens_preparation_task,
+    prepare_simulation_task,
     reconcile_stale_simulation_runs_task,
     run_simulation_task,
 )
+from app.tasks.graph_tasks import generate_ontology_task
 
 
 @pytest.fixture(autouse=True)
@@ -149,7 +152,7 @@ def test_simulation_start_dispatch_failure_fails_task_without_running_in_request
     monkeypatch.setattr(
         execution_api, "_check_simulation_prepared", lambda _sid: (True, {})
     )
-    monkeypatch.setattr(run_simulation_task, "delay", reject_dispatch)
+    monkeypatch.setattr(run_simulation_task, "apply_async", reject_dispatch)
     monkeypatch.setattr(
         SimulationRunner, "start_simulation", reject_direct_runner
     )
@@ -488,15 +491,21 @@ def test_prepare_simulation_returns_202_and_enqueues_task(monkeypatch, api_clien
     # Patch the heavy work so the test is fast and deterministic.
     captured_kwargs = {}
 
-    def fake_delay(**kwargs):
+    def fake_apply_async(*, kwargs, task_id):
         captured_kwargs.update(kwargs)
+        captured_kwargs["delivery_task_id"] = task_id
         return SimpleNamespace(id="celery-task-id-fake")
 
-    monkeypatch.setattr(prepare_simulation_task, "delay", staticmethod(fake_delay))
+    monkeypatch.setattr(
+        prepare_simulation_task,
+        "apply_async",
+        staticmethod(fake_apply_async),
+    )
 
     # Patch the synchronous entity-count read so the test does not hit Zep.
     fake_state = SimpleNamespace(
         project_id="proj_x",
+        graph_id="source-graph",
         entities_count=10,
         entity_types=["Student"],
         status=SimulationStatus.CREATED,
@@ -515,7 +524,11 @@ def test_prepare_simulation_returns_202_and_enqueues_task(monkeypatch, api_clien
     monkeypatch.setattr(
         SimulationManager, "_save_simulation_state", lambda self, state: None
     )
-    fake_project = SimpleNamespace(simulation_requirement="a decision")
+    fake_project = SimpleNamespace(
+        graph_id="source-graph",
+        status="graph_completed",
+        simulation_requirement="a decision",
+    )
     monkeypatch.setattr(
         "app.api.routes.prep_routes.ProjectManager.get_project",
         lambda project_id: fake_project,
@@ -553,3 +566,12 @@ def test_prepare_simulation_returns_202_and_enqueues_task(monkeypatch, api_clien
     assert captured_kwargs["entity_types"] is None
     assert captured_kwargs["use_llm_for_profiles"] is True
     assert captured_kwargs["document_text"] == ""  # no Zep reads
+def test_simulation_delivery_is_requeued_after_worker_loss():
+    for task in (
+        run_simulation_task,
+        prepare_simulation_task,
+        finalize_decision_lens_preparation_task,
+        generate_ontology_task,
+    ):
+        assert task.acks_late is True
+        assert task.reject_on_worker_lost is True

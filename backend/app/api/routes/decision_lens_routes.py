@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from http import HTTPStatus
 
 from flask import current_app, jsonify, request
@@ -9,7 +10,11 @@ from kombu.exceptions import OperationalError
 from pydantic import ValidationError
 
 from ...domain.decision_lens import DecisionLensV1, LensDispositionV1
-from ...models.task import TaskManager
+from ...models.task import (
+    TaskIdempotencyConflict,
+    TaskManager,
+    TaskStateError,
+)
 from ...services.decision_lens_repository import DecisionLensRepositoryError
 from ...services.decision_lens_review_service import (
     DecisionLensReviewService,
@@ -158,26 +163,42 @@ def put_decision_lens_review(simulation_id: str):
     idempotency_key = (
         f"decision-lens-finalize:{simulation_id}:{review.review_sha256}"
     )
-    existing_task_id = task_manager.find_in_flight_by_idempotency_key(
-        idempotency_key
-    )
-    task_id = existing_task_id or task_manager.create_task(
-        "decision_lens_finalize",
-        metadata={
-            "simulation_id": simulation_id,
-            "review_id": review.review_id,
-            "artifact_id": review.lens_artifact_id,
-        },
-        idempotency_key=idempotency_key,
-    )
-    if existing_task_id is None:
+    candidate_task_id = str(uuid.uuid4())
+    task_metadata = {
+        "simulation_id": simulation_id,
+        "review_id": review.review_id,
+        "artifact_id": review.lens_artifact_id,
+    }
+    try:
+        task_id = task_manager.create_task(
+            "decision_lens_finalize",
+            task_id=candidate_task_id,
+            metadata=task_metadata,
+            idempotency_key=idempotency_key,
+            idempotency_identity={
+                "simulation_id": simulation_id,
+                "review_sha256": review.review_sha256,
+            },
+        )
+    except TaskIdempotencyConflict:
+        return _error("idempotency_key_conflict", HTTPStatus.CONFLICT)
+    except TaskStateError:
+        return _error(
+            "decision_lens_task_state_unavailable",
+            HTTPStatus.SERVICE_UNAVAILABLE,
+        )
+
+    if task_id == candidate_task_id:
         from ...tasks.simulation_tasks import (
             finalize_decision_lens_preparation_task,
         )
 
         try:
-            finalize_decision_lens_preparation_task.delay(
-                simulation_id=simulation_id,
+            finalize_decision_lens_preparation_task.apply_async(
+                kwargs={
+                    "simulation_id": simulation_id,
+                    "task_id": task_id,
+                },
                 task_id=task_id,
             )
         except (ConnectionError, OSError, OperationalError, RuntimeError) as exc:

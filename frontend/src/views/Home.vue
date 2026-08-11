@@ -417,6 +417,7 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { getTemplates } from "../api/graph";
 import { getSimulationHistory } from "../api/simulation";
+import { fetchSourceUrls } from "../api/sources.js";
 import SettingsModal from "../components/SettingsModal.vue";
 import TruthRail from "../components/TruthRail.vue";
 import {
@@ -652,15 +653,9 @@ const fetchUrls = async () => {
   fetchingUrls.value = true;
   
   try {
-    const response = await fetch("/api/sources/fetch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls }),
-    });
+    const data = await fetchSourceUrls(urls);
     
-    const data = await response.json();
-    
-    if (!response.ok || !data.success) {
+    if (!data.success) {
       urlFetchError.value = data.error || "Failed to fetch URLs";
       return;
     }
@@ -686,7 +681,10 @@ const fetchUrls = async () => {
       urlFetchError.value = `Fetched ${successCount} URL${successCount === 1 ? "" : "s"}. ${failedCount} failed.`;
     }
   } catch (error) {
-    urlFetchError.value = `Network error: ${error.message}`;
+    urlFetchError.value =
+      error?.code === "ACCESS_REQUIRED"
+        ? "Access key required or invalid."
+        : "Failed to fetch URLs. Check the source and try again.";
   } finally {
     fetchingUrls.value = false;
   }

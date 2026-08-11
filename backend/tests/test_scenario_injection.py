@@ -2,17 +2,19 @@ import json
 import os
 import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
 
 import pytest
 
 from app import create_app
 from app.services.simulation_observation_store import (
     ensure_observation_store,
-    pop_in_memory_events,
-    push_in_memory_event,
 )
-from app.services.simulation_runtime_contract import apply_injected_events
-from scripts.run_parallel_simulation import RedisEventConsumer
+from app.services.simulation_runtime_contract import (
+    apply_injected_events,
+    apply_runtime_control,
+)
+from app.services.simulation_runner import RunnerStatus
 
 
 @pytest.fixture
@@ -23,8 +25,8 @@ def client():
         yield client
 
 
-def test_inject_endpoint_returns_200_and_publishes_event(client):
-    """Test that POST /api/simulation/<id>/inject returns HTTP 200 and publishes event."""
+def test_inject_endpoint_returns_202_and_enqueues_durable_control(client):
+    """The compatibility endpoint delegates to the durable control queue."""
     simulation_id = "sim_test_inject_200"
 
     mock_state = MagicMock()
@@ -32,15 +34,39 @@ def test_inject_endpoint_returns_200_and_publishes_event(client):
     mock_state.status = "running"
     mock_state.config = {"name": "Test Simulation"}
 
-    with patch("app.api.routes.execution_routes.SimulationManager") as mock_mgr_cls:
+    active_run = MagicMock()
+    active_run.runner_status = RunnerStatus.RUNNING
+    active_run.twitter_running = True
+    active_run.reddit_running = True
+    active_run.active_platforms = ["twitter", "reddit"]
+    active_run.attempt_id = "attempt-current"
+    active_run.fencing_token = 7
+
+    with (
+        patch("app.api.routes.execution_routes.SimulationManager") as mock_mgr_cls,
+        patch(
+            "app.api.routes.execution_routes.SimulationRunner.get_run_state",
+            return_value=active_run,
+        ),
+        patch(
+            "app.services.simulation_observation_store.push_in_memory_event",
+            side_effect=AssertionError("in-memory fallback must not be used"),
+        ),
+        patch("app.api.routes.execution_routes.RuntimeControlStore", create=True) as store_cls,
+    ):
         mock_mgr = MagicMock()
         mock_mgr.get_simulation.return_value = mock_state
         mock_mgr_cls.return_value = mock_mgr
+        store_cls.return_value.enqueue.return_value = {
+            "control_id": "control-123",
+            "command_type": "inject_event",
+            "status": "queued",
+            "platforms": ["twitter", "reddit"],
+        }
 
         payload = {
             "event_type": "breaking_news",
             "payload": {
-                "headline": "Breakthrough Announced!",
                 "content": "Major announcement alters current simulation topic dynamics."
             }
         }
@@ -51,31 +77,41 @@ def test_inject_endpoint_returns_200_and_publishes_event(client):
             content_type="application/json",
         )
 
-        assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.get_data(as_text=True)}"
+        assert response.status_code == 202, response.get_data(as_text=True)
         data = response.get_json()
         assert data["success"] is True
-        assert data["simulation_id"] == simulation_id
-        assert data["channel"] == f"simulation:{simulation_id}:events"
-        assert data["event"]["event_type"] == "breaking_news"
-        assert data["event"]["payload"]["headline"] == "Breakthrough Announced!"
-
-        events = pop_in_memory_events(simulation_id)
-        assert len(events) >= 1
-        assert events[0]["event_type"] == "breaking_news"
+        assert data["data"]["control_id"] == "control-123"
+        assert data["data"]["status"] == "queued"
+        store_cls.return_value.enqueue.assert_called_once_with(
+            "inject_event",
+            {
+                "event_type": "media_breaking_news",
+                "payload": {
+                    "content": "Major announcement alters current simulation topic dynamics.",
+                },
+                "targeting": {},
+                "reason": None,
+            },
+            ["twitter", "reddit"],
+            idempotency_key=None,
+        )
 
 
 def test_inject_endpoint_returns_404_for_missing_simulation(client):
     """Test that POST /api/simulation/<id>/inject returns HTTP 404 for non-existent simulation."""
     simulation_id = "sim_non_existent"
 
-    with patch("app.api.simulation.SimulationManager") as mock_mgr_cls:
+    with patch("app.api.routes.execution_routes.SimulationManager") as mock_mgr_cls:
         mock_mgr = MagicMock()
         mock_mgr.get_simulation.return_value = None
         mock_mgr_cls.return_value = mock_mgr
 
         response = client.post(
             f"/api/simulation/{simulation_id}/inject",
-            data=json.dumps({"event_type": "breaking_news"}),
+            data=json.dumps({
+                "event_type": "breaking_news",
+                "payload": {"content": "A valid event"},
+            }),
             content_type="application/json",
         )
 
@@ -85,58 +121,28 @@ def test_inject_endpoint_returns_404_for_missing_simulation(client):
         assert "Simulation does not exist" in data["error"]
 
 
-def test_redis_event_consumer_in_memory_fallback():
-    """Test that RedisEventConsumer retrieves events pushed to in-memory fallback queue."""
-    simulation_id = "sim_test_consumer_fallback"
-
-    event_payload = {
-        "simulation_id": simulation_id,
-        "event_type": "persona_modification",
-        "payload": {
-            "agent_id": 42,
-            "instruction": "Adopt an optimistic outlook on economic news."
+@pytest.mark.parametrize(
+    "event_type",
+    [
+        "persona_modification",
+        "persona_change",
+        "dynamic_instruction",
+        "inject_post",
+    ],
+)
+def test_compatibility_inject_rejects_instruction_and_command_variants(
+    client,
+    event_type,
+):
+    response = client.post(
+        "/api/simulation/sim-reject-event/inject",
+        json={
+            "event_type": event_type,
+            "payload": {"content": "Untrusted event content"},
         },
-        "timestamp": "2026-07-29T16:00:00Z"
-    }
+    )
 
-    push_in_memory_event(simulation_id, event_payload)
-
-    consumer = RedisEventConsumer(simulation_id=simulation_id, redis_url="memory://")
-    events = consumer.consume_events()
-
-    assert len(events) >= 1
-    matched = [e for e in events if e.get("event_type") == "persona_modification"]
-    assert len(matched) == 1
-    assert matched[0]["payload"]["agent_id"] == 42
-    assert matched[0]["payload"]["instruction"] == "Adopt an optimistic outlook on economic news."
-
-
-def test_redis_event_consumer_in_memory_fallback_isolates_platform_consumers():
-    """Test that both platform consumers receive the same fallback event when targeting both."""
-    simulation_id = "sim_test_consumer_dual_platform"
-    event_payload = {
-        "simulation_id": simulation_id,
-        "event_type": "breaking_news",
-        "payload": {"announcement": "Cross-platform fallback test"},
-        "platforms": ["twitter", "reddit"],
-        "timestamp": "2026-07-29T17:00:00Z",
-    }
-
-    push_in_memory_event(simulation_id, event_payload)
-
-    twitter_consumer = RedisEventConsumer(simulation_id=simulation_id, redis_url="memory://", platform="twitter")
-    reddit_consumer = RedisEventConsumer(simulation_id=simulation_id, redis_url="memory://", platform="reddit")
-
-    twitter_events = twitter_consumer.consume_events()
-    reddit_events = reddit_consumer.consume_events()
-
-    assert len(twitter_events) == 1
-    assert len(reddit_events) == 1
-    assert twitter_events[0]["event_type"] == "breaking_news"
-    assert reddit_events[0]["payload"]["announcement"] == "Cross-platform fallback test"
-
-    exhausted = pop_in_memory_events(simulation_id)
-    assert exhausted == []
+    assert response.status_code == 422
 
 
 @pytest.mark.asyncio
@@ -227,6 +233,61 @@ async def test_apply_injected_events_record_and_execute():
         assert intervention_payload["_intervention"]["resolved_agent_ids"] == [1]
         assert intervention_payload["_intervention"]["applied_agent_ids"] == [1]
         assert intervention_payload["_intervention"]["applied_target_count"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("command_type", "args"),
+    [
+        (
+            "inject_post",
+            {"content": "Targeted notice", "agent_id": 999},
+        ),
+        (
+            "inject_event",
+            {
+                "event_type": "seed_post",
+                "payload": {"content": "Targeted event"},
+                "targeting": {"poster_agent_id": 999},
+            },
+        ),
+    ],
+)
+async def test_runtime_control_explicit_unknown_id_never_falls_back(
+    tmp_path,
+    command_type,
+    args,
+):
+    agent = MagicMock()
+    env = MagicMock()
+    env.agent_graph.get_agent.side_effect = lambda agent_id: {
+        4: agent,
+    }[agent_id]
+    env.step = AsyncMock()
+
+    result = await apply_runtime_control(
+        env=env,
+        simulation_dir=str(tmp_path),
+        config={
+            "agent_configs": [
+                {
+                    "agent_id": 4,
+                    "platform_preference": "twitter",
+                    "influence_weight": 1.0,
+                }
+            ]
+        },
+        platform="twitter",
+        command_type=command_type,
+        args=args,
+        agent_names={4: "Agent_4"},
+        manual_action_cls=MagicMock(),
+        action_type_cls=SimpleNamespace(CREATE_POST="CREATE_POST"),
+        round_num=0,
+    )
+
+    assert result["applied_count"] == 0
+    env.step.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -80,6 +80,25 @@ def test_production_auth_requirement_is_validated(monkeypatch):
     assert any("APP_TOKEN" in error for error in Config.validate())
 
 
+@pytest.mark.parametrize(
+    "public_build_placeholder",
+    ("build-validation-model-key", "build-validation-zep-key"),
+)
+def test_public_build_placeholders_cannot_be_private_app_credentials(
+    monkeypatch,
+    public_build_placeholder,
+):
+    monkeypatch.setattr(Config, "DEBUG", False)
+    monkeypatch.setattr(Config, "REQUIRE_APP_AUTH", True)
+    monkeypatch.setattr(Config, "SECRET_KEY", public_build_placeholder)
+    monkeypatch.setattr(Config, "APP_TOKEN", public_build_placeholder)
+
+    errors = Config.validate()
+
+    assert any("SECRET_KEY" in error for error in errors)
+    assert any("APP_TOKEN" in error for error in errors)
+
+
 def test_application_factory_refuses_required_auth_without_token():
     class MissingRequiredAuthConfig(Config):
         REQUIRE_APP_AUTH = True

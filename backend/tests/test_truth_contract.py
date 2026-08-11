@@ -6,6 +6,7 @@ Note: These tests validate the truth contract implementation structure.
 Full API integration tests require Flask test client setup.
 """
 
+import ast
 import sys
 import os
 import json
@@ -82,8 +83,16 @@ class TestAPIMetadataIntegration:
         with open(api_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        assert "from ..utils.response import truth_metadata" in content, \
-            "report.py does not import truth_metadata"
+        tree = ast.parse(content)
+        imports_truth_metadata = any(
+            isinstance(node, ast.ImportFrom)
+            and node.level == 2
+            and node.module == "utils.response"
+            and any(alias.name == "truth_metadata" for alias in node.names)
+            for node in ast.walk(tree)
+        )
+
+        assert imports_truth_metadata, "report.py does not import truth_metadata"
         assert "**truth_metadata()" in content, \
             "report.py does not use truth_metadata in responses"
     
@@ -118,6 +127,11 @@ class TestAPIMetadataIntegration:
         app = Flask(__name__)
         with mock.patch.object(entity_routes, "truth_metadata", fake_truth_metadata), \
                 mock.patch.object(entity_routes, "ZepEntityReader", FakeReader), \
+                mock.patch.object(
+                    entity_routes,
+                    "resolve_project_graph",
+                    return_value=SimpleNamespace(graph_id="g1"),
+                ), \
                 mock.patch.object(entity_routes.Config, "ZEP_API_KEY", "test-key"):
             handlers = [
                 lambda: entity_routes.get_graph_entities("g1"),
@@ -125,7 +139,7 @@ class TestAPIMetadataIntegration:
                 lambda: entity_routes.get_entities_by_type("g1", "Person"),
             ]
             for handler in handlers:
-                with app.test_request_context():
+                with app.test_request_context("/?project_id=project-1"):
                     payload = handler().get_json()
                 assert payload["success"] is True
                 assert payload.get("truth_metadata") == "present", (
@@ -247,10 +261,16 @@ class TestTruthRailComponent:
         with open(component_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        # Check for required disclosure elements
-        assert "SYNTHETIC EXPLORATION" in content
-        assert "0 human respondents" in content
-        assert "Non-representative sample" in content
+        required_truth_statements = (
+            "ACTIONS + ANSWERS: SYNTHETIC",
+            "HUMAN RESPONDENTS: 0",
+            "NOT A FORECAST",
+            "SOURCES: STARTING CONDITIONS ONLY",
+            "HUMAN VALIDATION: OUTSIDE THIS RUN",
+        )
+
+        for statement in required_truth_statements:
+            assert statement in content
     
     def test_truth_rail_styling(self):
         """Verify TruthRail has prominent styling (yellow background)"""

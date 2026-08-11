@@ -11,6 +11,7 @@ from app.models.task import TaskManager, TaskStatus
 from app.services.decision_lens_repository import DecisionLensRepository
 from app.services.simulation_manager import SimulationStatus
 from tests.domain.test_decision_lens import valid_artifact, valid_review
+from tests.test_task_manager_durability import FakeRedis
 
 APP_TOKEN = "review-secret-0123456789-abcdef-xyz"
 
@@ -51,6 +52,10 @@ def review_api(tmp_path, monkeypatch):
         APP_TOKEN=APP_TOKEN,
         REQUIRE_APP_AUTH=True,
     )
+    task_manager = TaskManager()
+    monkeypatch.setattr(task_manager, "_tasks", {}, raising=False)
+    monkeypatch.setattr(task_manager, "_redis_client", FakeRedis(), raising=False)
+    monkeypatch.setattr(task_manager, "_redis_retry_at", 0.0, raising=False)
     manager = SimulationManager()
     state = manager.create_simulation("project-review", "graph-review")
     state.status = SimulationStatus.NEEDS_REVIEW
@@ -110,7 +115,7 @@ def test_patch_creates_revision_and_stales_prior_review(review_api, monkeypatch)
 
     monkeypatch.setattr(
         finalize_decision_lens_preparation_task,
-        "delay",
+        "apply_async",
         lambda **_kwargs: SimpleNamespace(id="finalize-first"),
     )
     approved = review_api.client.put(
@@ -157,15 +162,16 @@ def test_approved_review_enqueues_finalization(review_api, monkeypatch) -> None:
     captured: dict = {}
     dispatches: list[dict] = []
 
-    def fake_delay(**kwargs):
+    def fake_apply_async(*, kwargs, task_id):
         captured.update(kwargs)
-        dispatches.append(dict(kwargs))
+        captured["delivery_task_id"] = task_id
+        dispatches.append({**kwargs, "delivery_task_id": task_id})
         return SimpleNamespace(id="celery-finalize")
 
     monkeypatch.setattr(
         finalize_decision_lens_preparation_task,
-        "delay",
-        fake_delay,
+        "apply_async",
+        fake_apply_async,
     )
     response = review_api.client.put(
         f"/api/simulation/{review_api.state.simulation_id}/decision-lens-review",
@@ -181,6 +187,7 @@ def test_approved_review_enqueues_finalization(review_api, monkeypatch) -> None:
     assert captured == {
         "simulation_id": review_api.state.simulation_id,
         "task_id": data["task_id"],
+        "delivery_task_id": data["task_id"],
     }
 
     duplicate = review_api.client.put(
@@ -198,7 +205,7 @@ def test_broker_failure_fails_task_and_returns_503(review_api, monkeypatch) -> N
 
     monkeypatch.setattr(
         finalize_decision_lens_preparation_task,
-        "delay",
+        "apply_async",
         lambda **_kwargs: (_ for _ in ()).throw(ConnectionError("broker down")),
     )
     response = review_api.client.put(
@@ -214,3 +221,20 @@ def test_broker_failure_fails_task_and_returns_503(review_api, monkeypatch) -> N
     assert task is not None
     assert task.status == TaskStatus.FAILED
     assert task.public_error == "decision_lens_finalization_dispatch_unavailable"
+
+
+def test_task_state_outage_returns_stable_503(review_api, monkeypatch) -> None:
+    task_manager = TaskManager()
+    monkeypatch.setattr(task_manager, "_get_redis", lambda: None)
+
+    response = review_api.client.put(
+        f"/api/simulation/{review_api.state.simulation_id}/decision-lens-review",
+        json=review_body(),
+        headers=review_api.headers,
+    )
+
+    assert response.status_code == 503
+    assert response.get_json() == {
+        "success": False,
+        "error": "decision_lens_task_state_unavailable",
+    }

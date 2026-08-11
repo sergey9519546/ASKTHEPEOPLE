@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   askSyntheticProfiles: vi.fn(),
   exportGeneratedResponsesCSV: vi.fn(),
   getRunStatusDetail: vi.fn(),
+  getSimulationControlStatus: vi.fn(),
   getSimulationOpinions: vi.fn(),
   getSimulationProfilesRealtime: vi.fn(),
   stopSimulation: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock("../api/simulation", () => ({
   askSyntheticProfiles: mocks.askSyntheticProfiles,
   exportGeneratedResponsesCSV: mocks.exportGeneratedResponsesCSV,
   getRunStatusDetail: mocks.getRunStatusDetail,
+  getSimulationControlStatus: mocks.getSimulationControlStatus,
   getSimulationOpinions: mocks.getSimulationOpinions,
   getSimulationProfilesRealtime: mocks.getSimulationProfilesRealtime,
   stopSimulation: mocks.stopSimulation,
@@ -114,6 +116,10 @@ beforeEach(() => {
   mocks.getAgentLog.mockResolvedValue(successfulLogs);
   mocks.getSimulationProfilesRealtime.mockResolvedValue(successfulProfiles);
   mocks.getRunStatusDetail.mockResolvedValue(successfulRunStatus);
+  mocks.getSimulationControlStatus.mockResolvedValue({
+    success: true,
+    data: { control_id: "control-stop", status: "queued" },
+  });
   mocks.getSimulationOpinions.mockResolvedValue({
     success: true,
     data: { opinions: [] },
@@ -124,9 +130,222 @@ afterEach(() => {
   while (mountedWrappers.length > 0) {
     mountedWrappers.pop().unmount();
   }
+  vi.useRealTimers();
 });
 
 describe("Step 5 workspace resilience", () => {
+  it("queues stop and polls its durable receipt without claiming stopped on 202", async () => {
+    mocks.getRunStatusDetail
+      .mockResolvedValueOnce({
+        success: true,
+        data: {
+          ...successfulRunStatus.data,
+          runner_status: "running",
+          current_round: 3,
+        },
+      })
+      .mockResolvedValue({
+        success: true,
+        data: {
+          ...successfulRunStatus.data,
+          runner_status: "stopping",
+          current_round: 3,
+        },
+      });
+    mocks.stopSimulation.mockResolvedValue({
+      success: true,
+      status: "queued",
+      data: { control_id: "control-stop", status: "queued" },
+    });
+
+    const wrapper = mountStep5();
+    await flushPromises();
+    const stopButton = wrapper.get("button.stop-run");
+    await stopButton.trigger("click");
+    await stopButton.trigger("click");
+    await flushPromises();
+
+    expect(mocks.getSimulationControlStatus).toHaveBeenCalledWith(
+      "simulation-test",
+      "control-stop",
+    );
+    expect(wrapper.get("button.stop-run").text()).toContain("Stop queued");
+    const logMessages = (wrapper.emitted("add-log") || []).flat();
+    expect(logMessages).toContain("Stop request queued. Waiting for the runtime worker.");
+    expect(logMessages.some((message) => /run stopped/i.test(message))).toBe(false);
+    expect(wrapper.text()).toContain("Stopping");
+  });
+
+  it("reports stopped only after the persisted run state is stopped", async () => {
+    vi.useFakeTimers();
+    mocks.getRunStatusDetail
+      .mockResolvedValueOnce({
+        success: true,
+        data: { ...successfulRunStatus.data, runner_status: "running" },
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        data: { ...successfulRunStatus.data, runner_status: "stopping" },
+      })
+      .mockResolvedValue({
+        success: true,
+        data: { ...successfulRunStatus.data, runner_status: "stopped" },
+      });
+    mocks.getSimulationControlStatus
+      .mockResolvedValueOnce({
+        success: true,
+        data: { control_id: "control-stop", status: "processing" },
+      })
+      .mockResolvedValue({
+        success: true,
+        data: { control_id: "control-stop", status: "completed" },
+      });
+    mocks.stopSimulation.mockResolvedValue({
+      success: true,
+      status: "queued",
+      data: { control_id: "control-stop", status: "queued" },
+    });
+
+    const wrapper = mountStep5();
+    await flushPromises();
+    await wrapper.get("button.stop-run").trigger("click");
+    await wrapper.get("button.stop-run").trigger("click");
+    await flushPromises();
+
+    let logMessages = (wrapper.emitted("add-log") || []).flat();
+    expect(logMessages.some((message) => /run stopped/i.test(message))).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    await flushPromises();
+
+    logMessages = (wrapper.emitted("add-log") || []).flat();
+    expect(logMessages).toContain("Scenario run stopped.");
+    expect(wrapper.text()).toContain("Stopped");
+  });
+
+  it("ends queued stop state on a failed receipt without exposing backend errors", async () => {
+    mocks.getRunStatusDetail.mockResolvedValue({
+      success: true,
+      data: { ...successfulRunStatus.data, runner_status: "running" },
+    });
+    mocks.stopSimulation.mockResolvedValue({
+      success: true,
+      status: "queued",
+      data: { control_id: "control-stop", status: "queued" },
+    });
+    mocks.getSimulationControlStatus.mockResolvedValue({
+      success: true,
+      data: {
+        control_id: "control-stop",
+        status: "failed",
+        errors: { twitter: "private worker path and provider detail" },
+      },
+    });
+
+    const wrapper = mountStep5();
+    await flushPromises();
+    await wrapper.get("button.stop-run").trigger("click");
+    await wrapper.get("button.stop-run").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get("button.stop-run").text()).toBe("Stop the run");
+    expect(wrapper.get(".inline-error").text()).toContain(
+      "The run remains active",
+    );
+    expect(wrapper.text()).toContain("Running");
+    expect(wrapper.text()).not.toContain("private worker path");
+    const logMessages = (wrapper.emitted("add-log") || []).flat();
+    expect(logMessages).toContain(
+      "The stop request failed. The run remains active; check live status and retry.",
+    );
+    expect(logMessages.some((message) => /run stopped/i.test(message))).toBe(false);
+  });
+
+  it("clears a prior simulation stop control when the workspace context changes", async () => {
+    mocks.getRunStatusDetail.mockResolvedValue({
+      success: true,
+      data: { ...successfulRunStatus.data, runner_status: "running" },
+    });
+    mocks.stopSimulation.mockResolvedValue({
+      success: true,
+      status: "queued",
+      data: { control_id: "control-stop", status: "queued" },
+    });
+
+    const wrapper = mountStep5();
+    await flushPromises();
+    await wrapper.get("button.stop-run").trigger("click");
+    await wrapper.get("button.stop-run").trigger("click");
+    await flushPromises();
+    expect(wrapper.get("button.stop-run").text()).toContain("Stop queued");
+
+    await wrapper.setProps({
+      reportId: "report-new",
+      simulationId: "simulation-new",
+    });
+    await flushPromises();
+
+    expect(wrapper.get("button.stop-run").text()).toBe("Stop the run");
+    expect(mocks.getSimulationControlStatus).not.toHaveBeenCalledWith(
+      "simulation-new",
+      "control-stop",
+    );
+  });
+
+  it("ends pending stop UI when the persisted run fails instead of stopping", async () => {
+    mocks.getRunStatusDetail
+      .mockResolvedValueOnce({
+        success: true,
+        data: { ...successfulRunStatus.data, runner_status: "running" },
+      })
+      .mockResolvedValue({
+        success: true,
+        data: {
+          ...successfulRunStatus.data,
+          runner_status: "failed",
+          error: "private provider traceback",
+        },
+      });
+    mocks.stopSimulation.mockResolvedValue({
+      success: true,
+      status: "queued",
+      data: { control_id: "control-stop", status: "queued" },
+    });
+    mocks.getSimulationControlStatus.mockResolvedValue({
+      success: true,
+      data: { control_id: "control-stop", status: "completed" },
+    });
+
+    const wrapper = mountStep5();
+    await flushPromises();
+    await wrapper.get("button.stop-run").trigger("click");
+    await wrapper.get("button.stop-run").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find("button.stop-run").exists()).toBe(false);
+    expect(wrapper.get('[data-testid="stop-terminal-state"]').text()).toContain(
+      "Needs attention",
+    );
+    expect(wrapper.get('[data-testid="stop-terminal-state"]').text()).toContain(
+      "failed before a stopped state was confirmed",
+    );
+    expect(wrapper.text()).not.toContain("private provider traceback");
+    const logMessages = (wrapper.emitted("add-log") || []).flat();
+    expect(logMessages.some((message) => /run stopped/i.test(message))).toBe(false);
+  });
+
+  it("labels a persisted paused run without inventing a frontend state", async () => {
+    mocks.getRunStatusDetail.mockResolvedValue({
+      success: true,
+      data: { ...successfulRunStatus.data, runner_status: "paused" },
+    });
+
+    const wrapper = mountStep5();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("Paused");
+  });
+
   it("keeps unresolved records in an explicit loading state instead of showing empty content", async () => {
     const reportRequest = deferred();
     const logRequest = deferred();

@@ -6,7 +6,24 @@ from flask import Blueprint, jsonify, current_app
 from redis import Redis
 from sqlalchemy import text
 
+from ..config import Config
+from ..services.zep_dependency_status import (
+    check_zep_dependency as _check_zep_dependency,
+)
+from ..utils.logger import get_logger
+from ..utils.build_revision import resolve_deployed_revision
+
 health_bp = Blueprint('health', __name__)
+logger = get_logger('askthepeople.health')
+
+
+def _revision() -> str:
+    return resolve_deployed_revision() or 'unknown'
+
+
+def check_zep_dependency():
+    """Read the cached, sanitized status for the configured Zep project."""
+    return _check_zep_dependency(Config.ZEP_API_KEY)
 
 
 def check_database():
@@ -43,8 +60,8 @@ def check_celery():
         stats = inspector.stats()
         return stats is not None and len(stats) > 0
     except Exception:
-        # Celery not configured or not available
-        return True  # Don't fail health check if Celery not set up yet
+        # Keep web liveness independent, but never claim an unverified worker.
+        return False
 
 
 @health_bp.route('/', methods=['GET'], strict_slashes=False)
@@ -87,11 +104,7 @@ def health():
         # status string as well would break the established probe contract.
         'status': 'ok' if all_ok else 'degraded',
         'service': 'ASKTHEPEOPLE Backend',
-        'revision': (
-            os.environ.get('RAILWAY_GIT_COMMIT_SHA')
-            or os.environ.get('BUILD_REVISION')
-            or 'unknown'
-        ),
+        'revision': _revision(),
         'components': {
             'storage': 'ok' if storage_writable else 'error',
             'database': 'ok' if db_ok else 'degraded',
@@ -107,7 +120,7 @@ def health():
 
 @health_bp.route('/readiness', methods=['GET'], strict_slashes=False)
 def readiness():
-    """Readiness probe — all dependencies must be available."""
+    """Readiness probe for required web and graph-backed dependencies."""
     upload_folder = os.path.abspath(current_app.config['UPLOAD_FOLDER'])
 
     try:
@@ -124,15 +137,46 @@ def readiness():
     redis_ok = check_redis()
     celery_ok = check_celery()
 
-    ready = storage_writable and db_ok and redis_ok
+    try:
+        zep_status = check_zep_dependency()
+    except Exception as exc:
+        logger.warning(
+            "Zep readiness status failed reason=probe_failed exception=%s",
+            type(exc).__name__,
+            extra={"privacy_safe": True},
+        )
+        zep_status = {
+            'status': 'error',
+            'reason': 'probe_failed',
+            'cached': False,
+            'stale': False,
+            'checked_at': None,
+            'age_seconds': 0.0,
+        }
+
+    zep_ready = (
+        zep_status.get('status') == 'ok'
+        and zep_status.get('reason') == 'available'
+        and zep_status.get('stale') is False
+    )
+    ready = storage_writable and db_ok and redis_ok and zep_ready
 
     payload = {
         'status': 'ready' if ready else 'not_ready',
+        'scope': 'web',
+        'revision': _revision(),
         'components': {
             'storage': 'ok' if storage_writable else 'error',
             'database': 'ok' if db_ok else 'error',
             'redis': 'ok' if redis_ok else 'error',
             'celery': 'ok' if celery_ok else 'degraded',
+            'zep': 'ok' if zep_ready else 'error',
+        },
+        'dependencies': {
+            'zep': zep_status,
+        },
+        'capabilities': {
+            'web_graph_backed': 'ready' if zep_ready else 'unavailable',
         },
         # Flat keys for backward compatibility with test_health_readiness
         'storage': 'ok' if storage_writable else 'error',

@@ -4,28 +4,37 @@ Step 2: Zep Entity Reading & Filtering, OASIS Simulation Preparation & Running (
 """
 
 import traceback
-from flask import request, jsonify
+import uuid
 
-from .. import simulation_bp
-from ..simulation import (
-    _with_profile_truth,
-    _validate_prepare_controls,
-    _check_simulation_prepared,
+from flask import jsonify, request
+
+from app.api.schemas import (
+    CreateSimulationRequest,
+    PrepareSimulationRequest,
+    validate_schema,
 )
-from .. import limiter
+
 from ...config import Config
-from ...services.zep_entity_reader import ZepEntityReader
-from ...services.oasis_profile_generator import OasisProfileGenerator
-from ...services.simulation_manager import SimulationManager, SimulationStatus
+from ...models.project import ProjectManager
 from ...services.claim_boundary import (
     fictional_profile_disclosure,
     synthetic_output_disclosure,
 )
+from ...services.graph_association import (
+    GraphAssociationError,
+    resolve_project_graph,
+)
+from ...services.oasis_profile_generator import OasisProfileGenerator
+from ...services.simulation_manager import SimulationManager, SimulationStatus
+from ...services.zep_entity_reader import ZepEntityReader
+from ...utils.input_policy import PREPARE_ENTITY_MAX, InputPolicyError
 from ...utils.logger import get_logger
-from ...utils.input_policy import InputPolicyError, PREPARE_ENTITY_MAX
-from ...models.project import ProjectManager
-
-from app.api.schemas import CreateSimulationRequest, PrepareSimulationRequest, validate_schema
+from .. import limiter, simulation_bp
+from ..simulation import (
+    _check_simulation_prepared,
+    _validate_prepare_controls,
+    _with_profile_truth,
+)
 
 logger = get_logger('askthepeople.api.simulation')
 
@@ -82,19 +91,8 @@ def create_simulation():
                 "error": "Please provide project_id"
             }), 400
         
-        project = ProjectManager.get_project(project_id)
-        if not project:
-            return jsonify({
-                "success": False,
-                "error": f"Project does not exist: {project_id}"
-            }), 404
-        
-        graph_id = data.get('graph_id') or project.graph_id
-        if not graph_id:
-            return jsonify({
-                "success": False,
-                "error": "Graph not yet built for the project, please call /api/graph/build first"
-            }), 400
+        association = resolve_project_graph(project_id, data.get('graph_id'))
+        graph_id = association.graph_id
         
         manager = SimulationManager()
         state = manager.create_simulation(
@@ -109,13 +107,17 @@ def create_simulation():
             "data": state.to_dict()
         })
         
-    except Exception as e:
-        logger.error(f"Failed to create simulation: {str(e)}")
+    except GraphAssociationError as exc:
+        return jsonify({"success": False, "error": exc.code}), exc.status_code
+    except Exception as exc:
+        logger.error(
+            "simulation creation unavailable exception_type=%s",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "simulation_create_unavailable",
+        }), 503
 
 @simulation_bp.route('/prepare', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
@@ -160,8 +162,8 @@ def prepare_simulation():
             }
         }
     """
-    from ...models.task import TaskManager
     from ...config import Config
+    from ...models.task import TaskManager
     
     try:
         data = request.get_json() or {}
@@ -245,12 +247,9 @@ def prepare_simulation():
                 logger.info(f"Simulation {simulation_id} Preparation not complete, starting preparation task")
         
         # Get required info from project
-        project = ProjectManager.get_project(state.project_id)
-        if not project:
-            return jsonify({
-                "success": False,
-                "error": f"Project does not exist: {state.project_id}"
-            }), 404
+        association = resolve_project_graph(state.project_id, state.graph_id)
+        project = association.project
+        graph_id = association.graph_id
         
         # Get simulation requirements
         simulation_requirement = project.simulation_requirement or ""
@@ -273,11 +272,11 @@ def prepare_simulation():
         # ========== Synchronously get entity count (before background task start) ==========
         # This allows the frontend to get the expected total Agent count immediately after calling prepare
         try:
-            logger.info(f"Synchronously get entity count: graph_id={state.graph_id}")
+            logger.info(f"Synchronously get entity count: graph_id={graph_id}")
             reader = ZepEntityReader()
             # Fast read entities (count only, no edge info needed)
             filtered_preview = reader.filter_defined_entities(
-                graph_id=state.graph_id,
+                graph_id=graph_id,
                 defined_entity_types=entity_types_list,
                 enrich_with_edges=False  # Speed up by not retrieving edge info
             )
@@ -295,8 +294,11 @@ def prepare_simulation():
             state.entities_count = filtered_preview.filtered_count
             state.entity_types = list(filtered_preview.entity_types)
             logger.info(f"Expected entity count: {filtered_preview.filtered_count}, types: {filtered_preview.entity_types}")
-        except Exception as e:
-            logger.warning(f"Failed to synchronously get entity count (will retry in background task): {e}")
+        except Exception as exc:
+            logger.warning(
+                "synchronous entity preview unavailable exception_type=%s",
+                type(exc).__name__,
+            )
             # Failure does not affect subsequent steps as the background task will retry
         
         # Create background task. An optional Idempotency-Key header dedupes
@@ -306,29 +308,23 @@ def prepare_simulation():
         idempotency_key = request.headers.get("Idempotency-Key") or None
         task_manager = TaskManager()
 
-        # If a prepare for this key is already in flight, hand back that
-        # task_id and skip enqueueing a duplicate worker job. NOTE: there is a
-        # benign TOCTOU window between this find and create_task below — two
-        # concurrent requests with the same key could both see None here and
-        # both reach the enqueue step. create_task also dedupes under its lock,
-        # so they would share one task_id, but both would enqueue a worker job.
-        # This is safe today because the web runs as a single worker (Procfile
-        # --workers 1); the multi-worker case is the gate 2/4 blocker. Moving
-        # the dedup fully behind a single atomic create-or-return call is part
-        # of that work.
-        already_in_flight_task_id = None
-        if idempotency_key:
-            already_in_flight_task_id = task_manager.find_in_flight_by_idempotency_key(
-                idempotency_key
-            )
-
-        task_id = already_in_flight_task_id or task_manager.create_task(
+        candidate_task_id = str(uuid.uuid4())
+        task_id = task_manager.create_task(
             task_type="simulation_prepare",
+            task_id=candidate_task_id,
             metadata={
                 "simulation_id": simulation_id,
                 "project_id": state.project_id
             },
             idempotency_key=idempotency_key,
+            idempotency_identity=(
+                {
+                    "simulation_id": simulation_id,
+                    "project_id": state.project_id,
+                }
+                if idempotency_key
+                else None
+            ),
         )
 
         # Update simulation state (including pre-fetched entity count)
@@ -338,20 +334,23 @@ def prepare_simulation():
         # Only enqueue the worker job for a genuinely new task. A deduped
         # (already-in-flight) submission returns the existing task_id and
         # does not start a second preparation run.
-        if not already_in_flight_task_id:
+        if task_id == candidate_task_id:
             from ...tasks.simulation_tasks import prepare_simulation_task
 
-            prepare_simulation_task.delay(
-                simulation_id=simulation_id,
+            prepare_simulation_task.apply_async(
+                kwargs={
+                    "simulation_id": simulation_id,
+                    "task_id": task_id,
+                    "entity_types": entity_types_list,
+                    "use_llm_for_profiles": use_llm_for_profiles,
+                    "parallel_profile_count": parallel_profile_count,
+                    "use_archetypes": use_archetypes,
+                    "archetype_count": archetype_count,
+                    "expansion_factor": expansion_factor,
+                    "simulation_requirement": simulation_requirement,
+                    "document_text": document_text,
+                },
                 task_id=task_id,
-                entity_types=entity_types_list,
-                use_llm_for_profiles=use_llm_for_profiles,
-                parallel_profile_count=parallel_profile_count,
-                use_archetypes=use_archetypes,
-                archetype_count=archetype_count,
-                expansion_factor=expansion_factor,
-                simulation_requirement=simulation_requirement,
-                document_text=document_text,
             )
 
         response = jsonify({
@@ -368,19 +367,17 @@ def prepare_simulation():
         })
         return response, 202, {"Location": f"/api/jobs/{task_id}"}
         
-    except ValueError as e:
+    except GraphAssociationError as exc:
+        return jsonify({"success": False, "error": exc.code}), exc.status_code
+    except Exception as exc:
+        logger.error(
+            "simulation preparation unavailable exception_type=%s",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e)
-        }), 404
-        
-    except Exception as e:
-        logger.error(f"Failed to start preparation task: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "simulation_prepare_unavailable",
+        }), 503
 
 @simulation_bp.route('/prepare/status', methods=['POST'])
 def get_prepare_status():
@@ -502,7 +499,8 @@ def generate_profiles():
     
     Request (JSON):
         {
-            "graph_id": "atp_xxxx",           // Required
+            "project_id": "proj_xxxx",        // Required
+            "graph_id": "atp_xxxx",           // Optional; must match project
             "entity_types": ["Student"],      // Optional
             "use_llm": true,                  // Optional
             "platform": "reddit"              // Optional
@@ -511,12 +509,11 @@ def generate_profiles():
     try:
         data = request.get_json() or {}
         
-        graph_id = data.get('graph_id')
-        if not graph_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide graph_id"
-            }), 400
+        association = resolve_project_graph(
+            data.get('project_id'),
+            data.get('graph_id'),
+        )
+        graph_id = association.graph_id
         
         entity_types = data.get('entity_types')
         use_llm = data.get('use_llm', True)
@@ -561,13 +558,17 @@ def generate_profiles():
             "disclosure": synthetic_output_disclosure(),
         })
         
-    except Exception as e:
-        logger.error(f"Failed to generate profile: {str(e)}")
+    except GraphAssociationError as exc:
+        return jsonify({"success": False, "error": exc.code}), exc.status_code
+    except Exception as exc:
+        logger.error(
+            "profile generation unavailable exception_type=%s",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "profile_generation_unavailable",
+        }), 503
 
 @simulation_bp.route('/<simulation_id>/preflight', methods=['GET'])
 def get_simulation_preflight(simulation_id: str):

@@ -1,5 +1,6 @@
 """Regression coverage for runtime defects found during the July 2026 audit."""
 
+import asyncio
 import json
 import os
 import sys
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from flask import Flask
 
@@ -25,7 +26,12 @@ from app.services.simulation_runner import (
     SimulationRunState,
     SimulationRunner,
 )
-from app.services.run_attempt_store import RunAttemptHeld, RunAttemptStore
+from app.services.run_attempt_store import (
+    RunAttemptHeld,
+    RunAttemptStore,
+    StaleRunAttempt,
+)
+from app.services.runtime_control_store import RuntimeControlStore
 from app.services.zep_entity_reader import EntityNode
 from scripts.run_parallel_simulation import ParallelIPCHandler
 
@@ -169,48 +175,20 @@ def test_task_list_route_accepts_task_manager_serialized_dtos(monkeypatch):
     assert "generated_at" in payload
 
 
-def test_stop_simulation_terminates_runtime_and_releases_resources(
+def test_stop_simulation_compatibility_service_only_queues_durable_control(
     monkeypatch,
     tmp_path,
 ):
-    class FakeProcess:
-        pid = 123
-
-        def __init__(self):
-            self.running = True
-            self.returncode = None
-
-        def poll(self):
-            return None if self.running else self.returncode
-
-    class FakeHandle:
-        def __init__(self):
-            self.closed = False
-
-        def close(self):
-            self.closed = True
-
     simulation_id = "sim-stop"
     state = SimulationRunState(
         simulation_id=simulation_id,
         runner_status=RunnerStatus.RUNNING,
         twitter_running=True,
         reddit_running=True,
+        active_platforms=["twitter", "reddit"],
+        attempt_id="attempt-stop",
+        fencing_token=5,
     )
-    process = FakeProcess()
-    stdout = FakeHandle()
-    persisted = []
-    observed = []
-
-    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: state})
-    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
-    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
-    monkeypatch.setattr(SimulationRunner, "_action_queues", {simulation_id: object()})
-    monkeypatch.setattr(SimulationRunner, "_stdout_files", {simulation_id: stdout})
-    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
-    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
-    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
-    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
     monkeypatch.setattr(
         SimulationRunner,
         "_get_run_state_dir",
@@ -218,39 +196,32 @@ def test_stop_simulation_terminates_runtime_and_releases_resources(
     )
     monkeypatch.setattr(
         SimulationRunner,
-        "_save_run_state",
-        staticmethod(lambda saved_state: persisted.append(saved_state.runner_status)),
+        "get_run_state",
+        classmethod(lambda _cls, _simulation_id: state),
     )
-
-    def terminate(fake_process, _simulation_id):
-        fake_process.running = False
-        fake_process.returncode = -15
-
     monkeypatch.setattr(
         SimulationRunner,
         "_terminate_process",
-        staticmethod(terminate),
+        staticmethod(
+            lambda *_args: (_ for _ in ()).throw(
+                AssertionError("compatibility service must not own the child")
+            )
+        ),
     )
-    monkeypatch.setattr(
-        simulation_runner_module,
-        "sync_observation_store",
-        lambda _path, run_state: observed.append(run_state["runner_status"]),
-    )
 
-    stopped = SimulationRunner.stop_simulation(simulation_id)
+    returned = SimulationRunner.stop_simulation(simulation_id)
 
-    assert stopped.runner_status == RunnerStatus.STOPPED
-    assert stopped.twitter_running is False
-    assert stopped.reddit_running is False
-    assert stopped.completed_at
-    assert persisted == [RunnerStatus.STOPPING, RunnerStatus.STOPPED]
-    assert observed == [RunnerStatus.STOPPED.value]
-    assert simulation_id not in SimulationRunner._processes
-    assert simulation_id not in SimulationRunner._action_queues
-    assert stdout.closed is True
+    assert returned is state
+    assert returned.runner_status == RunnerStatus.RUNNING
+    store = RuntimeControlStore(str(tmp_path))
+    manifests = list((store.manifests_dir).glob("*.json"))
+    assert len(manifests) == 1
+    control = json.loads(manifests[0].read_text(encoding="utf-8"))
+    assert control["command_type"] == "stop"
+    assert control["expected_platforms"] == ["twitter", "reddit"]
 
 
-def test_monitor_preserves_intentional_stop_for_nonzero_exit(
+def test_monitor_does_not_claim_stopped_without_current_receipt_and_clean_exit(
     monkeypatch,
     tmp_path,
 ):
@@ -289,10 +260,159 @@ def test_monitor_preserves_intentional_stop_for_nonzero_exit(
 
     monitored = SimulationRunner._monitor_simulation(simulation_id)
 
-    assert monitored.runner_status == RunnerStatus.STOPPED
-    assert monitored.error is None
+    assert monitored.runner_status == RunnerStatus.FAILED
+    assert "Exit code: -15" in monitored.error
     assert monitored.twitter_running is False
     assert monitored.completed_at
+
+
+def test_monitor_marks_clean_exit_stopped_from_current_attempt_receipts(
+    monkeypatch,
+    tmp_path,
+):
+    simulation_id = "sim-monitor-durable-stop"
+    state = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        twitter_running=True,
+        active_platforms=["twitter"],
+        attempt_id="attempt-1",
+        fencing_token=4,
+    )
+    store = RuntimeControlStore(
+        str(tmp_path), attempt_id="attempt-1", fencing_token=4
+    )
+    control = store.enqueue("stop", {}, ["twitter"])
+    command = store.claim_next("twitter")
+    store.write_platform_state(
+        "twitter",
+        {
+            "status": "stopped",
+            "decision": "stop",
+            "round_num": 3,
+            "last_control_id": control["control_id"],
+        },
+    )
+    store.complete(
+        "twitter", command, {"state": "stop_requested", "round_num": 3}
+    )
+    process = SimpleNamespace(poll=lambda: 0, returncode=0)
+
+    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: state})
+    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        staticmethod(lambda _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_save_run_state",
+        staticmethod(lambda _state: None),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "sync_observation_store",
+        lambda _path, run_state: None,
+    )
+
+    monitored = SimulationRunner._monitor_simulation(simulation_id)
+
+    assert monitored.runner_status == RunnerStatus.STOPPED
+    assert monitored.error is None
+
+
+def test_monitor_projects_current_attempt_paused_and_running_platform_states(tmp_path):
+    state = SimulationRunState(
+        simulation_id="sim-monitor-pause-resume",
+        runner_status=RunnerStatus.RUNNING,
+        active_platforms=["twitter", "reddit"],
+        attempt_id="attempt-current",
+        fencing_token=5,
+    )
+    store = RuntimeControlStore(
+        str(tmp_path),
+        attempt_id="attempt-current",
+        fencing_token=5,
+    )
+    store.write_platform_state("twitter", {"status": "paused", "round_num": 2})
+    store.write_platform_state("reddit", {"status": "paused", "round_num": 2})
+
+    SimulationRunner._apply_runtime_control_state(str(tmp_path), state)
+    assert state.runner_status == RunnerStatus.PAUSED
+
+    store.write_platform_state("twitter", {"status": "running", "round_num": 2})
+    SimulationRunner._apply_runtime_control_state(str(tmp_path), state)
+    assert state.runner_status == RunnerStatus.RUNNING
+
+
+def test_stale_prior_attempt_stop_receipt_cannot_classify_current_run_stopped(
+    monkeypatch,
+    tmp_path,
+):
+    simulation_id = "sim-monitor-stale-stop"
+    state = SimulationRunState(
+        simulation_id=simulation_id,
+        runner_status=RunnerStatus.RUNNING,
+        twitter_running=True,
+        active_platforms=["twitter"],
+        attempt_id="attempt-current",
+        fencing_token=8,
+    )
+    stale_store = RuntimeControlStore(
+        str(tmp_path), attempt_id="attempt-prior", fencing_token=7
+    )
+    stale_control = stale_store.enqueue("stop", {}, ["twitter"])
+    stale_command = stale_store.claim_next("twitter")
+    stale_store.write_platform_state(
+        "twitter",
+        {
+            "status": "stopped",
+            "decision": "stop",
+            "last_control_id": stale_control["control_id"],
+        },
+    )
+    stale_store.complete(
+        "twitter", stale_command, {"state": "stopped", "decision": "stop"}
+    )
+    process = SimpleNamespace(poll=lambda: 0, returncode=0)
+
+    monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: state})
+    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
+    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
+    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
+    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
+    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
+    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
+    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_get_run_state_dir",
+        staticmethod(lambda _simulation_id: str(tmp_path)),
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "_save_run_state",
+        staticmethod(lambda _state: None),
+    )
+    monkeypatch.setattr(
+        simulation_runner_module,
+        "sync_observation_store",
+        lambda _path, run_state: None,
+    )
+
+    monitored = SimulationRunner._monitor_simulation(simulation_id)
+
+    assert monitored.runner_status == RunnerStatus.COMPLETED
+    assert monitored.error is None
 
 
 def test_load_run_state_is_pure_for_active_persisted_state(monkeypatch, tmp_path):
@@ -575,43 +695,28 @@ def test_get_run_state_does_not_create_process_local_control_reference(
     assert control_references == {}
 
 
-def test_get_run_state_preserves_control_reference_used_by_stop(monkeypatch, tmp_path):
+def test_stop_service_uses_durable_snapshot_without_process_local_control(
+    monkeypatch, tmp_path
+):
     simulation_id = "sim-durable-stop-reference"
     durable = SimulationRunState(
         simulation_id=simulation_id,
         runner_status=RunnerStatus.RUNNING,
         current_round=7,
+        twitter_running=True,
+        active_platforms=["twitter"],
+        attempt_id="attempt-stop",
+        fencing_token=8,
     )
     control = SimulationRunState(
         simulation_id=simulation_id,
         runner_status=RunnerStatus.RUNNING,
         current_round=1,
     )
-
-    class LiveProcess:
-        pid = 123
-        returncode = None
-
-        def __init__(self):
-            self.running = True
-
-        def poll(self):
-            return None if self.running else self.returncode
-
-    process = LiveProcess()
     (tmp_path / "run_state.json").write_text(
         json.dumps(durable.to_detail_dict()), encoding="utf-8"
     )
-    saved_statuses = []
     monkeypatch.setattr(SimulationRunner, "_run_states", {simulation_id: control})
-    monkeypatch.setattr(SimulationRunner, "_processes", {simulation_id: process})
-    monkeypatch.setattr(SimulationRunner, "_monitor_threads", {})
-    monkeypatch.setattr(SimulationRunner, "_action_queues", {})
-    monkeypatch.setattr(SimulationRunner, "_stdout_files", {})
-    monkeypatch.setattr(SimulationRunner, "_stderr_files", {})
-    monkeypatch.setattr(SimulationRunner, "_graph_memory_enabled", {})
-    monkeypatch.setattr(SimulationRunner, "_follower_engines", {})
-    monkeypatch.setattr(SimulationRunner, "_follower_agents", {})
     monkeypatch.setattr(
         SimulationRunner,
         "_get_run_state_dir",
@@ -619,35 +724,23 @@ def test_get_run_state_preserves_control_reference_used_by_stop(monkeypatch, tmp
     )
     monkeypatch.setattr(
         SimulationRunner,
-        "_save_run_state",
-        classmethod(
-            lambda _cls, state: saved_statuses.append(state.runner_status)
+        "_terminate_process",
+        staticmethod(
+            lambda *_args: (_ for _ in ()).throw(
+                AssertionError("durable stop must not terminate a local child")
+            )
         ),
     )
 
-    def terminate(fake_process, _simulation_id):
-        fake_process.running = False
-        fake_process.returncode = -15
-
-    monkeypatch.setattr(
-        SimulationRunner,
-        "_terminate_process",
-        staticmethod(terminate),
-    )
-    monkeypatch.setattr(
-        simulation_runner_module,
-        "sync_observation_store",
-        lambda _path, run_state: None,
-    )
-
     snapshot = SimulationRunner.get_run_state(simulation_id)
-    stopped = SimulationRunner.stop_simulation(simulation_id)
+    returned = SimulationRunner.stop_simulation(simulation_id)
 
     assert snapshot.current_round == 7
-    assert stopped is control
-    assert control.runner_status == RunnerStatus.STOPPED
-    assert process.poll() == -15
-    assert saved_statuses == [RunnerStatus.STOPPING, RunnerStatus.STOPPED]
+    assert returned.current_round == 7
+    assert control.runner_status == RunnerStatus.RUNNING
+    store = RuntimeControlStore(str(tmp_path))
+    manifests = list(store.manifests_dir.glob("*.json"))
+    assert len(manifests) == 1
 
 
 def test_get_run_state_preserves_control_reference_used_by_monitor(
@@ -698,8 +791,8 @@ def test_get_run_state_preserves_control_reference_used_by_monitor(
 
     assert snapshot.current_round == 7
     assert monitored is control
-    assert control.runner_status == RunnerStatus.STOPPED
-    assert control.error is None
+    assert control.runner_status == RunnerStatus.FAILED
+    assert "Exit code: -15" in control.error
 
 
 def test_reconcile_stale_run_interrupts_without_inspecting_processes(
@@ -1171,27 +1264,57 @@ def test_startup_failure_heartbeats_ownership_until_child_exits(
     assert simulation_id not in SimulationRunner._processes
 
 
-def test_live_injection_returns_pubsub_contract(monkeypatch):
+def test_live_injection_returns_durable_queue_contract(monkeypatch):
     app = Flask(__name__)
 
-    mock_state = SimpleNamespace(simulation_id="sim-1", status="running", config={})
+    mock_state = SimpleNamespace(
+        simulation_id="sim-1",
+        status="running",
+        config={},
+        enable_twitter=True,
+        enable_reddit=True,
+    )
     mock_mgr = MagicMock()
     mock_mgr.get_simulation.return_value = mock_state
     # execution_routes owns the registered /<id>/inject handler; the copy in
     # api/simulation.py is undecorated and never serves a request.
     monkeypatch.setattr(execution_routes, "SimulationManager", lambda: mock_mgr)
+    monkeypatch.setattr(
+        execution_routes.SimulationRunner,
+        "get_run_state",
+        lambda sid: SimpleNamespace(
+            runner_status=RunnerStatus.RUNNING,
+            active_platforms=["twitter", "reddit"],
+            twitter_running=True,
+            reddit_running=True,
+            attempt_id="attempt-1",
+            fencing_token=1,
+        ),
+    )
+    store = MagicMock()
+    store.enqueue.return_value = {
+        "control_id": "control-1",
+        "command_type": "inject_event",
+        "platforms": ["twitter", "reddit"],
+        "status": "queued",
+    }
+    monkeypatch.setattr(
+        execution_routes,
+        "RuntimeControlStore",
+        lambda *args, **kwargs: store,
+    )
 
     with app.test_request_context(
         json={"content": "Breaking update", "platform": "parallel"}
     ):
         response = execution_routes.inject_simulation_event("sim-1")
 
-    body, status = response
-    assert status == 200
-    payload = body.get_json()
+    assert response.status_code == 202
+    payload = response.get_json()
     assert payload["success"] is True
     assert payload["simulation_id"] == "sim-1"
-    assert payload["channel"] == "simulation:sim-1:events"
+    assert payload["data"]["control_id"] == "control-1"
+    assert response.headers["Location"].endswith("/control/control-1")
 
 
 def test_saved_run_summary_exposes_resume_contract(monkeypatch):
@@ -1333,37 +1456,424 @@ def _persisted_state_factory(status):
     return SimpleNamespace(status=status)
 
 
-def test_stop_route_persists_stopped_not_paused(execution_client, monkeypatch):
-    """/stop must persist SimulationStatus.STOPPED when the runner reports
-    STOPPED — not PAUSED (audit P1). Regression: the old code set PAUSED."""
+def test_stop_route_queues_durable_control_without_persisting_terminal_state(
+    execution_client, monkeypatch
+):
+    """The web worker cannot claim that an asynchronously queued stop finished."""
     from app.services.simulation_manager import SimulationManager, SimulationStatus
-    from app.services.simulation_runner import RunnerStatus
 
-    stopped_run_state = SimpleNamespace(
-        runner_status=RunnerStatus.STOPPED,
-        to_dict=lambda: {"runner_status": "stopped"},
+    active_run_state = SimpleNamespace(
+        runner_status=RunnerStatus.RUNNING,
+        active_platforms=["twitter"],
+        twitter_running=True,
+        reddit_running=False,
+        attempt_id="attempt-stop",
+        fencing_token=3,
+    )
+    monkeypatch.setattr(
+        execution_routes.SimulationRunner,
+        "get_run_state",
+        lambda simulation_id: active_run_state,
     )
     monkeypatch.setattr(
         execution_routes.SimulationRunner,
         "stop_simulation",
-        lambda simulation_id: stopped_run_state,
+        lambda simulation_id: (_ for _ in ()).throw(
+            AssertionError("web route must not stop a local process")
+        ),
     )
 
     persisted = {"status": None}
-    fake_state = _persisted_state_factory(SimulationStatus.RUNNING)
+    fake_state = SimpleNamespace(
+        status=SimulationStatus.RUNNING,
+        enable_twitter=True,
+        enable_reddit=False,
+    )
 
     def fake_save(self, state):
         persisted["status"] = state.status
 
     monkeypatch.setattr(SimulationManager, "get_simulation", lambda self, sid: fake_state)
     monkeypatch.setattr(SimulationManager, "_save_simulation_state", fake_save)
+    store = MagicMock()
+    store.enqueue.return_value = {
+        "control_id": "control-stop",
+        "command_type": "stop",
+        "status": "queued",
+        "platforms": ["twitter"],
+    }
+    monkeypatch.setattr(
+        execution_routes,
+        "RuntimeControlStore",
+        lambda *args, **kwargs: store,
+    )
 
     resp = execution_client.post(
         "/api/simulation/stop", json={"simulation_id": "sim_stop_p1"}
     )
-    assert resp.status_code == 200
-    assert persisted["status"] == SimulationStatus.STOPPED
-    assert persisted["status"] != SimulationStatus.PAUSED
+    assert resp.status_code == 202
+    assert persisted["status"] is None
+    assert resp.headers["Location"].endswith("/control/control-stop")
+    assert "stopped" not in resp.get_data(as_text=True).lower()
+
+
+def test_stop_retry_during_stopping_returns_existing_idempotent_control(
+    execution_client, monkeypatch
+):
+    from app.services.simulation_manager import SimulationManager, SimulationStatus
+
+    run_state = SimpleNamespace(
+        runner_status=RunnerStatus.STOPPING,
+        active_platforms=["twitter"],
+        twitter_running=True,
+        reddit_running=False,
+        attempt_id="attempt-stop",
+        fencing_token=3,
+    )
+    simulation = SimpleNamespace(
+        status=SimulationStatus.RUNNING,
+        enable_twitter=True,
+        enable_reddit=False,
+    )
+    monkeypatch.setattr(SimulationManager, "get_simulation", lambda self, sid: simulation)
+    monkeypatch.setattr(SimulationRunner, "get_run_state", lambda sid: run_state)
+    store = MagicMock()
+    store.enqueue.return_value = {
+        "control_id": "control-stop",
+        "command_type": "stop",
+        "status": "processing",
+        "platforms": ["twitter"],
+    }
+    monkeypatch.setattr(
+        execution_routes,
+        "RuntimeControlStore",
+        lambda *args, **kwargs: store,
+    )
+
+    response = execution_client.post(
+        "/api/simulation/stop", json={"simulation_id": "sim_stop_p1"}
+    )
+
+    assert response.status_code == 202
+    assert response.get_json()["status"] == "processing"
+    assert store.enqueue.call_args.kwargs["idempotency_key"].startswith(
+        "stop:attempt-stop:3"
+    )
+
+
+def test_force_restart_cannot_clean_or_dispatch_while_stop_is_processing(
+    execution_client, monkeypatch, tmp_path
+):
+    from app.services.simulation_manager import SimulationManager, SimulationStatus
+
+    simulation = SimpleNamespace(
+        status=SimulationStatus.RUNNING,
+        graph_id="source-graph",
+        enable_twitter=True,
+        enable_reddit=True,
+    )
+    run_state = SimpleNamespace(runner_status=RunnerStatus.STOPPING)
+    monkeypatch.setattr(SimulationManager, "get_simulation", lambda self, sid: simulation)
+    monkeypatch.setattr(SimulationRunner, "get_run_state", lambda sid: run_state)
+    monkeypatch.setattr(execution_routes, "_safe_sim_dir", lambda sid: str(tmp_path))
+    monkeypatch.setattr(
+        execution_routes,
+        "_check_simulation_prepared",
+        lambda sid: (True, {}),
+    )
+    monkeypatch.setattr(
+        execution_routes,
+        "assert_decision_lens_execution_admission",
+        lambda sim_dir: {},
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "cleanup_simulation_logs",
+        lambda sid: (_ for _ in ()).throw(
+            AssertionError("STOPPING run artifacts must not be cleaned")
+        ),
+    )
+
+    response = execution_client.post(
+        "/api/simulation/start",
+        json={"simulation_id": "sim-stop-in-flight", "force": True},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "active_run_stop_required"
+
+
+def test_force_restart_fails_closed_when_active_run_artifact_is_missing(
+    execution_client,
+    monkeypatch,
+):
+    from app.services.simulation_manager import SimulationManager, SimulationStatus
+
+    simulation = SimpleNamespace(
+        status=SimulationStatus.RUNNING,
+        graph_id="source-graph",
+        enable_twitter=True,
+        enable_reddit=True,
+    )
+    monkeypatch.setattr(SimulationManager, "get_simulation", lambda self, sid: simulation)
+    monkeypatch.setattr(SimulationRunner, "get_run_state", lambda sid: None)
+    monkeypatch.setattr(
+        execution_routes,
+        "_check_simulation_prepared",
+        lambda sid: (True, {}),
+    )
+    monkeypatch.setattr(
+        execution_routes,
+        "assert_decision_lens_execution_admission",
+        lambda sim_dir: {},
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "cleanup_simulation_logs",
+        lambda sid: (_ for _ in ()).throw(
+            AssertionError("missing active run state must not trigger cleanup")
+        ),
+    )
+
+    response = execution_client.post(
+        "/api/simulation/start",
+        json={"simulation_id": "sim-active-state-missing", "force": True},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "active_run_stop_required"
+
+
+def _owned_runtime_control_store(tmp_path):
+    attempt = RunAttemptStore().acquire(
+        str(tmp_path),
+        "sim-runtime-control-test",
+        "worker-runtime-control-test",
+        30,
+    )
+    return RuntimeControlStore(
+        str(tmp_path),
+        attempt_id=attempt.attempt_id,
+        fencing_token=attempt.fencing_token,
+    )
+
+
+@pytest.mark.asyncio
+async def test_round_boundary_processes_pause_injection_and_resume_in_sequence(
+    monkeypatch, tmp_path
+):
+    from scripts import run_parallel_simulation as runtime
+
+    store = _owned_runtime_control_store(tmp_path)
+    pause = store.enqueue("pause_after_round", {}, ["twitter"])
+    injection = store.enqueue(
+        "inject_event",
+        {
+            "event_type": "media_breaking_news",
+            "payload": {"content": "A boundary event"},
+            "targeting": {},
+        },
+        ["twitter"],
+    )
+    resume = store.enqueue("resume", {}, ["twitter"])
+    apply_control = AsyncMock(return_value={"applied_count": 1, "round_num": 4})
+    monkeypatch.setattr(runtime, "apply_runtime_control", apply_control)
+
+    outcome = await runtime._process_runtime_controls(
+        control_store=store,
+        platform="twitter",
+        env=MagicMock(),
+        simulation_dir=str(tmp_path),
+        config={"agent_configs": []},
+        current_round=4,
+        agent_names={},
+        action_logger=None,
+        poll_interval=0,
+    )
+
+    assert outcome == "continue"
+    assert store.get_status(pause["control_id"])["status"] == "completed"
+    assert store.get_status(injection["control_id"])["status"] == "completed"
+    assert store.get_status(resume["control_id"])["status"] == "completed"
+    state = store.get_platform_states()["twitter"]
+    assert state["status"] == "running"
+    assert state["last_control_id"] == resume["control_id"]
+    context = apply_control.await_args.kwargs["control_context"]
+    assert context == {
+        "control_id": injection["control_id"],
+        "attempt_id": store.attempt_id,
+        "fencing_token": store.fencing_token,
+        "platform": "twitter",
+        "round_num": 4,
+    }
+
+
+@pytest.mark.asyncio
+async def test_zero_effect_injection_gets_failed_not_completed_receipt(
+    monkeypatch, tmp_path
+):
+    from scripts import run_parallel_simulation as runtime
+
+    store = _owned_runtime_control_store(tmp_path)
+    control = store.enqueue(
+        "inject_post", {"content": "No matching target"}, ["twitter"]
+    )
+    monkeypatch.setattr(
+        runtime,
+        "apply_runtime_control",
+        AsyncMock(return_value={"applied_count": 0, "round_num": 2}),
+    )
+
+    outcome = await runtime._process_runtime_controls(
+        control_store=store,
+        platform="twitter",
+        env=MagicMock(),
+        simulation_dir=str(tmp_path),
+        config={"agent_configs": []},
+        current_round=2,
+        agent_names={},
+        action_logger=None,
+        poll_interval=0,
+    )
+
+    assert outcome == "continue"
+    status = store.get_status(control["control_id"])
+    assert status["status"] == "failed"
+    assert "no runtime effect" in status["errors"]["twitter"]
+
+
+@pytest.mark.asyncio
+async def test_stale_runtime_child_aborts_before_claim_or_effect(monkeypatch, tmp_path):
+    from scripts import run_parallel_simulation as runtime
+
+    attempts = RunAttemptStore()
+    old_attempt = attempts.acquire(
+        str(tmp_path),
+        "sim-stale-runtime-child",
+        "worker-old",
+        30,
+    )
+    store = RuntimeControlStore(
+        str(tmp_path),
+        attempt_id=old_attempt.attempt_id,
+        fencing_token=old_attempt.fencing_token,
+    )
+    control = store.enqueue(
+        "inject_post",
+        {"content": "Must never be applied"},
+        ["twitter"],
+    )
+    attempts.release(
+        str(tmp_path),
+        old_attempt.attempt_id,
+        old_attempt.fencing_token,
+        "failed",
+    )
+    attempts.acquire(
+        str(tmp_path),
+        "sim-stale-runtime-child",
+        "worker-new",
+        30,
+    )
+    apply_control = AsyncMock(return_value={"applied_count": 1})
+    monkeypatch.setattr(runtime, "apply_runtime_control", apply_control)
+
+    with pytest.raises(StaleRunAttempt):
+        await runtime._process_runtime_controls(
+            control_store=store,
+            platform="twitter",
+            env=MagicMock(),
+            simulation_dir=str(tmp_path),
+            config={"agent_configs": []},
+            current_round=0,
+            agent_names={},
+            action_logger=None,
+            poll_interval=0,
+        )
+
+    apply_control.assert_not_awaited()
+    assert store.get_status(control["control_id"])["status"] == "queued"
+    assert not list((store.root / "receipts" / "twitter").glob("*.json"))
+
+
+@pytest.mark.asyncio
+async def test_post_loop_stop_writes_state_then_current_attempt_receipt(tmp_path):
+    from scripts import run_parallel_simulation as runtime
+
+    store = _owned_runtime_control_store(tmp_path)
+    control = store.enqueue("stop", {}, ["reddit"])
+    persistence_order = []
+    write_platform_state = store.write_platform_state
+    complete = store.complete
+
+    def recording_write_platform_state(platform, state):
+        write_platform_state(platform, state)
+        written = store.get_platform_states()[platform]
+        persistence_order.append(("state", written["status"], written.get("decision")))
+
+    def recording_complete(platform, command, result_payload):
+        persisted = store.get_platform_states()[platform]
+        assert persisted["status"] == "stopped"
+        assert persisted["decision"] == "stop"
+        persistence_order.append(("receipt", result_payload["state"], result_payload["decision"]))
+        return complete(platform, command, result_payload)
+
+    store.write_platform_state = recording_write_platform_state
+    store.complete = recording_complete
+
+    result = runtime.PlatformSimulation()
+    result.control_store = store
+    result.env = MagicMock()
+    result.completed_rounds = 9
+    result.agent_names = {}
+    result.action_logger = None
+
+    stopped = await runtime._process_post_loop_controls(
+        config={"agent_configs": []},
+        simulation_dir=str(tmp_path),
+        twitter_result=None,
+        reddit_result=result,
+    )
+
+    assert stopped is True
+    state = store.get_platform_states()["reddit"]
+    assert state["status"] == "stopped"
+    assert state["attempt_id"] == store.attempt_id
+    status = store.get_status(control["control_id"])
+    assert status["status"] == "completed"
+    receipt = status["platform_statuses"]["reddit"]
+    assert receipt["result"]["state"] == "stopped"
+    assert receipt["result"]["decision"] == "stop"
+    assert receipt["result"]["round_num"] == 9
+    assert persistence_order[-2:] == [
+        ("state", "stopped", "stop"),
+        ("receipt", "stopped", "stop"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_paused_runtime_control_poll_honors_shutdown_event(monkeypatch, tmp_path):
+    from scripts import run_parallel_simulation as runtime
+
+    store = _owned_runtime_control_store(tmp_path)
+    store.write_platform_state("twitter", {"status": "paused", "round_num": 2})
+    shutdown = asyncio.Event()
+    shutdown.set()
+    monkeypatch.setattr(runtime, "_shutdown_event", shutdown)
+
+    outcome = await runtime._process_runtime_controls(
+        control_store=store,
+        platform="twitter",
+        env=MagicMock(),
+        simulation_dir=str(tmp_path),
+        config={"agent_configs": []},
+        current_round=3,
+        agent_names={},
+        action_logger=None,
+        poll_interval=0,
+    )
+
+    assert outcome == "shutdown"
 
 
 def test_close_env_route_does_not_mark_completed_on_failure(execution_client, monkeypatch):

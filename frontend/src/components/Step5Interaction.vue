@@ -183,7 +183,7 @@
         <button
           type="button"
           class="stop-run"
-          :disabled="isStopping"
+          :disabled="isStopping || isStopPending"
           @click="
             confirmingStop
               ? handleStopSimulation()
@@ -192,14 +192,18 @@
         >
           {{
             isStopping
-              ? "Stopping…"
-              : confirmingStop
-                ? "Confirm stop"
-                : "Stop the run"
+              ? "Queuing stop…"
+              : isStopPending
+                ? stopControlStatus === "queued"
+                  ? "Stop queued…"
+                  : "Stopping…"
+                : confirmingStop
+                  ? "Confirm stop"
+                  : "Stop the run"
           }}
         </button>
         <button
-          v-if="confirmingStop && !isStopping"
+          v-if="confirmingStop && !isStopping && !isStopPending"
           type="button"
           class="keep-running"
           @click="confirmingStop = false"
@@ -208,6 +212,18 @@
         </button>
       </div>
       <p v-if="stopError" class="inline-error" role="alert">{{ stopError }}</p>
+    </section>
+
+    <section
+      v-if="workspaceLoadState === 'ready' && stopTerminalMessage"
+      class="connection-state"
+      role="status"
+      data-testid="stop-terminal-state"
+    >
+      <div>
+        <p>{{ runStatusLabel(runStatus?.runner_status) }}</p>
+        <span>{{ stopTerminalMessage }}</span>
+      </div>
     </section>
 
     <main
@@ -768,6 +784,7 @@ import {
   askSyntheticProfiles,
   exportGeneratedResponsesCSV,
   getRunStatusDetail,
+  getSimulationControlStatus,
   getSimulationProfilesRealtime,
   stopSimulation,
 } from "../api/simulation";
@@ -801,6 +818,10 @@ const chatHistoryCache = reactive({});
 const profiles = ref([]);
 const conversationError = ref("");
 const stopError = ref("");
+const stopControlId = ref("");
+const stopControlStatus = ref("");
+const stopCompletionAnnounced = ref(false);
+const stopFailureAnnounced = ref(false);
 
 const runStatus = ref(null);
 const recentActions = ref([]);
@@ -835,6 +856,8 @@ const runStatusLabel = (status) => {
   const labels = {
     starting: "Starting",
     running: "Running",
+    paused: "Paused",
+    stopping: "Stopping",
     completed: "Complete",
     stopped: "Stopped",
     failed: "Needs attention",
@@ -874,10 +897,41 @@ const profileName = (profile, index) =>
 const profileRole = (profile) =>
   profile?.profession || profile?.bio || "Generated character brief";
 
-const isSimRunning = computed(() =>
-  ["running", "starting"].includes(
-    String(runStatus.value?.runner_status || "").toLowerCase(),
-  ),
+const persistedRunnerStatus = computed(() =>
+  String(runStatus.value?.runner_status || "").toLowerCase(),
+);
+const persistedTerminalStatuses = new Set([
+  "stopped",
+  "failed",
+  "interrupted",
+  "completed",
+]);
+
+const isStopPending = computed(
+  () =>
+    Boolean(stopControlId.value) &&
+    stopControlStatus.value !== "failed" &&
+    !persistedTerminalStatuses.has(persistedRunnerStatus.value),
+);
+
+const stopTerminalMessage = computed(() => {
+  if (!stopControlId.value) return "";
+  const messages = {
+    failed:
+      "The run failed before a stopped state was confirmed. Review run diagnostics before retrying.",
+    interrupted:
+      "The run was interrupted before a stopped state was confirmed. Review the preserved run record before retrying.",
+    completed:
+      "The run completed before a stopped state was confirmed. Its completed artifacts remain available.",
+  };
+  return messages[persistedRunnerStatus.value] || "";
+});
+
+const isSimRunning = computed(
+  () =>
+    ["running", "starting", "paused", "stopping"].includes(
+      persistedRunnerStatus.value,
+    ) || isStopPending.value,
 );
 
 const conversationHeading = computed(() => {
@@ -968,6 +1022,56 @@ const useSuggestedQuestion = (question) => {
   chatInput.value = question;
 };
 
+const markStopReceiptFailed = () => {
+  stopControlStatus.value = "failed";
+  stopError.value =
+    "The stop request failed. The run remains active; check live status and retry.";
+  if (!stopFailureAnnounced.value) {
+    stopFailureAnnounced.value = true;
+    addLog(stopError.value);
+  }
+};
+
+const pollStopControl = async () => {
+  if (
+    !props.simulationId ||
+    !stopControlId.value ||
+    ["completed", "failed"].includes(stopControlStatus.value)
+  ) {
+    return;
+  }
+  try {
+    const response = await getSimulationControlStatus(
+      props.simulationId,
+      stopControlId.value,
+    );
+    if (!response?.success || !response.data) {
+      throw new Error("runtime_control_status_unavailable");
+    }
+    const status = String(response.data.status || "queued").toLowerCase();
+    if (status === "failed") {
+      markStopReceiptFailed();
+      return;
+    }
+    stopControlStatus.value = status;
+    stopError.value = "";
+  } catch {
+    stopError.value =
+      "The stop request is still pending, but its receipt is temporarily unavailable.";
+  }
+};
+
+const announcePersistedStop = () => {
+  if (
+    stopControlId.value &&
+    persistedRunnerStatus.value === "stopped" &&
+    !stopCompletionAnnounced.value
+  ) {
+    stopCompletionAnnounced.value = true;
+    addLog("Scenario run stopped.");
+  }
+};
+
 const pollStatus = async () => {
   if (!props.simulationId) {
     runStatusLoadState.value = "error";
@@ -988,9 +1092,13 @@ const pollStatus = async () => {
       recentActions.value = response.data.recent_actions || [];
       runStatusLoadState.value = "ready";
       pollingError.value = "";
+      await pollStopControl();
+      announcePersistedStop();
       emit(
         "update-status",
-        ["running", "starting"].includes(response.data.runner_status)
+        ["running", "starting", "paused", "stopping"].includes(
+          String(response.data.runner_status || "").toLowerCase(),
+        )
           ? "processing"
           : "ready",
       );
@@ -1031,9 +1139,21 @@ const handleStopSimulation = async () => {
     const response = await stopSimulation({
       simulation_id: props.simulationId,
     });
-    if (response.success) {
-      addLog("Scenario run stopped.");
+    const controlId = response?.data?.control_id;
+    if (response.success && controlId) {
+      stopControlId.value = controlId;
+      stopControlStatus.value = String(
+        response.data.status || response.status || "queued",
+      ).toLowerCase();
+      stopCompletionAnnounced.value = false;
+      stopFailureAnnounced.value = false;
+      addLog("Stop request queued. Waiting for the runtime worker.");
+      if (stopControlStatus.value === "failed") {
+        markStopReceiptFailed();
+      }
       await pollStatus();
+    } else {
+      throw new Error("The stop request did not return a durable control ID.");
     }
   } catch (error) {
     stopError.value =
@@ -1335,6 +1455,12 @@ const resetForNewContext = () => {
   selectedAgents.value = new Set();
   groupResponses.value = [];
   chatHistory.value = [];
+  stopControlId.value = "";
+  stopControlStatus.value = "";
+  stopCompletionAnnounced.value = false;
+  stopFailureAnnounced.value = false;
+  stopError.value = "";
+  confirmingStop.value = false;
   Object.keys(chatHistoryCache).forEach((key) => {
     delete chatHistoryCache[key];
   });

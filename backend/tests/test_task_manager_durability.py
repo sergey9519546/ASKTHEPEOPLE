@@ -8,7 +8,11 @@ Redis would make the contention cases timing-dependent.
 """
 
 import json
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +23,7 @@ from app.models.task import (
     TASK_TTL_SECONDS,
     Task,
     TaskManager,
+    TaskStateUnavailable,
     TaskStatus,
 )
 
@@ -32,8 +37,8 @@ class FakePipeline:
     def __init__(self, store):
         self._store = store
         self._queued = []
-        self._watching = None
-        self._watch_version = None
+        self._watching = ()
+        self._watch_versions = {}
 
     # -- context manager -------------------------------------------------- #
     def __enter__(self):
@@ -43,12 +48,16 @@ class FakePipeline:
         return False
 
     # -- immediate mode --------------------------------------------------- #
-    def watch(self, key):
-        self._watching = key
-        self._watch_version = self._store.versions.get(key, 0)
+    def watch(self, *keys):
+        self._watching = tuple(dict.fromkeys((*self._watching, *keys)))
+        for key in keys:
+            self._watch_versions.setdefault(
+                key,
+                self._store.versions.get(key, 0),
+            )
 
     def get(self, key):
-        if self._watching is not None:
+        if self._watching:
             return self._store.get(key)
         self._queued.append(("get", (key,)))
         return self
@@ -68,12 +77,13 @@ class FakePipeline:
     def execute(self):
         from redis.exceptions import WatchError
 
-        if self._watching is not None:
-            current = self._store.versions.get(self._watching, 0)
-            if current != self._watch_version:
-                raise WatchError("key changed under WATCH")
-        for name, args in self._queued:
-            getattr(self._store, name)(*args)
+        with self._store.lock:
+            for key, watched_version in self._watch_versions.items():
+                current = self._store.versions.get(key, 0)
+                if current != watched_version:
+                    raise WatchError("key changed under WATCH")
+            for name, args in self._queued:
+                getattr(self._store, name)(*args)
         self._queued = []
         return []
 
@@ -86,6 +96,7 @@ class FakeRedis:
         self.zsets = {}
         self.versions = {}
         self.ping_calls = 0
+        self.lock = threading.RLock()
 
     def ping(self):
         self.ping_calls += 1
@@ -95,22 +106,26 @@ class FakeRedis:
         return FakePipeline(self)
 
     def get(self, key):
-        return self.data.get(key)
+        with self.lock:
+            return self.data.get(key)
 
     def mget(self, keys):
         return [self.data.get(k) for k in keys]
 
     def set(self, key, value, ex=None):
-        self.data[key] = value
-        self.versions[key] = self.versions.get(key, 0) + 1
+        with self.lock:
+            self.data[key] = value
+            self.versions[key] = self.versions.get(key, 0) + 1
 
     def delete(self, key):
-        self.data.pop(key, None)
-        self.zsets.pop(key, None)
-        self.versions[key] = self.versions.get(key, 0) + 1
+        with self.lock:
+            self.data.pop(key, None)
+            self.zsets.pop(key, None)
+            self.versions[key] = self.versions.get(key, 0) + 1
 
     def zadd(self, key, mapping):
-        self.zsets.setdefault(key, {}).update(mapping)
+        with self.lock:
+            self.zsets.setdefault(key, {}).update(mapping)
 
     def zrem(self, key, *members):
         z = self.zsets.get(key, {})
@@ -149,6 +164,16 @@ def redis_manager(manager, monkeypatch):
     fake = FakeRedis()
     monkeypatch.setattr(manager, "_redis_client", fake, raising=False)
     return manager, fake
+
+
+def _isolated_manager(fake: FakeRedis) -> TaskManager:
+    """Build the independent state a second OS process would own."""
+    manager = object.__new__(TaskManager)
+    manager._tasks = {}
+    manager._task_lock = threading.Lock()
+    manager._redis_client = fake
+    manager._redis_retry_at = 0.0
+    return manager
 
 
 # --------------------------------------------------------------------------- #
@@ -262,6 +287,324 @@ def test_watch_conflict_is_retried_against_the_newer_value(redis_manager):
     )
 
 
+def test_watch_exhaustion_never_falls_back_to_an_unconditional_write(
+    redis_manager,
+):
+    """Contention must fail closed instead of clobbering terminal Redis state."""
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    stale = Task.from_dict(json.loads(fake.data[f"task:{task_id}"]))
+    manager.complete_task(task_id, {"winner": "newer-terminal-state"})
+    manager._tasks[task_id] = stale
+
+    class _AlwaysContendedPipeline(FakePipeline):
+        def execute(self):
+            if self._watching:
+                from redis.exceptions import WatchError
+
+                raise WatchError("continuous concurrent writer")
+            return super().execute()
+
+    fake.pipeline = lambda: _AlwaysContendedPipeline(fake)
+
+    with pytest.raises(RuntimeError, match="^task_state_contention$"):
+        manager.update_task(
+            task_id,
+            status=TaskStatus.PROCESSING,
+            progress=80,
+        )
+
+    stored = json.loads(fake.data[f"task:{task_id}"])
+    assert stored["status"] == TaskStatus.COMPLETED.value
+    assert stored["result"] == {"winner": "newer-terminal-state"}
+
+
+def test_two_manager_instances_concurrently_share_one_durable_reservation(
+    monkeypatch,
+):
+    """Two processes racing one key must receive exactly one task identity."""
+    fake = FakeRedis()
+    first_manager = _isolated_manager(fake)
+    second_manager = _isolated_manager(fake)
+    start = threading.Barrier(2)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+
+    def _create(manager, candidate):
+        start.wait(timeout=2)
+        return manager.create_task(
+            "report_generate",
+            task_id=candidate,
+            idempotency_key="report:simulation-1",
+            metadata={"simulation_id": "simulation-1", "graph_id": "graph-1"},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first_future = executor.submit(_create, first_manager, "task-first")
+        second_future = executor.submit(_create, second_manager, "task-second")
+        returned = {first_future.result(), second_future.result()}
+
+    assert len(returned) == 1
+    task_id = returned.pop()
+    assert task_id in {"task-first", "task-second"}
+    assert json.loads(fake.data[f"task:{task_id}"])["task_id"] == task_id
+
+
+def test_durable_idempotency_rejects_same_key_with_different_identity(
+    monkeypatch,
+):
+    fake = FakeRedis()
+    first_manager = _isolated_manager(fake)
+    second_manager = _isolated_manager(fake)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+
+    first_manager.create_task(
+        "report_generate",
+        task_id="task-first",
+        idempotency_key="report:shared-key",
+        metadata={"simulation_id": "simulation-a", "graph_id": "graph-a"},
+    )
+
+    with pytest.raises(RuntimeError, match="^idempotency_key_conflict$"):
+        second_manager.create_task(
+            "report_generate",
+            task_id="task-second",
+            idempotency_key="report:shared-key",
+            metadata={"simulation_id": "simulation-b", "graph_id": "graph-b"},
+        )
+
+
+def test_durable_reservation_recovers_when_its_task_record_expired(monkeypatch):
+    fake = FakeRedis()
+    first_manager = _isolated_manager(fake)
+    recovering_manager = _isolated_manager(fake)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+
+    first_task = first_manager.create_task(
+        "simulation_prepare",
+        task_id="task-expired",
+        idempotency_key="prepare:simulation-1",
+        metadata={"simulation_id": "simulation-1"},
+    )
+    fake.delete(f"task:{first_task}")
+
+    recovered_task = recovering_manager.create_task(
+        "simulation_prepare",
+        task_id="task-recovered",
+        idempotency_key="prepare:simulation-1",
+        metadata={"simulation_id": "simulation-1"},
+    )
+
+    assert recovered_task == "task-recovered"
+    assert recovering_manager.find_in_flight_by_idempotency_key(
+        "prepare:simulation-1"
+    ) == recovered_task
+
+
+def test_idempotent_task_update_fails_if_its_durable_reservation_is_missing(
+    monkeypatch,
+):
+    fake = FakeRedis()
+    manager = _isolated_manager(fake)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+    task_id = manager.create_task(
+        "report_generate",
+        task_id="task-reservation-lost",
+        idempotency_key="report:reservation-lost",
+        metadata={"simulation_id": "simulation-reservation-lost"},
+    )
+    reservation_key = manager._idempotency_reservation_key(
+        "report:reservation-lost"
+    )
+    fake.delete(reservation_key)
+
+    with pytest.raises(
+        RuntimeError,
+        match="^task_idempotency_state_invalid$",
+    ):
+        manager.update_task(
+            task_id,
+            status=TaskStatus.PROCESSING,
+            progress=10,
+        )
+
+    stored = json.loads(fake.data[f"task:{task_id}"])
+    assert stored["status"] == TaskStatus.PENDING.value
+
+
+def test_idempotent_task_never_updates_from_local_cache_when_redis_is_lost(
+    monkeypatch,
+):
+    fake = FakeRedis()
+    manager = _isolated_manager(fake)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+    task_id = manager.create_task(
+        "report_generate",
+        task_id="task-redis-lost",
+        idempotency_key="report:redis-lost",
+        metadata={"simulation_id": "simulation-redis-lost"},
+    )
+    manager._redis_client = None
+    manager._redis_retry_at = time.monotonic() + 60
+
+    with pytest.raises(RuntimeError, match="^task_state_unavailable$"):
+        manager.update_task(
+            task_id,
+            status=TaskStatus.PROCESSING,
+            progress=10,
+        )
+
+    assert manager._tasks[task_id].status is TaskStatus.PENDING
+
+
+def test_worker_claim_requires_the_task_semantic_reservation(monkeypatch):
+    fake = FakeRedis()
+    manager = _isolated_manager(fake)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+    task_id = manager.create_task(
+        "report_generate",
+        task_id="task-claim-reservation-lost",
+        idempotency_key="report:claim-reservation-lost",
+        metadata={"simulation_id": "simulation-claim-reservation-lost"},
+    )
+    fake.delete(
+        manager._idempotency_reservation_key(
+            "report:claim-reservation-lost"
+        )
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="^task_idempotency_state_invalid$",
+    ):
+        manager.claim_task_execution(
+            task_id,
+            "worker-owner",
+            expected_task_type="report_generate",
+        )
+
+    assert json.loads(fake.data[f"task:{task_id}"])["status"] == "pending"
+
+
+def test_worker_claim_rejects_the_wrong_semantic_idempotency_key(monkeypatch):
+    fake = FakeRedis()
+    manager = _isolated_manager(fake)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+    task_id = manager.create_task(
+        "report_generate",
+        task_id="task-wrong-semantic-key",
+        idempotency_key="report_generate:different-simulation",
+        metadata={
+            "simulation_id": "simulation-expected",
+            "report_id": "report-expected",
+        },
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="^task_execution_identity_mismatch$",
+    ):
+        manager.claim_task_execution(
+            task_id,
+            "worker-owner",
+            expected_task_type="report_generate",
+            expected_idempotency_key="report_generate:simulation-expected",
+        )
+
+
+def test_report_worker_fence_allows_only_one_concurrent_generation(monkeypatch):
+    """A redelivery cannot enter the LLM boundary while its peer owns the task."""
+    from app.models.project import ProjectManager
+    from app.services.report_agent import ReportManager, ReportStatus
+    from app.services.simulation_manager import SimulationManager
+    from app.tasks import report_tasks
+
+    fake = FakeRedis()
+    manager = _isolated_manager(fake)
+    monkeypatch.setattr("app.models.task._audit", lambda **_event: None)
+    task_id = manager.create_task(
+        "report_generate",
+        task_id="task-report-fence",
+        idempotency_key="report_generate:simulation-fence",
+        metadata={
+            "simulation_id": "simulation-fence",
+            "report_id": "report-fence",
+            "graph_id": "graph-fence",
+        },
+    )
+    simulation = SimpleNamespace(
+        simulation_id="simulation-fence",
+        project_id="project-fence",
+        graph_id="graph-fence",
+    )
+    project = SimpleNamespace(
+        project_id="project-fence",
+        graph_id="graph-fence",
+        simulation_requirement="Assess the bounded fictional scenario.",
+    )
+    first_generation_entered = threading.Event()
+    release_first_generation = threading.Event()
+    generation_lock = threading.Lock()
+    generation_calls = 0
+
+    class _ReportAgent:
+        def __init__(self, **_context) -> None:
+            pass
+
+        def generate_report(self, **request):
+            nonlocal generation_calls
+            with generation_lock:
+                generation_calls += 1
+                call_number = generation_calls
+            if call_number == 1:
+                first_generation_entered.set()
+                assert release_first_generation.wait(timeout=3)
+            return SimpleNamespace(
+                report_id=request["report_id"],
+                simulation_id=simulation.simulation_id,
+                graph_id=project.graph_id,
+                simulation_requirement=project.simulation_requirement,
+                status=ReportStatus.COMPLETED,
+            )
+
+    monkeypatch.setattr(report_tasks, "TaskManager", lambda: manager)
+    monkeypatch.setattr(report_tasks, "ReportAgent", _ReportAgent)
+    monkeypatch.setattr(ReportManager, "get_report", lambda _report_id: None)
+    monkeypatch.setattr(
+        SimulationManager,
+        "get_simulation",
+        lambda _manager, _simulation_id: simulation,
+    )
+    monkeypatch.setattr(ProjectManager, "get_project", lambda _project_id: project)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            report_tasks.generate_report_task.run,
+            simulation_id=simulation.simulation_id,
+            report_id="report-fence",
+            task_id=task_id,
+        )
+        assert first_generation_entered.wait(timeout=3)
+        try:
+            with pytest.raises(RuntimeError, match="^report_generation_in_progress$"):
+                report_tasks.generate_report_task.run(
+                    simulation_id=simulation.simulation_id,
+                    report_id="report-fence",
+                    task_id=task_id,
+                )
+        finally:
+            release_first_generation.set()
+        assert first.result(timeout=3) == {
+            "success": True,
+            "report_id": "report-fence",
+        }
+
+    assert generation_calls == 1
+    persisted = manager.get_task(task_id)
+    assert persisted.status is TaskStatus.COMPLETED
+    assert persisted.result["report_id"] == "report-fence"
+    assert "execution_owner" not in persisted.to_public_dict()
+
+
 def test_completed_task_is_not_reverted_by_a_late_progress_update(redis_manager):
     """A straggler update must not un-finish a task and strand its poller."""
     manager, _fake = redis_manager
@@ -272,8 +615,8 @@ def test_completed_task_is_not_reverted_by_a_late_progress_update(redis_manager)
 
     task = manager.get_task(task_id)
     assert task.status == TaskStatus.COMPLETED
-    # Non-status fields from the late update still apply.
-    assert task.progress == 60
+    # Terminal status and its coupled progress envelope are immutable.
+    assert task.progress == 100
 
 
 def test_failed_task_is_not_reverted_either(manager):
@@ -283,12 +626,115 @@ def test_failed_task_is_not_reverted_either(manager):
     assert manager.get_task(task_id).status == TaskStatus.FAILED
 
 
-def test_terminal_to_terminal_transition_is_allowed(manager):
-    """COMPLETED -> FAILED is a real outcome change, not a revert."""
+def test_terminal_to_terminal_transition_cannot_replace_completed_outcome(manager):
+    """A late delivery cannot replace an already published success."""
     task_id = manager.create_task("simulation_run")
-    manager.complete_task(task_id, {"ok": True})
+    result = {"ok": True}
+    manager.complete_task(task_id, result)
     manager.fail_task(task_id, "post-hoc validation failed")
-    assert manager.get_task(task_id).status == TaskStatus.FAILED
+    task = manager.get_task(task_id)
+    assert task.status == TaskStatus.COMPLETED
+    assert task.result == result
+    assert task.error is None
+    assert task.public_error is None
+
+
+def test_duplicate_completed_delivery_cannot_replace_terminal_result(manager):
+    task_id = manager.create_task("simulation_run")
+    manager.complete_task(task_id, {"winner": "first-delivery"})
+
+    manager.complete_task(task_id, {"winner": "late-duplicate"})
+
+    task = manager.get_task(task_id)
+    assert task.status is TaskStatus.COMPLETED
+    assert task.result == {"winner": "first-delivery"}
+
+
+def test_late_partial_update_cannot_replace_terminal_result(manager):
+    task_id = manager.create_task("simulation_run")
+    manager.complete_task(task_id, {"winner": "first-delivery"})
+
+    manager.update_task(task_id, result={"winner": "late-progress-writer"})
+
+    task = manager.get_task(task_id)
+    assert task.status is TaskStatus.COMPLETED
+    assert task.result == {"winner": "first-delivery"}
+
+
+def test_late_processing_update_cannot_rewrite_terminal_envelope(manager):
+    task_id = manager.create_task("simulation_run")
+    manager.complete_task(task_id, {"winner": "first-delivery"})
+    completed = manager.get_task(task_id)
+    terminal_snapshot = (
+        completed.status,
+        completed.progress,
+        completed.message,
+        completed.progress_detail,
+        completed.result,
+        completed.error,
+        completed.public_error,
+    )
+
+    manager.update_task(
+        task_id,
+        status=TaskStatus.PROCESSING,
+        progress=11,
+        message="late worker",
+        progress_detail={"phase": "stale"},
+        result={"winner": "late-delivery"},
+    )
+
+    persisted = manager.get_task(task_id)
+    assert (
+        persisted.status,
+        persisted.progress,
+        persisted.message,
+        persisted.progress_detail,
+        persisted.result,
+        persisted.error,
+        persisted.public_error,
+    ) == terminal_snapshot
+
+
+def test_corrupt_persisted_status_is_rejected() -> None:
+    payload = Task(
+        task_id="task-corrupt-status",
+        task_type="simulation_run",
+        status=TaskStatus.PENDING,
+        created_at=datetime.now(),
+        updated_at=datetime.now(),
+    ).to_dict()
+    payload["status"] = "not-a-task-status"
+
+    with pytest.raises(TaskStateUnavailable, match="task_status_invalid"):
+        Task.from_dict(payload)
+
+
+def test_explicit_redis_outage_rejects_non_idempotent_creation(
+    manager,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("REDIS_URL", "redis://configured-but-unavailable:6379/0")
+    monkeypatch.setattr(manager, "_get_redis", lambda: None)
+
+    with pytest.raises(TaskStateUnavailable, match="task_state_unavailable"):
+        manager.create_task("graph_build")
+
+    assert manager._tasks == {}
+
+
+def test_explicit_redis_outage_rejects_local_task_update(
+    manager,
+    monkeypatch,
+) -> None:
+    task_id = manager.create_task("graph_build")
+    monkeypatch.setenv("REDIS_URL", "redis://configured-but-unavailable:6379/0")
+    monkeypatch.setattr(manager, "_get_redis", lambda: None)
+
+    with pytest.raises(TaskStateUnavailable, match="task_state_unavailable"):
+        manager.update_task(task_id, progress=50)
+
+    assert manager.get_task(task_id).progress == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -450,12 +896,11 @@ def test_cleanup_old_tasks_beat_schedule_registered():
     assert entry["kwargs"]["max_age_hours"] == 24
 
 
-def test_idempotency_key_dedupes_in_flight_submissions():
+def test_idempotency_key_dedupes_in_flight_submissions(redis_manager):
     """A second create_task with the same idempotency_key while the first is
     still in flight returns the first task's id — no duplicate task created
     (ADR-0003)."""
-    manager = TaskManager()
-    manager._tasks.clear()
+    manager, _fake = redis_manager
 
     first = manager.create_task(
         "simulation_prepare",
@@ -475,17 +920,16 @@ def test_idempotency_key_dedupes_in_flight_submissions():
     assert found == first
 
 
-def test_idempotency_key_allows_resubmit_after_terminal():
+def test_idempotency_key_allows_resubmit_after_terminal(redis_manager):
     """A task that reached COMPLETED does not block a fresh submission with
     the same key — the caller is explicitly re-running."""
-    manager = TaskManager()
-    manager._tasks.clear()
+    manager, _fake = redis_manager
 
     first = manager.create_task(
         "simulation_prepare",
         idempotency_key="client-key-2",
     )
-    manager._tasks[first].status = TaskStatus.COMPLETED
+    manager.complete_task(first, {"ok": True})
 
     second = manager.create_task(
         "simulation_prepare",
@@ -495,9 +939,8 @@ def test_idempotency_key_allows_resubmit_after_terminal():
     assert len(manager._tasks) == 2
 
 
-def test_find_in_flight_returns_none_for_unknown_or_missing_key():
-    manager = TaskManager()
-    manager._tasks.clear()
+def test_find_in_flight_returns_none_for_unknown_or_missing_key(redis_manager):
+    manager, _fake = redis_manager
     assert manager.find_in_flight_by_idempotency_key("nope") is None
     assert manager.find_in_flight_by_idempotency_key("") is None
     assert manager.find_in_flight_by_idempotency_key(None) is None

@@ -41,15 +41,53 @@ export function getTaskStatus(taskId) {
   })
 }
 
+function requireOwnedGraphIds(projectId, graphId) {
+  if (
+    typeof projectId !== 'string' ||
+    !projectId.trim() ||
+    typeof graphId !== 'string' ||
+    !graphId.trim()
+  ) {
+    throw new TypeError('projectId and graphId are required')
+  }
+}
+
 /**
- * Get graph data
- * @param {String} graphId - Graph ID
+ * Get graph data through its canonical project association.
+ * @param {String} projectId - Server-owned project ID
+ * @param {String} graphId - Graph ID associated with the project
  * @returns {Promise}
  */
-export function getGraphData(graphId) {
+export function getGraphData(projectId, graphId) {
+  requireOwnedGraphIds(projectId, graphId)
   return service({
     url: `/api/graph/data/${graphId}`,
-    method: 'get'
+    method: 'get',
+    params: { project_id: projectId }
+  }).catch(error => {
+    if (error?.response?.data?.error === 'graph_not_available_for_project') {
+      return {
+        success: false,
+        error: 'graph_not_available_for_project'
+      }
+    }
+    throw error
+  })
+}
+
+/**
+ * Request graph deletion through its canonical project association.
+ * The server currently fails closed until durable graph deletion exists.
+ * @param {String} projectId - Server-owned project ID
+ * @param {String} graphId - Graph ID associated with the project
+ * @returns {Promise}
+ */
+export function deleteGraph(projectId, graphId) {
+  requireOwnedGraphIds(projectId, graphId)
+  return service({
+    url: `/api/graph/delete/${graphId}`,
+    method: 'delete',
+    params: { project_id: projectId }
   })
 }
 

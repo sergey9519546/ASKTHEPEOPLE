@@ -6,7 +6,7 @@ from app import create_app
 from app.api import graph as graph_api
 from app.api import report as report_api
 from app.api import simulation as simulation_api
-from app.api.routes import export_routes, prep_routes, read_routes
+from app.api.routes import execution_routes, export_routes, prep_routes, read_routes
 from app.config import Config
 from app.services.claim_boundary import (
     model_proposed_schema_disclosure,
@@ -96,6 +96,16 @@ def test_generated_interactions_alias_discloses_zero_humans(
 
 def test_graph_data_marks_each_edge_provenance_unverified(client, monkeypatch):
     monkeypatch.setattr(Config, "ZEP_API_KEY", "test-zep-key")
+    monkeypatch.setattr(
+        graph_api.ProjectManager,
+        "get_project",
+        lambda project_id: SimpleNamespace(
+            status="graph_completed",
+            graph_id="graph_123",
+        )
+        if project_id == "project_123"
+        else None,
+    )
 
     class FakeBuilder:
         def __init__(self, api_key):
@@ -109,7 +119,9 @@ def test_graph_data_marks_each_edge_provenance_unverified(client, monkeypatch):
 
     monkeypatch.setattr(graph_api, "GraphBuilderService", FakeBuilder)
 
-    response = client.get("/api/graph/data/graph_123")
+    response = client.get(
+        "/api/graph/data/graph_123?project_id=project_123"
+    )
 
     assert response.status_code == 200
     payload = response.get_json()
@@ -239,10 +251,25 @@ def test_debug_search_keeps_legacy_facts_but_adds_canonical_records(
         "ZepToolsService",
         lambda: SimpleNamespace(search_graph=lambda **_kwargs: result),
     )
+    monkeypatch.setattr(
+        report_api.ProjectManager,
+        "get_project",
+        lambda project_id: SimpleNamespace(
+            status="graph_completed",
+            graph_id="graph_123",
+        )
+        if project_id == "project_123"
+        else None,
+    )
 
     response = client.post(
         "/api/report/tools/search",
-        json={"graph_id": "graph_123", "query": "service", "limit": 5},
+        json={
+            "project_id": "project_123",
+            "graph_id": "graph_123",
+            "query": "service",
+            "limit": 5,
+        },
     )
 
     assert response.status_code == 200
@@ -336,10 +363,24 @@ def test_realtime_and_standalone_profile_apis_keep_fictional_metadata(
             ]
         ),
     )
+    monkeypatch.setattr(
+        prep_routes.ProjectManager,
+        "get_project",
+        lambda project_id: SimpleNamespace(
+            status="graph_completed",
+            graph_id="graph_123",
+        )
+        if project_id == "project_123"
+        else None,
+    )
 
     standalone = client.post(
         "/api/simulation/generate-profiles",
-        json={"graph_id": "graph_123", "platform": "reddit"},
+        json={
+            "project_id": "project_123",
+            "graph_id": "graph_123",
+            "platform": "reddit",
+        },
     )
     assert standalone.status_code == 200
     standalone_payload = standalone.get_json()
@@ -607,21 +648,44 @@ def test_stop_run_state_keeps_the_synthetic_disclosure(
     client,
     monkeypatch,
 ):
+    from app.services.simulation_manager import SimulationStatus
+    from app.services.simulation_runner import RunnerStatus
+
     monkeypatch.setattr(
-        simulation_api.SimulationRunner,
-        "stop_simulation",
+        execution_routes.SimulationRunner,
+        "get_run_state",
         lambda _simulation_id: SimpleNamespace(
-            to_dict=lambda: {
-                "simulation_id": "sim_123",
-                "runner_status": "stopped",
-            }
+            runner_status=RunnerStatus.RUNNING,
+            active_platforms=["twitter"],
+            twitter_running=True,
+            reddit_running=False,
+            attempt_id="attempt-1",
+            fencing_token=1,
         ),
-        raising=False,
     )
     monkeypatch.setattr(
-        simulation_api,
+        execution_routes,
         "SimulationManager",
-        lambda: SimpleNamespace(get_simulation=lambda _simulation_id: None),
+        lambda: SimpleNamespace(
+            get_simulation=lambda _simulation_id: SimpleNamespace(
+                status=SimulationStatus.RUNNING,
+                enable_twitter=True,
+                enable_reddit=False,
+            )
+        ),
+    )
+    store = SimpleNamespace(
+        enqueue=lambda *args, **kwargs: {
+            "control_id": "control-1",
+            "command_type": "stop",
+            "platforms": ["twitter"],
+            "status": "queued",
+        }
+    )
+    monkeypatch.setattr(
+        execution_routes,
+        "RuntimeControlStore",
+        lambda *args, **kwargs: store,
     )
 
     response = client.post(
@@ -629,5 +693,5 @@ def test_stop_run_state_keeps_the_synthetic_disclosure(
         json={"simulation_id": "sim_123"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 202
     assert_synthetic_disclosure(response.get_json())

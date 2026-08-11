@@ -144,6 +144,11 @@ import { getReport } from "../api/report";
 import { getSimulation } from "../api/simulation";
 import GraphPanel from "../components/GraphPanel.vue";
 import Step4Report from "../components/Step4Report.vue";
+import {
+  RecordedGraphIdentityError,
+  recordedGraphReadError,
+  resolveRecordedGraphIdentity,
+} from "../utils/recordedGraphIdentity";
 
 const route = useRoute();
 const router = useRouter();
@@ -152,6 +157,7 @@ const viewMode = ref("workbench");
 const currentReportId = ref(route.params.reportId);
 const simulationId = ref(null);
 const projectData = ref(null);
+const graphIdentity = ref(null);
 const graphData = ref(null);
 const graphLoading = ref(false);
 const systemLogs = ref([]);
@@ -220,6 +226,9 @@ const loadReportData = async () => {
   const sequence = ++loadSequence;
   error.value = "";
   simulationId.value = null;
+  projectData.value = null;
+  graphIdentity.value = null;
+  graphData.value = null;
   currentStatus.value = "processing";
   addLog("Opening the scenario report…");
 
@@ -256,18 +265,27 @@ const loadReportData = async () => {
         const projRes = await getProject(simRes.data.project_id);
         if (projRes?.success && projRes.data) {
           projectData.value = projRes.data;
-          if (projRes.data.graph_id) {
-            await loadGraph(projRes.data.graph_id);
-          }
+          graphIdentity.value = resolveRecordedGraphIdentity({
+            project: projRes.data,
+            report: reportData,
+            simulation: simRes.data,
+          });
+          await loadGraph(
+            graphIdentity.value.projectId,
+            graphIdentity.value.graphId,
+          );
         }
       }
-    } catch (_) {
+    } catch (err) {
+      if (err instanceof RecordedGraphIdentityError) throw err;
       addLog("The source map context could not be loaded.");
     }
-  } catch (_) {
+  } catch (err) {
     if (sequence !== loadSequence) return;
     error.value =
-      "The saved report is unavailable right now. Check the link and try again, or return home.";
+      err instanceof RecordedGraphIdentityError
+        ? err.message
+        : "The saved report is unavailable right now. Check the link and try again, or return home.";
     currentStatus.value = "failed";
     addLog("The saved report could not be opened.");
     await nextTick();
@@ -275,18 +293,33 @@ const loadReportData = async () => {
   }
 };
 
-const loadGraph = async (id) => {
+const loadGraph = async (projectId, graphId) => {
   graphLoading.value = true;
   try {
-    const res = await getGraphData(id);
-    if (res.success) graphData.value = res.data;
+    const res = await getGraphData(projectId, graphId);
+    if (!res.success || !res.data) throw recordedGraphReadError(res);
+    graphData.value = res.data;
   } finally {
     graphLoading.value = false;
   }
 };
 
-const refreshGraph = () =>
-  projectData.value?.graph_id && loadGraph(projectData.value.graph_id);
+const refreshGraph = async () => {
+  if (!graphIdentity.value) return;
+  try {
+    await loadGraph(
+      graphIdentity.value.projectId,
+      graphIdentity.value.graphId,
+    );
+  } catch (err) {
+    error.value =
+      err instanceof RecordedGraphIdentityError
+        ? err.message
+        : "The recorded source map is temporarily unavailable.";
+    currentStatus.value = "failed";
+    addLog("The recorded source map could not be refreshed.");
+  }
+};
 
 watch(
   () => route.params.reportId,

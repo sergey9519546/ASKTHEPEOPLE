@@ -4,19 +4,17 @@ from types import SimpleNamespace
 import pytest
 from flask import Flask
 
-from app.api import simulation as simulation_api
 from app.api.routes import execution_routes
 from app.api.simulation import _resolve_graph_memory_request
 from app.config import Config
 from app.services.report_agent import ReportAgent
-from app.services.simulation_runner import SimulationRunner
 from app.services.simulation_manager import SimulationStatus
+from app.services.simulation_runner import SimulationRunner
 from app.services.zep_graph_memory_updater import (
     AgentActivity,
     ZepGraphMemoryManager,
 )
 from app.services.zep_tools import InsightForgeResult, PanoramaResult, SearchResult
-import app.services.report_agent as report_agent_module
 
 
 def test_graph_memory_request_is_off_and_requires_a_json_boolean():
@@ -101,7 +99,7 @@ def test_start_route_defaults_to_observation_store_without_graph_write(monkeypat
     )
     monkeypatch.setattr("app.models.task.TaskManager", FakeTaskManager)
     monkeypatch.setattr(
-        "app.tasks.simulation_tasks.run_simulation_task.delay",
+        "app.tasks.simulation_tasks.run_simulation_task.apply_async",
         capture_dispatch,
     )
     app = Flask(__name__)
@@ -116,9 +114,11 @@ def test_start_route_defaults_to_observation_store_without_graph_write(monkeypat
     assert payload["data"]["graph_memory_update_enabled"] is False
     assert payload["data"]["observation_storage"] == "simulation_observation_store"
     assert payload["data"]["source_graph_mutated"] is False
-    assert captured["enable_graph_memory_update"] is False
-    assert captured["graph_id"] is None
-    assert captured["source_graph_id"] == "source-graph"
+    assert captured["task_id"] == "task-1"
+    assert captured["kwargs"]["task_id"] == "task-1"
+    assert captured["kwargs"]["enable_graph_memory_update"] is False
+    assert captured["kwargs"]["graph_id"] is None
+    assert captured["kwargs"]["source_graph_id"] == "source-graph"
 
 
 def test_invalid_graph_write_request_has_no_force_restart_side_effects(monkeypatch):

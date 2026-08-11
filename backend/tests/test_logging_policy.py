@@ -10,6 +10,8 @@ from app.services.oasis_profile_generator import (
 )
 from app.services.report_agent import ReportAgent
 from app.services.report_agent import ReportLogger
+from app.services.report_agent import ReportOutline, ReportSection
+from app.services.report_agent import ReportManager, ReportStatus
 from app.services.zep_tools import ZepToolsService
 from app.utils.logger import _ProductionPrivacyFilter, _configured_level
 
@@ -117,6 +119,225 @@ def test_report_tool_info_log_records_parameter_names_not_values(monkeypatch):
     assert private_text not in rendered
     assert "query" in rendered
     assert "limit" in rendered
+
+
+def test_report_tool_failure_omits_raw_provider_exception(monkeypatch):
+    private_text = "PRIVATE_ZEP_PROVIDER_EXCEPTION_CANARY"
+    error_messages = []
+
+    class _ZepTools:
+        def quick_search(self, **_kwargs):
+            raise ConnectionError(private_text)
+
+    agent = ReportAgent.__new__(ReportAgent)
+    agent.graph_id = "graph-1"
+    agent.simulation_id = "sim-1"
+    agent.simulation_requirement = "scenario"
+    agent.zep_tools = _ZepTools()
+    agent._generation_lease = None
+
+    monkeypatch.setattr(
+        report_agent_module.logger,
+        "error",
+        lambda message, *args, **_kwargs: error_messages.append(
+            message % args if args else str(message)
+        ),
+    )
+
+    result = agent._execute_tool("quick_search", {"query": "server query"})
+
+    assert result == "Tool execution failed"
+    assert private_text not in repr((result, error_messages))
+    assert "ConnectionError" in repr(error_messages)
+
+
+def test_report_outline_failure_log_omits_raw_provider_exception(monkeypatch):
+    private_text = "PRIVATE_OUTLINE_PROVIDER_EXCEPTION_CANARY"
+    error_messages = []
+
+    class _ZepTools:
+        def get_simulation_context(self, **_kwargs):
+            return {}
+
+    class _LLM:
+        def chat_json(self, **_kwargs):
+            raise TimeoutError(private_text)
+
+    agent = ReportAgent.__new__(ReportAgent)
+    agent.graph_id = "graph-1"
+    agent.simulation_id = "sim-1"
+    agent.simulation_requirement = "scenario"
+    agent.zep_tools = _ZepTools()
+    agent.llm = _LLM()
+    agent._simulation_metrics = None
+    agent._generation_lease = None
+
+    monkeypatch.setattr(
+        report_agent_module.logger,
+        "error",
+        lambda message, *args, **_kwargs: error_messages.append(
+            message % args if args else str(message)
+        ),
+    )
+
+    outline = agent.plan_outline()
+
+    assert outline.sections
+    assert private_text not in repr(error_messages)
+    assert "TimeoutError" in repr(error_messages)
+
+
+def test_report_section_debug_log_records_length_not_raw_model_response(
+    monkeypatch,
+):
+    private_text = "PRIVATE_RAW_MODEL_RESPONSE_CANARY"
+    debug_messages = []
+    tool_call = (
+        '<tool_call>{"name":"quick_search",'
+        '"parameters":{"query":"server query"}}</tool_call>'
+    )
+
+    class _LLM:
+        def __init__(self) -> None:
+            self.responses = iter(
+                [tool_call, tool_call, tool_call, f"Final Answer: {private_text}"]
+            )
+
+        def chat(self, **_kwargs):
+            return next(self.responses)
+
+    agent = ReportAgent.__new__(ReportAgent)
+    agent.simulation_requirement = "scenario"
+    agent.llm = _LLM()
+    agent.tools = {}
+    agent.report_logger = None
+    agent._generation_lease = None
+    agent._execute_tool = lambda *_args, **_kwargs: "safe tool result"
+
+    monkeypatch.setattr(
+        report_agent_module.logger,
+        "debug",
+        lambda message, *args, **_kwargs: debug_messages.append(
+            message % args if args else str(message)
+        ),
+    )
+
+    result = agent._generate_section_react(
+        ReportSection(title="Section"),
+        ReportOutline(title="Report", summary="Summary", sections=[]),
+        [],
+        section_index=1,
+    )
+
+    assert private_text in result
+    assert private_text not in repr(debug_messages)
+    assert any("response_length=" in message for message in debug_messages)
+
+
+def test_report_section_logs_do_not_emit_model_generated_title(monkeypatch):
+    private_text = "PRIVATE_MODEL_GENERATED_SECTION_TITLE_CANARY"
+    messages = []
+
+    class _LLM:
+        def chat(self, **_kwargs):
+            return None
+
+    agent = ReportAgent.__new__(ReportAgent)
+    agent.simulation_requirement = "scenario"
+    agent.llm = _LLM()
+    agent.tools = {}
+    agent.report_logger = None
+    agent._generation_lease = None
+
+    for level in ("warning", "error"):
+        monkeypatch.setattr(
+            report_agent_module.logger,
+            level,
+            lambda message, *args, _level=level, **_kwargs: messages.append(
+                (_level, message % args if args else str(message))
+            ),
+        )
+
+    agent._generate_section_react(
+        ReportSection(title=private_text),
+        ReportOutline(title="Report", summary="Summary", sections=[]),
+        [],
+        section_index=7,
+    )
+
+    assert private_text not in repr(messages)
+    assert "section=7" in repr(messages)
+
+
+def test_report_generation_failure_log_omits_raw_exception(monkeypatch):
+    private_text = "PRIVATE_REPORT_GENERATION_EXCEPTION_CANARY"
+    error_messages = []
+    agent = ReportAgent.__new__(ReportAgent)
+    agent.simulation_id = "sim-1"
+    agent.graph_id = "graph-1"
+    agent.simulation_requirement = "scenario"
+    agent.report_logger = None
+    agent.console_logger = None
+    agent._generation_lease = None
+
+    monkeypatch.setattr(Config, "DEBUG", False)
+    monkeypatch.setattr(
+        ReportManager,
+        "_ensure_report_folder",
+        lambda _report_id: (_ for _ in ()).throw(OSError(private_text)),
+    )
+    monkeypatch.setattr(ReportManager, "save_report", lambda _report: None)
+    monkeypatch.setattr(
+        ReportManager,
+        "update_progress",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        report_agent_module.logger,
+        "error",
+        lambda message, *args, **_kwargs: error_messages.append(
+            message % args if args else str(message)
+        ),
+    )
+
+    report = agent.generate_report(report_id="report-generation-failure")
+
+    assert report.status is ReportStatus.FAILED
+    assert private_text not in repr(error_messages)
+    assert "OSError" in repr(error_messages)
+
+
+def test_report_generation_failure_state_omits_raw_exception_in_debug(
+    monkeypatch,
+):
+    private_text = "PRIVATE_DEBUG_REPORT_EXCEPTION_CANARY"
+    progress_updates = []
+    agent = ReportAgent.__new__(ReportAgent)
+    agent.simulation_id = "sim-1"
+    agent.graph_id = "graph-1"
+    agent.simulation_requirement = "scenario"
+    agent.report_logger = None
+    agent.console_logger = None
+    agent._generation_lease = None
+
+    monkeypatch.setattr(Config, "DEBUG", True)
+    monkeypatch.setattr(
+        ReportManager,
+        "_ensure_report_folder",
+        lambda _report_id: (_ for _ in ()).throw(OSError(private_text)),
+    )
+    monkeypatch.setattr(ReportManager, "save_report", lambda _report: None)
+    monkeypatch.setattr(
+        ReportManager,
+        "update_progress",
+        lambda *args, **kwargs: progress_updates.append((args, kwargs)),
+    )
+
+    report = agent.generate_report(report_id="report-debug-generation-failure")
+
+    assert report.status is ReportStatus.FAILED
+    assert report.error == "report_generation_failed"
+    assert private_text not in repr((report.error, progress_updates))
 
 
 def test_generated_profile_console_does_not_print_private_profile_in_production(

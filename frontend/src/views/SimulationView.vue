@@ -105,6 +105,11 @@ import { getGraphData, getProject } from "../api/graph";
 import { getSimulation } from "../api/simulation";
 import GraphPanel from "../components/GraphPanel.vue";
 import Step2EnvSetup from "../components/Step2EnvSetup.vue";
+import {
+  RecordedGraphIdentityError,
+  recordedGraphReadError,
+  resolveRecordedGraphIdentity,
+} from "../utils/recordedGraphIdentity";
 
 const route = useRoute();
 const router = useRouter();
@@ -112,6 +117,7 @@ const router = useRouter();
 const viewMode = ref("workbench");
 const currentSimulationId = ref(route.params.simulationId);
 const projectData = ref(null);
+const graphIdentity = ref(null);
 const graphData = ref(null);
 const graphLoading = ref(false);
 const systemLogs = ref([]);
@@ -208,6 +214,8 @@ const handleNextStep = (params = {}) => {
 
 const loadSimulationData = async () => {
   error.value = "";
+  graphIdentity.value = null;
+  graphData.value = null;
   currentStatus.value = "processing";
   try {
     addLog("Loading the prepared scenario…");
@@ -224,25 +232,38 @@ const loadSimulationData = async () => {
       throw new Error(projRes.error || "The source project could not be loaded.");
     }
     projectData.value = projRes.data;
-    if (projRes.data.graph_id) await loadGraph(projRes.data.graph_id);
+    graphIdentity.value = resolveRecordedGraphIdentity({
+      project: projRes.data,
+      simulation: simData,
+    });
+    await loadGraph(
+      graphIdentity.value.projectId,
+      graphIdentity.value.graphId,
+    );
   } catch (err) {
-    error.value = err.message || "The prepared scenario could not be loaded.";
+    error.value =
+      err instanceof RecordedGraphIdentityError
+        ? err.message
+        : "The prepared scenario could not be loaded.";
     currentStatus.value = "error";
     addLog(`The prepared scenario could not be loaded: ${error.value}`);
   }
 };
 
-const loadGraph = async (id) => {
+const loadGraph = async (projectId, graphId) => {
   graphLoading.value = true;
   try {
-    const res = await getGraphData(id);
+    const res = await getGraphData(projectId, graphId);
     if (res.success) {
       graphData.value = res.data;
     } else {
-      throw new Error(res.error || "The source map could not be loaded.");
+      throw recordedGraphReadError(res);
     }
   } catch (err) {
-    error.value = err.message || "The source map could not be loaded.";
+    error.value =
+      err instanceof RecordedGraphIdentityError
+        ? err.message
+        : "The recorded source map is temporarily unavailable.";
     currentStatus.value = "error";
     throw err;
   } finally {
@@ -250,8 +271,17 @@ const loadGraph = async (id) => {
   }
 };
 
-const refreshGraph = () =>
-  projectData.value?.graph_id && loadGraph(projectData.value.graph_id);
+const refreshGraph = async () => {
+  if (!graphIdentity.value) return;
+  try {
+    await loadGraph(
+      graphIdentity.value.projectId,
+      graphIdentity.value.graphId,
+    );
+  } catch {
+    // loadGraph owns the sanitized visible failure state.
+  }
+};
 
 onMounted(async () => {
   addLog("Scenario workspace opened.");

@@ -5,30 +5,28 @@ Provides interfaces for simulation report generation, retrieval, chat, etc.
 
 import os
 import traceback
-import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
-from flask import request, jsonify, send_file
 
-from . import report_bp, limiter
+from flask import jsonify, request, send_file
+
 from ..config import Config
-from ..services.report_agent import Report, ReportAgent, ReportManager, ReportStatus
-from ..services.report_generation_coordinator import (
-    ReportGenerationCancelled,
-    report_generation_coordinator,
-)
-from ..services.report_evidence import load_report_evidence
+from ..models.project import ProjectManager
+from ..models.task import TaskIdempotencyConflict, TaskManager
 from ..services.claim_boundary import (
     graph_record_disclosure,
     synthetic_output_disclosure,
 )
+from ..services.export_service import CSVExporter, ExecutiveExporter, PDFGenerator
+from ..services.graph_association import (
+    GraphAssociationError,
+    resolve_project_graph,
+)
+from ..services.report_agent import ReportAgent, ReportManager, ReportStatus
+from ..services.report_evidence import load_report_evidence
+from ..services.report_generation_coordinator import (
+    report_generation_coordinator,
+)
 from ..services.simulation_manager import SimulationManager
-from ..services.export_service import PDFGenerator, CSVExporter, ExecutiveExporter
 from ..services.zep_tools import ZepToolsService
-from ..models.project import ProjectManager
-from ..models.task import TaskManager, TaskStatus
-from ..utils.logger import get_logger
-from ..utils.response import truth_metadata
-from ..utils.safe_path import SafePathError
 from ..utils.input_policy import (
     CHAT_MESSAGE_MAX,
     GRAPH_QUERY_MAX,
@@ -37,8 +35,56 @@ from ..utils.input_policy import (
     bounded_text,
     validate_chat_history,
 )
+from ..utils.logger import get_logger
+from ..utils.response import mark_public_safe_error, truth_metadata
+from ..utils.safe_path import SafePathError
+from . import limiter, report_bp
 
 logger = get_logger('askthepeople.api.report')
+
+
+def _release_report_lease_safely(lease) -> None:
+    if lease is None:
+        return
+    try:
+        report_generation_coordinator.release(lease)
+    except Exception:
+        logger.error(
+            "Report lease release failed: code=report_lease_release_failed",
+            extra={"privacy_safe": True},
+        )
+
+
+def _fail_report_task_safely(task_manager, task_id, failure_code) -> None:
+    if task_manager is None or task_id is None:
+        return
+    get_task = getattr(task_manager, "get_task", None)
+    if callable(get_task):
+        try:
+            if get_task(task_id) is None:
+                # Admission may have failed before the candidate was written.
+                # update_task creates placeholders for legacy progress events,
+                # so calling fail_task here would fabricate a task record.
+                return
+        except Exception:
+            logger.error(
+                "Report dispatch task lookup failed: "
+                "code=report_failure_persistence_failed",
+                extra={"privacy_safe": True},
+            )
+            return
+    try:
+        task_manager.fail_task(
+            task_id,
+            failure_code,
+            public_error=failure_code,
+        )
+    except Exception:
+        logger.error(
+            "Report dispatch failure persistence failed: "
+            "code=report_failure_persistence_failed",
+            extra={"privacy_safe": True},
+        )
 
 
 def _get_status_request_data():
@@ -85,15 +131,21 @@ def generate_report():
         }
     """
     lease = None
-    generation_thread_started = False
+    task_manager = None
+    task_id = None
     try:
-        data = request.get_json() or {}
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify({
+                "success": False,
+                "error": "report_request_invalid",
+            }), 400
         
         simulation_id = data.get('simulation_id')
         if not simulation_id:
             return jsonify({
                 "success": False,
-                "error": "Please provide simulation_id"
+                "error": "report_simulation_id_missing"
             }), 400
         
         force_regenerate = data.get('force_regenerate', False)
@@ -105,7 +157,7 @@ def generate_report():
         if not state:
             return jsonify({
                 "success": False,
-                "error": f"Simulation does not exist: {simulation_id}"
+                "error": "report_simulation_not_found"
             }), 404
         
         # Check if report already exists
@@ -128,21 +180,38 @@ def generate_report():
         if not project:
             return jsonify({
                 "success": False,
-                "error": f"Project does not exist: {state.project_id}"
+                "error": "report_project_not_found"
             }), 404
         
-        graph_id = state.graph_id or project.graph_id
-        if not graph_id:
+        graph_id = getattr(project, "graph_id", None)
+        if (
+            not isinstance(graph_id, str)
+            or not graph_id.strip()
+            or graph_id != graph_id.strip()
+        ):
             return jsonify({
                 "success": False,
-                "error": "Missing graph ID, please ensure the graph is built"
+                "error": "report_graph_id_missing",
             }), 400
-        
-        simulation_requirement = project.simulation_requirement
-        if not simulation_requirement:
+
+        simulation_graph_id = getattr(state, "graph_id", None)
+        if (
+            simulation_graph_id not in (None, "")
+            and simulation_graph_id != graph_id
+        ):
             return jsonify({
                 "success": False,
-                "error": "Missing simulation requirement description"
+                "error": "report_graph_scope_mismatch",
+            }), 409
+        
+        simulation_requirement = getattr(project, "simulation_requirement", None)
+        if (
+            not isinstance(simulation_requirement, str)
+            or not simulation_requirement.strip()
+        ):
+            return jsonify({
+                "success": False,
+                "error": "report_simulation_requirement_missing",
             }), 400
         
         # Pre-generate report_id to return to the frontend immediately
@@ -165,7 +234,7 @@ def generate_report():
         if not force_regenerate:
             existing_report = ReportManager.get_report_by_simulation(simulation_id)
             if existing_report and existing_report.status == ReportStatus.COMPLETED:
-                report_generation_coordinator.release(lease)
+                _release_report_lease_safely(lease)
                 lease = None
                 return jsonify({
                     "success": True,
@@ -180,28 +249,56 @@ def generate_report():
         
         # Create asynchronous task
         task_manager = TaskManager()
-        task_id = task_manager.create_task(
+        candidate_task_id = str(uuid.uuid4())
+        # Bind the candidate before create_task: the task write happens before
+        # its audit event, so a post-write audit failure must still be able to
+        # fail this exact record instead of leaving a phantom PENDING task.
+        task_id = candidate_task_id
+        created_task_id = task_manager.create_task(
             task_type="report_generate",
+            task_id=candidate_task_id,
+            idempotency_key=f"report_generate:{simulation_id}",
+            idempotency_identity={
+                "simulation_id": simulation_id,
+                "graph_id": graph_id,
+            },
             metadata={
                 "simulation_id": simulation_id,
                 "graph_id": graph_id,
                 "report_id": report_id
             }
         )
+        task_id = created_task_id
         lease.task_id = task_id
+
+        if task_id != candidate_task_id:
+            existing_task = task_manager.get_task(task_id)
+            existing_metadata = getattr(existing_task, "metadata", None) or {}
+            existing_report_id = existing_metadata.get("report_id", report_id)
+            _release_report_lease_safely(lease)
+            lease = None
+            return jsonify({
+                "success": True,
+                "data": {
+                    "report_id": existing_report_id,
+                    "task_id": task_id,
+                    "status": "pending",
+                    "already_queued": True,
+                },
+            }), 202, {'Location': f'/api/jobs/{task_id}'}
         
         from ..tasks.report_tasks import generate_report_task
-        
-        generation_thread_started = True
-        
-        generate_report_task.delay(
-            simulation_id=simulation_id,
-            report_id=report_id,
-            user_prompt=data.get('user_prompt'),
-            custom_instructions=data.get('custom_instructions'),
-            task_id=task_id
+
+        generate_report_task.apply_async(
+            kwargs={
+                "simulation_id": simulation_id,
+                "report_id": report_id,
+            },
+            task_id=task_id,
         )
-        
+
+        _release_report_lease_safely(lease)
+        lease = None
         return jsonify({
             "success": True,
             "data": {
@@ -210,16 +307,29 @@ def generate_report():
                 "status": "pending"
             }
         }), 202, {'Location': f'/api/jobs/{task_id}'}
-        
-    except Exception as e:
-        if lease is not None and not generation_thread_started:
-            report_generation_coordinator.release(lease)
-        logger.error(f"Failed to start report generation task: {str(e)}")
+
+    except TaskIdempotencyConflict:
+        _release_report_lease_safely(lease)
+        lease = None
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "idempotency_key_conflict",
+        }), 409
+    except Exception:
+        failure_code = "report_dispatch_failed"
+        _fail_report_task_safely(task_manager, task_id, failure_code)
+        _release_report_lease_safely(lease)
+        lease = None
+        logger.error(
+            "Report generation start failed: code=%s",
+            failure_code,
+            extra={"privacy_safe": True},
+        )
+        response = jsonify({
+            "success": False,
+            "error": failure_code,
+        })
+        return mark_public_safe_error(response, failure_code), 503
 
 
 @report_bp.route('/generate/status', methods=['GET', 'POST'])
@@ -1182,6 +1292,7 @@ def search_graph_tool():
     
     Request (JSON):
         {
+            "project_id": "proj_xxxx",
             "graph_id": "atp_xxxx",
             "query": "Search query",
             "limit": 10
@@ -1190,7 +1301,6 @@ def search_graph_tool():
     try:
         data = request.get_json() or {}
         
-        graph_id = data.get('graph_id')
         try:
             query = bounded_text(
                 data.get('query'),
@@ -1210,12 +1320,12 @@ def search_graph_tool():
                 "error": exc.code,
                 "message": exc.message,
             }), 400
-        
-        if not graph_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide graph_id"
-            }), 400
+
+        association = resolve_project_graph(
+            data.get('project_id'),
+            data.get('graph_id'),
+        )
+        graph_id = association.graph_id
         
         tools = ZepToolsService()
         result = tools.search_graph(
@@ -1244,13 +1354,17 @@ def search_graph_tool():
             "disclosure": synthetic_output_disclosure(),
         })
         
-    except Exception as e:
-        logger.error(f"Graph search failed: {str(e)}")
+    except GraphAssociationError as exc:
+        return jsonify({"success": False, "error": exc.code}), exc.status_code
+    except Exception as exc:
+        logger.warning(
+            "graph search unavailable exception_type=%s",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "graph_search_unavailable",
+        }), 503
 
 
 @report_bp.route('/tools/statistics', methods=['POST'])
@@ -1260,19 +1374,18 @@ def get_graph_statistics_tool():
     
     Request (JSON):
         {
+            "project_id": "proj_xxxx",
             "graph_id": "atp_xxxx"
         }
     """
     try:
         data = request.get_json() or {}
         
-        graph_id = data.get('graph_id')
-        
-        if not graph_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide graph_id"
-            }), 400
+        association = resolve_project_graph(
+            data.get('project_id'),
+            data.get('graph_id'),
+        )
+        graph_id = association.graph_id
         
         tools = ZepToolsService()
         result = tools.get_graph_statistics(graph_id)
@@ -1283,10 +1396,14 @@ def get_graph_statistics_tool():
             "disclosure": synthetic_output_disclosure(),
         })
         
-    except Exception as e:
-        logger.error(f"Failed to get graph statistics: {str(e)}")
+    except GraphAssociationError as exc:
+        return jsonify({"success": False, "error": exc.code}), exc.status_code
+    except Exception as exc:
+        logger.warning(
+            "graph statistics unavailable exception_type=%s",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "graph_statistics_unavailable",
+        }), 503

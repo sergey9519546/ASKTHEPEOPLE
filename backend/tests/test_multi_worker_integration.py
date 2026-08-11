@@ -2,7 +2,7 @@
 Multi-worker integration test suite verifying end-to-end simulation lifecycle:
 1. Async simulation start (POST /api/simulation/start) returning HTTP 202 Accepted with task metadata.
 2. Redis-backed task status polling (GET /api/simulation/<id>/status and /api/simulation/task/<task_id>/status).
-3. Live Redis Pub/Sub scenario injection (POST /api/simulation/<id>/inject) consumed during tick execution.
+3. Durable scenario controls claimed exactly once across independent workers.
 4. Persistent per-simulation observation SQLite store operating in WAL mode post-completion.
 5. Path traversal defense enforcement on file access endpoints.
 6. Direct safe_join path containment verification rejecting invalid traversal inputs.
@@ -16,6 +16,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -33,17 +34,15 @@ from app.services.simulation_observation_store import (
     ensure_observation_store,
     get_observation_db_journal_mode,
     observation_db_path,
-    pop_in_memory_events,
-    push_in_memory_event,
     record_injected_event,
     search_observations,
     sync_observation_store,
 )
+from app.services.run_attempt_store import RunAttemptStore
+from app.services.runtime_control_store import RuntimeControlStore
 from app.services.simulation_runner import RunnerStatus, SimulationRunner, SimulationRunState
-from app.services.simulation_runtime_contract import apply_injected_events
 from app.tasks.simulation_tasks import run_simulation_task
 from app.utils.safe_path import safe_join, SafePathError
-from scripts.run_parallel_simulation import RedisEventConsumer
 
 
 @pytest.fixture(autouse=True)
@@ -178,55 +177,80 @@ def test_redis_backed_task_status_polling(client):
     assert completed_data["data"]["progress"] == 100
 
 
-def test_live_pubsub_scenario_injection_during_tick(client, monkeypatch):
-    """Verify scenario injection via Pub/Sub endpoint and consumption during tick execution."""
-    sim_id = "sim_live_inject_tick_456"
+def test_durable_injection_is_claimed_once_across_workers(
+    client,
+    isolate_simulation_storage,
+    monkeypatch,
+):
+    sim_id = "sim_durable_inject_tick_456"
+    sim_dir = isolate_simulation_storage / sim_id
+    sim_dir.mkdir()
+    attempt = RunAttemptStore().acquire(
+        str(sim_dir),
+        sim_id,
+        "worker-owner",
+        30,
+    )
+    simulation = SimpleNamespace(simulation_id=sim_id, status="running")
+    run_state = SimulationRunState(
+        simulation_id=sim_id,
+        runner_status=RunnerStatus.RUNNING,
+        twitter_running=True,
+        active_platforms=["twitter"],
+        attempt_id=attempt.attempt_id,
+        fencing_token=attempt.fencing_token,
+    )
+    monkeypatch.setattr(
+        execution_routes.SimulationManager,
+        "get_simulation",
+        lambda _self, requested_id: simulation if requested_id == sim_id else None,
+    )
+    monkeypatch.setattr(
+        SimulationRunner,
+        "get_run_state",
+        lambda requested_id: run_state if requested_id == sim_id else None,
+    )
 
-    # Pin the transport. The /inject endpoint only falls back to the in-memory
-    # queue when the Redis publish fails, and Config.REDIS_URL defaults to
-    # redis://localhost:6379/0 -- so on a host with a reachable Redis this test
-    # would publish to the real broker and the memory-transport consumer below
-    # would see nothing.
-    monkeypatch.setattr(Config, "REDIS_URL", "memory://")
-
-    mock_state = MagicMock()
-    mock_state.simulation_id = sim_id
-    mock_state.status = "running"
-    mock_state.config = {"name": "PubSub Simulation"}
-
-    with patch("app.api.routes.execution_routes.SimulationManager") as mock_mgr_cls:
-        mock_mgr = MagicMock()
-        mock_mgr.get_simulation.return_value = mock_state
-        mock_mgr_cls.return_value = mock_mgr
-
-        injection_payload = {
+    response = client.post(
+        f"/api/simulation/{sim_id}/inject",
+        json={
             "event_type": "breaking_news",
-            "payload": {
-                "headline": "Policy Revision Announced",
-                "content": "Regulatory update impacts economic scenario parameters."
-            }
-        }
+            "payload": {"headline": "Policy revision announced"},
+            "platforms": ["twitter"],
+        },
+    )
 
-        # 1. Post live scenario injection to endpoint
-        response = client.post(
-            f"/api/simulation/{sim_id}/inject",
-            json=injection_payload,
+    assert response.status_code == 202
+    control_id = response.get_json()["data"]["control_id"]
+    stores = [
+        RuntimeControlStore(
+            str(sim_dir),
+            attempt_id=attempt.attempt_id,
+            fencing_token=attempt.fencing_token,
         )
+        for _ in range(2)
+    ]
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        claimed = list(executor.map(lambda store: store.claim_next("twitter"), stores))
 
-        assert response.status_code == 200
-        res_data = response.get_json()
-        assert res_data["success"] is True
-        assert res_data["channel"] == f"simulation:{sim_id}:events"
-        assert res_data["event"]["event_type"] == "breaking_news"
+    commands = [command for command in claimed if command is not None]
+    assert len(commands) == 1
+    assert commands[0]["control_id"] == control_id
+    stores[0].write_platform_state(
+        "twitter",
+        {"status": "running", "last_control_id": control_id},
+    )
+    stores[0].complete(
+        "twitter",
+        commands[0],
+        {"applied_count": 1, "round_num": 0},
+    )
 
-        # 2. RedisEventConsumer consumes event during tick execution
-        consumer = RedisEventConsumer(simulation_id=sim_id, redis_url="memory://")
-        events = consumer.consume_events()
-
-        assert len(events) >= 1
-        matched = [e for e in events if e.get("event_type") == "breaking_news"]
-        assert len(matched) == 1
-        assert matched[0]["payload"]["headline"] == "Policy Revision Announced"
+    status_response = client.get(
+        f"/api/simulation/{sim_id}/control/{control_id}"
+    )
+    assert status_response.status_code == 200
+    assert status_response.get_json()["data"]["status"] == "completed"
 
 
 @pytest.mark.asyncio
@@ -339,9 +363,6 @@ def test_multi_worker_e2e_simulation_lifecycle(client, isolate_simulation_storag
     """Full end-to-end multi-worker integration test covering start -> status polling -> injection -> WAL persistence."""
     sim_id = "sim_e2e_multi_worker_lifecycle"
     sim_dir = str(isolate_simulation_storage / sim_id)
-    # Force the in-memory event transport; see the note in
-    # test_live_pubsub_scenario_injection_during_tick.
-    monkeypatch.setattr(Config, "REDIS_URL", "memory://")
 
     # Pre-create simulation dir and canonical agents
     os.makedirs(sim_dir, exist_ok=True)
@@ -375,11 +396,16 @@ def test_multi_worker_e2e_simulation_lifecycle(client, isolate_simulation_storag
         total_rounds=1,
         current_round=1,
     )
+    current_run_state = {"value": completed_run_state}
 
     monkeypatch.setattr(execution_routes, "SimulationManager", E2EManager)
     monkeypatch.setattr(execution_routes, "_check_simulation_prepared", lambda sid: (True, {}))
     monkeypatch.setattr(SimulationRunner, "start_simulation", lambda **kwargs: completed_run_state)
-    monkeypatch.setattr(SimulationRunner, "get_run_state", lambda sid: completed_run_state)
+    monkeypatch.setattr(
+        SimulationRunner,
+        "get_run_state",
+        lambda sid: current_run_state["value"],
+    )
 
     # Step 1: Start simulation asynchronously -> 202 Accepted
     start_resp = client.post("/api/simulation/start", json={"simulation_id": sim_id, "platform": "parallel"})
@@ -392,13 +418,31 @@ def test_multi_worker_e2e_simulation_lifecycle(client, isolate_simulation_storag
     assert poll_resp.status_code == 200
     assert poll_resp.get_json()["data"]["status"] in ("pending", "processing", "completed")
 
-    # Step 3: Live scenario injection during tick
+    # Step 3: Durable scenario injection during an owned active attempt
+    attempt = RunAttemptStore().acquire(
+        sim_dir,
+        sim_id,
+        "worker-e2e",
+        30,
+    )
+    current_run_state["value"] = SimulationRunState(
+        simulation_id=sim_id,
+        runner_status=RunnerStatus.RUNNING,
+        twitter_running=True,
+        active_platforms=["twitter"],
+        attempt_id=attempt.attempt_id,
+        fencing_token=attempt.fencing_token,
+    )
     inject_resp = client.post(f"/api/simulation/{sim_id}/inject", json={
-        "event_type": "scenario_update",
-        "payload": {"announcement": "E2E Injection Verified"}
+        "event_type": "media_breaking_news",
+        "payload": {"summary": "E2E injection verified"},
+        "platforms": ["twitter"],
     })
-    assert inject_resp.status_code == 200
-    assert pop_in_memory_events(sim_id)[0]["payload"]["announcement"] == "E2E Injection Verified"
+    assert inject_resp.status_code == 202
+    control_id = inject_resp.get_json()["data"]["control_id"]
+    durable_status = RuntimeControlStore(sim_dir).get_status(control_id)
+    assert durable_status["status"] == "queued"
+    assert durable_status["args"]["payload"]["summary"] == "E2E injection verified"
 
     # Step 4: Verify post-completion SQLite WAL store persistence
     synced_db = sync_observation_store(sim_dir, run_state={"simulation_id": sim_id, "status": "completed"})

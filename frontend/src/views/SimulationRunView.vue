@@ -125,6 +125,11 @@ import {
 import GraphPanel from "../components/GraphPanel.vue";
 import ForkRunControl from "../components/ForkRunControl.vue";
 import Step3Simulation from "../components/Step3Simulation.vue";
+import {
+  RecordedGraphIdentityError,
+  recordedGraphReadError,
+  resolveRecordedGraphIdentity,
+} from "../utils/recordedGraphIdentity";
 
 const route = useRoute();
 const router = useRouter();
@@ -136,6 +141,7 @@ const maxRounds = ref(
 );
 const minutesPerRound = ref(30);
 const projectData = ref(null);
+const graphIdentity = ref(null);
 const graphData = ref(null);
 const graphLoading = ref(false);
 const contextLoading = ref(false);
@@ -233,6 +239,8 @@ const loadSimulationData = async () => {
   if (contextLoading.value) return;
   contextLoading.value = true;
   contextError.value = null;
+  graphIdentity.value = null;
+  graphData.value = null;
   try {
     addLog("Loading the saved scenario run…");
     const simRes = await getSimulation(currentSimulationId.value);
@@ -253,26 +261,33 @@ const loadSimulationData = async () => {
     }
 
     projectData.value = projRes.data;
-    if (projRes.data.graph_id) {
-      await loadGraph(projRes.data.graph_id, true);
-    }
+    graphIdentity.value = resolveRecordedGraphIdentity({
+      project: projRes.data,
+      simulation: simData,
+    });
+    await loadGraph(
+      graphIdentity.value.projectId,
+      graphIdentity.value.graphId,
+      true,
+    );
   } catch (err) {
     contextError.value =
-      "Its decision and source material could not be loaded. The run itself may still be available below.";
+      err instanceof RecordedGraphIdentityError
+        ? err.message
+        : "Its decision and source material could not be loaded. The run itself may still be available below.";
     addLog("The saved run context could not be loaded.");
   } finally {
     contextLoading.value = false;
   }
 };
 
-const loadGraph = async (id, surfaceError = false) => {
+const loadGraph = async (projectId, graphId, surfaceError = false) => {
   if (!isSimulating.value) graphLoading.value = true;
   try {
-    const res = await getGraphData(id);
+    const res = await getGraphData(projectId, graphId);
     if (!res.success || !res.data) {
       if (surfaceError) {
-        contextError.value =
-          "The decision loaded, but its supporting source map is temporarily unavailable.";
+        contextError.value = recordedGraphReadError(res).message;
       }
       return;
     }
@@ -287,8 +302,14 @@ const loadGraph = async (id, surfaceError = false) => {
   }
 };
 
-const refreshGraph = () =>
-  projectData.value?.graph_id && loadGraph(projectData.value.graph_id);
+const refreshGraph = async () => {
+  if (!graphIdentity.value) return;
+  await loadGraph(
+    graphIdentity.value.projectId,
+    graphIdentity.value.graphId,
+    true,
+  );
+};
 
 let graphRefreshTimer = null;
 const startGraphRefresh = () => {

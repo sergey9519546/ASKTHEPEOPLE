@@ -5,23 +5,25 @@ Uses project context mechanism, server-side persistent state
 
 import os
 import traceback
-from flask import request, jsonify
 
-from . import graph_bp
-from . import limiter
+from flask import jsonify, request
+
 from ..config import Config
-from ..services.ontology_generator import OntologyGenerator
-from ..services.graph_builder import GraphBuilderService
+from ..models.project import ProjectManager, ProjectStatus
+from ..models.task import TaskManager
 from ..services.claim_boundary import (
     graph_record_disclosure,
     model_proposed_schema_disclosure,
     synthetic_output_disclosure,
 )
+from ..services.graph_association import (
+    GraphAssociationError,
+    resolve_project_graph,
+)
+from ..services.graph_builder import GraphBuilderService
 from ..services.text_processor import TextProcessor
 from ..utils.file_parser import FileParser, FileParserLimitError
 from ..utils.file_security import validate_file_upload
-from ..utils.logger import get_logger
-from ..utils.response import truth_metadata
 from ..utils.input_policy import (
     ADDITIONAL_CONTEXT_MAX,
     EXTRACTED_TEXT_CHARACTERS_MAX,
@@ -33,8 +35,9 @@ from ..utils.input_policy import (
     validate_exploratory_use,
     validate_item_count,
 )
-from ..models.task import TaskManager, TaskStatus
-from ..models.project import ProjectManager, ProjectStatus
+from ..utils.logger import get_logger
+from ..utils.response import truth_metadata
+from . import graph_bp, limiter
 
 # Get Logger
 logger = get_logger('askthepeople.api')
@@ -63,6 +66,26 @@ def _attach_graph_record_provenance(graph_data: dict) -> dict:
         for edge in graph_data.get("edges", [])
     ]
     return disclosed
+
+
+def _resolve_owned_graph(graph_id: str):
+    """Resolve the canonical project association before any provider access.
+
+    A ZEP graph identifier is not an authorization capability.  The caller
+    must also supply a server-owned project identifier, and the current
+    canonical project record must name this exact completed graph.
+    """
+    try:
+        association = resolve_project_graph(
+            request.args.get("project_id"),
+            graph_id,
+        )
+    except GraphAssociationError as exc:
+        return None, (
+            jsonify({"success": False, "error": exc.code}),
+            exc.status_code,
+        )
+    return association.project, None
 
 
 def allowed_file(filename: str) -> bool:
@@ -119,6 +142,18 @@ def delete_project(project_id: str):
     """
     Delete project
     """
+    project = ProjectManager.get_project(project_id)
+    if not project:
+        return jsonify({
+            "success": False,
+            "error": f"Project does not exist: {project_id}",
+        }), 404
+    if project.status == ProjectStatus.GRAPH_BUILDING or project.graph_id:
+        return jsonify({
+            "success": False,
+            "error": "project_deletion_unavailable",
+        }), 409
+
     success = ProjectManager.delete_project(project_id)
     
     if not success:
@@ -145,6 +180,12 @@ def reset_project(project_id: str):
             "success": False,
             "error": f"Project does not exist: {project_id}"
         }), 404
+
+    if project.status == ProjectStatus.GRAPH_BUILDING or project.graph_id:
+        return jsonify({
+            "success": False,
+            "error": "graph_reset_unavailable",
+        }), 409
     
     # Reset to ontology generated state
     if project.ontology:
@@ -172,9 +213,10 @@ def generate_ontology():
     """
     Endpoint 1: Upload file, analyze and generate ontology definition (async)
 
-    Saves files and extracts text synchronously, then runs the LLM call in a
-    background thread to avoid Railway/proxy timeouts on long LLM responses.
-    Returns a task_id immediately; poll /api/graph/task/{task_id} for progress.
+    In the legacy filesystem mode, saves files and extracts text synchronously,
+    then queues the LLM call through Celery. Canonical persistence fails closed
+    until the reviewed source-ingestion pipeline owns object retrieval and
+    parsing. Returns a task_id immediately; poll /api/graph/task/{task_id} for progress.
     On completion, task.result contains the full project/ontology data.
 
     Request Method: multipart/form-data
@@ -210,6 +252,18 @@ def generate_ontology():
         if not Config.LLM_API_KEY:
             return jsonify({"success": False, "error": "LLM_API_KEY is not configured"}), 500
 
+        # The canonical repository returns an opaque object-store key from the
+        # upload seam. Passing that key to FileParser would treat it as a local
+        # path and either fail or bypass the required scan/review lifecycle.
+        # Keep the unfinished canonical source path dark until Task 4 owns the
+        # object read, quarantine, parser attempt, and review state.
+        if Config.USE_SUPABASE_PERSISTENCE:
+            return jsonify({
+                "success": False,
+                "error": "canonical_source_ingestion_unavailable",
+                "message": "Canonical source ingestion is not available.",
+            }), 503
+
         # Get parameters
         try:
             simulation_requirement = bounded_text(
@@ -224,7 +278,7 @@ def generate_ontology():
                 max_length=PROJECT_NAME_MAX,
                 required=True,
             )
-            additional_context = bounded_text(
+            bounded_text(
                 request.form.get('additional_context', ''),
                 field="additional_context",
                 max_length=ADDITIONAL_CONTEXT_MAX,
@@ -368,17 +422,21 @@ def generate_ontology():
 
         from ..tasks.graph_tasks import generate_ontology_task
         
-        generate_ontology_task.delay(
-            project_id=project.project_id,
-            text=all_text,
-            requirements=simulation_requirement,
-            task_id=task_id
+        generate_ontology_task.apply_async(
+            kwargs={
+                "project_id": project.project_id,
+                "text": all_text,
+                "requirements": simulation_requirement,
+                "task_id": task_id,
+            },
+            task_id=task_id,
         )
 
         return jsonify({
             "success": True,
             "data": {
                 "task_id": task_id,
+                "project_id": project.project_id,
                 "status": "processing"
             }
         }), 202, {'Location': f'/api/graph/task/{task_id}'}
@@ -402,7 +460,6 @@ def build_graph():
     Request (JSON):
         {
             "project_id": "proj_xxxx",  // Required, from Endpoint 1
-            "graph_name": "Graph Name",    // Optional
             "chunk_size": 500,          // Optional, default 500
             "chunk_overlap": 50         // Optional, default 50
         }
@@ -417,6 +474,8 @@ def build_graph():
             }
         }
     """
+    task_manager = None
+    task_id = None
     try:
         logger.info("=== Started building graph ===")
         
@@ -459,22 +518,28 @@ def build_graph():
                 "error": "Project has not generated ontology yet, please call /ontology/generate first"
             }), 400
         
-        if project.status == ProjectStatus.GRAPH_BUILDING and not force:
+        if project.status == ProjectStatus.GRAPH_BUILDING:
             return jsonify({
                 "success": False,
-                "error": "Graph is currently building, please do not submit repeatedly. To force rebuild, add force: true",
-                "task_id": project.graph_build_task_id
-            }), 400
+                "error": "graph_build_conflict",
+            }), 409
+
+        if force and (
+            project.status == ProjectStatus.GRAPH_COMPLETED or project.graph_id
+        ):
+            return jsonify({
+                "success": False,
+                "error": "graph_rebuild_unavailable",
+            }), 409
         
         # If force rebuild, reset status
-        if force and project.status in [ProjectStatus.GRAPH_BUILDING, ProjectStatus.FAILED, ProjectStatus.GRAPH_COMPLETED]:
-            project.status = ProjectStatus.ONTOLOGY_GENERATED
-            project.graph_id = None
-            project.graph_build_task_id = None
-            project.error = None
-        
+        prior_graph_state = {
+            "status": project.status,
+            "graph_id": project.graph_id,
+            "graph_build_task_id": project.graph_build_task_id,
+            "error": project.error,
+        }
         # Get configuration
-        graph_name = data.get('graph_name', project.name or 'ASKTHEPEOPLE Graph')
         chunk_size = data.get('chunk_size', project.chunk_size or Config.DEFAULT_CHUNK_SIZE)
         chunk_overlap = data.get('chunk_overlap', project.chunk_overlap or Config.DEFAULT_CHUNK_OVERLAP)
         
@@ -482,39 +547,58 @@ def build_graph():
         project.chunk_size = chunk_size
         project.chunk_overlap = chunk_overlap
         
-        # Get extracted text
-        text = ProjectManager.get_extracted_text(project_id)
-        if not text:
-            return jsonify({
-                "success": False,
-                "error": "Could not find extracted text content"
-            }), 400
-        
-        # Get ontology
-        ontology = project.ontology
-        if not ontology:
-            return jsonify({
-                "success": False,
-                "error": "Could not find ontology definition"
-            }), 400
-        
         # Create asynchronous task
         task_manager = TaskManager()
-        task_id = task_manager.create_task(f"Build Graph: {graph_name}")
+        task_id = task_manager.create_task("graph_build")
         logger.info(f"Created graph building task: task_id={task_id}, project_id={project_id}")
         
-        # Update project status
-        project.status = ProjectStatus.GRAPH_BUILDING
-        project.graph_build_task_id = task_id
-        ProjectManager.save_project(project)
+        if not ProjectManager.begin_graph_build(
+            project_id,
+            task_id,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            expected_status=prior_graph_state["status"],
+            expected_task_id=prior_graph_state["graph_build_task_id"],
+            force=force,
+        ):
+            try:
+                task_manager.fail_task(
+                    task_id,
+                    "graph_build_conflict",
+                    public_error="graph_build_conflict",
+                )
+            except Exception:
+                logger.error("graph begin conflict recovery failed project_id=%s", project_id)
+            return jsonify({"success": False, "error": "graph_build_conflict"}), 409
         
         from ..tasks.graph_tasks import build_graph_task
         
-        build_graph_task.delay(
-            project_id=project_id,
-            graph_name=graph_name,
-            task_id=task_id
-        )
+        try:
+            build_graph_task.apply_async(
+                kwargs={"project_id": project_id},
+                task_id=task_id,
+            )
+        except Exception:
+            recovery_state = dict(prior_graph_state)
+            if recovery_state["status"] != ProjectStatus.GRAPH_COMPLETED:
+                recovery_state["error"] = "graph_dispatch_failed"
+            try:
+                ProjectManager.unwind_graph_build_dispatch(
+                    project_id,
+                    task_id,
+                    recovery_state,
+                )
+            except Exception:
+                logger.error("graph dispatch unwind failed project_id=%s task_id=%s", project_id, task_id)
+            try:
+                task_manager.fail_task(
+                    task_id,
+                    "graph_dispatch_failed",
+                    public_error="graph_dispatch_failed",
+                )
+            except Exception:
+                logger.error("graph dispatch task recovery failed project_id=%s task_id=%s", project_id, task_id)
+            return jsonify({"success": False, "error": "graph_dispatch_failed"}), 503
         
         return jsonify({
             "success": True,
@@ -524,11 +608,26 @@ def build_graph():
             }
         }), 202, {'Location': f'/api/graph/task/{task_id}'}
         
-    except Exception as e:
+    except Exception as exc:
+        logger.error(
+            "graph build setup failed exception_type=%s",
+            type(exc).__name__,
+        )
+        if task_manager is not None and task_id is not None:
+            try:
+                task_manager.fail_task(
+                    task_id,
+                    "graph_build_setup_failed",
+                    public_error="graph_build_setup_failed",
+                )
+            except Exception:
+                logger.error(
+                    "graph build setup task recovery failed task_id=%s",
+                    task_id,
+                )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
+            "error": "graph_build_setup_failed",
         }), 500
 
 
@@ -579,13 +678,17 @@ def get_graph_data(graph_id: str):
     """
     Get graph data (nodes and edges)
     """
+    _project, ownership_error = _resolve_owned_graph(graph_id)
+    if ownership_error is not None:
+        return ownership_error
+
+    if not Config.ZEP_API_KEY:
+        return jsonify({
+            "success": False,
+            "error": "graph_dependency_unavailable",
+        }), 503
+
     try:
-        if not Config.ZEP_API_KEY:
-            return jsonify({
-                "success": False,
-                "error": "ZEP_API_KEY not configured"
-            }), 500
-        
         builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
         graph_data = _attach_graph_record_provenance(
             builder.get_graph_data(graph_id)
@@ -597,12 +700,15 @@ def get_graph_data(graph_id: str):
             "disclosure": synthetic_output_disclosure(),
         })
         
-    except Exception as e:
+    except Exception as exc:
+        logger.warning(
+            "graph read unavailable exception_type=%s",
+            type(exc).__name__,
+        )
         return jsonify({
             "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+            "error": "graph_read_unavailable",
+        }), 503
 
 
 @graph_bp.route('/delete/<graph_id>', methods=['DELETE'])
@@ -610,24 +716,15 @@ def delete_graph(graph_id: str):
     """
     Delete Zep graph
     """
-    try:
-        if not Config.ZEP_API_KEY:
-            return jsonify({
-                "success": False,
-                "error": "ZEP_API_KEY not configured"
-            }), 500
-        
-        builder = GraphBuilderService(api_key=Config.ZEP_API_KEY)
-        builder.delete_graph(graph_id)
-        
-        return jsonify({
-            "success": True,
-            "message": f"Graph deleted: {graph_id}"
-        })
-        
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+    _project, ownership_error = _resolve_owned_graph(graph_id)
+    if ownership_error is not None:
+        return ownership_error
+
+    # The current Project aggregate has no owner-fenced graph-delete state or
+    # recovery transition for an ambiguous provider response.  Mutating ZEP
+    # here could therefore orphan the canonical association.  Keep deletion
+    # unavailable until that durable state machine exists.
+    return jsonify({
+        "success": False,
+        "error": "graph_delete_unavailable",
+    }), 503

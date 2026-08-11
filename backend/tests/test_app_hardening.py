@@ -112,7 +112,12 @@ def test_health_fails_when_artifact_storage_is_not_writable(app, monkeypatch):
     assert payload["storage_writable"] is False
 
 
-def test_health_is_exempt_from_default_rate_limit(app):
+def test_health_is_exempt_from_default_rate_limit(app, monkeypatch):
+    # This is a rate-limit contract, not an external-dependency integration
+    # test. Keep all sixty liveness requests offline and deterministic.
+    monkeypatch.setattr("app.api.health.check_database", lambda: True)
+    monkeypatch.setattr("app.api.health.check_redis", lambda: True)
+    monkeypatch.setattr("app.api.health.check_celery", lambda: True)
     client = app.test_client()
     statuses = [client.get("/health").status_code for _ in range(60)]
     assert set(statuses) == {200}

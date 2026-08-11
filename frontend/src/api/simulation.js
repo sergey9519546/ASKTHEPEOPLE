@@ -108,6 +108,17 @@ export const stopSimulation = (data) => {
 };
 
 /**
+ * Get aggregate status for a durable runtime control.
+ * @param {string} simulationId
+ * @param {string} controlId
+ */
+export const getSimulationControlStatus = (simulationId, controlId) => {
+  return service.get(
+    `/api/simulation/${simulationId}/control/${controlId}`,
+  );
+};
+
+/**
  * Get simulation run status in real-time
  * @param {string} simulationId
  */
@@ -257,4 +268,3 @@ export const forkSimulation = (simulationId, targetTurn) => {
     target_turn: targetTurn,
   });
 };
-

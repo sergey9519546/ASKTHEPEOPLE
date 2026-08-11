@@ -167,3 +167,32 @@ def test_upload_route_rejects_renamed_malicious_file(client, monkeypatch, tmp_pa
     assert payload["error"] == "invalid_file"
     # And no half-created project is left behind on rejection.
     assert not any(tmp_path.joinpath("projects").glob("*"))
+
+
+def test_canonical_upload_fails_before_local_parser_or_project_write(
+    client,
+    monkeypatch,
+):
+    from app.models.project import ProjectManager
+    from app.utils.file_parser import FileParser
+
+    monkeypatch.setattr(Config, "USE_SUPABASE_PERSISTENCE", True)
+    monkeypatch.setattr(
+        ProjectManager,
+        "create_project",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("canonical route must not create a project")
+        ),
+    )
+    monkeypatch.setattr(
+        FileParser,
+        "extract_text",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("object keys must not reach the local parser")
+        ),
+    )
+
+    response = client.post("/api/graph/ontology/generate")
+
+    assert response.status_code == 503
+    assert response.get_json()["error"] == "canonical_source_ingestion_unavailable"
