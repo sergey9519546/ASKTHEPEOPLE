@@ -4,7 +4,15 @@ set -eu
 uploads_dir="/app/backend/uploads"
 logs_dir="/app/backend/logs"
 
-# A Railway volume replaces the image-owned directory with a root-owned mount.
+if [ "${TRANSITION_STORAGE_MARKER_REQUIRED:-false}" = "true" ]; then
+  if ! python /app/backend/scripts/prepare_transition_storage.py \
+    --verify-store "$uploads_dir" >/dev/null; then
+    echo "fatal: transition storage marker is missing or invalid" >&2
+    exit 78
+  fi
+fi
+
+# A transition bind mount replaces the image-owned directory with a root-owned mount.
 # Fix only the two application-writable locations, then permanently drop
 # privileges before starting Gunicorn or any simulation subprocess. Correct
 # the mount roots before creating children so a restricted-capability Compose

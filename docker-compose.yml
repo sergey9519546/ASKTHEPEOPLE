@@ -1,26 +1,66 @@
+# TRANSITION topology for one host only.
+#
+# Web, worker, and beat deliberately share the same durable uploads mount while
+# project, simulation, and report records remain filesystem-backed. Do not split
+# these services across hosts or use this file as canonical-persistence evidence.
 services:
+  redis:
+    image: redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    mem_limit: 768m
+    cpus: 0.15
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - redis-data:/data
+
   askthepeople:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_REVISION: ${BUILD_REVISION:?Set BUILD_REVISION to the exact git commit}
     image: askthepeople:latest
     container_name: askthepeople
     env_file:
-      - .env
+      - path: .env.transition
+        required: true
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      RATELIMIT_STORAGE_URI: redis://redis:6379/1
+      TRANSITION_STORAGE_MARKER_REQUIRED: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    labels:
+      com.askthepeople.deployment-mode: transition-single-host
     ports:
       - "127.0.0.1:5001:5001"
     restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 0.5
+    pids_limit: 256
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
     stop_grace_period: 5m
-    # The entrypoint starts as root only to repair the writable mount, then
-    # drops permanently to UID 10001 before Gunicorn or simulations start.
-    # These capabilities are the minimum needed for that transition and for
-    # inspecting a pre-existing restrictive bind mount. We do not set read_only
-    # because the app writes logs and generated artifacts.
     cap_drop:
       - "ALL"
     cap_add:
-      # Required only by the root entrypoint to repair bind-mount ownership
-      # and switch UID/GID; gosu drops them before the application starts.
       - "CHOWN"
       - "DAC_READ_SEARCH"
       - "SETGID"
@@ -30,5 +70,110 @@ services:
     tmpfs:
       - /tmp
     volumes:
-      # The entrypoint normalizes this exact mount to container UID 10001.
-      - ./backend/uploads:/app/backend/uploads
+      - ./.transition-data/uploads:/app/backend/uploads
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        BUILD_REVISION: ${BUILD_REVISION:?Set BUILD_REVISION to the exact git commit}
+    image: askthepeople-worker:latest
+    container_name: askthepeople-worker
+    working_dir: /app/backend
+    command: ["/app/backend/scripts/worker_wrapper.sh"]
+    env_file:
+      - path: .env.transition
+        required: true
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      RATELIMIT_STORAGE_URI: redis://redis:6379/1
+      TRANSITION_STORAGE_MARKER_REQUIRED: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    labels:
+      com.askthepeople.deployment-mode: transition-single-host
+    restart: unless-stopped
+    mem_limit: 7g
+    cpus: 1.25
+    pids_limit: 512
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    stop_grace_period: 5m
+    cap_drop:
+      - "ALL"
+    cap_add:
+      - "CHOWN"
+      - "DAC_READ_SEARCH"
+      - "SETGID"
+      - "SETUID"
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./.transition-data/uploads:/app/backend/uploads
+
+  beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        BUILD_REVISION: ${BUILD_REVISION:?Set BUILD_REVISION to the exact git commit}
+    image: askthepeople-worker:latest
+    container_name: askthepeople-beat
+    working_dir: /app/backend
+    command:
+      - sh
+      - -c
+      - cd /app/backend && exec celery -A app.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    # Dockerfile.worker's health check proves worker_ready and is therefore
+    # inapplicable to the scheduler-only process.
+    healthcheck:
+      disable: true
+    env_file:
+      - path: .env.transition
+        required: true
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      RATELIMIT_STORAGE_URI: redis://redis:6379/1
+      TRANSITION_STORAGE_MARKER_REQUIRED: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    labels:
+      com.askthepeople.deployment-mode: transition-single-host
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 0.1
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    stop_grace_period: 5m
+    cap_drop:
+      - "ALL"
+    cap_add:
+      - "CHOWN"
+      - "DAC_READ_SEARCH"
+      - "SETGID"
+      - "SETUID"
+    security_opt:
+      - "no-new-privileges:true"
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./.transition-data/uploads:/app/backend/uploads
+
+volumes:
+  redis-data:

@@ -29,7 +29,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends "gosu=${GOSU_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
-ARG BUILD_REVISION=unknown
+ARG BUILD_REVISION
 LABEL org.opencontainers.image.title="ASKTHEPEOPLE" \
     org.opencontainers.image.description="Synthetic scenario explorer" \
     org.opencontainers.image.source="https://github.com/sergey9519546/ASKTHEPEOPLE" \
@@ -40,7 +40,6 @@ ENV PATH="/app/backend/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     FLASK_APP=backend/run.py \
     FLASK_DEBUG=false \
-    BUILD_REVISION=${BUILD_REVISION} \
     PORT=5001
 
 COPY --from=backend-builder /app/backend/.venv /app/backend/.venv
@@ -50,6 +49,13 @@ COPY backend/run.py backend/wsgi.py /app/backend/
 COPY backend/docker-entrypoint.sh /usr/local/bin/askthepeople-entrypoint
 COPY LICENSE /usr/share/licenses/askthepeople/AGPL-3.0.txt
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+RUN printf '%s' "$BUILD_REVISION" \
+      | grep -Eq '^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$' \
+    && install -d -m 0755 /usr/share/askthepeople \
+    && printf '%s\n' "$BUILD_REVISION" \
+      > /usr/share/askthepeople/build-revision \
+    && chmod 0444 /usr/share/askthepeople/build-revision
 
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
     && install -d -o app -g app \
@@ -62,7 +68,8 @@ EXPOSE 5001
 STOPSIGNAL SIGTERM
 
 RUN cd /app/backend \
-    && python -c "import os, secrets; os.environ.update({'SECRET_KEY': secrets.token_urlsafe(32), 'APP_TOKEN': secrets.token_urlsafe(32), 'REQUIRE_APP_AUTH': 'true', 'LLM_API_KEY': 'build-validation-model-key', 'ZEP_API_KEY': 'build-validation-zep-key', 'CORS_ORIGINS': 'http://127.0.0.1'}); from wsgi import app; print('Validated WSGI import OK')"
+    && python -c "import os, secrets; os.environ.update({'SECRET_KEY': secrets.token_urlsafe(32), 'APP_TOKEN': secrets.token_urlsafe(32), 'REQUIRE_APP_AUTH': 'true', 'LLM_API_KEY': 'build-validation-model-key', 'ZEP_API_KEY': 'build-validation-zep-key', 'CORS_ORIGINS': 'http://127.0.0.1', 'DATABASE_URL': 'sqlite:////tmp/build-validation.db'}); from wsgi import app; print('Validated WSGI import OK')" \
+    && rm -f /tmp/build-validation.db
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:' + os.environ.get('PORT', '5001') + '/health', timeout=3).read()" || exit 1

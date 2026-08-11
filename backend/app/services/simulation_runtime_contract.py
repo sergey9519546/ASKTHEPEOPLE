@@ -406,15 +406,15 @@ def _build_event_content(event_type: str, payload: Dict[str, Any]) -> str:
         topics = [str(topic).strip() for topic in _listify(payload.get("topics")) if str(topic).strip()]
         if topics:
             return f"Topic spike: {', '.join(topics[:3])}"
-        return "Topic spike is accelerating across the network."
+        return ""
     if event_type == "official_statement":
-        return str(payload.get("statement") or payload.get("summary") or "Official statement released.").strip()
+        return str(payload.get("statement") or payload.get("summary") or "").strip()
     if event_type == "media_breaking_news":
-        return str(payload.get("headline") or payload.get("summary") or "Breaking news is spreading quickly.").strip()
+        return str(payload.get("headline") or payload.get("summary") or "").strip()
     if event_type == "seed_post":
-        return str(payload.get("summary") or "Follow-up seed post.").strip()
+        return str(payload.get("summary") or "").strip()
     if event_type == "inject_post":
-        return str(payload.get("summary") or "Injected post").strip()
+        return str(payload.get("summary") or "").strip()
     return ""
 
 
@@ -429,6 +429,7 @@ def _select_target_agent_ids(
     poster_agent_id = targeting.get("poster_agent_id")
     if isinstance(poster_agent_id, int):
         requested_ids.insert(0, poster_agent_id)
+    explicit_ids_requested = bool(requested_ids)
 
     unique_ids: List[int] = []
     seen = set()
@@ -441,6 +442,8 @@ def _select_target_agent_ids(
             unique_ids.append(agent_id)
     if unique_ids:
         return unique_ids[: max(fallback_limit, 1)]
+    if explicit_ids_requested:
+        return []
 
     roles = {
         str(role).strip().lower()
@@ -919,9 +922,13 @@ async def apply_runtime_control(
     action_type_cls: Any,
     round_num: int,
     action_logger: Any = None,
+    control_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     normalized = str(command_type or "").strip().lower()
     specs: List[Dict[str, Any]] = []
+    evidence_metadata = {
+        "runtime_control": dict(control_context or {}),
+    }
 
     if normalized == "inject_post":
         content = str(args.get("content", "")).strip()
@@ -946,8 +953,9 @@ async def apply_runtime_control(
                     "action_args": {"content": content},
                     "content": content,
                     "metadata": {
-                        "control_source": "ipc",
+                        "control_source": "durable_runtime_control",
                         "reasoning": args.get("reason"),
+                        **evidence_metadata,
                     },
                 }
             )
@@ -955,6 +963,14 @@ async def apply_runtime_control(
         event_type = str(args.get("event_type", "")).strip()
         if not event_type:
             raise ValueError("inject_event requires event_type")
+        if event_type not in {
+            "seed_post",
+            "official_statement",
+            "media_breaking_news",
+            "topic_spike",
+            "follow_wave",
+        }:
+            raise ValueError("inject_event event_type is unsupported")
         event = {
             "trigger_round": round_num,
             "platforms": args.get("platforms") or [platform],
@@ -966,7 +982,8 @@ async def apply_runtime_control(
         specs = _scheduled_event_specs(simulation_dir, {"agent_configs": config.get("agent_configs", []), "event_schedule": [event]}, platform, round_num)
         for spec in specs:
             spec.setdefault("metadata", {})
-            spec["metadata"]["control_source"] = "ipc"
+            spec["metadata"]["control_source"] = "durable_runtime_control"
+            spec["metadata"].update(evidence_metadata)
     else:
         raise ValueError(f"unsupported runtime control: {command_type}")
 
@@ -982,7 +999,12 @@ async def apply_runtime_control(
         event_log_path=scheduled_events_path(simulation_dir),
         action_logger=action_logger,
     )
-    return {"applied_count": applied, "round_num": round_num, "platform": platform}
+    return {
+        "applied_count": applied,
+        "round_num": round_num,
+        "platform": platform,
+        "runtime_control": dict(control_context or {}),
+    }
 
 
 async def apply_reflection_round(

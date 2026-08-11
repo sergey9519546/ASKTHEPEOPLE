@@ -8,12 +8,13 @@ import os
 import time
 import uuid
 from bisect import bisect_right
-from typing import Dict, Any, Optional
+from typing import Dict, Optional
 from ..celery_app import celery_app
 from ..models.task import TaskManager, TaskStatus
 from ..services.simulation_runner import SimulationRunner, RunnerStatus
 from ..config import Config
 from ..utils.logger import get_logger
+from ..utils.task_retry import is_retryable_task_exception as _is_retryable_task_exception
 
 logger = get_logger('askthepeople.tasks.simulation_tasks')
 
@@ -24,69 +25,11 @@ class SimulationInterruptedError(RuntimeError):
     """A run stopped because its durable owner heartbeat expired."""
 
 
-# Deterministic failure types that a retry can never fix. Retrying them only
-# burns the backoff budget and delays surfacing the real error to the user
-# (ADR-0003 retry classification; mirrors ZepToolsService._is_retryable at
-# services/zep_tools.py). These are imported lazily inside the predicate so a
-# missing/renamed module never breaks task dispatch.
-_DETERMINISTIC_ERROR_NAMES = {
-    "ProfileValidationError",
-    "InputPolicyError",
-    "ValueError",  # includes InputPolicyError; bad input won't change on retry
-    "KeyError",
-    "TypeError",
-    "AttributeError",
-    "FileNotFoundError",
-    "SafePathError",
-}
-
-
-def _is_retryable_task_exception(exc: BaseException) -> bool:
-    """Classify whether a Celery task exception is worth retrying.
-
-    Transient failures (connection resets, broker timeouts, 429/5xx from
-    upstream providers) plausibly succeed on a retry. Deterministic failures
-    (validation, input policy, missing files, bad arguments) will fail
-    identically on every attempt, so retrying only delays the user-visible
-    error.
-    """
-    # Explicit allowlist: only these are retried. Anything not here is final.
-    transient = (
-        ConnectionError,
-        TimeoutError,
-    )
-    if isinstance(exc, transient):
-        return True
-
-    # Connection-related exceptions from redis/requests/amqp often don't
-    # subclass ConnectionError; classify by name to catch them without
-    # importing every provider's exception hierarchy.
-    name = type(exc).__name__
-    if name in {"ConnectionError", "ConnectionResetError", "ConnectionRefusedError",
-                "ConnectTimeout", "ReadTimeout", "TimeoutError",
-                "BrokerConnectionError", "OperationalError"}:
-        return True
-
-    # HTTP-style upstream errors carrying a status code: retry 429 and 5xx.
-    status = getattr(exc, "status_code", None)
-    if status is not None:
-        return status == 429 or status >= 500
-
-    # Deterministic errors are explicitly final.
-    if name in _DETERMINISTIC_ERROR_NAMES:
-        return False
-
-    # Unknown errors default to non-retryable. This is the safe choice for a
-    # simulation pipeline: a surprise failure is more likely a bug than a
-    # transient blip, and silent retries can mask real issues (and spend
-    # budget). Operators who want a broader retry net can override the task
-    # decorator.
-    return False
-
-
 @celery_app.task(
     name='tasks.run_simulation_task',
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     # Retry policy is applied explicitly inside the task body via self.retry(),
     # gated by _is_retryable_task_exception — deterministic failures
     # (validation, input policy, missing files) are not retried, only
@@ -290,6 +233,8 @@ _PREPARE_STAGE_NAMES = {
 @celery_app.task(
     name='tasks.prepare_simulation_task',
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
     # Retry applied explicitly in the body via self.retry(), gated by
     # _is_retryable_task_exception — see run_simulation_task above.
 )
@@ -483,6 +428,8 @@ def prepare_simulation_task(
 @celery_app.task(
     name="tasks.finalize_decision_lens_preparation_task",
     bind=True,
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def finalize_decision_lens_preparation_task(
     self,

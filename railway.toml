@@ -15,6 +15,12 @@ watchPatterns = [
 ]
 
 [deploy]
+# RELEASE NO-GO: this config describes a single service while current graph
+# and report workers require same-host filesystem state. Railway can autodeploy
+# directly from GitHub independently of the repository Actions gate, so every
+# new deployment is blocked in the image until canonical shared persistence and
+# revision-atomic web/worker/beat deployment are implemented and reviewed.
+preDeployCommand = ["python /app/backend/scripts/block_legacy_railway_deploy.py"]
 # healthcheckPath applies to both web and worker services.
 # Worker runs worker_health.py which responds 200 at /health.
 # Web runs Flask which responds at /health.

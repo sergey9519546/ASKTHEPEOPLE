@@ -29,6 +29,7 @@ from .simulation_preflight import (
     run_preflight,
 )
 from .run_attempt_store import RunAttemptStore, StaleRunAttempt
+from .runtime_control_store import RuntimeControlStore
 from .simulation_limits import resolve_total_rounds
 
 logger = get_logger('askthepeople.simulation_runner')
@@ -127,6 +128,7 @@ class SimulationRunState:
     # Platform status
     twitter_running: bool = False
     reddit_running: bool = False
+    active_platforms: List[str] = field(default_factory=list)
     twitter_actions_count: int = 0
     reddit_actions_count: int = 0
     
@@ -191,6 +193,7 @@ class SimulationRunState:
             "reddit_simulated_hours": self.reddit_simulated_hours,
             "twitter_running": self.twitter_running,
             "reddit_running": self.reddit_running,
+            "active_platforms": list(self.active_platforms),
             "twitter_completed": self.twitter_completed,
             "reddit_completed": self.reddit_completed,
             "twitter_actions_count": self.twitter_actions_count,
@@ -372,6 +375,7 @@ class SimulationRunner:
                 reddit_simulated_hours=data.get("reddit_simulated_hours", 0),
                 twitter_running=data.get("twitter_running", False),
                 reddit_running=data.get("reddit_running", False),
+                active_platforms=list(data.get("active_platforms") or []),
                 twitter_completed=data.get("twitter_completed", False),
                 reddit_completed=data.get("reddit_completed", False),
                 twitter_actions_count=data.get("twitter_actions_count", 0),
@@ -649,11 +653,14 @@ class SimulationRunner:
         script_name = "run_parallel_simulation.py"
         if platform == "twitter":
             state.twitter_running = True
+            state.active_platforms = ["twitter"]
         elif platform == "reddit":
             state.reddit_running = True
+            state.active_platforms = ["reddit"]
         else:
             state.twitter_running = True
             state.reddit_running = True
+            state.active_platforms = ["twitter", "reddit"]
         
         script_path = os.path.join(cls.SCRIPTS_DIR, script_name)
         
@@ -789,6 +796,62 @@ class SimulationRunner:
             raise
 
         return state
+
+    @classmethod
+    def _read_runtime_control_state(
+        cls,
+        sim_dir: str,
+        state: SimulationRunState,
+    ) -> Dict[str, Any]:
+        store = RuntimeControlStore(sim_dir)
+        platform_states = {
+            platform: platform_state
+            for platform, platform_state in store.get_platform_states().items()
+            if (
+                platform_state.get("attempt_id") == state.attempt_id
+                and platform_state.get("fencing_token") == state.fencing_token
+            )
+        }
+        stop_control = None
+        if state.attempt_id is not None and state.fencing_token is not None:
+            stop_control = store.find_completed_control(
+                "stop",
+                attempt_id=state.attempt_id,
+                fencing_token=state.fencing_token,
+            )
+        return {
+            "platform_states": platform_states,
+            "stop_control": stop_control,
+        }
+
+    @classmethod
+    def _apply_runtime_control_state(
+        cls,
+        sim_dir: str,
+        state: SimulationRunState,
+    ) -> Optional[dict]:
+        snapshot = cls._read_runtime_control_state(sim_dir, state)
+        stop_control = snapshot["stop_control"]
+        if stop_control is not None:
+            state.runner_status = RunnerStatus.STOPPING
+            return stop_control
+
+        active_platforms = list(state.active_platforms)
+        platform_states = snapshot["platform_states"]
+        if active_platforms and all(
+            platform_states.get(platform, {}).get("status") == "paused"
+            for platform in active_platforms
+        ):
+            state.runner_status = RunnerStatus.PAUSED
+        elif state.runner_status == RunnerStatus.PAUSED and any(
+            platform_states.get(platform, {}).get("status") in {
+                "running",
+                "completed",
+            }
+            for platform in active_platforms
+        ):
+            state.runner_status = RunnerStatus.RUNNING
+        return None
     
     @classmethod
     def _monitor_simulation(cls, simulation_id: str):
@@ -858,7 +921,9 @@ class SimulationRunner:
                         on_round_end=_follower_round_callback,
                     )
 
-                # Update state
+                # Only the owning monitor translates durable worker controls
+                # into the public run-state artifact.
+                cls._apply_runtime_control_state(sim_dir, state)
                 cls._save_run_state(state)
                 time.sleep(2)
 
@@ -870,8 +935,11 @@ class SimulationRunner:
             
             # Process ended
             exit_code = process.returncode
-            
-            if state.runner_status in (RunnerStatus.STOPPING, RunnerStatus.STOPPED):
+            stop_control = cls._read_runtime_control_state(
+                sim_dir, state
+            )["stop_control"]
+
+            if exit_code == 0 and stop_control is not None:
                 state.runner_status = RunnerStatus.STOPPED
                 state.error = None
                 logger.info("Simulation stopped: %s", simulation_id)
@@ -902,14 +970,7 @@ class SimulationRunner:
                         simulation_id,
                         terminate_exc,
                     )
-            if state.runner_status in (RunnerStatus.STOPPING, RunnerStatus.STOPPED):
-                state.runner_status = RunnerStatus.STOPPED
-                state.error = None
-                logger.info(
-                    "Simulation monitor exited during an intentional stop: %s",
-                    simulation_id,
-                )
-            elif isinstance(exc, StaleRunAttempt):
+            if isinstance(exc, StaleRunAttempt):
                 lost_ownership = True
                 state.runner_status = RunnerStatus.INTERRUPTED
                 state.error = "run-attempt heartbeat expired"
@@ -1486,6 +1547,7 @@ class SimulationRunner:
         
         # List of directories to clean (including action logs)
         dirs_to_clean = ["twitter", "reddit"]
+        dirs_to_remove = ["runtime_controls"]
         
         # Delete files
         for filename in files_to_delete:
@@ -1509,6 +1571,15 @@ class SimulationRunner:
                             cleaned_files.append(f"{dir_name}/{log_name}")
                         except Exception as e:
                             errors.append(f"Failed to delete {dir_name}/{log_name}: {str(e)}")
+
+        for dir_name in dirs_to_remove:
+            dir_path = os.path.join(sim_dir, dir_name)
+            if os.path.exists(dir_path):
+                try:
+                    shutil.rmtree(dir_path)
+                    cleaned_files.append(dir_name)
+                except Exception as e:
+                    errors.append(f"Failed to delete {dir_name}: {str(e)}")
         
         # Clean up run state in memory
         if simulation_id in cls._run_states:
@@ -2167,10 +2238,8 @@ class SimulationRunner:
 
     @classmethod
     def stop_simulation(cls, simulation_id: str) -> SimulationRunState:
-        """Stop a live run without allowing the monitor to relabel it failed."""
-        state = cls._run_states.get(simulation_id)
-        if state is None:
-            state = cls.get_run_state(simulation_id)
+        """Compatibility service that queues stop without owning the child."""
+        state = cls.get_run_state(simulation_id)
         if state is None:
             raise ValueError(f"Simulation run does not exist: {simulation_id}")
 
@@ -2192,75 +2261,28 @@ class SimulationRunner:
                 f"Simulation is not running: {simulation_id}, "
                 f"status={state.runner_status.value}"
             )
-
-        state.runner_status = RunnerStatus.STOPPING
-        cls._save_run_state(state)
-
-        process = cls._processes.get(simulation_id)
-        if process and process.poll() is None:
-            try:
-                cls._terminate_process(process, simulation_id)
-            except (ProcessLookupError, OSError):
-                # The process exited between poll() and termination.
-                pass
-            except Exception as exc:
-                logger.error(
-                    "Failed to terminate process group for %s: %s",
-                    simulation_id,
-                    exc,
-                )
-                try:
-                    process.terminate()
-                    process.wait(timeout=5)
-                except Exception as fallback_exc:
-                    try:
-                        process.kill()
-                        process.wait(timeout=5)
-                    except Exception as kill_exc:
-                        state.runner_status = RunnerStatus.FAILED
-                        state.error = "runtime process could not be stopped"
-                        state.completed_at = datetime.now().isoformat()
-                        cls._save_run_state(state)
-                        sync_observation_store(
-                            cls._get_run_state_dir(simulation_id),
-                            run_state=state.to_detail_dict(),
-                        )
-                        raise RuntimeError(
-                            f"Failed to stop simulation runtime: {simulation_id}"
-                        ) from kill_exc
-                    logger.warning(
-                        "Graceful fallback stop failed for %s: %s",
-                        simulation_id,
-                        fallback_exc,
-                    )
-
-        monitor = cls._monitor_threads.get(simulation_id)
-        if (
-            monitor
-            and monitor is not threading.current_thread()
-            and monitor.is_alive()
-        ):
-            monitor.join(timeout=3)
-
-        state = cls._run_states.get(simulation_id, state)
-        if state.runner_status not in {
-            RunnerStatus.COMPLETED,
-            RunnerStatus.INTERRUPTED,
-            RunnerStatus.FAILED,
-        }:
-            state.runner_status = RunnerStatus.STOPPED
-            state.error = None
-            state.twitter_running = False
-            state.reddit_running = False
-            state.completed_at = state.completed_at or datetime.now().isoformat()
-            cls._save_run_state(state)
-            sync_observation_store(
-                cls._get_run_state_dir(simulation_id),
-                run_state=state.to_detail_dict(),
-            )
-
-        if not monitor or not monitor.is_alive():
-            cls._release_runtime_resources(simulation_id)
-
+        if state.attempt_id is None or state.fencing_token is None:
+            raise ValueError("Simulation run has no durable attempt identity")
+        platforms = list(state.active_platforms)
+        if not platforms:
+            if state.twitter_running:
+                platforms.append("twitter")
+            if state.reddit_running:
+                platforms.append("reddit")
+        if not platforms:
+            raise ValueError("Simulation run has no active platforms")
+        RuntimeControlStore(
+            cls._get_run_state_dir(simulation_id),
+            attempt_id=state.attempt_id,
+            fencing_token=state.fencing_token,
+        ).enqueue(
+            "stop",
+            {},
+            platforms,
+            idempotency_key=(
+                f"stop:{state.attempt_id}:{state.fencing_token}:"
+                f"{','.join(platforms)}"
+            ),
+        )
         return state
 

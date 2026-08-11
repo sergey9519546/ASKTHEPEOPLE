@@ -17,6 +17,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from ..config import Config
+from ..utils.build_revision import resolve_deployed_revision
 from ..utils.input_policy import PREPARED_PROFILE_MAX
 from .camel_model_factory import (
     validate_camel_runtime_imports,
@@ -374,11 +375,7 @@ def _write_run_manifest(
     payload = {
         "schema_version": 1,
         "generated_at": datetime.now(UTC).isoformat(),
-        "code_revision": (
-            os.environ.get("RAILWAY_GIT_COMMIT_SHA")
-            or os.environ.get("BUILD_REVISION")
-            or "unknown"
-        ),
+        "code_revision": resolve_deployed_revision() or "unknown",
         "simulation": {
             "simulation_id": config.get("simulation_id"),
             "project_id": config.get("project_id"),

@@ -168,6 +168,20 @@ jobs:
           push: false
           tags: askthepeople-ci:${{ github.sha }}
 
+      - name: Build the exact worker candidate image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          build-args: |
+            BUILD_REVISION=${{ github.sha }}
+          cache-from: type=gha,scope=ci-worker-container
+          cache-to: type=gha,mode=max,scope=ci-worker-container
+          context: .
+          file: Dockerfile.worker
+          load: true
+          provenance: false
+          push: false
+          tags: askthepeople-worker-ci:${{ github.sha }}
+
       - name: Start candidate and verify health and access boundary
         env:
           IMAGE_TAG: askthepeople-ci:${{ github.sha }}
@@ -249,6 +263,103 @@ jobs:
           )"
           printf '%s' "$authenticated" |
             jq -e '.success == true' >/dev/null
+
+      - name: Verify worker availability and beat command boundary
+        env:
+          TESTED_SHA: ${{ github.sha }}
+          WORKER_IMAGE_TAG: askthepeople-worker-ci:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          network_name="askthepeople-ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          redis_name="askthepeople-redis-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          worker_name="askthepeople-worker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          runtime_env="${RUNNER_TEMP}/worker-smoke.env"
+          cleanup() {
+            docker rm --force "$worker_name" >/dev/null 2>&1 || true
+            docker rm --force "$redis_name" >/dev/null 2>&1 || true
+            docker network rm "$network_name" >/dev/null 2>&1 || true
+            rm --force "$runtime_env"
+          }
+          trap cleanup EXIT
+
+          docker network create "$network_name" >/dev/null
+          docker run \
+            --detach \
+            --name "$redis_name" \
+            --network "$network_name" \
+            redis:7.4.2-alpine@sha256:02419de7eddf55aa5bcf49efb74e88fa8d931b4d77c07eff8a6b2144472b6952 >/dev/null
+
+          for attempt in $(seq 1 30); do
+            if docker exec "$redis_name" redis-cli ping 2>/dev/null |
+              grep -qx PONG; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs --tail 100 "$redis_name" >&2
+              echo "::error::Worker smoke Redis dependency did not become ready."
+              exit 1
+            fi
+            sleep 1
+          done
+
+          {
+            printf 'SECRET_KEY=%s\n' "$(openssl rand -hex 32)"
+            printf 'REQUIRE_APP_AUTH=true\n'
+            printf 'APP_TOKEN=%s\n' "$(openssl rand -hex 32)"
+            printf 'FLASK_DEBUG=false\n'
+            printf 'LLM_API_KEY=worker-smoke-model-key\n'
+            printf 'ZEP_API_KEY=worker-smoke-zep-key\n'
+            printf 'REDIS_URL=redis://%s:6379/0\n' "$redis_name"
+            printf 'CELERY_BROKER_URL=redis://%s:6379/0\n' "$redis_name"
+            printf 'CELERY_RESULT_BACKEND=redis://%s:6379/0\n' "$redis_name"
+            printf 'PORT=8080\n'
+          } > "$runtime_env"
+          chmod 0600 "$runtime_env"
+
+          docker run \
+            --detach \
+            --env-file "$runtime_env" \
+            --name "$worker_name" \
+            --network "$network_name" \
+            --publish 127.0.0.1:18080:8080 \
+            "$WORKER_IMAGE_TAG" >/dev/null
+
+          for attempt in $(seq 1 90); do
+            worker_health="$(
+              curl \
+                --fail \
+                --silent \
+                --show-error \
+                --max-time 3 \
+                http://127.0.0.1:18080/health || true
+            )"
+            if printf '%s' "$worker_health" |
+              jq -e \
+                --arg revision "$TESTED_SHA" \
+                '. == {status:"ok", service:"celery-worker", revision:$revision}' \
+                >/dev/null; then
+              test "$(
+                docker inspect \
+                  --format '{{.State.Health.Status}}' \
+                  "$worker_name"
+              )" = "healthy"
+              break
+            fi
+            if [ "$attempt" -eq 90 ]; then
+              docker logs --tail 200 "$worker_name" >&2
+              echo "::error::Worker never attested the tested image revision."
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker run \
+            --rm \
+            --entrypoint /bin/sh \
+            --env-file "$runtime_env" \
+            --network "$network_name" \
+            "$WORKER_IMAGE_TAG" \
+            -c 'cd /app/backend && celery -A app.celery_app beat --help >/dev/null'
 
   secret-scan:
     name: Secret scan (gitleaks)
@@ -361,7 +472,14 @@ jobs:
   deploy-production:
     name: Deploy tested main revision
     needs: gate
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # The legacy Railway workflow deploys only the web service while worker,
+    # beat, migrations, and filesystem-backed records are not revision-atomic.
+    # Undefined repository variables evaluate false, so release stays dark
+    # until the split-service topology is explicitly re-approved.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.RAILWAY_PRODUCTION_DEPLOYMENT_ENABLED == 'true'
     uses: ./.github/workflows/deploy.yml
     with:
       tested_sha: ${{ github.sha }}

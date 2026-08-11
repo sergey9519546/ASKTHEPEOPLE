@@ -3,30 +3,6 @@ title = "ASKTHEPEOPLE secret detection"
 [extend]
 useDefault = true
 
-[allowlist]
-description = "Global allowlist for non-production code"
-paths = [
-    '''^backend/tests/''',
-    '''^frontend/src/__tests__/''',
-    '''^docs/''',
-    '''^\.env\.example$''',
-    '''^\.env\.production$''',
-    '''^README\.md$''',
-    '''^NEXT_STEPS_ROADMAP\.md$''',
-]
-stopwords = [
-    "test",
-    "example",
-    "fixture",
-    "mock",
-    "fake",
-    "dummy",
-    "sample",
-    "placeholder",
-    "build-validation",
-    "ci-secret",
-]
-
 [[rules]]
 id = "generic-api-key"
 
@@ -44,19 +20,23 @@ id = "generic-api-key"
     regexes = ['''strong-secret-key-7b9f3d2c8a6e4f10''']
     paths = ['''^backend/tests/test_hardening_config\.py$''']
 
-    [[rules.allowlists]]
-    description = "Ignore a known generic-key false positive in removed vendored minified JavaScript."
-    paths = ['''^txt2graph/lib/vis-9\.1\.2/vis-network\.min\.js$''']
-
 [[rules]]
 id = "zep-api-key-assignment"
 description = "Detected a Zep API key assigned to application configuration."
 regex = '''(?i)\bZEP_API_KEY[\t ]*[=:][\t ]*["']?(z_[A-Za-z0-9._=-]{32,})'''
 secretGroup = 1
 
-    [[rules.allowlists]]
-    description = "Allow test fixtures and documentation examples"
-    paths = ['''^backend/tests/''', '''^docs/''', '''^README\.md$''', '''^\.env\.example$''']
+[[rules]]
+id = "firecrawl-api-key-assignment"
+description = "Detected a Firecrawl API key assigned to application configuration."
+regex = '''(?i)\bFIRECRAWL_API_KEY[\t ]*[=:][\t ]*["']?(fc-[A-Za-z0-9_-]{8,})'''
+secretGroup = 1
+
+[[rules]]
+id = "jina-api-key-assignment"
+description = "Detected a Jina API key assigned to application configuration."
+regex = '''(?i)\bJINA_API_KEY[\t ]*[=:][\t ]*["']?(jina_[A-Za-z0-9_-]{60})'''
+secretGroup = 1
 
 [[rules]]
 id = "brave-search-api-key-assignment"
@@ -64,16 +44,20 @@ description = "Detected a Brave Search API key assigned to application configura
 regex = '''(?i)\bBRAVE_SEARCH_API_KEY[\t ]*[=:][\t ]*["']?(BSA_[A-Za-z0-9_-]{20,})'''
 secretGroup = 1
 
-    [[rules.allowlists]]
-    description = "Allow test fixtures and documentation examples"
-    paths = ['''^backend/tests/''', '''^docs/''', '''^README\.md$''', '''^\.env\.example$''']
-
 [[rules]]
 id = "openai-compatible-api-key-assignment"
 description = "Detected an OpenAI-compatible API key assigned to application configuration."
 regex = '''(?i)\bLLM_API_KEY[\t ]*[=:][\t ]*["']?(sk-[A-Za-z0-9_-]{40,})'''
 secretGroup = 1
 
-    [[rules.allowlists]]
-    description = "Allow test fixtures and documentation examples"
-    paths = ['''^backend/tests/''', '''^docs/''', '''^README\.md$''', '''^\.env\.example$''']
+[[rules]]
+id = "groq-api-key-assignment"
+description = "Detected a Groq API key assigned to application configuration."
+regex = '''(?i)\b(?:LLM_API_KEY|LLM_BOOST_API_KEY|GROQ_API_KEY)[\t ]*[=:][\t ]*["']?(gsk_[A-Za-z0-9_-]{32,})'''
+secretGroup = 1
+
+[[rules]]
+id = "nvidia-api-key-assignment"
+description = "Detected an NVIDIA API key assigned to application configuration."
+regex = '''(?i)\b(?:LLM_API_KEY|LLM_BOOST_API_KEY|NVIDIA_API_KEY)[\t ]*[=:][\t ]*["']?(nvapi-[A-Za-z0-9._=-]{40,})'''
+secretGroup = 1

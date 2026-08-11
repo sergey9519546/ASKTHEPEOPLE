@@ -6,9 +6,13 @@
 .DS_Store
 .env
 .env.*
-!.env.example
 
 .claude
+.agents
+.codex
+.superpowers
+.transition-data
+.transition-backups
 .jules
 .kilo
 .qodo
@@ -23,6 +27,7 @@ backend/.venv
 __pycache__
 *.pyc
 .pytest_cache
+.pytest*
 .mypy_cache
 .ruff_cache
 
@@ -34,10 +39,29 @@ backend/log
 backend/logs
 backend/tests
 backend/scripts/test_*.py
+scratch
+
+# Never upload local persistence into a remote build context.
+*.db
+*.sqlite
+*.sqlite3
 
 docs
 static
 README*
+DEPLOY_CHECKLIST.md
+DEPLOYMENT_OPTIONS.md
+FREE_DEPLOYMENT_GUIDE.md
+PRE_DEPLOYMENT_AUDIT.md
+PRODUCTION_READY_SUMMARY.md
+RAILWAY_DEPLOY.md
+RAILWAY_DEPLOY.md.bak
+RAILWAY_QUICK_FIX.md
+RAILWAY_SETUP.md
+RAILWAY_FREE_TRIAL_STRATEGY.md
+CELERY_WORKER_SETUP.md
+FRONTEND_UPLOAD_FIX.md
+FRONTEND_UPLOAD_FIX_V2.md
 LICENSE
 docker-compose.yml
 render.yaml

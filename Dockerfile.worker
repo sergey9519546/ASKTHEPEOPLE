@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Celery worker service for Railway.
+# Celery worker image for the bounded single-host transition topology.
 # Shares all build stages with Dockerfile — only CMD differs.
 
 ARG NODE_IMAGE=node:24.18.0-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
@@ -28,7 +28,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends "gosu=${GOSU_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
-ARG BUILD_REVISION=unknown
+ARG BUILD_REVISION
 LABEL org.opencontainers.image.title="ASKTHEPEOPLE-worker" \
     org.opencontainers.image.description="Celery worker for ASKTHEPEOPLE" \
     org.opencontainers.image.source="https://github.com/sergey9519546/ASKTHEPEOPLE" \
@@ -40,7 +40,6 @@ ENV PATH="/app/backend/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     FLASK_APP=backend/run.py \
     FLASK_DEBUG=false \
-    BUILD_REVISION=${BUILD_REVISION} \
     PORT=8080
 
 COPY --from=backend-builder /app/backend/.venv /app/backend/.venv
@@ -50,6 +49,13 @@ COPY backend/run.py backend/wsgi.py /app/backend/
 COPY backend/docker-entrypoint.sh /usr/local/bin/askthepeople-entrypoint
 COPY LICENSE /usr/share/licenses/askthepeople/AGPL-3.0.txt
 COPY --from=frontend-builder /app/frontend/dist /app/frontend/dist
+
+RUN printf '%s' "$BUILD_REVISION" \
+      | grep -Eq '^[0-9a-fA-F]{40}([0-9a-fA-F]{24})?$' \
+    && install -d -m 0755 /usr/share/askthepeople \
+    && printf '%s\n' "$BUILD_REVISION" \
+      > /usr/share/askthepeople/build-revision \
+    && chmod 0444 /usr/share/askthepeople/build-revision
 
 RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
     && install -d -o app -g app \
@@ -62,10 +68,12 @@ RUN useradd --create-home --shell /usr/sbin/nologin --uid 10001 app \
 EXPOSE 8080
 STOPSIGNAL SIGTERM
 
+HEALTHCHECK --interval=5s --timeout=3s --start-period=20s --retries=6 \
+  CMD ["python", "-c", "import json,pathlib,urllib.request; expected=pathlib.Path('/usr/share/askthepeople/build-revision').read_text(encoding='ascii').strip().lower(); response=urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=2); payload=json.load(response); assert payload == {'status':'ok','service':'celery-worker','revision':expected}"]
+
 ENTRYPOINT ["/usr/local/bin/askthepeople-entrypoint"]
 
-# The wrapper backgrounds the health HTTP server (Railway requires /health to
-# return 200; Celery serves no HTTP) then execs Celery from /app/backend so the
-# `app` package resolves. Railway's startCommand for this service is set to the
-# same path, so CMD and startCommand agree.
+# The wrapper backgrounds the health HTTP server so the checked single-host
+# topology can attest worker readiness; Celery itself serves no HTTP. It then
+# runs Celery from /app/backend so the `app` package resolves.
 CMD ["/app/backend/scripts/worker_wrapper.sh"]

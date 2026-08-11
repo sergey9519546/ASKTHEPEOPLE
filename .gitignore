@@ -9,6 +9,10 @@ Thumbs.db
 .env.development
 .env.test
 .env.production
+.env.transition
+.env.transition.build
+.transition-data/
+.transition-backups/
 
 # Python
 __pycache__/
@@ -38,6 +42,7 @@ yarn-error.log*
 
 # 测试
 .pytest_cache/
+.pytest*/
 .coverage
 htmlcov/
 
