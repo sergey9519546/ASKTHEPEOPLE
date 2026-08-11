@@ -25,7 +25,7 @@ from ..services.report_evidence import load_report_evidence
 from ..services.report_generation_coordinator import (
     report_generation_coordinator,
 )
-from ..services.simulation_manager import SimulationManager
+from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.zep_tools import ZepToolsService
 from ..utils.input_policy import (
     CHAT_MESSAGE_MAX,
@@ -159,6 +159,34 @@ def generate_report():
                 "success": False,
                 "error": "report_simulation_not_found"
             }), 404
+
+        # Task 5 fix: report generation requires a terminal run. A simulation
+        # that is still PREPARING, RUNNING, or otherwise non-terminal must not
+        # enter report generation — its data is incomplete or in-flight.
+        # Terminal states (COMPLETED, STOPPED, INTERRUPTED, FAILED) may
+        # generate a report (a stopped/failed run has partial data worth
+        # surfacing, with the truth-contract disclosure handling the caveat).
+        # Use getattr so a legacy/mock simulation without a status attribute
+        # passes through rather than crashing.
+        _NON_TERMINAL = {
+            SimulationStatus.CREATED,
+            SimulationStatus.PREPARING,
+            SimulationStatus.NEEDS_REVIEW,
+            SimulationStatus.READY,
+            SimulationStatus.RUNNING,
+            SimulationStatus.PAUSED,
+        }
+        _status = getattr(state, "status", None)
+        if _status is not None and _status in _NON_TERMINAL:
+            return jsonify({
+                "success": False,
+                "error": "report_run_not_terminal",
+                "message": (
+                    f"Simulation status is '{state.status.value}'; report "
+                    "generation requires a terminal run (completed, stopped, "
+                    "interrupted, or failed)."
+                ),
+            }), 409
         
         # Check if report already exists
         if not force_regenerate:

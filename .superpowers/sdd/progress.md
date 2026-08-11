@@ -17,3 +17,10 @@
 - Task 7: not started.
 - Task 8: not started.
 - Task 9: not started.
+- Task 5: PARTIAL. Bounded fixes landed: /api/jobs get_instance crash fixed
+  (used TaskManager() singleton); report generation now requires a terminal
+  run (rejects RUNNING/PREPARING/etc with 409 report_run_not_terminal, with
+  getattr defense for legacy/mock states without a status attribute). 7
+  regression tests. The full 20-state durable run control plane, PostgreSQL
+  run/stage/event/lease tables, fencing tokens, heartbeats, and stalled-lease
+  recovery remain TARGET (require PostgreSQL infra).

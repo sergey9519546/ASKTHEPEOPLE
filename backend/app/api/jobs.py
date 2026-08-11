@@ -25,7 +25,7 @@ def get_job_status(task_id: str):
         200: Task exists, returns status
         404: Task not found
     """
-    task_manager = TaskManager.get_instance()
+    task_manager = TaskManager()  # singleton via __new__
     task = task_manager.get_task(task_id)
     
     if not task:
