@@ -31,7 +31,7 @@ dependencies = [
     # LLM-Related
     "openai>=1.0.0",
     # Zep Cloud
-    "zep-cloud==3.13.0",
+    "zep-cloud==3.27.0",
     # OASIS Social Media Simulation
     "camel-oasis==0.2.5",
     "camel-ai==0.2.78",  # pinned: camel-oasis==0.2.5 requires exactly this version
