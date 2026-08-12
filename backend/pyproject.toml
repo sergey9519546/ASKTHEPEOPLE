@@ -38,7 +38,7 @@ dependencies = [
     # OASIS imports torch directly from its recommendation engine; CPU build explicit
     "torch==2.13.0",
     # OASIS imports SentenceTransformer at module load
-    "sentence-transformers==5.6.1",
+    "sentence-transformers==5.7.0",
     # Security advisory override
     "transformers==5.14.1",
     # MCP server compatibility pin
@@ -70,7 +70,7 @@ explicit = true
 
 [tool.uv]
 override-dependencies = [
-    "sentence-transformers==5.6.1",
+    "sentence-transformers==5.7.0",
     "unstructured; sys_platform == 'never'",
     "pillow>=12.3.0",
     "pytest>=9.1.1,<10",
