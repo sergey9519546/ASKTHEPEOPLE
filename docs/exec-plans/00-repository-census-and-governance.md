@@ -185,8 +185,8 @@ allowlist with file/line/owner/expiry. Do not disable the linter globally.
 **Key file:line references:**
 
 - `backend/app/api/__init__.py:13-17 (Flask blueprints)`
-- `backend/app/api/simulation.py (~1,600 lines: read routes + shared helpers)`
-- `backend/app/api/routes/ (~2,300 lines: decomposed write/lifecycle handlers)`
+- `backend/app/api/simulation.py (510 lines: shared route helpers; route handlers live under backend/app/api/routes/)`
+- `backend/app/api/routes/ (~4,000 lines: decomposed simulation, workspace, source, and review handlers)`
 - `backend/app/services/simulation_runner.py:1 (82 KB runner)`
 - `backend/app/services/report_agent.py:1 (114 KB agent)`
 - `backend/uploads/ (filesystem storage)`

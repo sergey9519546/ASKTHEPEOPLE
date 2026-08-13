@@ -51,7 +51,7 @@ that no PR can claim the target without an acceptance-evidence bundle.
                                    │  Blueprints (api/__init__.py:13-17)│
                                    │   /api/auth       auth_bp           │
                                    │   /api/graph      graph_bp (29 KB)  │
-                                   │   /api/simulation simulation_bp (130 KB) ─── P0/P1 cluster
+                                   │   /api/simulation simulation_bp (routes/ + helpers)
                                    │   /api/report     report_bp  (48 KB)│
                                    │   /api/settings   settings_bp        │
                                    │   WebSocket       api/ws.py (flask-sock)│
@@ -72,7 +72,7 @@ that no PR can claim the target without an acceptance-evidence bundle.
                                                 │  IPC: simulation_ipc.py
                                                 │  invoked by:
                                                 │   • Celery task app/tasks/simulation_tasks.py
-                                                │   • in-process daemon thread (P0)
+                                                │   • runner-owned monitor thread for the child process
                                                 │
                                                 ▼
                                         OASIS / CAMEL runtime
@@ -94,25 +94,30 @@ directories, and build exports.
 |---|---|---|---:|---|
 | `/api/auth` | `auth_bp` | [`api/auth.py`](../../backend/app/api/auth.py) | 1 KB | CURRENT |
 | `/api/graph` | `graph_bp` | [`api/graph.py`](../../backend/app/api/graph.py) | 29 KB | CURRENT |
-| `/api/simulation` | `simulation_bp` | [`api/simulation.py`](../../backend/app/api/simulation.py) + [`api/routes/`](../../backend/app/api/routes/) | ~0.5 kloc helpers + ~3.2 kloc routes | **CURRENT (decomposition)** — all 41 route handlers now live in `api/routes/`; `simulation.py` holds only the shared helpers |
+| `/api/simulation` | `simulation_bp` | [`api/simulation.py`](../../backend/app/api/simulation.py) + [`api/routes/`](../../backend/app/api/routes/) | 0.5 kloc helpers + ~4.0 kloc routes | **CURRENT (decomposition)** — all simulation routes live in `api/routes/`; `simulation.py` holds only shared helpers |
 | `/api/report` | `report_bp` | [`api/report.py`](../../backend/app/api/report.py) | 48 KB | CURRENT (route layer) |
 | `/api/settings` | `settings_bp` | [`api/settings.py`](../../backend/app/api/settings.py) | 13 KB | CURRENT |
 | WebSocket | (none — registered in [`api/ws.py`](../../backend/app/api/ws.py)) | `api/ws.py` | 10 KB | CURRENT |
 
-`simulation_bp` was the 3,526-line, 54-function, 41-route controller identified
-by the integration audit. The decomposition (ADR-0011) is complete: all 41
-route handlers now live in `api/routes/`, and `simulation.py` is a 518-line
-helper module only — no route decorators remain in it:
+`simulation_bp` was the 3,526-line controller identified by the integration
+audit. The decomposition (ADR-0011) is complete: all simulation route
+handlers now live in `api/routes/`, and `simulation.py` is a 510-line helper
+module only — no route decorators remain in it. The application currently
+registers 60 `/api/simulation` URL rules, including dynamically registered
+source-ingestion routes:
 
 | Module | Route fns | Lines | Holds |
 |---|---:|---:|---|
-| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 508 | shared helpers `routes/` imports (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
-| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 17 | 961 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
-| [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 8 | 705 | start / stop / status / inject / env |
-| [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 557 | create / prepare / profiles / preflight |
+| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 510 | shared helpers imported by `routes/` (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
+| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 17 | 978 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
+| [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 10 | 916 | start / stop / status / inject / env / durable runtime controls |
+| [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 610 | create / prepare / profiles / preflight |
 | [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 4 | 562 | generated-response routes |
 | [`api/routes/export_routes.py`](../../backend/app/api/routes/export_routes.py) | 3 | 176 | config / script / survey download |
-| [`api/routes/entity_routes.py`](../../backend/app/api/routes/entity_routes.py) | 3 | 138 | graph entity listing |
+| [`api/routes/entity_routes.py`](../../backend/app/api/routes/entity_routes.py) | 3 | 179 | graph entity listing |
+| [`api/routes/decision_lens_routes.py`](../../backend/app/api/routes/decision_lens_routes.py) | dynamic | 222 | immutable decision-lens review |
+| [`api/routes/workspace_routes.py`](../../backend/app/api/routes/workspace_routes.py) | 1 | 43 | decision-workspace manifest |
+| [`api/routes/source_routes.py`](../../backend/app/api/routes/source_routes.py) | dynamic | 338 | feature-gated source-ingestion capability and commands |
 
 Every module in `api/routes/` must be listed in that package's `__init__.py`.
 `entity_routes` once was not, and the decorators it replaced were commented
@@ -420,9 +425,9 @@ in [`docs/exec-plans/`](../exec-plans/README.md):
 | Gate | Theme | Owner | Status |
 |---|---|---|---|
 | 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL — secrets hardened, MIME/magic-byte upload validation wired onto the live route, path-traversal/SSRF defenses, source-as-data prompt guard in place. Open P0s: multi-tenant isolation (deferred; needs a user-identity model), privacy/retention architecture, source-rights attestation. |
-| 1 | Typed API boundary | `askthepeople-architect` | CURRENT — `simulation.py` is now a 518-line helper module; all 41 routes live in `api/routes/` (prep, execution, interview, export, entity, read). No thread/subprocess/SQLite-directory-scan violations remain in routes; the `/posts` and `/comments` handlers now dispatch to a `simulation_activity_reader` service rather than opening SQLite inline. The typed request/response schema layer and `app/application/`+`app/domain/` packages remain gate 1 work. |
+| 1 | Typed API boundary | `askthepeople-architect` | PARTIAL — `simulation.py` is a 510-line helper module; simulation routes live in `api/routes/`, with typed schemas and `app/application/` + `app/domain/` foundations now present. No route owns a preparation daemon thread or opens the activity SQLite directly. Remaining: complete schema enforcement across legacy handlers and finish the route responsibility contract. |
 | 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — cleanup runs in Celery beat; Celery tasks classify transient retries; idempotent task admission uses an atomic cross-process Redis reservation with payload-conflict and missing-record recovery semantics; task updates fail closed after CAS contention; report deliveries use a durable single-owner execution fence. Open: renewable leases, heartbeats, monotonic fencing tokens enforced by artifact persistence, recovery/takeover, push-based event delivery, the four independent state machines, and process-local `SimulationRunner` ownership. |
-| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL — atomic writes (`save_project`, `save_extracted_text`) and source sha256 hashing at ingest are in; run-artifact digests exist. Open: PostgreSQL/object-storage canonical store (schema is dead scaffolding), soft-delete/audit-log, provenance-edge write-time validation. |
+| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL — tenant/workspace-scoped PostgreSQL repositories now cover projects/sources/runs and first-class path aggregates (`project_repository.py`, `source_repository.py`, `run_repository.py`, `path_repository.py`), with migrations and run-artifact digests. Open: production object-storage cutover, outbox events, soft-delete/audit-log, and complete provenance-edge write-time validation. |
 | 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED — observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting. Runbook and incident-response docs are concrete but the procedures are unimplemented. |
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL — CoT scrubbing is IMPLEMENTED (ADR-0010); a versioned prompt registry and a single OpenAI-compatible adapter exist; a narrow eval suite passes in CI. Open: most prompts still inlined, model-release gating, failure-mode catalogue, adversarial/sensitivity evals. |
 

@@ -89,9 +89,8 @@ contract. Use this file as the shared contract instead.
    warnings. CI will block the PR otherwise.
 4. **Do not add code to `backend/app/api/simulation.py`.** New handlers go in
    the per-resource modules under `backend/app/api/routes/`, which is what
-   `api/__init__.py` registers. The controller is down to ~1,600 lines and now
-   holds only the read-oriented routes that have not been moved yet, plus the
-   helpers every `routes/` module imports. It previously also carried
+   `api/__init__.py` registers. The controller is down to ~510 lines and now
+   holds only the helpers every `routes/` module imports. It previously also carried
    undecorated copies of all 24 handlers `routes/` serves: unreachable, kept in
    sync by hand, and called directly by tests, so a safety assertion could pass
    against code that never answered a request. Do not reintroduce that pattern.
@@ -152,8 +151,8 @@ column here cites the code so the claim can be checked rather than trusted.
 | Gate | Theme | Owner | Status | Landed so far |
 |---|---|---|---|---|
 | 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL | Path-escape defense (`backend/app/utils/safe_path.py`), SSRF defense on source ingestion (`backend/app/utils/safe_url.py`), bearer auth on `/api/*` and signed WebSocket tickets (`backend/app/__init__.py`, `backend/app/api/ws.py`), fail-closed `SECRET_KEY`/`APP_TOKEN` and production CORS refusal (`backend/app/config.py`), 5xx traceback scrubbing (`backend/app/__init__.py`). Remaining: full threat-model coverage per `docs/security/THREAT_MODEL.md` |
-| 1 | Typed API boundary | `askthepeople-architect` | PARTIAL | Route decomposition into `backend/app/api/routes/` is under way; `backend/app/api/simulation.py` still holds the read-oriented routes. Remaining: the typed boundary itself — there is no `app/application/` or `app/domain/` package and no request/response schema layer |
+| 1 | Typed API boundary | `askthepeople-architect` | PARTIAL | Simulation routes are decomposed under `backend/app/api/routes/`; typed schemas and the `app/application/` + `app/domain/` foundations are present. Remaining: complete schema enforcement across legacy handlers and finish the route responsibility contract |
 | 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL | Routes enqueue to Celery and return 202 instead of spawning daemon threads (`backend/app/api/routes/prep_routes.py`, `backend/app/tasks/simulation_tasks.py`); task state is shared through Redis with atomic updates (`backend/app/models/task.py`). Remaining: leases, fencing tokens, heartbeats, idempotency keys and retry classification per ADR 0003 |
-| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL | Alembic is initialised with an initial revision (`backend/alembic.ini`, `backend/migrations/versions/`) and `tenant_id` exists in `backend/app/db/schema.py`. Remaining: object storage, outbox events, immutable artifacts, and tenant isolation enforced at the query layer |
+| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL | Tenant/workspace-scoped repositories now cover projects, sources, runs, and first-class path aggregates (`backend/app/services/*_repository.py`) with Alembic migrations. Remaining: production object-storage cutover, outbox events, immutable artifacts, and tenant isolation enforced at the query layer |
 | 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED | — |
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL | Behavioural model layer exists under `backend/app/services/`; `big_five`, `prospect_theory` and `diffusion_model` are wired into profile generation and agent controls. Remaining: `constraint_engine`, `game_theory` and `calibration_metrics` have no production importer yet |

@@ -335,13 +335,16 @@ GRAPH_COMPLETED (visualization ready)
 These were discovered during the audit but not addressed in this immediate fix:
 
 1. **P1**: `backend/app/services/simulation_runner.py` uses class-method singleton antipattern
-2. **P1**: `backend/app/api/simulation.py` was a 3,526-line monolith — partially
-   decomposed; write/lifecycle handlers now live in `backend/app/api/routes/`
-   and the controller is ~1,600 lines of read routes plus shared helpers
+2. **P1**: `backend/app/api/simulation.py` was a 3,526-line monolith — the
+   decomposition is now complete: route handlers live in
+   `backend/app/api/routes/` and the controller is a ~510-line helper module
 3. ~~**P0**: Daemon threads in preparation endpoint (violates ADR-0003)~~ —
    closed; the prepare route enqueues `prepare_simulation_task` and returns 202
-4. **P1**: No PostgreSQL persistence (uses filesystem JSON)
-5. **P1**: No immutable provenance tracking
+4. **P1**: PostgreSQL persistence is now partially landed for tenant/workspace-
+   scoped projects, sources, runs, and path aggregates; object-storage cutover,
+   outbox events, and full tenant enforcement remain open
+5. **P1**: Immutable path/review domain objects and run-artifact digests exist;
+   complete provenance-edge write-time validation remains open
 
 These require larger architectural refactoring and are tracked separately.
 
