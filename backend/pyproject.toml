@@ -19,7 +19,7 @@ dependencies = [
     "redis>=5.0.0",
     # Database
     "sqlalchemy>=2.0.0",
-    "alembic>=1.13.0",
+    "alembic>=1.19.1",
     "psycopg[binary]>=3.2.0",  # PostgreSQL driver for SQLAlchemy 2 sync
     # Supabase — Storage + Auth client (Postgres goes through SQLAlchemy/psycopg)
     "supabase>=2.6.0",
