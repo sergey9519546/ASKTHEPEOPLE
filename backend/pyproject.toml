@@ -20,7 +20,7 @@ dependencies = [
     # Database
     "sqlalchemy>=2.0.0",
     "alembic>=1.13.0",
-    "psycopg[binary]>=3.2.0",  # PostgreSQL driver for SQLAlchemy 2 sync
+    "psycopg[binary]>=3.3.4",  # PostgreSQL driver for SQLAlchemy 2 sync
     # Supabase — Storage + Auth client (Postgres goes through SQLAlchemy/psycopg)
     "supabase>=2.6.0",
     "gotrue>=2.6.0",  # transitive but pinned for safety; supabase-py re-exports
