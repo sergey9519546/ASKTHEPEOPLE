@@ -158,6 +158,8 @@ def test_legacy_project_alias_is_preserved_but_invalid_alias_is_rejected() -> No
         ("artifact", "artifact"),
         ("audit", "audit"),
         ("service", "service"),
+        ("path", "path"),
+        ("path_set", "path_set"),
     ],
 )
 def test_durable_run_public_alias_kinds_use_independent_uuid7(

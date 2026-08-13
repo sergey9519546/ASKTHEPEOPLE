@@ -395,6 +395,13 @@ def create_app(config_class=Config):
     def api_not_found(path):
         return jsonify({"success": False, "error": "not_found"}), 404
 
+    # Health probes are operational API endpoints, never SPA routes. A typo
+    # such as /health/ready must fail closed instead of receiving index.html
+    # with HTTP 200 and falsely appearing healthy to a monitor.
+    @app.route('/health/<path:path>')
+    def health_not_found(path):
+        return jsonify({"success": False, "error": "not_found"}), 404
+
     # Serve static frontend files
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')

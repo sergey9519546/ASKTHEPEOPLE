@@ -11,12 +11,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from ..config import Config
+from ..domain.identifiers import new_public_id, new_uuid7
 
 logger = logging.getLogger(__name__)
 
@@ -55,9 +56,9 @@ class PathRepository:
         status: str,
         content_sha256: str,
     ) -> Dict[str, Any]:
-        ps_id = uuid4()
+        ps_id = new_uuid7()
         now = _utc_now()
-        public_id = f"path_set_{ps_id.hex[:32]}"
+        public_id = new_public_id("path_set", ps_id)
         engine = cls._get_engine()
         with engine.begin() as conn:
             conn.execute(text("""
@@ -125,10 +126,14 @@ class PathRepository:
         content_sha256: str,
         distinctness_sha256: str,
     ) -> Dict[str, Any]:
-        path_id = uuid4()
+        path_id = new_uuid7()
         now = _utc_now()
-        public_id = f"path_{path_id.hex[:32]}"
-        semantic_id = f"path_set_{path_set_id.hex[:32]}"
+        public_id = new_public_id("path", path_id)
+        # Semantic lineage is server-issued and independent of the physical
+        # row ID. The full revision/lineage resolver remains behind the Task
+        # 6 persistence gate; this transition repository must never derive a
+        # semantic alias from a physical UUID.
+        semantic_id = new_public_id("path_set", new_uuid7())
         engine = cls._get_engine()
         with engine.begin() as conn:
             conn.execute(text("""
@@ -194,7 +199,7 @@ class PathRepository:
         items: List[Dict[str, Any]],
         content_sha256: str,
     ) -> Dict[str, Any]:
-        review_id = uuid4()
+        review_id = new_uuid7()
         now = _utc_now()
         engine = cls._get_engine()
         with engine.begin() as conn:

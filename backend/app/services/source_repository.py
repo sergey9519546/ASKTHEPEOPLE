@@ -12,13 +12,14 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy import create_engine
 
 from ..config import Config
+from ..domain.identifiers import new_public_id, new_uuid7
 from ..domain.source_ingestion import SourceIngestionState
 
 logger = logging.getLogger(__name__)
@@ -58,9 +59,9 @@ class SourceRepository:
         created_by_actor_id: UUID,
     ) -> Dict[str, Any]:
         """Insert a new source aggregate at version 1."""
-        source_id = uuid4()
+        source_id = new_uuid7()
         now = _utc_now()
-        public_id = f"src_{source_id.hex}"
+        public_id = new_public_id("source", source_id)
         engine = cls._get_engine()
         with engine.begin() as conn:
             conn.execute(text("""
@@ -135,9 +136,9 @@ class SourceRepository:
         created_by_actor_id: UUID,
     ) -> Dict[str, Any]:
         """Insert a new source version (the upload/scan/parse/review record)."""
-        version_id = uuid4()
+        version_id = new_uuid7()
         now = _utc_now()
-        public_id = f"srcv_{version_id.hex}"
+        public_id = new_public_id("source_version", version_id)
         engine = cls._get_engine()
         with engine.begin() as conn:
             conn.execute(text("""

@@ -102,6 +102,14 @@ def test_health_check_open_even_when_auth_enabled(app, monkeypatch):
     assert payload['storage_writable'] is True
 
 
+def test_unknown_health_probe_does_not_receive_spa_fallback(app):
+    response = app.test_client().get("/health/ready")
+
+    assert response.status_code == 404
+    assert response.is_json
+    assert response.get_json() == {"success": False, "error": "not_found"}
+
+
 def test_health_fails_when_artifact_storage_is_not_writable(app, monkeypatch):
     monkeypatch.setattr("app.os.access", lambda *_args, **_kwargs: False)
     response = app.test_client().get("/health")

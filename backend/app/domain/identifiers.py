@@ -36,6 +36,8 @@ PublicIdKind = Literal[
     "source_flag",
     "source_review",
     "deletion_request",
+    "path",
+    "path_set",
 ]
 
 _PUBLIC_ID_PREFIXES = {
@@ -60,6 +62,8 @@ _PUBLIC_ID_PREFIXES = {
     "source_flag": "sflag",
     "source_review": "srev",
     "deletion_request": "del",
+    "path": "path",
+    "path_set": "path_set",
 }
 _LEGACY_PROJECT_PUBLIC_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 

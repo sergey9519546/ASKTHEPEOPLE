@@ -29,12 +29,13 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import text, create_engine
 from sqlalchemy.engine import Engine
 
 from ..config import Config
+from ..domain.identifiers import new_public_id, new_uuid7
 from ..domain.run_attempt import (
     RunCommandKind,
     RunGuardFacts,
@@ -87,12 +88,13 @@ class RunRepository:
         parent_run_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Insert a new run at DRAFT state, return the row as a dict."""
-        run_id = uuid4()
+        run_id = new_uuid7()
         now = _utc_now()
         engine = cls._get_engine()
         with engine.begin() as conn:
-            # Generate a public ID in the domain's format.
-            public_id = f"run_{run_id.hex}"
+            # Public identity is independent from the physical UUIDv7. This
+            # prevents the caller-visible alias from leaking row identity.
+            public_id = new_public_id("run", run_id)
             conn.execute(text("""
                 INSERT INTO dw_runs (
                     id, public_id, organization_id, workspace_id,
@@ -242,7 +244,7 @@ class RunRepository:
                 raise RuntimeError("run_version_conflict")
 
             # Record the transition event in the same transaction.
-            event_id = uuid4()
+            event_id = new_uuid7()
             conn.execute(text("""
                 INSERT INTO dw_run_events (
                     id, run_id, command, from_state, to_state,

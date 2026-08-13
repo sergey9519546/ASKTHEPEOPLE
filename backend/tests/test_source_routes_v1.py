@@ -129,6 +129,31 @@ def test_upload_intent_accepts_txt(enabled_client):
     assert data["byte_length"] == 500
 
 
+def test_persistence_enabled_requires_trusted_tenant_context(enabled_client, monkeypatch):
+    """Persistence must fail closed until authentication installs server scope."""
+    from app.api.routes import source_routes
+
+    monkeypatch.setattr(source_routes, "_persistence_configured", lambda: True)
+
+    upload = enabled_client.post(
+        "/api/simulation/sources/v1/upload-intent",
+        json={"filename": "source.txt", "byte_length": 500},
+    )
+    assert upload.status_code == 503
+    assert upload.get_json()["error"] == "tenant_context_unavailable"
+
+    status = enabled_client.get("/api/simulation/sources/v1/src_1/status")
+    assert status.status_code == 503
+    assert status.get_json()["error"] == "tenant_context_unavailable"
+
+    review = enabled_client.post(
+        "/api/simulation/sources/v1/src_1/review",
+        json={"disposition": "ACCEPTED_SOURCE_CONDITION"},
+    )
+    assert review.status_code == 503
+    assert review.get_json()["error"] == "tenant_context_unavailable"
+
+
 def test_review_rejects_invalid_disposition(enabled_client):
     resp = enabled_client.post(
         "/api/simulation/sources/v1/src_1/review",

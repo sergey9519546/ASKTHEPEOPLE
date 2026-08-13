@@ -248,10 +248,6 @@ def generate_ontology():
     try:
         logger.info("=== Starting ontology generation task ===")
 
-        # Validate API key upfront so we fail fast before touching the filesystem
-        if not Config.LLM_API_KEY:
-            return jsonify({"success": False, "error": "LLM_API_KEY is not configured"}), 500
-
         # The canonical repository returns an opaque object-store key from the
         # upload seam. Passing that key to FileParser would treat it as a local
         # path and either fail or bypass the required scan/review lifecycle.
@@ -316,6 +312,10 @@ def generate_ontology():
                 "success": False,
                 "error": "Please upload at least one document file"
             }), 400
+
+        # Validate provider configuration only after rejecting malformed input.
+        if not Config.LLM_API_KEY:
+            return jsonify({"success": False, "error": "LLM_API_KEY is not configured"}), 500
 
         # Create project
         project = ProjectManager.create_project(name=project_name)

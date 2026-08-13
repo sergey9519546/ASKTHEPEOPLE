@@ -18,7 +18,7 @@ change ``source_review=UNAVAILABLE``, expose a production route, or support
 a security claim."
 """
 
-from flask import jsonify, request
+from flask import g, jsonify, request
 
 from ...config import Config
 from ...domain.source_ingestion import (
@@ -60,6 +60,35 @@ def _unavailable():
         ),
         "source_review": "UNAVAILABLE",
     }), 503
+
+
+def _actor_context():
+    """Return the trusted request scope, if the auth layer installed one."""
+    from ...domain.actor_context import ActorContext
+
+    context = getattr(g, "actor_context", None)
+    return context if isinstance(context, ActorContext) else None
+
+
+def _tenant_context_unavailable():
+    return jsonify({
+        "success": False,
+        "error": "tenant_context_unavailable",
+        "message": "Canonical source operations require a server-derived tenant and actor context.",
+    }), 503
+
+
+def _actor_context_ready(context) -> bool:
+    """Whether the trusted context contains the complete source scope."""
+    return context is not None and context.project_id is not None
+
+
+def _record_in_actor_scope(record, context) -> bool:
+    """Check every canonical source scope dimension against trusted context."""
+    return _actor_context_ready(context) and all(
+        record.get(field) == getattr(context, field)
+        for field in ("organization_id", "workspace_id", "project_id")
+    )
 
 
 # --- Capability advertisement (always available) --- #
@@ -128,15 +157,17 @@ def register_source_routes(simulation_bp):
         # When persistence is configured, create a real source + version
         # record. Otherwise return the structured intent shape for test mode.
         if _persistence_configured():
-            from uuid import uuid4
+            actor_context = _actor_context()
+            if not _actor_context_ready(actor_context):
+                return _tenant_context_unavailable()
             from ...services.source_repository import SourceRepository
             try:
                 source = SourceRepository.create_source(
-                    organization_id=uuid4(),  # dev mode — real auth not yet wired
-                    workspace_id=uuid4(),
-                    project_id=uuid4(),
+                    organization_id=actor_context.organization_id,
+                    workspace_id=actor_context.workspace_id,
+                    project_id=actor_context.project_id,
                     display_name=filename,
-                    created_by_actor_id=uuid4(),
+                    created_by_actor_id=actor_context.actor_id,
                 )
                 version = SourceRepository.create_source_version(
                     source_id=source["id"],
@@ -205,9 +236,13 @@ def register_source_routes(simulation_bp):
                 ),
             }), 501
 
+        actor_context = _actor_context()
+        if not _actor_context_ready(actor_context):
+            return _tenant_context_unavailable()
+
         from ...services.source_repository import SourceRepository
         source = SourceRepository.get_source_by_public_id(source_id)
-        if not source:
+        if not source or not _record_in_actor_scope(source, actor_context):
             return jsonify({
                 "success": False,
                 "error": "source_not_found",
@@ -218,6 +253,15 @@ def register_source_routes(simulation_bp):
         version = None
         if version_id:
             version = SourceRepository.get_source_version(version_id)
+            if (
+                not version
+                or version.get("source_id") != source.get("id")
+                or not _record_in_actor_scope(version, actor_context)
+            ):
+                return jsonify({
+                    "success": False,
+                    "error": "source_version_not_found",
+                }), 404
 
         return jsonify({
             "success": True,
@@ -263,13 +307,17 @@ def register_source_routes(simulation_bp):
                 ),
             }), 501
 
+        actor_context = _actor_context()
+        if not _actor_context_ready(actor_context):
+            return _tenant_context_unavailable()
+
         # When persistence is configured, load the source and update its
         # version state through the review disposition. The domain kernel's
         # candidate-review logic (accept/revise/exclude) is pure and tested;
         # this is the persistence seam.
         from ...services.source_repository import SourceRepository
         source = SourceRepository.get_source_by_public_id(source_id)
-        if not source:
+        if not source or not _record_in_actor_scope(source, actor_context):
             return jsonify({
                 "success": False,
                 "error": "source_not_found",
@@ -283,7 +331,11 @@ def register_source_routes(simulation_bp):
             }), 404
 
         version = SourceRepository.get_source_version(version_id)
-        if not version:
+        if (
+            not version
+            or version.get("source_id") != source.get("id")
+            or not _record_in_actor_scope(version, actor_context)
+        ):
             return jsonify({
                 "success": False,
                 "error": "source_version_not_found",
