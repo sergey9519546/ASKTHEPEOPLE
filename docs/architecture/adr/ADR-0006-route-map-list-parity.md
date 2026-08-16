@@ -62,17 +62,18 @@ ADR is **TARGET**.
 
 ### Current state — PARTIAL
 
-- Frontend is a Vue 3 + Vite + vue-router + Pinia application
+- Frontend is a Vue 3 + Vite + vue-router application
   served by
-  [`backend/app/__init__.py:317-325`](../../../backend/app/__init__.py:317)
+  [`backend/app/__init__.py:317`](../../../backend/app/__init__.py:317)
   from `frontend/dist/`.
-- Route visualization uses D3 to render paths from a JSON
-  configuration; the design is documented in
+- Route visualization in the home view uses CSS-driven animations;
+  D3 is used in `GraphPanel.vue` for graph rendering, as documented in
   [`docs/design/ROUTE_GRAMMAR.md`](../../design/ROUTE_GRAMMAR.md).
 - The semantic route list as a first-class accessible alternative
-  is **not yet rendered**. There is no parity test asserting that
-  every fact and action in the visual map is reachable in the list
-  by keyboard and screen reader.
+  is **not yet rendered**. Keyboard and state-contract tests exist
+  for the source-map component, but parity tests asserting that
+  every visual fact and action has a corresponding list entry
+  (and vice versa) are not yet implemented.
 - The Route Grammar document calls out the qualitative-only
   constraint ("Line width, color, position, spacing, order, count
   and placement never communicate probability, support,

@@ -214,8 +214,8 @@ Recommended shell:
 
 | Region | Size |
 |---|---:|
-| Masthead | 64 px |
-| Truth Rail | 48–52 px |
+| Masthead | 72 px (4.5 rem) |
+| Truth Rail | 32 px (2 rem) |
 | Step spine | 216–240 px |
 | Primary paper surface | 680–760 px |
 | Route stage | Flexible remainder |

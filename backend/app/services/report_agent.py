@@ -26,6 +26,11 @@ from .report_generation_coordinator import (
     ReportGenerationCancelled,
     ReportGenerationLease,
 )
+from ..models.task import (
+    TaskExecutionConflict,
+    TaskStateContentionError,
+    TaskStateUnavailable,
+)
 from .report_evidence import build_report_evidence
 from .claim_boundary import synthetic_output_disclosure
 from .simulation_observation_store import search_observations
@@ -1095,7 +1100,35 @@ class ReportAgent:
         logger.info(f"ReportAgent initialized: graph_id={graph_id}, simulation_id={simulation_id}")
 
     def _generation_checkpoint(self) -> None:
-        if self._generation_lease is not None:
+        if self._generation_lease is None:
+            return
+        # Heartbeat: renew the renewable lease BEFORE the write-time validation,
+        # so a self-lapsed lease (a slow step that exceeded the horizon) is
+        # recovered for the rightful owner rather than aborting the report
+        # (ADR-0003). The durable renew validates owner+token+status and
+        # refreshes the lease in one transaction. Transient heartbeat failures
+        # must not abort a live report: only a real fence loss
+        # (TaskExecutionConflict) propagates; WATCH contention or a Redis hiccup
+        # is best-effort (the next write_guard still enforces claim validity).
+        renew = getattr(self._generation_lease, "renew_lease", None)
+        if callable(renew):
+            try:
+                renewed = renew()
+            except TaskExecutionConflict:
+                raise  # fence lost or token diverged — real ownership loss
+            except (TaskStateContentionError, TaskStateUnavailable):
+                logger.warning(
+                    "report heartbeat skipped (transient task-state contention)",
+                    exc_info=True,
+                )
+                return
+        else:
+            renewed = None
+        # A durable renew that returned a non-None Task already validated the
+        # claim this cycle, so the milestone checkpoint is redundant for it.
+        # A process-local renew returns None (no-op): still run checkpoint to
+        # surface cooperative cancellation on the progress milestone.
+        if renewed is None:
             self._generation_lease.checkpoint()
 
     def _generation_write_guard(self):

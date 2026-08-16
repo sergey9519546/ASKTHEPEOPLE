@@ -390,8 +390,8 @@ Recommended shell:
 
 | Region | Size |
 |---|---:|
-| Masthead | 64 px |
-| Truth Rail | 48–52 px |
+| Masthead | 72 px (4.5 rem) |
+| Truth Rail | 32 px (2 rem) |
 | Step spine | 216–240 px |
 | Primary paper surface | 680–760 px |
 | Route stage | Flexible remainder |
@@ -691,11 +691,12 @@ is **TARGET**. Owned by `askthepeople-frontend-steward`.
 
 ### Current state — PARTIAL
 
-- Frontend is Vue 3 + Vite + vue-router + Pinia. Built into
+- Frontend is Vue 3 + Vite + vue-router. Built into
   `frontend/dist/` and served by
   [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
-- Route visualization uses D3; the route grammar is documented
-  in [`docs/design/ROUTE_GRAMMAR.md`](ROUTE_GRAMMAR.md).
+- Route visualization in the home view uses CSS-driven animations;
+  D3 is used in `GraphPanel.vue` for graph rendering. The route
+  grammar is documented in [`docs/design/ROUTE_GRAMMAR.md`](ROUTE_GRAMMAR.md).
 - The Truth Rail, the per-screen contextual statements, and the
   full disclosure block are **not yet rendered** in the
   frontend. The text disclosures live in

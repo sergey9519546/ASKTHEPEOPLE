@@ -79,6 +79,25 @@ shared task manager updates — but the polling loop is a smell. Reaching
 this ADR requires push-based event delivery, durable heartbeats, and a
 fencing token.
 
+A subset of that contract now exists for report-generation deliveries (not the
+simulation polling path): `TaskExecutionFence` carries a renewable lease, a
+monotonic `fencing_token`, and heartbeat-driven renewal, with expired-lease
+takeover (`backend/app/models/task.py`). The renewal runs before the
+write-time validation so a self-lapsed lease (slow step, no takeover) is
+recovered for the rightful owner. A takeover emits an operator warning
+(`task_execution_takeover`) naming the displaced/seizing owners and the new
+token. The lease horizon is env-tunable (`TASK_LEASE_DURATION_SECONDS`); the
+legacy-lease migration grace is independently env-tunable
+(`TASK_MIGRATION_GRACE_MULTIPLIER`) so an operator can widen it during a rolling
+deploy without slowing new-code crash recovery. Old-code report workers do not
+refresh `task.updated_at` mid-run, so the grace window
+(`LEASE_DURATION_SECONDS × MIGRATION_GRACE_MULTIPLIER`) must exceed the longest
+plausible report run or a slow-but-alive legacy worker is seized after it
+expires. A legacy `None` lease falls back to `updated_at` rather than being
+instantly lapsed. Fence credentials are stripped from `to_public_dict`. The
+TARGET PostgreSQL job/event history and transactional fenced artifact writes
+are not yet implemented.
+
 ### In-process daemon thread — release-blocker (audit P0)
 
 The preparation endpoint in

@@ -27,6 +27,8 @@
   --signal-tint: rgba(240, 75, 61, 0.14);
   --signal-wash: rgba(240, 75, 61, 0.24);
   --signal-rule: rgba(240, 75, 61, 0.42);
+  --signal-aura: rgba(240, 75, 61, 0.04);
+  --signal-haze: rgba(240, 75, 61, 0.08);
   /* Text variants meet WCAG AA on the warm paper surfaces. Keep the brighter
      colors for borders, fills, and status marks rather than small copy. */
   --signal-text: #982d24;
@@ -94,7 +96,9 @@
   --z-palette: 25;
   --z-crash: 26;
 
-  /* Legacy component aliases */
+  /* DEPRECATED legacy aliases — preserved for backward compatibility only.
+     All new code should use the canonical tokens (e.g. --ink, --paper, --signal).
+     See docs/design/DIRECTION_C.md and docs/architecture/index.md. */
   --bg-void: var(--ink);
   --bg-base: var(--ink-deep);
   --bg-panel: var(--ink-soft);

@@ -12,7 +12,7 @@ import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, Optional
 
@@ -128,6 +128,8 @@ class Task:
     idempotency_key: Optional[str] = None  # ADR-0003: dedupes double-submits
     idempotency_fingerprint: Optional[str] = None
     execution_owner: Optional[str] = None
+    fencing_token: int = 0  # Gate 2: monotonic counter incremented on claim
+    lease_expires_at: Optional[datetime] = None  # Gate 2: renewable lease horizon
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to an internal dictionary, including diagnostic details."""
@@ -147,6 +149,12 @@ class Task:
             "idempotency_key": self.idempotency_key,
             "idempotency_fingerprint": self.idempotency_fingerprint,
             "execution_owner": self.execution_owner,
+            "fencing_token": self.fencing_token,
+            "lease_expires_at": (
+                self.lease_expires_at.isoformat()
+                if isinstance(self.lease_expires_at, datetime)
+                else self.lease_expires_at
+            ),
         }
 
     def to_public_dict(self) -> Dict[str, Any]:
@@ -156,8 +164,14 @@ class Task:
             payload["error"] = self.public_error or "task_failed"
         else:
             payload["error"] = None
-        # The worker token is an internal fencing credential, never API data.
+        # Internal fencing credentials — never API data. The worker token,
+        # the monotonic fencing token, and the lease horizon are all owned by
+        # the worker layer; leaking the horizon lets a hostile client time a
+        # takeover race against a wedged worker, and the fencing token is half
+        # the renew_lease credential pair.
         payload.pop("execution_owner", None)
+        payload.pop("fencing_token", None)
+        payload.pop("lease_expires_at", None)
         return payload
 
     @classmethod
@@ -187,6 +201,16 @@ class Task:
         except (TypeError, ValueError):
             raise TaskStateUnavailable("task_status_invalid") from None
 
+        raw_lease = d.get("lease_expires_at")
+        lease_expires_at = None
+        if isinstance(raw_lease, str):
+            try:
+                lease_expires_at = datetime.fromisoformat(raw_lease)
+            except ValueError:
+                lease_expires_at = None
+        elif isinstance(raw_lease, datetime):
+            lease_expires_at = raw_lease
+
         return cls(
             task_id=d["task_id"],
             task_type=d.get("task_type", "unknown"),
@@ -203,29 +227,110 @@ class Task:
             idempotency_key=d.get("idempotency_key"),
             idempotency_fingerprint=d.get("idempotency_fingerprint"),
             execution_owner=d.get("execution_owner"),
+            fencing_token=d.get("fencing_token", 0),
+            lease_expires_at=lease_expires_at,
         )
+
+
+# Renewable lease horizon for a durable execution claim (ADR-0003). While a
+# worker heartbeats inside this window its PROCESSING claim is exclusive; once
+# the lease lapses a new delivery may take over, bumping the fencing token.
+# Tunable via env so a slow LLM provider can raise the horizon at deploy without
+# a code change.
+def _positive_int_env(name: str, default: int) -> int:
+    """Read a positive-int env var, degraded (not bricked) on a malformed value.
+
+    A non-integer falls back to the default rather than raising at import,
+    mirroring how ``from_dict`` swallows malformed timestamps. A non-positive
+    value is also rejected (e.g., a zero/negative lease horizon would make every
+    claim immediately lapsed).
+    """
+    raw = os.environ.get(name, str(default))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        logger.warning("%s=%r is not an int; falling back to %d", name, raw, default)
+        return default
+    if value <= 0:
+        logger.warning("%s=%r must be positive; falling back to %d", name, raw, default)
+        return default
+    return value
+
+
+LEASE_DURATION_SECONDS = _positive_int_env("TASK_LEASE_DURATION_SECONDS", 30)
+# Legacy records (``lease_expires_at is None``) predate the renewable lease. The
+# None-branch of ``_lease_is_lapsed`` falls back to ``updated_at`` rather than
+# treating them as instantly lapsed, so a rolling deploy does not seize a live
+# old-code worker. Because old-code report workers do not refresh
+# ``task.updated_at`` mid-run, this grace must comfortably exceed the longest
+# plausible report run or a slow-but-alive legacy worker would be seized after
+# the grace expires. The default 6x multiple lets a legacy worker stay unseized
+# for ~3min; raise ``TASK_MIGRATION_GRACE_MULTIPLIER`` before deploying if
+# reports routinely take longer. Decoupled from ``TASK_LEASE_DURATION_SECONDS``
+# so an operator can widen the migration grace during a rolling deploy without
+# also delaying crash-recovery latency for new-code workers (which refresh the
+# lease every checkpoint).
+LEASE_GRACE_MULTIPLIER = _positive_int_env("TASK_MIGRATION_GRACE_MULTIPLIER", 6)
+
+
+def _lease_is_lapsed(task: "Task", now: datetime) -> bool:
+    """True if a PROCESSING task's renewable lease has expired.
+
+    A live lease horizon is checked directly. A legacy record written before
+    leases existed carries ``lease_expires_at is None``; rather than treating
+    that as immediately lapsed (which would silently seize an in-flight claim
+    during a rolling deploy), fall back to the task's last progress write
+    (``updated_at``). Old-code report workers do not refresh
+    ``task.updated_at`` mid-run, so this grace window must comfortably exceed
+    the longest plausible report run or a slow-but-alive legacy worker would
+    be seized after the grace expires. Only a stale ``updated_at`` (the worker
+    is wedged/dead) becomes eligible for takeover after the grace window.
+    New-code claims overwrite ``lease_expires_at`` on first contact, so this
+    fallback only governs the deploy migration window.
+    """
+    if task.lease_expires_at is not None:
+        return task.lease_expires_at <= now
+    last_contact = getattr(task, "updated_at", None)
+    if last_contact is None:
+        return True
+    return (now - last_contact) > timedelta(
+        seconds=LEASE_DURATION_SECONDS * LEASE_GRACE_MULTIPLIER
+    )
 
 
 @dataclass(frozen=True)
 class TaskExecutionFence:
-    """A report-writer guard bound to one durable task execution owner.
+    """A report-writer guard bound to one durable, renewable task execution owner.
 
-    This is deliberately not a renewable lease. It prevents concurrent
-    deliveries and re-checks ownership at report checkpoints, but a worker
-    crash leaves the task fail-closed in PROCESSING until an operator or a
-    future durable orchestrator performs an explicit recovery transition.
+    Owns a renewable lease (``lease_expires_at``) plus a monotonic fencing
+    token. ``renew_lease`` refreshes the lease; ``checkpoint`` re-checks both
+    ownership and that the lease has not lapsed. A worker crash lets the lease
+    expire, after which a new claim can take over by incrementing the fencing
+    token — any write the dead worker's stale fence attempts then fails closed.
     """
 
     manager: "TaskManager"
     task_id: str
     owner: str
+    fencing_token: int = 0
 
     @property
     def cancelled(self) -> bool:
         return False
 
+    def renew_lease(self) -> Task:
+        """Refresh the renewable lease (heartbeat). Idempotent for the live owner."""
+        return self.manager.renew_lease(self.task_id, self.owner, self.fencing_token)
+
     def checkpoint(self) -> None:
-        self.manager.assert_task_execution_owner(self.task_id, self.owner)
+        task = self.manager.assert_task_execution_owner(self.task_id, self.owner)
+        # Lease expired: a newer delivery may take over. Refuse the write.
+        if _lease_is_lapsed(task, datetime.now()):
+            raise TaskExecutionConflict("task_execution_fence_expired")
+        # Strict monotonic enforcement: a higher recorded token means a newer
+        # delivery already took the fence.
+        if getattr(task, 'fencing_token', 0) > self.fencing_token:
+            raise TaskExecutionConflict("task_execution_fence_token_divergence")
 
     @contextmanager
     def write_guard(self, *, allow_cancelled: bool = False):
@@ -704,11 +809,13 @@ class TaskManager:
     ) -> Task:
         """Atomically claim one task delivery for a single worker owner.
 
-        A second owner never proceeds while the task is PROCESSING. The claim
-        is durable and checked again by ``TaskExecutionFence`` around report
-        checkpoints and writes. There is intentionally no automatic takeover:
-        without a durable heartbeat/fencing-token store, takeover would permit
-        a paused worker to resume and write concurrently.
+        A second owner never proceeds while the task is PROCESSING and its
+        renewable lease is live. The claim is durable and re-checked by
+        ``TaskExecutionFence`` around report checkpoints and writes. Once a
+        worker's lease lapses (crash/heartbeat gap), this method takes over:
+        the new owner re-claims, increments the fencing token, and refreshes
+        the lease. The dead worker's stale fence then fails closed on every
+        write, so a paused worker cannot resume and write concurrently.
         """
         if not isinstance(owner, str) or not owner:
             raise ValueError("task_execution_owner_invalid")
@@ -748,22 +855,44 @@ class TaskManager:
                             expected_metadata=expected_metadata,
                         )
 
+                        now = datetime.now()
                         if task.status is TaskStatus.COMPLETED:
                             return task
                         if task.status in (TaskStatus.FAILED, TaskStatus.CANCELLED):
                             raise TaskExecutionConflict("task_execution_terminal")
+                        takeover_prev_owner = None
                         if task.status is TaskStatus.PROCESSING:
-                            if task.execution_owner == owner:
+                            lapsed = _lease_is_lapsed(task, now)
+                            if task.execution_owner == owner and not lapsed:
                                 return task
-                            raise TaskExecutionConflict()
+                            if not lapsed:
+                                raise TaskExecutionConflict("task_execution_in_progress")
+                            # Lease lapsed: a crashed/wedged worker's claim
+                            # expired. Fall through to the write block, which
+                            # re-claims for this owner and increments the fencing
+                            # token (takeover). Record the displaced owner so the
+                            # operator can see a worker lost its lease mid-run.
+                            takeover_prev_owner = task.execution_owner
 
                         task.status = TaskStatus.PROCESSING
                         task.execution_owner = owner
+                        task.fencing_token += 1
+                        task.lease_expires_at = now + timedelta(seconds=LEASE_DURATION_SECONDS)
                         if progress is not None:
                             task.progress = progress
                         if message is not None:
                             task.message = message
-                        task.updated_at = datetime.now()
+                        task.updated_at = now
+                        if takeover_prev_owner is not None:
+                            logger.warning(
+                                "task_execution_takeover: task %s lease lapsed;"
+                                " owner %r (token %d) -> %r (token %d)",
+                                task_id,
+                                takeover_prev_owner,
+                                task.fencing_token - 1,
+                                owner,
+                                task.fencing_token,
+                            )
                         pipe.multi()
                         pipe.set(
                             key,
@@ -817,8 +946,93 @@ class TaskManager:
             self._drop_redis(exc)
             raise TaskStateUnavailable() from None
 
+    def renew_lease(
+        self,
+        task_id: str,
+        owner: str,
+        fencing_token: int,
+    ) -> Task:
+        """Refresh the renewable execution lease for one owner.
+
+        Atomically (WATCH/MULTI) re-asserts the owner holds the recorded
+        ``fencing_token`` and a live PROCESSING status, then extends
+        ``lease_expires_at``. A stale fence whose token was superseded by a
+        takeover raises ``TaskExecutionConflict``; a lapsed lease is renewed,
+        not rejected.
+        """
+        redis_client = self._get_redis()
+        if redis_client is None:
+            raise TaskStateUnavailable()
+        key = f"task:{task_id}"
+        try:
+            for _ in range(_MAX_UPDATE_ATTEMPTS):
+                with redis_client.pipeline() as pipe:
+                    try:
+                        pipe.watch(key)
+                        raw = pipe.get(key)
+                        if not raw:
+                            raise TaskExecutionConflict("task_execution_not_found")
+                        task = Task.from_dict(json.loads(raw))
+                        reservation_state = None
+                        if task.idempotency_key is not None:
+                            reservation_key = self._idempotency_reservation_key(
+                                task.idempotency_key
+                            )
+                            pipe.watch(reservation_key)
+                            reservation_state = self._validate_reservation_for_task(
+                                pipe, task
+                            )
+                        if (
+                            task.status is not TaskStatus.PROCESSING
+                            or task.execution_owner != owner
+                        ):
+                            raise TaskExecutionConflict("task_execution_fence_lost")
+                        if getattr(task, "fencing_token", 0) != fencing_token:
+                            raise TaskExecutionConflict(
+                                "task_execution_fence_token_divergence"
+                            )
+                        task.lease_expires_at = datetime.now() + timedelta(
+                            seconds=LEASE_DURATION_SECONDS
+                        )
+                        task.updated_at = task.lease_expires_at
+                        pipe.multi()
+                        pipe.set(
+                            key,
+                            json.dumps(task.to_dict()),
+                            ex=TASK_TTL_SECONDS,
+                        )
+                        if reservation_state is not None:
+                            reservation_key, raw_reservation = reservation_state
+                            pipe.set(
+                                reservation_key,
+                                raw_reservation,
+                                ex=TASK_TTL_SECONDS,
+                            )
+                        # A heartbeat changes only lease_expires_at/updated_at.
+                        # The task is already in TASK_INDEX_KEY (added on
+                        # create/claim) and _index_score == created_at timestamp
+                        # is immutable under a renewal, so re-running the ZADD
+                        # is a no-op write that contends on the shared index key;
+                        # omit it.
+                        pipe.execute()
+                        with self._task_lock:
+                            self._tasks[task.task_id] = task
+                        return task
+                    except WatchError:
+                        continue
+            raise TaskStateContentionError()
+        except TaskStateError:
+            raise
+        except Exception as exc:
+            self._drop_redis(exc)
+            raise TaskStateUnavailable() from None
+
     def execution_fence(self, task_id: str, owner: str) -> TaskExecutionFence:
-        return TaskExecutionFence(self, task_id, owner)
+        token = 0
+        task = self._load_from_redis(task_id)
+        if task is not None:
+            token = getattr(task, 'fencing_token', 0)
+        return TaskExecutionFence(self, task_id, owner, fencing_token=token)
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """Get task from Redis, memory, or Celery backend."""

@@ -270,7 +270,7 @@ test program**. Gate 1 + gate 5, owned by
 
 ### Current state — PARTIAL
 
-- Frontend is Vue 3 + Vite + vue-router + Pinia. Built into
+- Frontend is Vue 3 + Vite + vue-router. Built into
   `frontend/dist/` and served by
   [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
 - The accessibility conformance target is WCAG 2.2; no

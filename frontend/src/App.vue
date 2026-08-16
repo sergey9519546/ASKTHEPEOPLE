@@ -27,9 +27,9 @@
     <div class="crash-banner">
       <span class="crash-index" aria-hidden="true">Recovery</span>
       <div class="crash-message">
-        <h1 id="crash-title">Something went wrong</h1>
+        <h1 id="crash-title">The workspace hit an error</h1>
         <p id="crash-description">
-          The workspace hit an unexpected error. Reload to continue.
+          No final brief was created from this session. Reload to review partial artifacts, or start a new run.
         </p>
       </div>
       <button
@@ -180,6 +180,7 @@ onBeforeUnmount(() => {
 
 .app-surface {
   min-height: 100dvh;
+  background: linear-gradient(135deg, var(--signal-aura) 0%, var(--signal-haze) 50%, transparent 100%);
 }
 
 .crash-overlay {
@@ -198,6 +199,7 @@ onBeforeUnmount(() => {
   gap: 1.2rem;
   width: min(100%, 45rem);
   padding: 1.4rem;
+  box-shadow: var(--shadow-lg);
 }
 
 .crash-index {
@@ -242,3 +244,5 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+
+

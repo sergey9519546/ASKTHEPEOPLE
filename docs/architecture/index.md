@@ -267,11 +267,43 @@ owner's task.
 
 **Remaining defects / TARGET gaps:**
 
-- The fence is intentionally fail-closed, not a complete renewable lease. It
-  has no durable heartbeat, expiry/recovery transition, monotonic fencing
-  token, or transactional artifact writer. A worker crash can therefore leave
-  the report task in `PROCESSING`; automatic takeover remains unsafe until the
-  TARGET job/lease tables and fenced artifact writes exist.
+- CURRENT: the report execution fence is now a renewable lease, not fail-closed.
+  `claim_task_execution` sets `lease_expires_at`
+  ([`models/task.py:880`](../../backend/app/models/task.py:880)) and permits
+  takeover once a worker's lease lapses — incrementing the monotonic
+  `fencing_token`
+  ([`models/task.py:879`](../../backend/app/models/task.py:879)). Each
+  takeover emits an operator `task_execution_takeover` warning naming the
+  displaced and seizing owner and the new token
+  ([`models/task.py:888`](../../backend/app/models/task.py:888)), so a
+  wedged worker is visible in logs. The lease horizon is env-tunable
+  ([`models/task.py:260`](../../backend/app/models/task.py:260)) so a slow
+  LLM provider can raise it at deploy; the legacy-lease migration grace is
+  independently env-tunable
+  ([`models/task.py:273`](../../backend/app/models/task.py:273)) so an
+  operator can widen it during a rolling deploy without slowing new-code crash
+  recovery. The report agent renews the lease *before* the write-time
+  validation at every checkpoint cadence
+  ([`report_agent.py:1102-1131`](../../backend/app/services/report_agent.py:1102)),
+  so a self-lapsed lease (a slow step that exceeded the horizon, with no
+  takeover) is recovered for the rightful owner rather than aborting the
+  report; transient heartbeat contention is best-effort, only a real fence
+  loss (`TaskExecutionConflict`) propagates. `TaskExecutionFence.checkpoint`
+  still enforces the live lease and the fencing token
+  ([`models/task.py:325`](../../backend/app/models/task.py:325)), so a
+  dead worker's stale fence fails closed once a newer claim takes over. A
+  legacy record with `lease_expires_at is None` (claimed before leases
+  existed) falls back to the task's last progress write (`updated_at`)
+  rather than being instantly lapsed; old-code report workers do not refresh
+  `updated_at` mid-run, so the grace window must exceed the longest plausible
+  report run or a slow-but-alive legacy worker is seized after it expires. The fencing credentials
+  (`execution_owner`, `fencing_token`, `lease_expires_at`) are stripped from
+  `to_public_dict` so they never reach API clients.
+- TARGET gaps that remain: the artifact writer is not transactional with the
+  fence, so a write can land without the fence being verified as a single
+  atomic unit; and the job/event history still lives in Redis with a 24-hour TTL,
+  not in the TARGET PostgreSQL append-only tables, so replay/disaster recovery
+  is not established.
 - Non-idempotent task creation and legacy progress paths still permit a
   process-local fallback when Redis is absent; those paths are not canonical
   durable workflow state. Redis records also expire after 24 hours.
@@ -426,7 +458,7 @@ in [`docs/exec-plans/`](../exec-plans/README.md):
 |---|---|---|---|
 | 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL — secrets hardened, MIME/magic-byte upload validation wired onto the live route, path-traversal/SSRF defenses, source-as-data prompt guard in place. Open P0s: multi-tenant isolation (deferred; needs a user-identity model), privacy/retention architecture, source-rights attestation. |
 | 1 | Typed API boundary | `askthepeople-architect` | PARTIAL — `simulation.py` is a 510-line helper module; simulation routes live in `api/routes/`, with typed schemas and `app/application/` + `app/domain/` foundations now present. No route owns a preparation daemon thread or opens the activity SQLite directly. Remaining: complete schema enforcement across legacy handlers and finish the route responsibility contract. |
-| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — cleanup runs in Celery beat; Celery tasks classify transient retries; idempotent task admission uses an atomic cross-process Redis reservation with payload-conflict and missing-record recovery semantics; task updates fail closed after CAS contention; report deliveries use a durable single-owner execution fence. Open: renewable leases, heartbeats, monotonic fencing tokens enforced by artifact persistence, recovery/takeover, push-based event delivery, the four independent state machines, and process-local `SimulationRunner` ownership. |
+| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — cleanup runs in Celery beat; Celery tasks classify transient retries; idempotent task admission uses an atomic cross-process Redis reservation with payload-conflict and missing-record recovery semantics; task updates fail closed after CAS contention; report deliveries use a durable, renewable single-owner execution fence with monotonic fencing tokens, renew-before-validate heartbeat self-recovery, env-tunable lease horizon, expired-lease takeover with operator logging, legacy None-lease grace (updated_at fallback) for safe rolling deploys, and fencing-credential stripping in `to_public_dict` (`models/task.py`). Open: transactional (fenced) artifact writes, push-based event delivery, the four independent state machines, TARGET PostgreSQL job/event history, and process-local `SimulationRunner` ownership. |
 | 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL — tenant/workspace-scoped PostgreSQL repositories now cover projects/sources/runs and first-class path aggregates (`project_repository.py`, `source_repository.py`, `run_repository.py`, `path_repository.py`), with migrations and run-artifact digests. Open: production object-storage cutover, outbox events, soft-delete/audit-log, and complete provenance-edge write-time validation. |
 | 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED — observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting. Runbook and incident-response docs are concrete but the procedures are unimplemented. |
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL — CoT scrubbing is IMPLEMENTED (ADR-0010); a versioned prompt registry and a single OpenAI-compatible adapter exist; a narrow eval suite passes in CI. Open: most prompts still inlined, model-release gating, failure-mode catalogue, adversarial/sensitivity evals. |

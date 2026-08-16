@@ -141,7 +141,11 @@ def test_unsupported_split_platform_manifests_fail_closed() -> None:
     blocker = "block_legacy_railway_deploy.py"
     procfile = (REPO_ROOT / "Procfile").read_text(encoding="utf-8")
     render = (REPO_ROOT / "render.yaml").read_text(encoding="utf-8")
-    vercel_manifests = tuple(REPO_ROOT.rglob("vercel.json"))
+    vercel_manifests = tuple(
+        path
+        for path in REPO_ROOT.rglob("vercel.json")
+        if not any(part.startswith(".") for part in path.relative_to(REPO_ROOT).parts)
+    )
 
     assert all(blocker in line for line in procfile.splitlines() if ":" in line)
     assert "services: []" in render

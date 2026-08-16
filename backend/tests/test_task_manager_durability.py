@@ -11,7 +11,7 @@ import json
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -22,6 +22,7 @@ from app.models.task import (
     TASK_INDEX_KEY,
     TASK_TTL_SECONDS,
     Task,
+    TaskExecutionConflict,
     TaskManager,
     TaskStateUnavailable,
     TaskStatus,
@@ -963,5 +964,307 @@ def test_fail_task_does_not_audit_or_create_phantom_for_unknown_id(monkeypatch, 
     # No audit event should exist for a phantom task.
     events = audit_log.find_events(entity_id="nonexistent_task_id")
     assert events == [], f"phantom task should not be audited, got {events}"
+
+
+# --------------------------------------------------------------------------- #
+# Renewable lease + monotonic fencing token on task execution claims
+# --------------------------------------------------------------------------- #
+
+def test_claim_sets_a_renewable_lease_and_increments_the_token(redis_manager):
+    """claim_task_execution bumps fencing_token and installs a live lease."""
+    manager, _fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+
+    claimed = manager.claim_task_execution(task_id, "worker-A")
+    assert claimed.execution_owner == "worker-A"
+    assert claimed.fencing_token == 1, "claim must increment the monotonic token 0→1"
+    assert claimed.lease_expires_at is not None, "claim must install a renewable lease"
+
+    persisted = manager.get_task(task_id)
+    assert persisted.fencing_token == 1
+    assert persisted.lease_expires_at is not None
+    # The token + lease survive a Redis round-trip through to_dict/from_dict.
+    reloaded = Task.from_dict(json.loads(_fake.data[f"task:{task_id}"]))
+    assert reloaded.fencing_token == 1
+    assert reloaded.lease_expires_at is not None
+
+
+def test_execution_fence_adopts_the_current_token_and_passes_checkpoint(redis_manager):
+    """execution_fence reads the live token so the fence and the claim agree."""
+    manager, _fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+
+    fence = manager.execution_fence(task_id, "worker-A")
+    assert fence.fencing_token == 1, "execution_fence must read the current stored token"
+    # The legitimate owner's checkpoint passes: lease live, token equal.
+    fence.checkpoint()
+
+
+def test_live_lease_blocks_takeover_by_a_second_owner(redis_manager):
+    """A second owner cannot take over while the first owner's lease is live."""
+    from app.models.task import TaskExecutionConflict
+
+    manager, _fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+
+    with pytest.raises(TaskExecutionConflict, match="task_execution_in_progress"):
+        manager.claim_task_execution(task_id, "worker-B")
+    # The first owner's claim survives.
+    assert manager.get_task(task_id).execution_owner == "worker-A"
+    assert manager.get_task(task_id).fencing_token == 1
+
+
+def test_expired_lease_permits_takeover_and_increments_the_token(redis_manager):
+    """Once the lease lapses a new owner takes over, bumping the fencing token."""
+    from app.models.task import _lease_is_lapsed
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+    first = manager.get_task(task_id)
+    assert not _lease_is_lapsed(first, datetime.now())
+
+    # Simulate the heartbeat gap: backdate the lease horizon into the past.
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["lease_expires_at"] = (datetime.now() - timedelta(seconds=1)).isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+    assert _lease_is_lapsed(manager.get_task(task_id), datetime.now())
+
+    takeover = manager.claim_task_execution(task_id, "worker-B")
+    assert takeover.execution_owner == "worker-B"
+    assert takeover.fencing_token == 2, "takeover must increment the fencing token"
+    assert takeover.lease_expires_at is not None
+    assert not _lease_is_lapsed(takeover, datetime.now())
+
+
+def test_stale_fence_fails_closed_after_takeover(redis_manager):
+    """After takeover, the dead worker's fence (old owner) refuses writes."""
+    from app.models.task import TaskExecutionConflict, TaskExecutionFence
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+    dead_fence = manager.execution_fence(task_id, "worker-A")
+    assert dead_fence.fencing_token == 1
+
+    # Lapse the lease so a new owner can take over.
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["lease_expires_at"] = (datetime.now() - timedelta(seconds=1)).isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+    manager.claim_task_execution(task_id, "worker-B")  # takeover → token 2, owner B
+
+    # The dead worker's fence (owner A, token 1) is now rejected at checkpoint.
+    with pytest.raises(TaskExecutionConflict, match="fence_lost"):
+        dead_fence.checkpoint()
+    with pytest.raises(TaskExecutionConflict, match="fence_lost"):
+        with dead_fence.write_guard():
+            pass
+
+    # A fence that still carries the stale token but the new owner is rejected
+    # for token divergence (record token 2 > fence token 1).
+    stale_token_fence = TaskExecutionFence(manager, task_id, "worker-B", fencing_token=1)
+    with pytest.raises(TaskExecutionConflict, match="fence_token_divergence"):
+        stale_token_fence.checkpoint()
+
+
+def test_heartbeat_renew_lease_extends_the_horizon(redis_manager):
+    """renew_lease refreshes lease_expires_at; the live owner keeps its claim."""
+    from app.models.task import _lease_is_lapsed
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+    fence = manager.execution_fence(task_id, "worker-A")
+
+    horizon_before = manager.get_task(task_id).lease_expires_at
+    renewed = fence.renew_lease()
+    horizon_after = renewed.lease_expires_at
+    assert horizon_after >= horizon_before, "renew_lease must extend the horizon"
+    assert not _lease_is_lapsed(renewed, datetime.now())
+    assert renewed.fencing_token == 1, "renew_lease must not change the fencing token"
+
+    # A stale token cannot renew.
+    from app.models.task import TaskExecutionConflict, TaskExecutionFence
+    bad = TaskExecutionFence(manager, task_id, "worker-A", fencing_token=99)
+    with pytest.raises(TaskExecutionConflict, match="fence_token_divergence"):
+        bad.renew_lease()
+
+
+def test_checkpoint_refuses_writes_once_the_lease_lapses(redis_manager):
+    """Even the live owner's fence refuses writes once its own lease expires."""
+    from app.models.task import TaskExecutionConflict
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+    fence = manager.execution_fence(task_id, "worker-A")
+    fence.checkpoint()  # lease live → OK
+
+    # Let the lease lapse without renewing.
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["lease_expires_at"] = (datetime.now() - timedelta(seconds=1)).isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+
+    with pytest.raises(TaskExecutionConflict, match="fence_expired"):
+        fence.checkpoint()
+    with pytest.raises(TaskExecutionConflict, match="fence_expired"):
+        with fence.write_guard():
+            pass
+
+
+def test_round_trip_preserves_fencing_token_and_lease_of_a_claimed_task(redis_manager):
+    """Serializing a claimed task and reloading keeps fencing_token + lease intact."""
+    manager, _fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+
+    dumped = manager.get_task(task_id).to_dict()
+    assert dumped["fencing_token"] == 1
+    assert dumped["lease_expires_at"] is not None
+    reloaded = Task.from_dict(dumped)
+    assert reloaded.fencing_token == 1
+    assert reloaded.lease_expires_at is not None
+
+
+def test_takeover_emits_an_operator_warning_log(redis_manager, caplog):
+    """A lease-lapse takeover is logged so operators see a worker lost its lease."""
+    import logging
+
+    from app.models.task import _lease_is_lapsed
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["lease_expires_at"] = (datetime.now() - timedelta(seconds=1)).isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+
+    with caplog.at_level(logging.WARNING, logger="askthepeople.models.task"):
+        takeover = manager.claim_task_execution(task_id, "worker-B")
+    assert takeover.fencing_token == 2
+    takeover_logs = [r for r in caplog.records if "task_execution_takeover" in r.message]
+    assert len(takeover_logs) == 1
+    msg = takeover_logs[0].message
+    assert "worker-A" in msg and "worker-B" in msg
+    assert takeover_logs[0].levelno == logging.WARNING
+
+
+def test_renew_lease_recovers_a_self_lapsed_lease(redis_manager):
+    """A live owner whose own lease lapsed (slow step, no takeover) can renew
+    and recover — the renewable lease's self-recovery property (ADR-0003)."""
+    from app.models.task import _lease_is_lapsed
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+    fence = manager.execution_fence(task_id, "worker-A")
+
+    # The owner stalls > lease horizon; nobody takes over.
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["lease_expires_at"] = (datetime.now() - timedelta(seconds=1)).isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+    assert _lease_is_lapsed(manager.get_task(task_id), datetime.now())
+
+    # renew_lease refreshes — it does not reject the rightful owner's lapsed
+    # lease, so a slow-but-alive worker recovers instead of aborting.
+    renewed = fence.renew_lease()
+    assert renewed.execution_owner == "worker-A"
+    assert renewed.fencing_token == 1, "renew must not change the fencing token"
+    assert not _lease_is_lapsed(renewed, datetime.now())
+    # checkpoint now passes again because the lease is live.
+    fence.checkpoint()
+
+
+def test_legacy_none_lease_is_not_seized_while_progressing(redis_manager):
+    """A legacy task (lease_expires_at is None) written by old code is not
+    silently taken over while it is still progressing (fresh updated_at)."""
+    from app.models.task import _lease_is_lapsed, LEASE_DURATION_SECONDS
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["status"] = "processing"
+    record["execution_owner"] = "old-worker"
+    record["lease_expires_at"] = None
+    record["updated_at"] = datetime.now().isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+
+    assert not _lease_is_lapsed(manager.get_task(task_id), datetime.now()), (
+        "A freshly-progressing legacy worker must not read as lapsed"
+    )
+    with pytest.raises(TaskExecutionConflict, match="task_execution_in_progress"):
+        manager.claim_task_execution(task_id, "new-worker")
+
+
+def test_legacy_none_lease_becomes_takeable_after_the_grace_window(redis_manager):
+    """A legacy task whose last progress write is stale (wedged/dead worker)
+    becomes eligible for takeover after the grace window, which is a multiple
+    of the lease window because old-code report workers don't heartbeat."""
+    from app.models.task import (
+        _lease_is_lapsed,
+        LEASE_DURATION_SECONDS,
+        LEASE_GRACE_MULTIPLIER,
+    )
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    grace = LEASE_DURATION_SECONDS * LEASE_GRACE_MULTIPLIER
+    stale = datetime.now() - timedelta(seconds=grace + 5)
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["status"] = "processing"
+    record["execution_owner"] = "old-worker"
+    record["lease_expires_at"] = None
+    record["updated_at"] = stale.isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+
+    assert _lease_is_lapsed(manager.get_task(task_id), datetime.now())
+    takeover = manager.claim_task_execution(task_id, "new-worker")
+    assert takeover.execution_owner == "new-worker"
+    assert takeover.fencing_token == 1, "first real lease claim sets the token"
+    assert takeover.lease_expires_at is not None
+
+
+def test_legacy_none_lease_still_unseizable_inside_grace_window(redis_manager):
+    """An old-code worker that has been running for one lease horizon (30s) but
+    is still within the migration grace is NOT seized — old report workers
+    don't refresh updated_at mid-run, so the grace must exceed a single step."""
+    from app.models.task import _lease_is_lapsed, LEASE_DURATION_SECONDS
+
+    manager, fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    # One lease horizon old — old-code report work that slow, still alive.
+    recent = datetime.now() - timedelta(seconds=LEASE_DURATION_SECONDS)
+    record = json.loads(fake.data[f"task:{task_id}"])
+    record["status"] = "processing"
+    record["execution_owner"] = "old-worker"
+    record["lease_expires_at"] = None
+    record["updated_at"] = recent.isoformat()
+    fake.set(f"task:{task_id}", json.dumps(record))
+
+    assert not _lease_is_lapsed(manager.get_task(task_id), datetime.now()), (
+        "Legacy worker only one-horizon old must not be seized"
+    )
+    with pytest.raises(TaskExecutionConflict, match="task_execution_in_progress"):
+        manager.claim_task_execution(task_id, "new-worker")
+
+
+def test_public_dict_never_exposes_fence_credentials(redis_manager):
+    """to_public_dict must not leak the worker token, fencing token, or lease
+    horizon — internal fencing credentials, never API data."""
+    manager, _fake = redis_manager
+    task_id = manager.create_task("simulation_run")
+    manager.claim_task_execution(task_id, "worker-A")
+
+    public = manager.get_task(task_id).to_public_dict()
+    assert "execution_owner" not in public
+    assert "fencing_token" not in public
+    assert "lease_expires_at" not in public
+    internal = manager.get_task(task_id).to_dict()
+    assert internal["fencing_token"] == 1
+    assert internal["lease_expires_at"] is not None
+
 
 

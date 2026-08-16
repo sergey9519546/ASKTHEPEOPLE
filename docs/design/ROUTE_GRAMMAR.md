@@ -389,11 +389,12 @@ list is **TARGET**. Gate 1 + gate 5, owned by
 
 ### Current state — PARTIAL
 
-- Frontend is Vue 3 + Vite + vue-router + Pinia. Built into
+- Frontend is Vue 3 + Vite + vue-router. Built into
   `frontend/dist/` and served by
   [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
-- Route visualization uses D3 to render paths from a JSON
-  configuration; the design is implemented in CSS and SVG.
+- Route visualization in the home view uses CSS-driven animations;
+  D3 is used in `GraphPanel.vue` for graph rendering. The design is
+  implemented in CSS and SVG.
 - The semantic route list as a first-class accessible
   alternative is **not yet rendered**. There is no parity test
   asserting that every fact and action in the visual map is

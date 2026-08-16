@@ -1,6 +1,5 @@
 <template>
   <div class="main-view">
-    <ThreeScenarioCanvas />
     <TruthRail />
     <header class="app-header">
       <button class="header-left brand-home" type="button" @click="router.push('/')">
@@ -189,7 +188,6 @@ import Step2EnvSetup from "../components/Step2EnvSetup.vue";
 import Step3Simulation from "../components/Step3Simulation.vue";
 import Step4Report from "../components/Step4Report.vue";
 import Step5Interaction from "../components/Step5Interaction.vue";
-import ThreeScenarioCanvas from "../components/ThreeScenarioCanvas.vue";
 import TruthRail from "../components/TruthRail.vue";
 import { clearPendingUpload, getPendingUpload } from "../store/pendingUpload";
 import { listSimulations } from "../api/simulation";

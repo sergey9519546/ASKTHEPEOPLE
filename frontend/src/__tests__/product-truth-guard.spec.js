@@ -94,18 +94,6 @@ describe("frontend product-truth guard", () => {
       // Delete each entry as its source is corrected; never add new debt casually.
       {
         path: "frontend/index.html",
-        term: "product-name",
-        surface: "content",
-        snippet: "Ask The People — See the paths before you choose",
-      },
-      {
-        path: "frontend/index.html",
-        term: "product-name",
-        surface: "text",
-        snippet: "Ask The People — Synthetic scenario explorer",
-      },
-      {
-        path: "frontend/index.html",
         term: "respondents",
         surface: "content",
         snippet: "Zero human respondents",

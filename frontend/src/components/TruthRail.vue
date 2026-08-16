@@ -27,16 +27,16 @@
   top: 0;
   z-index: 1000;
   width: 100%;
-  background: var(--attention);
-  color: #000;
-  border-bottom: 2px solid #000;
+  background: rgba(12, 16, 15, 0.98);
+  color: var(--paper-muted);
+  border-bottom: 1px solid var(--line-dark);
 }
 
 .truth-rail-content {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.5rem;
+  min-height: 2rem;
   padding: 0.5rem 1rem;
 }
 
@@ -82,3 +82,4 @@
   }
 }
 </style>
+

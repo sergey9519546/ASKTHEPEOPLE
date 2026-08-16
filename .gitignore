@@ -45,6 +45,7 @@ yarn-error.log*
 .pytest*/
 .coverage
 htmlcov/
+gui-test-screenshots/
 
 # Cursor
 .cursor/
@@ -52,6 +53,7 @@ htmlcov/
 
 # Agent / IDE tooling state
 .agents/
+.freebuff/
 
 # Playwright CLI run artifacts
 .playwright-cli/

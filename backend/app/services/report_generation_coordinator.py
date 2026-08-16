@@ -37,6 +37,10 @@ class ReportGenerationLease:
         if self.cancelled:
             raise ReportGenerationCancelled("report_generation_cancelled")
 
+    def renew_lease(self) -> None:
+        """No-op: the process-local lease has no renewable lease horizon."""
+        return None
+
     def cancel(self) -> None:
         # Taking the write gate first establishes a fencing point: after this
         # method returns, no new guarded worker write can begin.

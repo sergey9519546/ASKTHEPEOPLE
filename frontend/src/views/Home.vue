@@ -1,13 +1,12 @@
 <template>
   <div class="public-signal-home">
-    <ThreeScenarioCanvas />
     <TruthRail />
     <a class="skip-link" href="#decision">Skip to the decision</a>
 
     <header class="signal-masthead">
-      <button class="brand-block" type="button" aria-label="Ask The People home" @click="scrollToSection('decision')">
-        <span>ASK THE</span>
-        <span>PEOPLE</span>
+      <button class="brand-block" type="button" aria-label="ASKTHEPEOPLE / Synthetic Decision Explorer home" @click="scrollToSection('decision')">
+        <span>ASKTHEPEOPLE</span>
+        <span>SYNTHETIC DECISION EXPLORER</span>
       </button>
 
       <div class="masthead-copy">
@@ -84,6 +83,23 @@
             <p id="decision-helper" class="field-helper">
               Write one concrete choice and the outcome you want to examine.
             </p>
+            <aside class="route-grammar-legend" aria-label="Route grammar — node codes used in this decision workspace">
+              <strong class="grammar-label">Route grammar</strong>
+              <span class="grammar-items">
+                <span class="grammar-item" title="Decision">D-01</span>
+                <span class="grammar-item" title="Source material">SM-01</span>
+                <span class="grammar-item" title="Starting condition">SC-01</span>
+                <span class="grammar-item" title="Assumption">A-01</span>
+                <span class="grammar-item" title="Critical uncertainty">U-01</span>
+                <span class="grammar-item" title="Generated profile / decision lens">GP-01</span>
+                <span class="grammar-item" title="Possible path">P-01</span>
+                <span class="grammar-item" title="Synthetic action">SA-01</span>
+                <span class="grammar-item" title="Decision consideration">DC-01</span>
+                <span class="grammar-item" title="Validation question">VQ-01</span>
+                <span class="grammar-item" title="Related run record">RR-01</span>
+              </span>
+              <span class="grammar-note">Sequence only. No probability or time.</span>
+            </aside>
             <details class="decision-details">
               <summary>Add a workspace name or extra context</summary>
               <div class="decision-details-grid">
@@ -231,52 +247,123 @@
           <span>Each branch is a synthetic possibility to inspect, challenge, and validate.</span>
         </header>
 
-        <div class="scenario-map" aria-label="Scenario method from sources to human validation">
-          <article class="map-stage source-stage">
-            <span class="map-label">Source</span>
+        <div
+          ref="routeMap"
+          class="route-map"
+          aria-label="How a run flows: optional source material informs reviewed assumptions; the assumptions branch into three equal-weight possible paths of synthetic actions; the synthetic run ends at a hard break, and validation with people happens outside the system."
+        >
+          <article class="route-stage stage-source">
+            <header class="stage-head">
+              <span class="stage-index">01</span>
+              <span class="stage-name">Source</span>
+            </header>
             <div class="source-tile">
               <svg viewBox="0 0 32 32" aria-hidden="true">
                 <path d="M8 3h11l6 6v20H8zM19 3v7h6M12 16h9M12 21h9"></path>
               </svg>
               <strong>Source material (optional)</strong>
-              <span>Upload files to ground personas in specific context, or skip to explore with just your decision.</span>
+              <span>Upload files to ground the scenarios in context, or explore with the decision alone.</span>
             </div>
           </article>
 
-          <article class="map-stage assumptions-stage">
-            <span class="map-label">Assumptions</span>
-            <ol>
-              <li><span>01</span> Who is affected?</li>
-              <li><span>02</span> What may change?</li>
-              <li><span>03</span> What stays uncertain?</li>
-            </ol>
-          </article>
+          <div class="route-link" aria-hidden="true"><span class="link-line"></span></div>
 
-          <article class="map-stage paths-stage">
-            <span class="map-label accent-label">Possible paths</span>
-            <div class="path path-a">
-              <span class="path-name">Path A</span>
-              <span class="path-node">Early response</span>
-              <span class="path-node">Second-order effect</span>
-              <span class="path-node">Longer-term outcome</span>
-            </div>
-            <div class="path path-b">
-              <span class="path-name">Path B</span>
-              <span class="path-node">Different response</span>
-              <span class="path-node">New pressure</span>
-              <span class="path-node">Alternative outcome</span>
-            </div>
-            <div class="path path-c">
-              <span class="path-name">Path C</span>
-              <span class="path-node">Edge case</span>
-              <span class="path-node">Unintended effect</span>
-              <span class="path-node">Risk to examine</span>
+          <article class="route-stage stage-gate">
+            <header class="stage-head">
+              <span class="stage-index">02</span>
+              <span class="stage-name">Assumptions</span>
+            </header>
+            <div class="gate-tile">
+              <span class="gate-diamond" aria-hidden="true">A</span>
+              <ol>
+                <li><span>01</span> Who is affected?</li>
+                <li><span>02</span> What may change?</li>
+                <li><span>03</span> What stays uncertain?</li>
+              </ol>
             </div>
           </article>
 
-          <article id="validate" class="map-stage validate-stage">
-            <span class="map-label">Validate with people</span>
+          <div class="route-fan" aria-hidden="true">
+            <svg viewBox="0 0 24 120" preserveAspectRatio="none">
+              <path pathLength="100" d="M0 60 H9 V20 H24"></path>
+              <path pathLength="100" d="M0 60 H24"></path>
+              <path pathLength="100" d="M0 60 H9 V100 H24"></path>
+            </svg>
+          </div>
+
+          <article class="route-stage stage-paths">
+            <header class="stage-head">
+              <span class="stage-index">03</span>
+              <span class="stage-name">Possible paths</span>
+            </header>
+            <div class="lane">
+              <span class="lane-id">P-01</span>
+              <div class="lane-track">
+                <span class="lane-rule" aria-hidden="true"></span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Early response</span>
+                </span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Second-order effect</span>
+                </span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Longer-term outcome</span>
+                </span>
+              </div>
+            </div>
+            <div class="lane">
+              <span class="lane-id">P-02</span>
+              <div class="lane-track">
+                <span class="lane-rule" aria-hidden="true"></span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Different response</span>
+                </span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">New pressure</span>
+                </span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Alternative outcome</span>
+                </span>
+              </div>
+            </div>
+            <div class="lane">
+              <span class="lane-id">P-03</span>
+              <div class="lane-track">
+                <span class="lane-rule" aria-hidden="true"></span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Edge case</span>
+                </span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Unintended effect</span>
+                </span>
+                <span class="lane-node">
+                  <span class="node-mark" aria-hidden="true"></span>
+                  <span class="node-label">Risk to examine</span>
+                </span>
+              </div>
+            </div>
+          </article>
+
+          <div class="route-break">
+            <span class="break-rule" aria-hidden="true"></span>
+            <span class="break-label">Synthetic run ends</span>
+          </div>
+
+          <article id="validate" class="route-stage stage-validate">
+            <header class="stage-head">
+              <span class="stage-index">04</span>
+              <span class="stage-name">Validate with people</span>
+            </header>
             <div class="validate-tile">
+              <span class="validate-eyebrow">Outside the synthetic run</span>
               <svg viewBox="0 0 40 32" aria-hidden="true">
                 <circle cx="20" cy="8" r="5"></circle>
                 <circle cx="8" cy="13" r="4"></circle>
@@ -287,13 +374,10 @@
               <span>Use them to structure research and real conversations.</span>
             </div>
           </article>
-        </div>
 
-        <div class="method-footer">
-          <svg viewBox="0 0 48 24" aria-hidden="true">
-            <path d="M2 12h40M33 3l10 9-10 9"></path>
-          </svg>
-          <strong>Explore more paths. Make better-informed decisions.</strong>
+          <p class="route-legend">
+            All paths carry equal weight — spacing shows sequence only, not time or likelihood. Branches form only at reviewed assumptions.
+          </p>
         </div>
       </section>
 
@@ -414,13 +498,12 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { getTemplates } from "../api/graph";
 import { getSimulationHistory } from "../api/simulation";
 import { fetchSourceUrls } from "../api/sources.js";
 import SettingsModal from "../components/SettingsModal.vue";
-import ThreeScenarioCanvas from "../components/ThreeScenarioCanvas.vue";
 import TruthRail from "../components/TruthRail.vue";
 import {
   closeSettings,
@@ -741,6 +824,48 @@ const scrollToSection = (id) => {
     ?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
 };
 
+/* The method-section route map is a one-shot scroll reveal, not a mount
+   autoplay. The diagram's CSS choreography (route-draw-x/y, route-draw-stroke,
+   node-in) still drives the draw-in, but its play-state is paused until the
+   diagram enters the viewport (see the `.route-map` play-state gate in
+   <style>); revealing flips play-state to running so the designed delay
+   ladder runs once and settles on `forwards`. The diagram's narrative is
+   top→bottom (source 01 → validate 04) but it enters the viewport bottom-up,
+   so a -25% bottom root anchor triggers once the top source tile reaches the
+   lower 75% of screen: the narrative's start is on screen before play begins,
+   instead of firing off-screen at mount and settling invisible. */
+const routeMap = ref(null);
+let routeRevealObserver = null;
+
+onMounted(() => {
+  const el = routeMap.value;
+  if (!el) return;
+  const revealImmediately =
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ||
+    typeof IntersectionObserver === "undefined";
+  if (revealImmediately) {
+    el.classList.add("is-revealed");
+    return;
+  }
+  routeRevealObserver = new IntersectionObserver(
+    (entries, observer) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-revealed");
+          observer.unobserve(entry.target);
+        }
+      }
+    },
+    { rootMargin: "0px 0px -25% 0px", threshold: 0 },
+  );
+  routeRevealObserver.observe(el);
+});
+
+onBeforeUnmount(() => {
+  routeRevealObserver?.disconnect();
+  routeRevealObserver = null;
+});
+
 const formatDate = (value) => {
   if (!value) return "Date unavailable";
   const date = new Date(value);
@@ -811,18 +936,9 @@ fetchHistory();
   transform: translateY(0);
 }
 
-.signal-masthead {
-  position: relative;
-  z-index: 2;
-  display: grid;
-  grid-template-columns: minmax(15rem, 20vw) minmax(0, 1fr) auto;
-  grid-template-areas:
-    "brand copy disclosure"
-    "brand nav nav";
-  min-height: 17rem;
+.signal-masthead { min-height: 16rem;
   border-bottom: 1px solid var(--line-dark);
-  background: rgba(6, 11, 20, 0.75);
-  backdrop-filter: blur(12px);
+  background: var(--ink-deep);
 }
 
 .brand-block {
@@ -836,10 +952,10 @@ fetchHistory();
   padding: 1.5rem clamp(1.25rem, 2.8vw, 3rem);
   overflow: hidden;
   border: 0;
-  background: var(--signal);
+  background: var(--ink-deep);
   color: var(--paper);
   font-family: var(--font-display);
-  font-size: clamp(3.5rem, 5.6vw, 6.6rem);
+  font-size: clamp(2.1rem, 2.5vw, 3.2rem);
   font-weight: 900;
   line-height: 0.78;
   letter-spacing: -0.025em;
@@ -855,14 +971,15 @@ fetchHistory();
   right: -2.75rem;
   width: 4.75rem;
   height: 130%;
-  background: var(--ink);
+  background: linear-gradient(105deg, transparent 40%, rgba(242, 235, 221, 0.08) 60%, transparent 80%);
   transform: rotate(4deg);
   transform-origin: center;
+  pointer-events: none;
 }
 
 .brand-block:hover {
-  background: var(--signal-strong);
-  color: var(--paper);
+  background: var(--ink);
+  color: var(--paper-strong);
 }
 
 .masthead-copy {
@@ -872,8 +989,7 @@ fetchHistory();
 }
 
 .masthead-kicker,
-.section-heading > p,
-.map-label {
+.section-heading > p {
   font-family: var(--font-display);
   font-size: 1rem;
   letter-spacing: 0.045em;
@@ -890,7 +1006,7 @@ fetchHistory();
   margin: 0;
   color: var(--paper);
   font-family: var(--font-display);
-  font-size: clamp(3rem, 4.7vw, 5.7rem);
+  font-size: clamp(2.65rem, 4vw, 4.5rem);
   font-weight: 900;
   line-height: 0.9;
   letter-spacing: -0.02em;
@@ -938,7 +1054,7 @@ fetchHistory();
   grid-area: nav;
   display: flex;
   align-items: stretch;
-  min-height: 4.4rem;
+  min-height: 4rem;
   padding-left: clamp(2rem, 4vw, 4.5rem);
 }
 
@@ -1163,8 +1279,7 @@ fetchHistory();
   box-shadow: 0.45rem 0.45rem 0 var(--signal-deep);
 }
 
-.source-icon,
-.source-stage svg {
+.source-icon {
   width: 2.4rem;
   flex: 0 0 auto;
   fill: none;
@@ -1395,7 +1510,7 @@ fetchHistory();
     linear-gradient(rgba(242, 235, 221, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(242, 235, 221, 0.025) 1px, transparent 1px),
     var(--ink);
-  background-size: 2.5rem 2.5rem;
+  background-size: 1.5rem 1.5rem;
   scroll-margin-top: 1rem;
 }
 
@@ -1430,44 +1545,60 @@ fetchHistory();
   text-wrap: pretty;
 }
 
-.scenario-map {
+/* Route Ledger — the route grammar drawn as one continuous route:
+   source informs the assumption gate (the only object allowed to branch),
+   three equal-weight possible paths carry synthetic actions in sequence,
+   and a hard break ends the synthetic run before validation with people. */
+.route-map {
   display: grid;
-  grid-template-columns: minmax(10rem, 0.62fr) minmax(13rem, 0.9fr) minmax(32rem, 2.6fr) minmax(14rem, 0.82fr);
+  grid-template-columns:
+    minmax(10rem, 0.72fr)
+    clamp(1.5rem, 2.5vw, 3rem)
+    minmax(11rem, 0.85fr)
+    clamp(1.75rem, 3vw, 3.5rem)
+    minmax(24rem, 2.5fr)
+    clamp(2rem, 3vw, 3.25rem)
+    minmax(10rem, 0.72fr);
   max-width: 104rem;
-  min-height: 27rem;
   margin: 0 auto;
   border-top: 1px solid var(--line-dark);
   border-bottom: 1px solid var(--line-dark);
 }
 
-.map-stage {
+.route-stage {
+  display: flex;
   min-width: 0;
-  padding: 1.7rem 1.3rem 2rem;
-  border-right: 1px dashed var(--line-dark);
+  flex-direction: column;
+  padding: 1.6rem 1.3rem 1.8rem;
 }
 
-.map-stage:last-child {
-  border-right: 0;
+.stage-head {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  margin-bottom: 1.4rem;
 }
 
-.map-label {
-  display: block;
-  margin-bottom: 2rem;
+.stage-index {
+  color: var(--paper-dim);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+}
+
+.stage-name {
   color: var(--paper);
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.accent-label {
+.stage-paths .stage-name {
   color: var(--signal);
 }
 
-.source-stage,
-.validate-stage {
-  display: flex;
-  flex-direction: column;
-}
-
-.source-tile,
-.validate-tile {
+.source-tile {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -1479,14 +1610,305 @@ fetchHistory();
   text-align: center;
 }
 
-.source-tile strong,
-.validate-tile strong {
+.source-tile svg {
+  width: 2.6rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.source-tile strong {
   margin-top: 1rem;
   font-size: 0.96rem;
   line-height: 1.25;
 }
 
-.source-tile span,
+.source-tile span {
+  margin-top: 0.45rem;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+/* Trunk connector: source → assumption gate. */
+.route-link {
+  position: relative;
+}
+
+.link-line {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--paper-muted);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: route-draw-x var(--duration-base) var(--ease-out) 120ms forwards;
+}
+
+/* Assumption gate: paper review surface; the red diamond is the only
+   object in the diagram allowed to create a branch. */
+.gate-tile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  padding: 1.1rem 0.9rem;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.gate-diamond {
+  position: relative;
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  margin: 0.4rem auto 1.1rem;
+  color: var(--signal-deep);
+  font-family: var(--font-display);
+  font-size: 1rem;
+}
+
+.gate-diamond::before {
+  content: "";
+  position: absolute;
+  inset: 0.34rem;
+  border: 2px solid var(--signal);
+  transform: rotate(45deg);
+}
+
+.gate-tile ol {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gate-tile li {
+  display: grid;
+  grid-template-columns: 1.7rem 1fr;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 0.1rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.gate-tile li + li {
+  border-top: 1px solid var(--line-light);
+}
+
+.gate-tile li span {
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+/* Branch fan: the gate emits three equal-weight lanes. */
+.route-fan {
+  min-width: 0;
+}
+
+.route-fan svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.route-fan path {
+  fill: none;
+  stroke: var(--paper-muted);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: route-draw-stroke var(--duration-base) var(--ease-out) 220ms forwards;
+}
+
+.route-fan path:nth-of-type(2) {
+  animation-delay: 280ms;
+}
+
+.route-fan path:nth-of-type(3) {
+  animation-delay: 340ms;
+}
+
+/* Lanes: equal weight, equal color, visible P-## identifiers. */
+.lane {
+  --lane-delay: 420ms;
+  display: grid;
+  flex: 1;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  align-items: center;
+  min-height: 4.8rem;
+}
+
+.stage-paths .lane:nth-child(3) {
+  --lane-delay: 480ms;
+}
+
+.stage-paths .lane:nth-child(4) {
+  --lane-delay: 540ms;
+}
+
+.lane-id {
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  letter-spacing: 0.05em;
+}
+
+.lane-track {
+  position: relative;
+  height: 4.6rem;
+  min-width: 0;
+}
+
+.lane-rule {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--paper);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: route-draw-x var(--duration-base) var(--ease-out) var(--lane-delay) forwards;
+}
+
+.lane-node {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 30%;
+  transform: translateX(-50%);
+}
+
+.lane-node:nth-of-type(2) {
+  left: 18%;
+}
+
+.lane-node:nth-of-type(3) {
+  left: 50%;
+}
+
+.lane-node:nth-of-type(4) {
+  left: 82%;
+}
+
+.node-mark {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 2px solid var(--paper);
+  background: var(--ink);
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  animation: node-in var(--duration-quick) var(--ease-out) forwards;
+}
+
+.lane-node:nth-of-type(2) .node-mark,
+.lane-node:nth-of-type(2) .node-label {
+  animation-delay: calc(var(--lane-delay) + 40ms);
+}
+
+.lane-node:nth-of-type(3) .node-mark,
+.lane-node:nth-of-type(3) .node-label {
+  animation-delay: calc(var(--lane-delay) + 110ms);
+}
+
+.lane-node:nth-of-type(4) .node-mark,
+.lane-node:nth-of-type(4) .node-label {
+  animation-delay: calc(var(--lane-delay) + 180ms);
+}
+
+.node-label {
+  position: absolute;
+  top: calc(50% + 0.8rem);
+  left: 50%;
+  width: max-content;
+  max-width: 7.5rem;
+  color: var(--paper);
+  font-size: 0.7rem;
+  line-height: 1.25;
+  text-align: center;
+  transform: translateX(-50%);
+  opacity: 0;
+  animation: node-in var(--duration-quick) var(--ease-out) forwards;
+}
+
+/* The break: the synthetic run terminates here. Lanes stop dead at the
+   dashed rule; validation lives on the other side of it. */
+.route-break {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.6rem 0 1.8rem;
+}
+
+.break-rule {
+  position: absolute;
+  top: 1.6rem;
+  bottom: 1.8rem;
+  left: 50%;
+  width: 0;
+  border-left: 2px dashed var(--paper-dim);
+  transform: translateX(-50%);
+}
+
+.break-label {
+  position: relative;
+  padding: 0.9rem 0.35rem;
+  background: var(--ink);
+  color: var(--paper-dim);
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+}
+
+/* Validation tile: the white transfer surface — outside the synthetic run. */
+.validate-tile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.3rem 1.1rem;
+  border: 1px solid var(--ink);
+  background: var(--paper-transfer);
+  color: var(--ink);
+  text-align: center;
+}
+
+.validate-eyebrow {
+  margin-bottom: 0.9rem;
+  color: var(--ink-muted);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.validate-tile svg {
+  width: 3.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.validate-tile strong {
+  margin-top: 0.9rem;
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
 .validate-tile span {
   margin-top: 0.45rem;
   color: var(--ink-muted);
@@ -1494,152 +1916,70 @@ fetchHistory();
   line-height: 1.45;
 }
 
-.validate-tile svg {
-  width: 3.4rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-}
-
-.assumptions-stage ol {
-  display: grid;
-  gap: 0.8rem;
+/* Grammar-required legend (route rules 1 and 9). */
+.route-legend {
+  grid-column: 1 / -1;
   margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.assumptions-stage li {
-  display: grid;
-  grid-template-columns: 2.2rem 1fr;
-  align-items: center;
-  min-height: 4.6rem;
-  padding: 0.8rem;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 0.8rem;
-  line-height: 1.3;
-}
-
-.assumptions-stage li span {
-  color: var(--ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-}
-
-.paths-stage {
-  display: grid;
-  grid-template-rows: auto repeat(3, 1fr);
-  padding-right: 1.8rem;
-  padding-left: 1.8rem;
-}
-
-.path {
-  --path-color: var(--signal);
-  position: relative;
-  display: grid;
-  grid-template-columns: 6.5rem repeat(3, 1fr);
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.path::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 6.5rem;
-  height: 0.25rem;
-  background: var(--path-color);
-  transform: scaleX(0);
-  transform-origin: left;
-  animation: draw-path 820ms var(--ease-out) forwards;
-  border-radius: 2px;
-}
-
-.path::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: 6.5rem;
-  width: 3rem;
-  height: 0.25rem;
-  background: var(--paper);
-  opacity: 0;
-  animation: data-flow 3s infinite ease-in-out;
-  animation-delay: 800ms;
-}
-
-@keyframes data-flow {
-  0% { transform: translateX(0); opacity: 0; }
-  10% { opacity: 0.8; }
-  80% { opacity: 0.8; }
-  100% { transform: translateX(min(40vw, 600px)); opacity: 0; }
-}
-
-.path-b {
-  --path-color: var(--paper-muted);
-}
-
-.path-c {
-  --path-color: var(--attention);
-}
-
-.path-name {
-  position: relative;
-  z-index: 1;
-  color: var(--path-color);
+  padding: 0.85rem 1.3rem;
+  border-top: 1px solid var(--line-dark);
+  color: var(--paper-dim);
   font-family: var(--font-display);
-  font-size: 1rem;
-  letter-spacing: 0.035em;
-  text-transform: uppercase;
-}
-
-.path-node {
-  position: relative;
-  z-index: 1;
-  padding: 2.6rem 0.5rem 0;
-  color: var(--paper);
   font-size: 0.72rem;
-  line-height: 1.3;
+  letter-spacing: 0.08em;
   text-align: center;
-}
-
-.path-node::before {
-  content: "";
-  position: absolute;
-  top: calc(50% - 0.58rem);
-  left: 50%;
-  width: 1.18rem;
-  height: 1.18rem;
-  border: 0.25rem solid var(--path-color);
-  outline: 0.18rem solid var(--ink);
-  background: var(--ink);
-  transform: translate(-50%, -50%);
-}
-
-.method-footer {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  width: max-content;
-  max-width: calc(100% - 2rem);
-  margin: 0 0 0 clamp(-1rem, -3.4vw, -4rem);
-  padding: 1.4rem clamp(1.5rem, 4vw, 4rem);
-  background: var(--signal);
-  color: var(--ink);
-  clip-path: polygon(0 0, 94% 0, 100% 100%, 0 100%);
-  font-family: var(--font-display);
-  font-size: clamp(1.25rem, 2vw, 2rem);
-  letter-spacing: 0.025em;
   text-transform: uppercase;
 }
 
-.method-footer svg {
-  width: 3rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 3;
+@keyframes route-draw-x {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes route-draw-y {
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes route-draw-stroke {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes node-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* The method section's route-map draw-in is a scroll-triggered one-shot, not a
+   mount autoplay. Pausing the signature animations here holds each child at its
+   base (pre-) state (opacity:0, transform:scaleX/Y(0), stroke-dashoffset:100)
+   while hidden; when the IntersectionObserver bound to `routeMap` in <script
+   setup> adds `.is-revealed`, the `--route-play` custom property flips to
+   `running` and the designed delay ladder plays once, settling on `forwards`.
+   One selector list drives both states so they cannot drift. The superset
+   matches the prefers-reduced-motion reset set (minus the independent loading
+   skeletons) so both layouts (desktop horizontal, mobile vertical) are gated;
+   play-state is a no-op on elements that have no animation in a given layout.
+   `:where()` keeps specificity 0 so this can't fight the animation declarations
+   above or the reduced-motion block below. */
+.route-map
+  :where(
+    .link-line,
+    .lane-rule,
+    .lane-track::before,
+    .route-fan path,
+    .route-fan::after,
+    .node-mark,
+    .node-label
+  ) {
+  animation-play-state: var(--route-play, paused);
+}
+.route-map.is-revealed {
+  --route-play: running;
 }
 
 .runs-section {
@@ -1926,18 +2266,80 @@ fetchHistory();
   text-align: right;
 }
 
-@keyframes draw-path {
-  to {
-    transform: scaleX(1);
-  }
-}
-
 @keyframes skeleton-pass {
   from {
     background-position: -100% 0;
   }
   to {
     background-position: 200% 0;
+  }
+}
+
+.route-grammar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.85rem;
+  margin-top: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line-light);
+  background: var(--paper-transfer);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.grammar-label {
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.grammar-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.35rem;
+}
+
+.grammar-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.08rem 0.35rem;
+  border: 1px solid var(--line-dark);
+  background: var(--paper);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.grammar-item:hover {
+  border-color: var(--signal);
+  color: var(--signal-deep);
+}
+
+.grammar-note {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-size: 0.62rem;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .route-grammar-legend {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+  .grammar-note {
+    margin-left: 0;
   }
 }
 
@@ -1979,23 +2381,150 @@ fetchHistory();
     margin: 0;
   }
 
-  .scenario-map {
-    grid-template-columns: 0.65fr 0.9fr 2fr;
+  /* The route reflows vertically: source ↓ gate ↓ lanes ↓ break ↓ validate. */
+  .route-map {
+    display: block;
   }
 
-  .validate-stage {
-    grid-column: 1 / -1;
-    border-top: 1px dashed var(--line-dark);
+  .route-stage {
+    padding: 1.4rem 0;
+  }
+
+  .stage-head {
+    margin-bottom: 1rem;
+  }
+
+  .route-link {
+    height: 2.2rem;
+  }
+
+  .link-line {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    right: auto;
+    width: 2px;
+    height: auto;
+    transform: scaleY(0);
+    transform-origin: top;
+    animation-name: route-draw-y;
+  }
+
+  .route-fan {
+    height: 2.2rem;
+  }
+
+  .route-fan svg {
+    display: none;
+  }
+
+  .route-fan::after {
+    content: "";
+    display: block;
+    width: 2px;
+    height: 100%;
+    margin: 0 auto;
+    background: var(--paper-muted);
+    transform: scaleY(0);
+    transform-origin: top;
+    animation: route-draw-y var(--duration-base) var(--ease-out) 180ms forwards;
+  }
+
+  .lane {
+    grid-template-columns: 3.2rem minmax(0, 1fr);
+    min-height: 0;
+    padding: 0.3rem 0;
+  }
+
+  .lane-track {
+    height: auto;
+  }
+
+  .lane-rule {
+    display: none;
+  }
+
+  .lane-track::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(0.375rem - 1px);
+    width: 2px;
+    background: var(--paper);
+    transform: scaleY(0);
+    transform-origin: top;
+    animation: route-draw-y var(--duration-base) var(--ease-out) var(--lane-delay) forwards;
+  }
+
+  .lane-node,
+  .lane-node:nth-of-type(2),
+  .lane-node:nth-of-type(3),
+  .lane-node:nth-of-type(4) {
+    position: relative;
+    top: auto;
+    bottom: auto;
+    left: auto;
+    width: auto;
+    padding: 0.42rem 0 0.42rem 1.5rem;
+    transform: none;
+  }
+
+  .node-mark {
+    top: 0.55rem;
+    left: 0;
+    width: 0.75rem;
+    height: 0.75rem;
+    transform: none;
+  }
+
+  .node-label {
+    position: static;
+    max-width: none;
+    text-align: left;
+    transform: none;
+  }
+
+  .route-break {
+    padding: 1.2rem 0 1.4rem;
+  }
+
+  .break-rule {
+    top: 0.6rem;
+    bottom: auto;
+    left: 0;
+    width: auto;
+    height: 0;
+    border-left: 0;
+    border-top: 2px dashed var(--paper-dim);
+    transform: none;
+  }
+
+  .break-label {
+    padding: 0.8rem 0 0;
+    background: none;
+    writing-mode: horizontal-tb;
   }
 
   .validate-tile {
     flex-direction: row;
-    gap: 1rem;
+    gap: 1.1rem;
+    padding: 1.1rem 1.2rem;
     text-align: left;
+  }
+
+  .validate-tile svg {
+    width: 2.6rem;
+    flex: 0 0 auto;
+  }
+
+  .validate-eyebrow {
+    display: none;
   }
 
   .validate-tile strong,
   .validate-tile span {
+    display: block;
     margin: 0;
   }
 }
@@ -2092,7 +2621,7 @@ fetchHistory();
   }
 
   .question-field textarea {
-    min-height: 4.4rem;
+    min-height: 4rem;
     font-size: 2.05rem !important;
   }
 
@@ -2145,62 +2674,26 @@ fetchHistory();
     margin-top: 1rem;
   }
 
-  .scenario-map {
-    display: block;
-    border-top: 1px solid var(--line-dark);
-  }
-
-  .map-stage {
-    padding: 1.4rem 0;
-    border-right: 0;
-    border-bottom: 1px dashed var(--line-dark);
-  }
-
-  .map-label {
-    margin-bottom: 1rem;
+  .route-stage {
+    padding: 1.2rem 0;
   }
 
   .source-tile,
   .validate-tile {
-    min-height: 10rem;
+    min-height: 8.5rem;
   }
 
-  .paths-stage {
-    display: block;
+  .lane {
+    grid-template-columns: 2.9rem minmax(0, 1fr);
   }
 
-  .path {
-    grid-template-columns: 5rem 1fr;
-    gap: 0.5rem;
-    min-height: 8rem;
+  .node-label {
+    font-size: 0.72rem;
   }
 
-  .path::before {
-    top: 4rem;
-    right: auto;
-    left: 5.6rem;
-    width: 0.35rem;
-    height: calc(100% - 3rem);
-    transform: scaleY(1);
-  }
-
-  .path-node {
-    grid-column: 2;
-    min-height: 2.5rem;
-    padding: 0 0 0 2rem;
-    text-align: left;
-  }
-
-  .path-node::before {
-    top: 0.5rem;
-    left: 0.3rem;
-  }
-
-  .method-footer {
-    width: calc(100% + 2rem);
-    max-width: none;
-    margin-left: -1rem;
-    clip-path: none;
+  .route-legend {
+    padding: 0.8rem 0.4rem;
+    letter-spacing: 0.05em;
   }
 
   .run-list button {
@@ -2356,11 +2849,28 @@ fetchHistory();
     scroll-behavior: auto;
   }
 
-  .path::before,
+  .link-line,
+  .lane-rule,
+  .lane-track::before,
+  .route-fan::after,
   .run-skeleton,
   .template-skeleton {
     animation: none;
     transform: none;
   }
+
+  .route-fan path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .node-mark,
+  .node-label {
+    animation: none;
+    opacity: 1;
+  }
 }
 </style>
+
+
+

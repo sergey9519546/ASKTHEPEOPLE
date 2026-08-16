@@ -120,7 +120,7 @@ contract. Use this file as the shared contract instead.
   baseline is **not** ruff-clean (~2,000 findings against ruff's defaults, no
   `[tool.ruff]` config), so this is advisory: lint the files you touched, not
   the tree.
-- Frontend lint: `cd frontend && npm run lint`
+- Frontend lint: none configured (Vitest only; no ESLint script in `frontend/package.json`)
 - Full local verify: `npm run verify` (per repo `package.json`)
 
 ## How to resume a session
