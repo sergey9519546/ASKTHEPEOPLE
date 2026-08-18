@@ -201,6 +201,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex: 1;
   min-height: 0;
+  position: relative;
 }
 
 .desktop-surface {
@@ -221,8 +222,11 @@ onBeforeUnmount(() => {
 
 @media (max-width: 860px) {
   .desktop-main {
-    flex-direction: column;
-  }
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
 }
 </style>
 
@@ -262,3 +266,4 @@ onBeforeUnmount(() => {
   display: none !important;
 }
 </style>
+
