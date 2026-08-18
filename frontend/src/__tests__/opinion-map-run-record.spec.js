@@ -111,14 +111,14 @@ describe("OpinionMap chronological run record", () => {
     const truthBoundary = wrapper.get(
       '[data-testid="interaction-truth-boundary"]',
     );
-    expect(truthBoundary.text()).toContain("Actions + answers: synthetic");
+    expect(truthBoundary.text()).toContain("Actions + answers: generated");
     expect(truthBoundary.text()).toContain("Human respondents: 0");
     expect(truthBoundary.text()).toContain("Not a forecast");
     expect(truthBoundary.text()).toContain("Human validation: outside this run");
 
     const list = wrapper.get('[data-testid="interaction-run-record-list"]');
     expect(list.element.tagName).toBe("OL");
-    expect(list.findAll('li[data-origin="synthetic-generated"]')).toHaveLength(3);
+    expect(list.findAll('li[data-origin="generated"]')).toHaveLength(3);
     expect(list.text().indexOf("The first saved response.")).toBeLessThan(
       list.text().indexOf("The middle saved response."),
     );

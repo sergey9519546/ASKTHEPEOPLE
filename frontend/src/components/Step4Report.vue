@@ -783,7 +783,7 @@ const reportMarkdown = () => {
   lines.push(
     "",
     "---",
-    "Synthetic scenario report. 0 human respondents. Not a forecast.",
+    "generated scenario report. 0 human respondents. Not a forecast.",
   );
   return lines.join("\n").trim();
 };

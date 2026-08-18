@@ -176,11 +176,30 @@ def generate_ontology_task(
             raise ValueError(f"Project not found: {project_id}")
 
         generator = OntologyGenerator()
-        result = generator.generate(text, requirements=requirements)
+        # OntologyGenerator.generate's real signature is
+        # (document_texts: List[str], simulation_requirement: str,
+        #  additional_context: Optional[str]). The task previously passed a raw
+        # string plus an unexpected `requirements=` keyword, which raised
+        # TypeError on every real (non-mocked) call and failed every ontology
+        # generation with `ontology_generation_failed`. Wrap the source text
+        # in a list and pass the requirement under its real parameter name.
+        result = generator.generate(
+            [text],
+            simulation_requirement=requirements,
+        )
 
-        if result.get("success"):
-            ontology_data = result.get("ontology", {})
-            summary = result.get("summary", "")
+        # The real generator returns {"entity_types", "edge_types",
+        # "analysis_summary"} directly and signals failure only by raising.
+        # The task previously checked result.get("success") and read
+        # result["ontology"]/result["summary"], which never matched the real
+        # generator, so every real run was marked failed even when the LLM
+        # returned a valid ontology.
+        if "entity_types" in result or "edge_types" in result:
+            ontology_data = {
+                "entity_types": result.get("entity_types", []),
+                "edge_types": result.get("edge_types", []),
+            }
+            summary = result.get("analysis_summary", "")
 
             project.ontology = ontology_data
             project.analysis_summary = summary

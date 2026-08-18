@@ -58,7 +58,7 @@ describe('Step3Simulation provenance separation', () => {
       }),
     );
     expect(apiMocks.startSimulation.mock.calls[0][0]).not.toHaveProperty(
-      'synthetic_graph_id',
+      'generated_graph_id',
     );
   });
 

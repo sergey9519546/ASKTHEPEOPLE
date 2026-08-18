@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import service from '../api/index.js';
 import {
-  askSyntheticProfiles,
+  askGeneratedProfiles,
   exportGeneratedResponsesCSV,
   getSimulationMetrics,
   getSimulationOpinions,
@@ -32,7 +32,7 @@ describe('simulation API helpers', () => {
     expect(runExperienceSource).toContain('changed after it begins.');
   });
 
-  it('exports synthetic profile responses through the truthful route', async () => {
+  it('exports generated profile responses through the truthful route', async () => {
     const response = new Blob(['profile,response']);
     const post = vi.spyOn(service, 'post').mockResolvedValue(response);
     const results = [{ agent_name: 'Profile 1', answer: 'A possible response' }];
@@ -56,7 +56,7 @@ describe('simulation API helpers', () => {
       questions: [{ agent_id: 1, prompt: 'What assumption should be tested?' }],
     };
 
-    await askSyntheticProfiles(request);
+    await askGeneratedProfiles(request);
     await getSimulationOpinions('sim-1', 25);
     await getSimulationMetrics('sim-1', true);
 

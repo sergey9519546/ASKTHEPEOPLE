@@ -93,11 +93,11 @@ class TestExportDisclosures:
     
     def test_pdf_export_has_disclosure(self):
         """Test that PDF exports include synthetic data disclosure"""
-        from app.services.export_service import SYNTHETIC_DISCLOSURE
+        from app.services.export_service import GENERATED_DISCLOSURE
         
         # Verify disclosure text exists and is non-empty
-        assert SYNTHETIC_DISCLOSURE, "PDF disclosure text must be defined"
-        assert "SYNTHETIC" in SYNTHETIC_DISCLOSURE.upper()
+        assert GENERATED_DISCLOSURE, "PDF disclosure text must be defined"
+        assert "GENERATED" in GENERATED_DISCLOSURE.upper()
     
     def test_csv_export_has_disclosure_columns(self):
         """Test that CSV exports include disclosure metadata columns"""

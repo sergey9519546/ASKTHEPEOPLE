@@ -4,10 +4,11 @@
     :class="{ 'empty-state': projects.length === 0 && !loading }"
     ref="historyContainer"
   >
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <!-- Section Header -->
     <header class="section-title-area" aria-label="Simulation Archive section">
       <h2 class="section-label">Simulation Archive</h2>
-      <p class="section-subtitle">Browse and replay synthetic scenario runs</p>
+      <p class="section-subtitle">Browse and replay generated scenario runs</p>
     </header>
 
     <!-- Project Cards Grid -->
@@ -235,7 +236,7 @@
             <!-- Interactivity Area -->
             <div
               class="modal-playback-divider"
-              aria-label="Synthetic playback section"
+              aria-label="generated playback section"
             >
               <span class="playback-label">Replay Pipeline</span>
             </div>

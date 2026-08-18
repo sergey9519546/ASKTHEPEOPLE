@@ -76,6 +76,13 @@ def _atomic_create_json(path: Path, payload: Dict[str, Any]) -> bool:
             os.link(temp_path, path)
         except FileExistsError:
             return False
+        except PermissionError:
+            # Windows can surface a lost no-overwrite reservation as
+            # ERROR_ACCESS_DENIED (PermissionError) instead of
+            # ERROR_ALREADY_EXISTS (FileExistsError) when two publishers race
+            # on the same destination. Treat it identically to "the artifact
+            # already exists" rather than crashing the publisher.
+            return False
         return True
     finally:
         try:
@@ -337,6 +344,14 @@ class RuntimeControlStore:
                 # tight race because replacement permits an existing target.
                 os.link(source, destination)
             except (FileExistsError, FileNotFoundError):
+                continue
+            except PermissionError:
+                # On Windows a lost hard-link reservation can surface as
+                # ERROR_ACCESS_DENIED instead of ERROR_ALREADY_EXISTS when two
+                # claimers race on the same file. Treat it like the explicit
+                # already-claimed cases: this candidate is no longer claimable,
+                # so move on to the next one (fail closed rather than crashing
+                # the worker).
                 continue
             try:
                 source.unlink()

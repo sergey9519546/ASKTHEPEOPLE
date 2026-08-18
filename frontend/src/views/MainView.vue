@@ -1,10 +1,9 @@
 <template>
   <div class="main-view">
-    <TruthRail />
     <header class="app-header">
-      <button class="header-left brand-home" type="button" @click="router.push('/')">
+      <a class="header-left brand-home" href="/" aria-label="ASK THE PEOPLE / generated Decision Explorer home">
         <span class="brand">ASK THE PEOPLE</span>
-      </button>
+      </a>
 
       <div class="header-center">
         <div
@@ -39,6 +38,7 @@
     </header>
 
     <nav ref="workflowPath" class="workflow-path" aria-label="Scenario workflow">
+      <a class="skip-link" href="#main-content">Skip to main content</a>
       <div
         v-for="(step, index) in stepNames"
         :key="step"
@@ -55,7 +55,7 @@
         <span>{{ String(index + 1).padStart(2, "0") }}</span>
         <strong>{{ step }}</strong>
       </div>
-      <p><strong>0 human respondents</strong> · Synthetic scenarios, not a forecast</p>
+      <p><strong>0 human respondents</strong> · generated scenarios, not a forecast</p>
     </nav>
     <label class="mobile-workflow-picker">
       <span>Workflow step</span>
@@ -86,7 +86,8 @@
       </div>
     </div>
 
-    <main class="content-area" :class="`view-${viewMode}`">
+    <main id="main-content" class="content-area" :class="`view-${viewMode}`">
+      <h1 class="view-title">Decision explorer</h1>
       <section
         v-if="viewMode !== 'workbench'"
         class="panel-wrapper left"
@@ -174,7 +175,9 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { useWindowRoute } from "../composables/useWindowContext.js";
+import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import {
   buildGraph,
   generateOntology,
@@ -188,13 +191,13 @@ import Step2EnvSetup from "../components/Step2EnvSetup.vue";
 import Step3Simulation from "../components/Step3Simulation.vue";
 import Step4Report from "../components/Step4Report.vue";
 import Step5Interaction from "../components/Step5Interaction.vue";
-import TruthRail from "../components/TruthRail.vue";
 import { clearPendingUpload, getPendingUpload } from "../store/pendingUpload";
 import { listSimulations } from "../api/simulation";
 import { deriveWorkflowStep } from "../utils/workflow.js";
 
-const route = useRoute();
 const router = useRouter();
+const windowRoute = useWindowRoute();
+const { setContext } = useWorkspaceState();
 
 const viewMode = ref("workbench");
 const currentStep = ref(1);
@@ -219,7 +222,10 @@ const jumpToStep = (targetStep) => {
   }
 };
 
-const currentProjectId = ref(route.params.projectId);
+const currentProjectId = ref(windowRoute.value.params.projectId);
+if (currentProjectId.value && currentProjectId.value !== "new") {
+  setContext({ projectId: currentProjectId.value });
+}
 const loading = ref(false);
 const graphLoading = ref(false);
 const error = ref("");
@@ -407,8 +413,12 @@ const initProject = async () => {
 
 const handleNewProject = async () => {
   const pending = getPendingUpload();
-  if (!pending.isPending || pending.files.length === 0) {
-    error.value = "No source files were carried into this workspace.";
+  // Prompt-only runs are a designed first-class path: sources are optional
+  // ("explore with the decision alone"), and the backend builds the source
+  // map from the user's own decision text when no files are carried over.
+  if (!pending.isPending) {
+    error.value =
+      "No decision was carried into this workspace. Return to the decision and start again.";
     return;
   }
 

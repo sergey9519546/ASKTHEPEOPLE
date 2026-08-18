@@ -15,7 +15,7 @@ from ..config import Config
 from ..utils.logger import get_logger
 from .claim_boundary import (
     GRAPH_RECORD_INTERPRETATION,
-    SYNTHETIC_OUTPUT_DISCLOSURE_TEXT,
+    GENERATED_OUTPUT_DISCLOSURE_TEXT,
     synthetic_output_disclosure,
 )
 from .zep_tools import ZepToolsService
@@ -24,7 +24,7 @@ logger = get_logger('askthepeople.export_service')
 
 # Compatibility name retained for callers; content comes from the shared
 # product-truth contract.
-SYNTHETIC_DISCLOSURE = SYNTHETIC_OUTPUT_DISCLOSURE_TEXT
+GENERATED_DISCLOSURE = GENERATED_OUTPUT_DISCLOSURE_TEXT
 UNVERIFIED_GRAPH_ORIGIN = "GRAPH_RECORD_ORIGIN_UNVERIFIED"
 UNVERIFIED_GRAPH_INTERPRETATION = GRAPH_RECORD_INTERPRETATION
 
@@ -118,7 +118,7 @@ class PDFGenerator:
         self.pdf.set_fill_color(229, 194, 29)
         self.pdf.set_text_color(17, 21, 19)
         self.pdf.set_font("Helvetica", "B", 9)
-        self.pdf.multi_cell(0, 7, SYNTHETIC_DISCLOSURE, fill=True)
+        self.pdf.multi_cell(0, 7, GENERATED_DISCLOSURE, fill=True)
         self.pdf.set_text_color(0, 0, 0)
         self.pdf.ln(8)
         
@@ -340,7 +340,7 @@ class ExecutiveExporter:
     </style>
 </head>
 <body>
-    <div class="disclosure">{SYNTHETIC_DISCLOSURE}</div>
+    <div class="disclosure">{GENERATED_DISCLOSURE}</div>
     <div class="slide">
         <div class="slide-title">{title}</div>
         <div class="summary-box">

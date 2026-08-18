@@ -85,7 +85,7 @@ describe('report DTO normalization and safe rendering', () => {
             details: {
               tool_name: 'quick_search',
               parameters: { query: 'transit access' },
-              content: 'A bounded synthetic result',
+              content: 'A bounded generated result',
               has_final_answer: false,
             },
           },
@@ -103,7 +103,7 @@ describe('report DTO normalization and safe rendering', () => {
     expect(entry).toMatchObject({
       tool_name: 'quick_search',
       params: { query: 'transit access' },
-      content: 'A bounded synthetic result',
+      content: 'A bounded generated result',
       final_answer: false,
       thinking: true,
     });
@@ -127,7 +127,7 @@ describe('report DTO normalization and safe rendering', () => {
               trace_id: 'section_1_trace_2',
               source_type: 'round_summary',
               excerpt: '{"generated_actions": 14}',
-              evidence_class: 'synthetic_observation',
+              evidence_class: 'generated_observation',
               human_respondents: 0,
               interpretation:
                 'Generated within this simulation run; not observed human behavior.',
@@ -140,7 +140,7 @@ describe('report DTO normalization and safe rendering', () => {
         trace_id: 'section_1_trace_2',
         source_type: 'round_summary',
         excerpt: '{"generated_actions": 14}',
-        evidence_class: 'synthetic_observation',
+        evidence_class: 'generated_observation',
         human_respondents: 0,
         interpretation:
           'Generated within this simulation run; not observed human behavior.',

@@ -941,11 +941,16 @@ def test_generate_ontology_threads_server_task_identity_into_canonical_save(
     saves = []
 
     class _Generator:
-        def generate(self, text, requirements=None):
+        def generate(
+            self,
+            document_texts,
+            simulation_requirement=None,
+            additional_context=None,
+        ):
             return {
-                "success": True,
-                "ontology": {"entity_types": [], "edge_types": []},
-                "summary": "server summary",
+                "entity_types": [],
+                "edge_types": [],
+                "analysis_summary": "server summary",
             }
 
     monkeypatch.setattr(graph_tasks, "TaskManager", lambda: manager)

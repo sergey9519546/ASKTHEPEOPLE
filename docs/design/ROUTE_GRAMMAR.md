@@ -35,10 +35,10 @@ DECISION
   → REVIEWED STARTING CONDITIONS
   → ASSUMPTION GATES / UNCERTAINTY STATES
   → GENERATED DECISION LENSES
-  → SYNTHETIC ACTIONS
+  → GENERATED ACTIONS
   → DECISION CONSIDERATIONS
   → QUESTIONS TO VALIDATE
-  ⇥ OUTSIDE THE SYNTHETIC RUN
+  ⇥ OUTSIDE THE GENERATED RUN
 ```
 
 ## Node taxonomy
@@ -51,11 +51,11 @@ DECISION
 | Assumption gate | `A` | `ASSUMPTION / A-01` | condition | path branch | probability split |
 | Critical uncertainty state | `U` | `UNCERTAINTY / U-01` | condition | scenario | forecast state |
 | Generated profile | `GP` | `GENERATED PROFILE / GP-01` | approved profile set | synthetic action | person/respondent |
-| Synthetic action | `SA` | `SYNTHETIC ACTION / SA-01` | scenario/profile | consideration | observed behavior |
+| Synthetic action | `SA` | `GENERATED ACTION / SA-01` | scenario/profile | consideration | observed behavior |
 | Possible path | `P` | `POSSIBLE PATH / P-01` | assumption/scenario | actions/considerations | likelihood |
 | Decision consideration | `DC` | `CONSIDERATION / DC-01` | path | validation question | finding from people |
 | Validation question | `VQ` | `QUESTION TO VALIDATE / VQ-01` | consideration | external handoff | completed validation |
-| Human-validation boundary | `HV` | `OUTSIDE SYNTHETIC RUN` | question | none in run | product recruited/measured people |
+| Human-validation boundary | `HV` | `OUTSIDE GENERATED RUN` | question | none in run | product recruited/measured people |
 | Related run record | `RR` | `RELATED RUN RECORD / RR-01` | diagnostic link only | none | citation/lineage/corroboration |
 
 ## Edge taxonomy
@@ -268,7 +268,7 @@ The map is a controlled semantic system.
 Five rectangular cells separated by hard rules; 48–52 px high.
 
 ```text
-ACTIONS + ANSWERS: SYNTHETIC | HUMAN RESPONDENTS: 0 | NOT A FORECAST |
+ACTIONS + ANSWERS: GENERATED | HUMAN RESPONDENTS: 0 | NOT A FORECAST |
 SOURCES: STARTING CONDITIONS ONLY | HUMAN VALIDATION: OUTSIDE THIS RUN
 ```
 
@@ -277,7 +277,7 @@ SOURCES: STARTING CONDITIONS ONLY | HUMAN VALIDATION: OUTSIDE THIS RUN
 Two wrapped lines, never a horizontal carousel:
 
 ```text
-SYNTHETIC · 0 HUMAN RESPONDENTS · NOT A FORECAST
+GENERATED · 0 HUMAN RESPONDENTS · NOT A FORECAST
 SOURCES SET INPUTS ONLY · VALIDATE WITH PEOPLE OUTSIDE
 ```
 
@@ -293,8 +293,8 @@ This creates a stable visual narrative:
 
 ```text
 CREAM — DEFINE AND REVIEW
-CHARCOAL — EXPLORE SYNTHETIC POSSIBILITIES
-LIGHT CREAM — LEAVE THE SYNTHETIC SYSTEM AND VALIDATE
+CHARCOAL — EXPLORE GENERATED POSSIBILITIES
+LIGHT CREAM — LEAVE THE GENERATED SYSTEM AND VALIDATE
 ```
 
 Do not use these surfaces merely as decorative alternation.

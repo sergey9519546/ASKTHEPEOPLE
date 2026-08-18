@@ -9,7 +9,7 @@ from app.services.zep_tools import (
     AgentInterview,
     InterviewResult,
     PanoramaResult,
-    SYNTHETIC_PROBE_PROMPT_PREFIX,
+    GENERATED_PROBE_PROMPT_PREFIX,
 )
 
 
@@ -117,7 +117,7 @@ def test_panorama_and_probe_render_as_unverified_synthetic_records():
 
 
 def test_synthetic_probe_engine_prompt_rejects_respondent_claims():
-    prompt = SYNTHETIC_PROBE_PROMPT_PREFIX.lower()
+    prompt = GENERATED_PROBE_PROMPT_PREFIX.lower()
 
     assert "fictional generated scenario record" in prompt
     assert "not claim to be a real person or respondent" in prompt

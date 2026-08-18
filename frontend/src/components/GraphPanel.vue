@@ -16,6 +16,9 @@
           class="graph-search-input"
           placeholder="Filter nodes…"
           aria-label="Filter map nodes"
+          autocomplete="off"
+          name="graph-search"
+          spellcheck="false"
         />
         <button
           class="btn-action small"
@@ -1117,11 +1120,11 @@ input:checked + .switch-slider:before {
 
 .status-overlay-hint,
 .completion-hint {
-  border-color: var(--signal);
+  border: 2px solid var(--signal);
   border-radius: var(--radius-md);
-  background: var(--signal);
-  color: var(--paper);
-  box-shadow: none;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0.35rem 0.35rem 0 rgba(12, 16, 15, 0.55);
   backdrop-filter: none;
 }
 

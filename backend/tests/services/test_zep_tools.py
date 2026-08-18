@@ -138,7 +138,7 @@ def test_interview_agents_failure_summary_omits_raw_provider_detail(
 ):
     from app.services.simulation_runner import SimulationRunner
 
-    raw_canary = "PRIVATE_SYNTHETIC_PROBE_PROVIDER_BODY"
+    raw_canary = "PRIVATE_GENERATED_PROBE_PROVIDER_BODY"
     profile = {
         "realname": "Generated profile",
         "username": "generated_profile",

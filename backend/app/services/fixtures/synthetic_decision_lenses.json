@@ -1,0 +1,1540 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-18T06:00:00Z",
+  "methodologyVersion": "1.1.0",
+  "productTruthContractVersion": "1.2.1",
+  "disclaimer": "These are fictional decision lenses for scenario exploration. They are not simulated people, representative respondents, population samples, digital twins, or predictions of human behavior. human_respondent_count: 0. output_origin: synthetic.",
+  "profiles": [
+    {
+      "id": "GP-01",
+      "title": "Resource-Constrained Implementer",
+      "purpose": "Examines whether the decision can be executed given real-world resource limits",
+      "context": [
+        "Operational team with fixed budget, headcount, and timeline",
+        "Legacy technical debt constrains greenfield options",
+        "Procurement cycle > 90 days for new vendors"
+      ],
+      "goals": [
+        "Deliver minimum viable outcome within constraints",
+        "Avoid scope creep that jeopardizes deadline",
+        "Minimize ongoing maintenance burden"
+      ],
+      "constraints": [
+        "Budget ceiling: $2.4M total cost of ownership Year 1",
+        "Team: 6 FTE (2 backend, 1 frontend, 1 DevOps, 1 QA, 1 PM)",
+        "Hard deadline: 2026-11-15 (board commitment)",
+        "Must integrate with existing authZ/authN (Keycloak)",
+        "Cannot rewrite core billing pipeline (18-month effort)"
+      ],
+      "accessConditions": [
+        "Internal systems and documentation only",
+        "No external vendor access without 90-day procurement",
+        "Staging environment mirrors production data schema",
+        "No production write access for validation"
+      ],
+      "incentives": [
+        "On-time delivery tied to team bonus structure",
+        "Technical debt reduction improves future velocity",
+        "Team stability: zero unplanned attrition target"
+      ],
+      "switchingCosts": [
+        "Rewriting Keycloak integrations: 4-6 weeks",
+        "Retraining team on new framework: 3-4 weeks",
+        "Vendor lock-in: 3-year contract with 12-month termination notice",
+        "Data migration from legacy billing: 8-12 weeks, zero-downtime required"
+      ],
+      "informationConditions": [
+        "Deep knowledge of current system failure modes",
+        "Aware of team's actual velocity (not planned velocity)",
+        "Unaware of emerging vendor roadmap beyond public announcements",
+        "No visibility into competitor technical decisions"
+      ],
+      "decisionCriteria": [
+        "Feasibility within constraints > architectural elegance",
+        "Proven technology > bleeding edge (unless strategic mandate)",
+        "Maintenance burden per feature < 0.2 FTE ongoing",
+        "Rollback plan must exist for every deployment"
+      ],
+      "excludedInferences": [
+        "Assumes unlimited budget or emergency funding",
+        "Assumes greenfield implementation without legacy constraints",
+        "Assumes perfect staff availability (no sick leave, no hiring lag)",
+        "Assumes vendor SLAs are always met",
+        "Assumes team can simultaneously maintain legacy AND build new"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "approved"
+    },
+    {
+      "id": "GP-02",
+      "title": "Risk-Averse Compliance Officer",
+      "purpose": "Surfaces regulatory, legal, and reputational risks that could block or reverse the decision",
+      "context": [
+        "Regulated industry with multiple overlapping frameworks",
+        "Audit cycles are quarterly with zero-tolerance findings",
+        "Precedent-setting potential makes this high-visibility"
+      ],
+      "goals": [
+        "Zero regulatory violations",
+        "Defensible documentation for every decision",
+        "Audit trail completeness exceeding minimum requirements"
+      ],
+      "constraints": [
+        "Must comply with frameworks A, B, C simultaneously",
+        "Data residency requirements in 3 jurisdictions",
+        "Retention mandates: 7 years for transaction records",
+        "Cannot deploy without legal sign-off on data flows"
+      ],
+      "accessConditions": [
+        "Legal counsel and compliance databases",
+        "Precedent records and enforcement actions",
+        "No direct access to customer PII",
+        "Read-only access to architecture diagrams"
+      ],
+      "incentives": [
+        "Clean audit results with zero findings",
+        "Career protection through documented diligence",
+        "Organizational reputation preservation",
+        "Regulatory relationship maintenance"
+      ],
+      "switchingCosts": [
+        "Re-architecting for compliance after deployment: 6-12 months",
+        "Legal review cycles: 4-8 weeks per major change",
+        "Regulatory filing amendments: public record, reputational risk",
+        "Incident response activation: executive escalation"
+      ],
+      "informationConditions": [
+        "Knows regulatory text and enforcement patterns",
+        "May not know operational realities or edge cases",
+        "Unaware of business urgency or competitive timeline",
+        "Has historical enforcement data but not predictive models"
+      ],
+      "decisionCriteria": [
+        "Compliance certainty > speed of deployment",
+        "Documented rationale > implicit assumptions",
+        "Precedent alignment > innovative interpretation",
+        "Defensible in public > defensible in private"
+      ],
+      "excludedInferences": [
+        "Assumes regulatory flexibility or enforcement discretion",
+        "Assumes 'we'll fix it later' is acceptable",
+        "Assumes compliance is solely a legal function",
+        "Assumes current regulation is stable and final"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-03",
+      "title": "Change-Resistant Incumbent",
+      "purpose": "Models institutional inertia and identifies what would need to overcome status-quo bias",
+      "context": [
+        "Established workflow with 8+ years of refinement",
+        "Tenured team with deep tribal knowledge",
+        "Existing vendor relationships with personal connections",
+        "Cultural norm: 'we've always done it this way'"
+      ],
+      "goals": [
+        "Minimize disruption to working practices",
+        "Protect existing investments and sunk costs",
+        "Maintain team morale and psychological safety"
+      ],
+      "constraints": [
+        "Change management budget: $150K (one-time)",
+        "Political capital: team has survived 3 reorganizations in 5 years",
+        "Retraining capacity: 2 hours per person per week max",
+        "SLA maintenance: no degradation during transition"
+      ],
+      "accessConditions": [
+        "Institutional memory and informal networks",
+        "Shadow IT knowledge and undocumented workflows",
+        "Limited external visibility (no conference attendance budget)",
+        "Historical change failure records"
+      ],
+      "incentives": [
+        "Stability and predictability",
+        "Avoiding blame for failed changes",
+        "Protecting team from burnout",
+        "Preserving established working relationships"
+      ],
+      "switchingCosts": [
+        "Process re-engineering: 6-12 months of productivity loss",
+        "Cultural resistance: formal complaints, quiet quitting, attrition",
+        "Loss of tribal knowledge during transition",
+        "Interim productivity dip: 30-40% for 3 months"
+      ],
+      "informationConditions": [
+        "Deep operational knowledge of every edge case",
+        "Limited exposure to alternatives (no external benchmarking)",
+        "May overestimate migration pain based on past failures",
+        "Unaware of competitor capabilities or industry trends"
+      ],
+      "decisionCriteria": [
+        "Proven continuity > theoretical improvement",
+        "Low disruption > high upside",
+        "Familiar technology > novel alternative",
+        "Political feasibility > technical elegance"
+      ],
+      "excludedInferences": [
+        "Assumes change is easy if well-planned",
+        "Assumes team welcomes innovation",
+        "Assumes competitors aren't advancing",
+        "Assumes current path is sustainable indefinitely"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-04",
+      "title": "Innovation-Seeking Challenger",
+      "purpose": "Forces exploration of disruptive alternatives and identifies opportunity cost of inaction",
+      "context": [
+        "Market pressure from new entrants",
+        "Competitive threat: Feature X launched by competitor 6 months ago",
+        "Technology shift enabling new architecture patterns",
+        "Board mandate: 'move faster' or risk irrelevance"
+      ],
+      "goals": [
+        "Leapfrog competitors on capability",
+        "Capture emerging market value before window closes",
+        "Establish strategic market position",
+        "Build talent brand to attract top candidates"
+      ],
+      "constraints": [
+        "Board appetite for risk: moderate (requires 3 pilot successes)",
+        "Capital allocation: $5M innovation budget for year",
+        "Talent acquisition: 40% increase in hiring target",
+        "Cannot cannibalize existing revenue stream > 20%"
+      ],
+      "accessConditions": [
+        "Market intelligence and competitive analysis",
+        "Startup ecosystem and emerging technology radar",
+        "Academic research and patent filings",
+        "VC/PE trend reports"
+      ],
+      "incentives": [
+        "First-mover advantage in emerging segment",
+        "Valuation growth through innovation narrative",
+        "Thought leadership and conference speaking opportunities",
+        "Career-defining wins for senior leadership"
+      ],
+      "switchingCosts": [
+        "Opportunity cost of not pursuing current path",
+        "Technical debt accumulation if innovation fails",
+        "Talent attrition to competitors pursuing similar bets",
+        "Reputation risk if high-profile initiative fails"
+      ],
+      "informationConditions": [
+        "Sees market trends and emerging patterns",
+        "May underestimate execution complexity and timeline",
+        "Biased toward novelty over reliability",
+        "Unaware of operational constraints or compliance risks"
+      ],
+      "decisionCriteria": [
+        "Strategic differentiation > incremental improvement",
+        "Asymmetric upside > symmetric risk",
+        "Learning velocity > current capability",
+        "Optionality preservation > commitment"
+      ],
+      "excludedInferences": [
+        "Assumes current approach is sustainable",
+        "Assumes market waits for our readiness",
+        "Assumes execution complexity is manageable",
+        "Assumes innovation success is guaranteed by effort"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "approved"
+    },
+    {
+      "id": "GP-05",
+      "title": "Frontline Operator",
+      "purpose": "Reveals usability, workflow integration, and day-to-day friction that leadership misses",
+      "context": [
+        "High-volume repetitive tasks with zero tolerance for error",
+        "Customer-facing: mistakes have immediate consequence",
+        "Time pressure: 30-second average handle time target",
+        "No admin rights, no configuration access, no API keys"
+      ],
+      "goals": [
+        "Reduce click-to-complete for common tasks",
+        "Eliminate workarounds and shadow systems",
+        "Prevent errors before they reach customer",
+        "Go home on time without carry-over stress"
+      ],
+      "constraints": [
+        "No ability to modify workflows or systems",
+        "IT ticket queue: 2-week average resolution",
+        "Muscle memory trained on current interface",
+        "Cannot install tools or extensions"
+      ],
+      "accessConditions": [
+        "The actual production UI (read-only except for own tasks)",
+        "Customer complaints and escalations",
+        "Peer tips and undocumented shortcuts",
+        "No strategic context or roadmap visibility"
+      ],
+      "incentives": [
+        "Task completion speed",
+        "Accuracy recognition in quality reviews",
+        "Fewer escalations and callbacks",
+        "Work-life boundary preservation"
+      ],
+      "switchingCosts": [
+        "Relearning keystrokes and workflows: 2-3 weeks",
+        "Broken macros and custom scripts: not transferable",
+        "Lost customizations and saved searches",
+        "Temporary slowdown during transition: 40% productivity loss"
+      ],
+      "informationConditions": [
+        "Knows every edge case and workaround",
+        "Doesn't know 'why' behind system design",
+        "Unaware of roadmap or strategic priorities",
+        "Has accurate sense of actual, not planned, task difficulty"
+      ],
+      "decisionCriteria": [
+        "Task completion time > feature completeness",
+        "Error prevention > error correction",
+        "Cognitive load minimization",
+        "Offline capability when network fails"
+      ],
+      "excludedInferences": [
+        "Assumes training solves usability problems",
+        "Assumes 'intuitive' means zero learning curve",
+        "Assumes operators read documentation",
+        "Assumes edge cases are negligible"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-06",
+      "title": "Edge-Case Stress Lens",
+      "purpose": "Systematically explores failure modes, boundary conditions, and pathological scenarios",
+      "context": [
+        "Adversarial inputs and malicious use cases",
+        "Scale extremes: 10x normal load and 0.1x normal",
+        "Partial degradation: network partitions, dependency failures",
+        "Concurrent failures: multiple independent failures"
+      ],
+      "goals": [
+        "Find breaking points before production",
+        "Validate graceful degradation under stress",
+        "Expose hidden coupling between components",
+        "Document blast radius of each failure mode"
+      ],
+      "constraints": [
+        "No happy-path assumptions allowed",
+        "Must consider Byzantine and adversarial behavior",
+        "Time-bounded: 40-hour exploration window",
+        "Cannot modify production or test infrastructure"
+      ],
+      "accessConditions": [
+        "System architecture diagrams and data flow",
+        "Failure logs and incident history",
+        "Chaos engineering tools (limited to staging)",
+        "Threat models and security assessments"
+      ],
+      "incentives": [
+        "Finding the bug before it reaches production",
+        "Reducing blast radius of failures",
+        "Sleep quality: knowing system is resilient",
+        "Professional reputation for rigor"
+      ],
+      "switchingCosts": [
+        "Architectural redesign for resilience: 3-6 months",
+        "Observability infrastructure investment",
+        "Testing infrastructure expansion",
+        "Cultural shift from 'move fast' to 'move safely'"
+      ],
+      "informationConditions": [
+        "Knows failure modes from incident history",
+        "May not know business priority of each failure path",
+        "Has threat model but not all attack vectors",
+        "Understands system coupling but not all dependencies"
+      ],
+      "decisionCriteria": [
+        "Graceful failure > catastrophic failure",
+        "Observability > blind operation",
+        "Isolation > cascade",
+        "Tested recovery > documented recovery"
+      ],
+      "excludedInferences": [
+        "Assumes normal distribution of failures",
+        "Assumes independent failures (ignores cascade)",
+        "Assumes 'that never happens' is acceptable risk",
+        "Assumes happy path is the only path that matters",
+        "Assumes graceful degradation applies to all user segments equally",
+        "Assumes partial failures do not compound over time",
+        "Assumes the system's failure modes are exhaustively documented",
+        "Assumes stress testing at 10x scale predicts behavior at 100x"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "approved"
+    },
+    {
+      "id": "GP-07",
+      "title": "Equity & Access Advocate",
+      "purpose": "Identifies exclusionary effects, disparate impact, and access barriers across populations",
+      "context": [
+        "Diverse user base with varying abilities, languages, and contexts",
+        "Legal accessibility mandates (WCAG 2.2 AA, Section 508, EN 301 549)",
+        "Inclusion commitments in public ESG reporting",
+        "Demographic variance in device, bandwidth, and ability"
+      ],
+      "goals": [
+        "Universal usability without exception",
+        "No disparate impact across protected characteristics",
+        "Barrier removal, not accommodation",
+        "Dignity preservation in every interaction"
+      ],
+      "constraints": [
+        "WCAG 2.2 AA minimum (target: AAA where feasible)",
+        "Language localization: 12 languages in Year 1",
+        "Device diversity: 3 screen sizes, 2 OS versions, assistive tech",
+        "Cognitive load limits: max 7 choices per screen",
+        "Bandwidth variance: 56kbps minimum viable experience"
+      ],
+      "accessConditions": [
+        "Accessibility audit tools (axe, WAVE, screen readers)",
+        "Community feedback from disabled users",
+        "Assistive technology testing lab",
+        "Demographic data and usage analytics by segment"
+      ],
+      "incentives": [
+        "Regulatory compliance and fine avoidance",
+        "Brand trust and market expansion",
+        "Moral consistency with stated values",
+        "Legal defensibility in discrimination claims"
+      ],
+      "switchingCosts": [
+        "Retrofitting accessibility after launch: 2x cost of designing in",
+        "Localization pipeline and maintenance",
+        "Inclusive design system and token system",
+        "Testing matrix expansion: 12 languages x 3 devices x 3 browsers"
+      ],
+      "informationConditions": [
+        "Knows standards, barriers, and assistive tech",
+        "May not know technical implementation constraints",
+        "Has community feedback but not always representative",
+        "Understands legal requirements but not engineering tradeoffs"
+      ],
+      "decisionCriteria": [
+        "Inclusive by default > accessible on request",
+        "Universal design > accommodation",
+        "Equity > average-case optimization",
+        "Dignity > efficiency"
+      ],
+      "excludedInferences": [
+        "Assumes 'most users' is sufficient coverage",
+        "Assumes accessibility is post-launch concern",
+        "Assumes user homogeneity",
+        "Assumes screen readers handle modern JS frameworks"
+      ],
+      "sensitiveAttributeJustifications": [
+        {
+          "attribute": "Disability status (visual, motor, cognitive)",
+          "relevance": "Accessibility requirements are directly derived from WCAG 2.2 AA which addresses these characteristics. Without this dimension, the lens cannot evaluate exclusionary effects.",
+          "approvedBy": "askthepeople-architect + askthepeople-security-reviewer"
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "GP-08",
+      "title": "Long-Term Steward",
+      "purpose": "Evaluates sustainability, technical debt accumulation, and multi-year ownership costs",
+      "context": [
+        "5-10 year horizon for system operation",
+        "Team turnover: 20% annual attrition in tech roles",
+        "Technology lifecycle: current framework enters maintenance mode in 3 years",
+        "Platform evolution: 3 major refactors in past 7 years"
+      ],
+      "goals": [
+        "Maintainability and evolvability of architecture",
+        "Cost predictability over system lifetime",
+        "Knowledge preservation across team changes",
+        "Smooth transitions between technology generations"
+      ],
+      "constraints": [
+        "Deprecation cycles: must plan 2 years ahead",
+        "Vendor viability: prefer vendors with >$1B revenue or strong ecosystem",
+        "Skill market trends: 3-year horizon for hiring feasibility",
+        "Architectural decision records must be kept current"
+      ],
+      "accessConditions": [
+        "Architecture documentation and ADRs",
+        "Vendor roadmaps and financial health reports",
+        "Industry trend reports (Gartner, ThoughtWorks Radar)",
+        "Exit interview data and skills inventory"
+      ],
+      "incentives": [
+        "Smooth transitions without emergency rewrites",
+        "Predictable operational cost trajectory",
+        "Reduced fire-fighting and technical debt interest",
+        "Institutional knowledge retention"
+      ],
+      "switchingCosts": [
+        "Platform migrations: 6-18 months, 2-3 FTE",
+        "Data model evolution: breaking changes require migration scripts",
+        "API versioning and backward compatibility maintenance",
+        "Team onboarding: 3-6 months to full productivity"
+      ],
+      "informationConditions": [
+        "Sees patterns across technology cycles",
+        "May over-engineer for uncertain futures",
+        "Has historical data but not all lessons documented",
+        "Understands long-term trends but not immediate pressures"
+      ],
+      "decisionCriteria": [
+        "Explicit architecture > implicit coupling",
+        "Standards compliance > proprietary advantage",
+        "Documentation > tribal knowledge",
+        "Boring technology > clever innovation",
+        "Bus factor > 1 for all critical components"
+      ],
+      "excludedInferences": [
+        "Assumes current team stays for full horizon",
+        "Assumes vendor survives and supports product",
+        "Assumes requirements freeze for 5+ years",
+        "Assumes technology evolution is predictable"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-09",
+      "title": "Customer Outcome Advocate",
+      "purpose": "Centers the end-user outcome rather than internal process or feature delivery",
+      "context": [
+        "Customer jobs-to-be-done: 3 primary JTBD identified",
+        "Success metrics: 30-day activation, 90-day retention, NPS > 50",
+        "Churn drivers: onboarding friction, missing integration, support unavailability",
+        "Expansion signals: usage growth, seat requests, executive engagement"
+      ],
+      "goals": [
+        "Customer achieves desired outcome within first 14 days",
+        "Time-to-value minimized to first meaningful milestone",
+        "Trust increased through reliability and transparency",
+        "Renewal secured through demonstrated value"
+      ],
+      "constraints": [
+        "Customer segment diversity: SMB to enterprise",
+        "Integration complexity: 47 integration points in ecosystem",
+        "Support capacity: 1 support agent per 200 customers",
+        "SLA commitments: 99.9% uptime, 4-hour response"
+      ],
+      "accessConditions": [
+        "Usage analytics and behavioral telemetry",
+        "Support tickets and resolution times",
+        "NPS verbatims and churn interviews",
+        "Renewal conversations and expansion pipeline"
+      ],
+      "incentives": [
+        "Customer lifetime value maximization",
+        "Net revenue retention > 110%",
+        "Referenceability and case study potential",
+        "Referral generation from satisfied customers"
+      ],
+      "switchingCosts": [
+        "Customer migration effort: 2-4 weeks of engineering work",
+        "Data portability: CSV export/import limitations",
+        "Workflow re-engineering for customer",
+        "Trust rebuilding after negative experience"
+      ],
+      "informationConditions": [
+        "Knows customer behavior patterns and drop-off points",
+        "May not know internal constraints or technical feasibility",
+        "Has NPS verbatims but not causal explanation",
+        "Understands desired outcomes but not implementation path"
+      ],
+      "decisionCriteria": [
+        "Outcome achievement > feature completeness",
+        "Adoption > shipment",
+        "Retention > acquisition",
+        "Time-to-value > feature richness"
+      ],
+      "excludedInferences": [
+        "Assumes features equal customer value",
+        "Assumes customers articulate needs perfectly",
+        "Assumes usage equals satisfaction",
+        "Assumes NPS verbatims are representative"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-10",
+      "title": "Adversarial Competitor",
+      "purpose": "Models competitive response, market countermoves, and strategic vulnerability",
+      "context": [
+        "Known competitors: 3 direct, 2 indirect",
+        "Asymmetric capabilities: we lead on integration, they lead on UX",
+        "Market dynamics: switching costs favor incumbents but network effects favor us",
+        "Strategic posture: competitor recently raised $50M growth round"
+      ],
+      "goals": [
+        "Neutralize our competitive advantage",
+        "Capture our high-value customers",
+        "Raise our cost-to-serve through competitive pressure",
+        "Shape market narrative in their favor"
+      ],
+      "constraints": [
+        "Their resources: $50M cash, 120 FTE engineering",
+        "Their technical debt: legacy codebase limits agility",
+        "Investor expectations: 3x growth mandate",
+        "Regulatory environment: same constraints apply equally"
+      ],
+      "accessConditions": [
+        "Public filings and earnings calls",
+        "Customer win/loss data from deals",
+        "Partner intelligence and channel feedback",
+        "Hiring signals and compensation trends",
+        "Pricing intelligence from deals"
+      ],
+      "incentives": [
+        "Market share gain in target segment",
+        "Margin protection through pricing pressure",
+        "Narrative control in analyst reports",
+        "Strategic optionality preservation"
+      ],
+      "switchingCosts": [
+        "Customer lock-in through contracts and integrations",
+        "Technical architecture constraints",
+        "Organizational inertia and process",
+        "Brand perception in market"
+      ],
+      "informationConditions": [
+        "Knows our public posture and announcements",
+        "May misread our internal capability or runway",
+        "Assumes rational response to competitive moves",
+        "Has incomplete picture of our partnership strategy"
+      ],
+      "decisionCriteria": [
+        "Asymmetric response > symmetric feature match",
+        "Customer poaching through pricing > feature parity",
+        "Narrative shaping in analyst reports > specification comparison",
+        "Ecosystem lock-in > point solution"
+      ],
+      "excludedInferences": [
+        "Assumes competitor ignores our move",
+        "Assumes competitor is technically incompetent",
+        "Assumes market is static and predictable",
+        "Assumes customer loyalty is primarily price-driven"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-11",
+      "title": "Data Sovereignty Guardian",
+      "purpose": "Enforces data localization, privacy, consent, and cross-border transfer constraints",
+      "context": [
+        "Multi-jurisdiction operation: US, EU, UK, APAC",
+        "GDPR, CCPA/CPRA, LGPD, PDPA all potentially applicable",
+        "Sector-specific rules: healthcare (HIPAA), finance (PCI-DSS)",
+        "Data residency mandates in 2 of 6 operating countries"
+      ],
+      "goals": [
+        "Lawful processing in every jurisdiction",
+        "Consent validity and purpose limitation compliance",
+        "Transfer mechanism compliance (SCCs, adequacy, BCRs)",
+        "Breach liability minimization through data minimization"
+      ],
+      "constraints": [
+        "Geographic data boundaries: EU data stays in EU",
+        "Purpose limitation: each data element has declared purpose",
+        "Storage minimization: delete when purpose expires",
+        "Retention schedules: 7 years for transactions, 90 days for logs"
+      ],
+      "accessConditions": [
+        "Data processing agreements (DPAs) and records",
+        "Transfer impact assessments (TIAs)",
+        "Subprocessors list and their locations",
+        "Breach notification procedures and templates"
+      ],
+      "incentives": [
+        "Regulatory standing and clean examination history",
+        "Customer trust in data handling",
+        "Fine avoidance: GDPR up to 4% global revenue",
+        "Operational continuity without data freeze orders"
+      ],
+      "switchingCosts": [
+        "Regional infrastructure deployment and maintenance",
+        "Data model segmentation by jurisdiction",
+        "Vendor reselection for compliant providers",
+        "Architectural refactoring for data residency"
+      ],
+      "informationConditions": [
+        "Knows regulatory text and enforcement patterns",
+        "May not know technical implementation details",
+        "Has legal interpretations but not engineering constraints",
+        "Understands risk but not mitigation cost"
+      ],
+      "decisionCriteria": [
+        "Lawful by design > lawful by patch",
+        "Local processing > remote processing",
+        "Data minimization > data maximization",
+        "Granular consent > blanket permission"
+      ],
+      "excludedInferences": [
+        "Assumes 'cloud' means data can go anywhere",
+        "Assumes consent covers all future purposes",
+        "Assumes adequacy decisions are permanent",
+        "Assumes pseudonymization exempts from regulation"
+      ],
+      "sensitiveAttributeJustifications": [
+        {
+          "attribute": "Geographic location (jurisdiction)",
+          "relevance": "Data residency and transfer rules are jurisdiction-specific. Location determines applicable legal framework.",
+          "approvedBy": "askthepeople-persistence-engineer + askthepeople-security-reviewer"
+        }
+      ],
+      "status": "generated"
+    },
+    {
+      "id": "GP-12",
+      "title": "Financial Discipline Lens",
+      "purpose": "Imposes unit economics, ROI thresholds, payback periods, and capital efficiency constraints",
+      "context": [
+        "Budget cycle: annual, with Q3 reforecast",
+        "Investor expectations: Rule of 40, gross margin > 70%",
+        "Cost of capital: WACC 12%, hurdle rate 20% for new initiatives",
+        "Revenue recognition: ASC 606, 5-year customer lifetime"
+      ],
+      "goals": [
+        "Positive unit economics within 18 months",
+        "Payback period < 12 months",
+        "LTV:CAC > 3:1 at segment level",
+        "Gross margin > 75% at scale"
+      ],
+      "constraints": [
+        "Capex vs opex classification affects P&L",
+        "Amortization schedules: 3-year straight-line for software",
+        "Headcount cost: fully-loaded $180K per FTE",
+        "Infrastructure scaling curves: 30% discount at $100K/month"
+      ],
+      "accessConditions": [
+        "Financial models and assumptions",
+        "Vendor quotes and contract terms",
+        "Usage forecasts and capacity planning",
+        "Competitive pricing intelligence"
+      ],
+      "incentives": [
+        "Budget adherence and forecast accuracy",
+        "Margin expansion and cost optimization",
+        "Capital efficiency and return multiples",
+        "Investor confidence and valuation support"
+      ],
+      "switchingCosts": [
+        "Contract penalties: early termination 20% of remaining value",
+        "Migration professional services: $150K-$500K",
+        "Data egress fees: $0.05/GB + network costs",
+        "Dual-run periods: 6 months of parallel operation"
+      ],
+      "informationConditions": [
+        "Knows financial targets and investor expectations",
+        "May not know technical implementation costs",
+        "Has models but not all assumptions are validated",
+        "Understands accounting rules but not engineering tradeoffs"
+      ],
+      "decisionCriteria": [
+        "Measurable ROI > strategic faith",
+        "Variable cost structure > fixed cost",
+        "Payback period < decision horizon",
+        "Option value preserved > commitment"
+      ],
+      "excludedInferences": [
+        "Assumes volume discounts materialize at forecasted scale",
+        "Assumes linear scaling with users",
+        "Assumes 'strategic' justifies any cost",
+        "Assumes financial models are accurate predictors"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-13",
+      "title": "Crisis & Continuity Planner",
+      "purpose": "Validates resilience under extreme stress: outages, disasters, supply chain rupture, key-person loss",
+      "context": [
+        "Business continuity requirements: RTO < 4 hours, RPO < 1 hour",
+        "Single points of failure: 3 identified in current architecture",
+        "Dependency chains: 2-tier vendor concentration in payment processing",
+        "Team availability: 40% of on-call rotation in same geography"
+      ],
+      "goals": [
+        "Survive 72-hour regional outage without data loss",
+        "Recover critical services within 4 hours",
+        "Zero data loss for transactional systems",
+        "Graceful degradation: core features available, advanced features suspended"
+      ],
+      "constraints": [
+        "DR budget: 15% of infrastructure spend allocated",
+        "Geographic redundancy: active-active in 2 regions minimum",
+        "Vendor SLA: 99.99% uptime with $10K/hour penalty",
+        "Team availability: no single-person dependency for critical path"
+      ],
+      "accessConditions": [
+        "Dependency maps and blast radius diagrams",
+        "Runbooks and incident response procedures",
+        "Tabletop exercise results and gap lists",
+        "Vendor DR attestations and certifications"
+      ],
+      "incentives": [
+        "Uptime SLA compliance and penalty avoidance",
+        "Customer retention during crisis events",
+        "Insurance premium reduction through demonstrated resilience",
+        "Board confidence and risk management rating"
+      ],
+      "switchingCosts": [
+        "Multi-region architecture and data replication",
+        "Failover automation and health check infrastructure",
+        "Chaos engineering program and tooling",
+        "Runbook maintenance and team training"
+      ],
+      "informationConditions": [
+        "Knows failure scenarios from incident history",
+        "May overestimate recovery capability under stress",
+        "Underestimates cascade probability in complex systems",
+        "Has vendor DR docs but not verified recovery capability"
+      ],
+      "decisionCriteria": [
+        "Tested recovery > documented recovery",
+        "Automated failover > manual runbook execution",
+        "Component isolation > shared fate architecture",
+        "Graceful degradation > all-or-nothing"
+      ],
+      "excludedInferences": [
+        "Assumes 'cloud handles' disaster recovery",
+        "Assumes single-region is sufficient",
+        "Assumes team is available during crisis",
+        "Assumes vendor DR actually works as advertised"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "approved"
+    },
+    {
+      "id": "GP-14",
+      "title": "Ecosystem & Platform Strategist",
+      "purpose": "Evaluates partner leverage, API strategy, marketplace dynamics, and platform network effects",
+      "context": [
+        "Partner ecosystem: 200+ active integrations, 47 ISV partners",
+        "API consumers: 3,000+ developers, 10M API calls/day",
+        "Marketplace presence: 3rd party apps generating 15% of total revenue",
+        "Extension points: 12 documented APIs, 4 open for extension"
+      ],
+      "goals": [
+        "Increase partner attachment and switching cost",
+        "Grow marketplace revenue to 25% of total",
+        "Shape industry standards through platform governance",
+        "Reduce disintermediation risk"
+      ],
+      "constraints": [
+        "Platform terms of service: must not compete with ISVs",
+        "API rate limits: 100K calls/day per developer",
+        "Revenue share: 20% to platform, 80% to ISV",
+        "Certification requirements: security review, 4-week timeline"
+      ],
+      "accessConditions": [
+        "Partner feedback and satisfaction scores",
+        "API usage analytics and error rates",
+        "Marketplace metrics: GMV, install rates, retention",
+        "Platform roadmap briefings under NDA"
+      ],
+      "incentives": [
+        "Ecosystem lock-in and switching cost elevation",
+        "Recurring partner revenue stream",
+        "Strategic indispensability in customer stack",
+        "Talent attraction through platform opportunity"
+      ],
+      "switchingCosts": [
+        "Partner migration to alternative platform",
+        "API versioning and backward compatibility maintenance",
+        "Certification renewal and compliance overhead",
+        "Marketplace algorithm changes affecting discoverability"
+      ],
+      "informationConditions": [
+        "Knows platform dynamics and partner incentives",
+        "May not know internal product priorities",
+        "Has ecosystem data but not all partner financials",
+        "Understands network effects but not churn drivers"
+      ],
+      "decisionCriteria": [
+        "Platform leverage > standalone feature",
+        "Open extensibility > closed garden",
+        "Community governance > vendor control",
+        "Portability > convenience"
+      ],
+      "excludedInferences": [
+        "Assumes platform stability and API longevity",
+        "Assumes partner loyalty to our platform",
+        "Assumes API compatibility across versions",
+        "Assumes network effects are self-reinforcing"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-15",
+      "title": "Talent & Organizational Capability Lens",
+      "purpose": "Assesses whether the team can execute, sustain, and evolve the decision's implications",
+      "context": [
+        "Skill gaps: 3 critical roles unfilled (security, ML, platform)",
+        "Hiring market: 40% increase in compensation expectations YoY",
+        "Retention risk: 2 senior engineers with competing offers",
+        "Knowledge concentration: 1 person holds critical system knowledge"
+      ],
+      "goals": [
+        "Executable roadmap with current team capabilities",
+        "Sustainable team health (no burnout, no heroics)",
+        "Knowledge distribution: bus factor > 2 for all critical paths",
+        "Hiring pipeline: fill critical roles within 6 months"
+      ],
+      "constraints": [
+        "Headcount budget: 5 new FTE approved, 2 frozen",
+        "Compensation bands: 15% below market for senior roles",
+        "Visa/immigration: 6-month lag for international hires",
+        "Training time: 3 months to productivity for new technology"
+      ],
+      "accessConditions": [
+        "Skills inventory and gap analysis",
+        "Exit interviews and retention risk data",
+        "Hiring funnel metrics and time-to-fill",
+        "Compensation benchmarks and market data",
+        "Engagement survey results"
+      ],
+      "incentives": [
+        "Team stability and retention",
+        "Shipping velocity and predictability",
+        "Employer brand and talent attraction",
+        "Internal mobility and career growth"
+      ],
+      "switchingCosts": [
+        "Rehiring critical roles: 6-9 months per position",
+        "Knowledge loss during transition",
+        "Onboarding investment: 3-6 months to full productivity",
+        "Cultural disruption from rapid team change"
+      ],
+      "informationConditions": [
+        "Knows team reality and capability gaps",
+        "May not know market availability of skills",
+        "Has engagement data but not root cause analysis",
+        "Understands current capacity but not future needs"
+      ],
+      "decisionCriteria": [
+        "Team capability match > technology preference",
+        "Sustainable pace > heroic sprints",
+        "Knowledge distribution > concentration",
+        "Hiring feasibility > ideal architecture"
+      ],
+      "excludedInferences": [
+        "Assumes 'we can hire for that' at current compensation",
+        "Assumes current team scales linearly",
+        "Assumes training is instant and effective",
+        "Assumes remote work solves all talent constraints"
+      ],
+      "sensitiveAttributeJustifications": [
+        {
+          "attribute": "Skill level and experience",
+          "relevance": "Organizational capability is directly determined by skill distribution. Without this dimension, the lens cannot evaluate execution feasibility.",
+          "approvedBy": "askthepeople-architect + askthepeople-ai-eval-steward"
+        }
+      ],
+      "status": "generated"
+    },
+    {
+      "id": "GP-16",
+      "title": "Narrative & Perception Architect",
+      "purpose": "Models how the decision will be framed, received, and narrated by stakeholders, media, and markets",
+      "context": [
+        "Stakeholder map: 5 distinct groups with conflicting interests",
+        "Media landscape: 3 trade publications, 2 analyst firms covering space",
+        "Historical narratives: 'innovation' vs 'stability' tension",
+        "Social dynamics: internal perception vs external positioning"
+      ],
+      "goals": [
+        "Controllable narrative at announcement",
+        "Stakeholder alignment before public disclosure",
+        "Ambiguity reduction in messaging",
+        "Trust deposit for future initiatives"
+      ],
+      "constraints": [
+        "Transparency obligations: regulatory disclosure requirements",
+        "Legal review cycles: 2-week minimum for public statements",
+        "Leak risk: 15% of decisions leak before intended announcement",
+        "Interpretation variance: same words mean different things to different audiences"
+      ],
+      "accessConditions": [
+        "Stakeholder interviews and sentiment mapping",
+        "Media monitoring and coverage analysis",
+        "Analyst briefing transcripts and expectations",
+        "Employee sentiment and internal communications",
+        "Customer advisory board feedback"
+      ],
+      "incentives": [
+        "Reputation capital and brand equity",
+        "Stakeholder trust and alignment",
+        "Talent attraction through compelling narrative",
+        "Investor confidence and valuation support",
+        "Customer pride and advocacy"
+      ],
+      "switchingCosts": [
+        "Narrative reversal after public commitment",
+        "Trust bankruptcy from inconsistency",
+        "Employee disengagement from perceived spin",
+        "Customer alienation from tone-deaf messaging",
+        "Analyst downgrade from credibility loss"
+      ],
+      "informationConditions": [
+        "Knows perception levers and framing options",
+        "May not know operational reality or technical constraints",
+        "Has stakeholder sentiment but not causal understanding",
+        "Understands media dynamics but not content accuracy"
+      ],
+      "decisionCriteria": [
+        "Authentic narrative > crafted spin",
+        "Proactive framing > reactive defense",
+        "Consistency across audiences > tailored messages",
+        "Long-term trust > short-term perception"
+      ],
+      "excludedInferences": [
+        "Assumes 'good product speaks for itself'",
+        "Assumes stakeholders read and understand deeply",
+        "Assumes nuance survives media transmission",
+        "Assumes internal narrative matches external perception"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-17",
+      "title": "Scientific Validity Challenger",
+      "purpose": "Demands empirical grounding, falsifiability, measurement rigor, and peer-reviewable claims",
+      "context": [
+        "Evidence-based decision culture with academic collaboration",
+        "Regulatory evidence standards requiring causal demonstration",
+        "Replication crisis awareness: 40% of published findings fail replication",
+        "Peer-review culture with pre-registration requirement"
+      ],
+      "goals": [
+        "Testable hypotheses with clear success criteria",
+        "Measurable outcomes with defined metrics",
+        "Confounding control and causal identification",
+        "Methodological transparency and reproducibility"
+      ],
+      "constraints": [
+        "Experiment design: randomized controlled trial preferred",
+        "Sample size: powered to detect minimum meaningful effect",
+        "Randomization feasibility: ethical and practical constraints",
+        "Publication timeline: 12-18 months for peer-reviewed publication"
+      ],
+      "accessConditions": [
+        "Academic literature and meta-analyses",
+        "Experimental infrastructure and instrumentation",
+        "Statistical expertise and analysis pipelines",
+        "IRB/ethics board approval processes",
+        "Pre-registration platforms (OSF, ClinicalTrials.gov)"
+      ],
+      "incentives": [
+        "Scientific credibility and citation",
+        "Policy influence through rigorous evidence",
+        "Reputation for methodological rigor",
+        "Funding competitiveness (grants require rigor)"
+      ],
+      "switchingCosts": [
+        "Study redesign after power analysis failure",
+        "Data re-collection for confound control",
+        "Analysis pipeline changes for robustness",
+        "Peer review cycles: 3-6 months per round"
+      ],
+      "informationConditions": [
+        "Knows methodological standards and best practices",
+        "May not know business urgency or operational constraints",
+        "Has statistical expertise but not domain knowledge",
+        "Understands rigor but not organizational politics"
+      ],
+      "decisionCriteria": [
+        "Causal evidence > correlational observation",
+        "Pre-registered > exploratory analysis",
+        "Replication > single study",
+        "Effect size > p-value significance",
+        "External validity > internal validity (when generalizing)"
+      ],
+      "excludedInferences": [
+        "Assumes A/B test equals scientific experiment",
+        "Assumes observational data can support causal claims",
+        "Assumes internal validity guarantees external validity",
+        "Assumes 'data-driven' means scientifically rigorous"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "approved"
+    },
+    {
+      "id": "GP-18",
+      "title": "Ethical & Societal Impact Lens",
+      "purpose": "Surfaces second-order societal effects, value alignment, and moral hazard",
+      "context": [
+        "Stakeholder ecosystem: 12 identified groups with varying power",
+        "Power asymmetries: decision affects parties with no voice in process",
+        "Vulnerable populations: 3 segments with heightened risk",
+        "Precedent setting: 'first of its kind' regulatory attention"
+      ],
+      "goals": [
+        "Do no harm to affected populations",
+        "Distributive justice across stakeholder groups",
+        "Procedural fairness in decision process",
+        "Transparency and accountability mechanisms"
+      ],
+      "constraints": [
+        "Ethical frameworks: utilitarian, deontological, virtue ethics all apply",
+        "Human rights standards: Universal Declaration, sector-specific conventions",
+        "Community norms: local expectations may conflict with global standards",
+        "Regulatory evolution: ethics becoming codified into law"
+      ],
+      "accessConditions": [
+        "Ethics review board and deliberation records",
+        "Community consultation outputs",
+        "Impact assessment frameworks and prior applications",
+        "Whistleblower channels and concern logs",
+        "Legal counsel on duty-of-care obligations"
+      ],
+      "incentives": [
+        "Social license to operate",
+        "Long-term legitimacy and trust",
+        "Employee pride and retention",
+        "Intergenerational equity consideration",
+        "Regulatory goodwill and cooperation"
+      ],
+      "switchingCosts": [
+        "Reputational repair after ethical failure",
+        "Policy reversal and implementation cost",
+        "Community trust rebuilding: years of consistent behavior",
+        "Legal liability and class action exposure",
+        "Talent exodus to ethically aligned competitors"
+      ],
+      "informationConditions": [
+        "Knows ethical frameworks and moral philosophy",
+        "May not know technical feasibility or business viability",
+        "Has community input but not all perspectives",
+        "Understands rights but not practical constraints"
+      ],
+      "decisionCriteria": [
+        "Rights preservation > utility maximization",
+        "Informed consent > assumed consent",
+        "Reversibility > lock-in",
+        "Dignity > efficiency",
+        "Procedural justice > outcome optimization"
+      ],
+      "excludedInferences": [
+        "Assumes 'net positive' justifies any means",
+        "Assumes affected parties cannot organize or resist",
+        "Assumes ethics is optional or post-hoc",
+        "Assumes current norms are ethically sound"
+      ],
+      "sensitiveAttributeJustifications": [
+        {
+          "attribute": "Power asymmetry and vulnerability status",
+          "relevance": "Ethical impact analysis requires identifying parties with diminished power to affect the decision. Without this dimension, the lens cannot evaluate distributive justice.",
+          "approvedBy": "askthepeople-architect + askthepeople-security-reviewer"
+        }
+      ],
+      "status": "approved"
+    },
+    {
+      "id": "GP-19",
+      "title": "Interoperability & Standards Advocate",
+      "purpose": "Enforces open standards, data portability, vendor neutrality, and composability",
+      "context": [
+        "Multi-vendor landscape: 5 core vendors, 12 niche providers",
+        "Legacy integration: 23 point-to-point connections, no ESB",
+        "Standardization bodies: W3C, IETF, OASIS active in domain",
+        "Open source dynamics: 3 community projects influencing direction"
+      ],
+      "goals": [
+        "Vendor optionality and competitive leverage",
+        "Data portability across systems",
+        "Composable architecture enabling recombination",
+        "Community alignment with open standards"
+      ],
+      "constraints": [
+        "Standard maturity: prefer stable over draft specifications",
+        "Implementation variance: 3+ implementations required for stability",
+        "Certification cost: $50K-$200K per standard conformance",
+        "Governance participation: need seat at standards table"
+      ],
+      "accessConditions": [
+        "Standards trackers and working group participation",
+        "Reference implementations and test suites",
+        "Conformance test results and compatibility reports",
+        "IPR policy review and patent licensing terms"
+      ],
+      "incentives": [
+        "Negotiation leverage through standards compliance",
+        "Innovation velocity through reusable components",
+        "Talent pool access (developers know standards)",
+        "Customer confidence in non-lock-in architecture"
+      ],
+      "switchingCosts": [
+        "Custom adapter maintenance for proprietary APIs",
+        "Proprietary data model migration effort",
+        "Certification rework after standard updates",
+        "Ecosystem fragmentation from divergent implementations"
+      ],
+      "informationConditions": [
+        "Knows standards landscape and maturity",
+        "May not know proprietary differentiation value",
+        "Has conformance data but not implementation quality",
+        "Understands governance but not business urgency"
+      ],
+      "decisionCriteria": [
+        "Open standard > proprietary API",
+        "Composability > monolithic design",
+        "Community governance > vendor control",
+        "Portability > convenience",
+        "Multiple implementations > reference implementation only"
+      ],
+      "excludedInferences": [
+        "Assumes 'industry standard' means mature and stable",
+        "Assumes standard conformance guarantees interoperability",
+        "Assumes vendor faithfully implements standard",
+        "Assumes open source equals community governance"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-20",
+      "title": "Localization & Cultural Adaptation Lens",
+      "purpose": "Validates cross-cultural, cross-linguistic, and cross-regional fit beyond translation",
+      "context": [
+        "Global markets: 6 regions, 12 languages",
+        "Cultural dimensions: power distance, uncertainty avoidance, individualism vary significantly",
+        "Legal pluralism: 3 distinct legal systems with different requirements",
+        "Payment diversity: 15 payment methods across regions"
+      ],
+      "goals": [
+        "Cultural resonance, not just translation accuracy",
+        "Legal compliance per jurisdiction",
+        "Local team empowerment and autonomy",
+        "Brand consistency without cultural imperialism"
+      ],
+      "constraints": [
+        "Localization budget: $2M for Year 1 global rollout",
+        "Linguistic QA: native speaker review for all 12 languages",
+        "Cultural consultation: 2 rounds per major market",
+        "Regional legal review: mandatory before market entry"
+      ],
+      "accessConditions": [
+        "In-market teams and their institutional knowledge",
+        "Local user research and usability testing",
+        "Cultural advisors and anthropologists",
+        "Regional legal counsel and regulatory bodies",
+        "Competitor localization quality benchmarks"
+      ],
+      "incentives": [
+        "Market penetration and revenue growth",
+        "Local team retention and empowerment",
+        "Regulatory compliance in each jurisdiction",
+        "Cultural credibility and brand respect",
+        "Revenue diversification across markets"
+      ],
+      "switchingCosts": [
+        "Retrofitting i18n/l10n after launch: 3x cost of designing in",
+        "Cultural misstep recovery: months to rebuild trust",
+        "Legal non-compliance: market exit or fine",
+        "Brand damage from cultural insensitivity",
+        "Team alienation from centralized control"
+      ],
+      "informationConditions": [
+        "Knows local context and cultural nuances",
+        "May not know global architecture constraints",
+        "Has local user research but limited sample",
+        "Understands regional law but not technical implementation"
+      ],
+      "decisionCriteria": [
+        "Local validity > global consistency",
+        "Cultural intelligence > translation accuracy",
+        "Regional autonomy > central control",
+        "Respectful adaptation > uniform experience"
+      ],
+      "excludedInferences": [
+        "Assumes English-first works globally",
+        "Assumes translation equals localization",
+        "Assumes cultural norms are universal",
+        "Assumes one UX pattern fits all cultures"
+      ],
+      "sensitiveAttributeJustifications": [
+        {
+          "attribute": "Cultural background and geographic region",
+          "relevance": "Localization and cultural adaptation requirements are inherently tied to cultural context and geographic jurisdiction. Without this dimension, the lens cannot evaluate cross-cultural fit.",
+          "approvedBy": "askthepeople-architect + askthepeople-ai-eval-steward"
+        }
+      ],
+      "status": "generated"
+    },
+    {
+      "id": "GP-21",
+      "title": "Learning & Adaptation Engine",
+      "purpose": "Designs for continuous learning, feedback loops, and evolutionary improvement",
+      "context": [
+        "Rapid iteration culture: weekly deployments, continuous experimentation",
+        "Experimentation infrastructure: feature flags, A/B testing, cohort analysis",
+        "Metric maturity: 40+ metrics tracked, 5 key outcomes identified",
+        "Organizational learning: quarterly retrospectives, decision logs"
+      ],
+      "goals": [
+        "Faster learning cycles per unit of effort",
+        "Compounding insight across experiments",
+        "Reduced uncertainty through systematic testing",
+        "Organizational memory and pattern recognition"
+      ],
+      "constraints": [
+        "Experiment velocity: max 3 concurrent major experiments",
+        "Statistical power: minimum 1000 users per variant",
+        "Ethical experimentation: no deception, no harm",
+        "Learning documentation: decision logs must be updated within 48 hours"
+      ],
+      "accessConditions": [
+        "Experiment platform and feature flag service",
+        "Analytics stack and data warehouse",
+        "Retrospective artifacts and decision records",
+        "Pattern libraries and prior experiment outcomes"
+      ],
+      "incentives": [
+        "Compound learning reducing repeat mistakes",
+        "Faster time-to-insight for decisions",
+        "Organizational memory surviving attrition",
+        "Innovation rate and competitive learning velocity"
+      ],
+      "switchingCosts": [
+        "Experiment infrastructure and tooling investment",
+        "Cultural change from 'ship and learn' to 'test and learn'",
+        "Documentation discipline and decision log maintenance",
+        "Analysis capability: statistical expertise in short supply"
+      ],
+      "informationConditions": [
+        "Knows learning theory and experimental design",
+        "May not know business urgency or political constraints",
+        "Has experiment data but not all confounds controlled",
+        "Understands methods but not domain context"
+      ],
+      "decisionCriteria": [
+        "Instrumented > assumed",
+        "Reversible > permanent",
+        "Learning velocity > feature velocity",
+        "System improvement > heroics",
+        "Documented decisions > tacit knowledge"
+      ],
+      "excludedInferences": [
+        "Assumes 'we'll learn from experience' without structure",
+        "Assumes intuition beats systematic testing",
+        "Assumes one experiment is sufficient",
+        "Assumes learning happens automatically"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-22",
+      "title": "Supply Chain & Dependency Risk Lens",
+      "purpose": "Maps upstream fragility, single-source exposure, and cascade failure potential",
+      "context": [
+        "Vendor concentration: 3 vendors provide 80% of critical infrastructure",
+        "Geographic concentration: 70% of suppliers in single region",
+        "Logistic chokepoints: 2 ports handle 90% of inbound components",
+        "Regulatory dependency: 5 certifications required for operation"
+      ],
+      "goals": [
+        "Supplier diversification to eliminate single-source exposure",
+        "Buffer stock and safety inventory for critical components",
+        "Contractual protection through SLAs and penalties",
+        "Early warning system for supplier distress"
+      ],
+      "constraints": [
+        "Qualification lead time: 6-12 months for new suppliers",
+        "Switching cost: 20-40% of annual spend in transition",
+        "Minimum order quantities: contractual commitments",
+        "IP ownership: critical component IP owned by supplier"
+      ],
+      "accessConditions": [
+        "Vendor financials and credit ratings",
+        "Supply chain mapping and dependency graph",
+        "Geopolitical risk feeds and trade policy alerts",
+        "Alternative source qualification status",
+        "Contract terms and SLA history"
+      ],
+      "incentives": [
+        "Continuity assurance and supply security",
+        "Negotiation leverage through alternatives",
+        "Cost stability and predictability",
+        "Risk transfer through contractual mechanisms",
+        "Stakeholder confidence in resilience"
+      ],
+      "switchingCosts": [
+        "Re-qualification cycles for new suppliers",
+        "Tooling and process changes for new sources",
+        "Data migration and system integration",
+        "Contract penalties for early termination",
+        "Capability rebuild after knowledge loss"
+      ],
+      "informationConditions": [
+        "Knows vendor landscape and relationships",
+        "May not know internal architecture coupling",
+        "Has financial data but not operational health",
+        "Understands risk but not business criticality weighting"
+      ],
+      "decisionCriteria": [
+        "Multi-source > single-source",
+        "Contractual protection > vendor relationship",
+        "Visibility > opacity in supply chain",
+        "Buffer stock > just-in-time efficiency",
+        "Geographic diversity > cost optimization"
+      ],
+      "excludedInferences": [
+        "Assumes vendor stability and continuity",
+        "Assumes 'strategic partnership' means reliability",
+        "Assumes alternatives exist at same cost",
+        "Assumes supply chain is linear and predictable"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-23",
+      "title": "Regulatory Horizon Scanner",
+      "purpose": "Anticipates emerging regulation, policy shifts, and compliance trajectory",
+      "context": [
+        "Legislative pipeline: 3 active bills in 2 jurisdictions",
+        "Regulatory agency agenda: 5 rulemakings in progress",
+        "Case law evolution: 2 appellate decisions pending",
+        "International standards: ISO/IEC standards under revision"
+      ],
+      "goals": [
+        "Proactive compliance before effective date",
+        "Competitive advantage through early readiness",
+        "Policy influence through engagement",
+        "Regulatory risk pricing into decisions"
+      ],
+      "constraints": [
+        "Legislative uncertainty: bills may not pass or may be amended",
+        "Implementation timeline variance: 6-36 months after enactment",
+        "Enforcement discretion: agencies may delay or prioritize selectively",
+        "Resource allocation: monitoring requires dedicated analyst time"
+      ],
+      "accessConditions": [
+        "Policy trackers and legislative databases",
+        "Trade association briefings and lobbying disclosures",
+        "Regulatory dockets and comment periods",
+        "Legal counsel alerts and client advisories",
+        "Enforcement action databases and consent decrees"
+      ],
+      "incentives": [
+        "First-mover compliance advantage",
+        "Reduced remediation cost vs retroactive compliance",
+        "Policy shaping through early engagement",
+        "Investor confidence in regulatory readiness",
+        "Market access preservation"
+      ],
+      "switchingCosts": [
+        "Retroactive compliance after enforcement action",
+        "Architectural refactoring for new requirements",
+        "Data model changes and migration",
+        "Legal exposure and potential penalties",
+        "Market exit if unable to comply"
+      ],
+      "informationConditions": [
+        "Knows regulatory trajectory and stakeholder positions",
+        "May not know technical implementation path",
+        "Has legislative text but not final form",
+        "Understands risk but not mitigation timeline"
+      ],
+      "decisionCriteria": [
+        "Future-proof > current-compliant",
+        "Flexibility > optimization for current rules",
+        "Engagement > avoidance of regulatory process",
+        "Principle-based > loophole exploitation"
+      ],
+      "excludedInferences": [
+        "Assumes current regulation is final and stable",
+        "Assumes enforcement is predictable and uniform",
+        "Assumes 'not currently regulated' means safe",
+        "Assumes regulatory change is always negative"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "generated"
+    },
+    {
+      "id": "GP-24",
+      "title": "Counterfactual & Disconfirmation Lens",
+      "purpose": "Explicitly constructs the conditions under which the decision would be wrong",
+      "context": [
+        "Decision commitment: resources allocated, stakeholders aligned",
+        "Sunk cost: $1.2M already spent on research and design",
+        "Confirmation bias risk: team has invested 18 months",
+        "Narrative lock-in: public commitments made"
+      ],
+      "goals": [
+        "Intellectual honesty over ego protection",
+        "Early warning before commitment becomes irreversible",
+        "Pivot triggers that are specific and measurable",
+        "Learning preservation even if decision fails"
+      ],
+      "constraints": [
+        "Pre-mortem discipline: must be done before decision locks",
+        "Specific measurable triggers required (no vague concerns)",
+        "Timeline binding: triggers have evaluation dates",
+        "Social permission to dissent: protected role in process"
+      ],
+      "accessConditions": [
+        "Decision record and assumption log",
+        "Uncertainty register with states and triggers",
+        "Disconfirmation conditions from all lenses",
+        "External critiques and red-team outputs",
+        "Historical decision outcomes and post-mortems"
+      ],
+      "incentives": [
+        "Decision quality and outcome success",
+        "Reputation for rigor and intellectual honesty",
+        "Learning culture and organizational improvement",
+        "Downside protection through early pivots",
+        "Trust capital with stakeholders"
+      ],
+      "switchingCosts": [
+        "Pivot execution: sunk cost, stakeholder realignment",
+        "Asset repurposing or write-off",
+        "Narrative change and credibility management",
+        "Ego recovery and team morale restoration",
+        "Opportunity cost of delayed decision"
+      ],
+      "informationConditions": [
+        "Knows decision logic and assumption structure",
+        "Actively seeks disconfirming evidence",
+        "Resists confirmation bias by design",
+        "Has historical decision outcomes for pattern matching"
+      ],
+      "decisionCriteria": [
+        "Falsifiability > confirmation seeking",
+        "Specific triggers > vague concerns",
+        "Timeline-bound > open-ended evaluation",
+        "Actionable > performative dissent",
+        "Learning > being right"
+      ],
+      "excludedInferences": [
+        "Assumes 'we'll know when we see it' is sufficient",
+        "Assumes success validates the original decision logic",
+        "Assumes dissent is disloyalty or lack of commitment",
+        "Assumes disconfirmation is rare or unlikely",
+        "Assumes dissent is emotional rather than evidence-based",
+        "Assumes confirmation bias has been neutralized by awareness",
+        "Assumes pivot triggers will be obvious without pre-registration",
+        "Assumes external critics share the same information set",
+        "Assumes sunk cost does not affect willingness to abandon the decision",
+        "Assumes the decision owner is capable of self-correction without structural checks",
+        "Assumes success metrics are independent of the decision framework itself",
+        "Assumes the absence of failure signals proves the decision is sound"
+      ],
+      "sensitiveAttributeJustifications": [],
+      "status": "approved"
+    }
+  ]
+}

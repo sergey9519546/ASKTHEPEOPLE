@@ -6,9 +6,9 @@
     :aria-hidden="accessRequired || hasCrashed ? 'true' : undefined"
     :inert="accessRequired || hasCrashed ? '' : undefined"
   >
-    <router-view />
-    <ToastContainer />
+    <DesktopShell />
     <ProjectLinks />
+    <ToastContainer />
     <CommandPalette v-if="!accessRequired && !hasCrashed" />
     <KeyboardShortcutsModal :is-open="shortcutsOpen" @close="shortcutsOpen = false" />
   </div>
@@ -48,6 +48,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AccessKeyGate from "./components/AccessKeyGate.vue";
 import CommandPalette from "./components/CommandPalette.vue";
+import DesktopShell from "./components/DesktopShell.vue";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal.vue";
 import ProjectLinks from "./components/ProjectLinks.vue";
 import ToastContainer from "./components/ToastContainer.vue";
@@ -179,8 +180,11 @@ onBeforeUnmount(() => {
 }
 
 .app-surface {
-  min-height: 100dvh;
-  background: linear-gradient(135deg, var(--signal-aura) 0%, var(--signal-haze) 50%, transparent 100%);
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--ink);
 }
 
 .crash-overlay {
@@ -199,6 +203,9 @@ onBeforeUnmount(() => {
   gap: 1.2rem;
   width: min(100%, 45rem);
   padding: 1.4rem;
+  border: 1px solid var(--signal);
+  background: var(--paper);
+  color: var(--ink);
   box-shadow: var(--shadow-lg);
 }
 
@@ -244,5 +251,3 @@ onBeforeUnmount(() => {
   }
 }
 </style>
-
-

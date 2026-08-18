@@ -12,7 +12,7 @@ import {
 import TruthRail from "../components/TruthRail.vue";
 
 const REQUIRED_TRUTH_RAIL_FACTS = [
-  "ACTIONS + ANSWERS: SYNTHETIC",
+  "ACTIONS + ANSWERS: GENERATED",
   "HUMAN RESPONDENTS: 0",
   "NOT A FORECAST",
   "SOURCES: STARTING CONDITIONS ONLY",
@@ -56,7 +56,7 @@ describe("frontend product-truth guard", () => {
       "frontend/src/components/Example.vue",
     );
     const approvedLockup = auditVisibleCopy(
-      `<p>ASKTHEPEOPLE / Synthetic Decision Explorer</p>`,
+      `<p>ASKTHEPEOPLE / Generated Decision Explorer</p>`,
       "frontend/src/components/Example.vue",
     );
 
@@ -114,22 +114,37 @@ describe("frontend product-truth guard", () => {
         snippet: "Ask The People",
       })),
       ...[
-        ["frontend/src/views/Home.vue", "aria-label", "Ask The People home"],
-        ["frontend/src/views/Home.vue", "text", "ASK THE PEOPLE"],
-        ["frontend/src/views/InteractionView.vue", "aria-label", "Ask The People — home"],
         ["frontend/src/views/InteractionView.vue", "text", "ASK THE PEOPLE"],
         ["frontend/src/views/MainView.vue", "text", "ASK THE PEOPLE"],
         ["frontend/src/views/NotFoundView.vue", "text", "Ask The People · Route recovery"],
-        ["frontend/src/views/ReportView.vue", "aria-label", "Ask The People — home"],
         ["frontend/src/views/ReportView.vue", "text", "ASK THE PEOPLE"],
-        ["frontend/src/views/SimulationRunView.vue", "aria-label", "Ask The People — home"],
+        ["frontend/src/views/SimulationRunView.vue", "text", "ASK THE PEOPLE"],
         ["frontend/src/views/SimulationView.vue", "text", "ASK THE PEOPLE"],
+        ["frontend/src/components/DesktopMasthead.vue", "text", "ASKTHEPEOPLE"],
       ].map(([path, surface, snippet]) => ({
         path,
         term: "product-name",
         surface,
         snippet,
       })),
+      {
+        path: "frontend/src/views/Home.vue",
+        term: "product-name",
+        surface: "text",
+        snippet: "ASKTHEPEOPLE",
+      },
+      {
+        path: "frontend/src/views/Home.vue",
+        term: "product-name",
+        surface: "text",
+        snippet: "ASK THE PEOPLE",
+      },
+      {
+        path: "frontend/src/views/Home.vue",
+        term: "product-name",
+        surface: "aria-label",
+        snippet: "ASKTHEPEOPLE home",
+      },
     ];
     const isAcceptedDebt = (violation) =>
       acceptedDebt.some(
@@ -151,19 +166,8 @@ describe("frontend product-truth guard", () => {
       repositoryRoot,
     );
 
-    expect(result.gaps.map(({ path, route }) => ({ path, route }))).toEqual([
-      {
-        path: "frontend/src/views/SimulationView.vue",
-        route: "/simulation/:simulationId",
-      },
-      {
-        path: "frontend/src/views/SimulationRunView.vue",
-        route: "/simulation/:simulationId/start",
-      },
-      {
-        path: "frontend/src/views/ReportView.vue",
-        route: "/report/:reportId",
-      },
-    ]);
+    // The desktop shell renders the rail once for the whole workspace, so no
+    // primary route is a gap.
+    expect(result.gaps).toEqual([]);
   });
 });

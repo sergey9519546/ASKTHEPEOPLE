@@ -14,9 +14,9 @@
       <aside
         class="run-truth-boundary"
         data-testid="run-truth-boundary"
-        aria-label="Interpretation limits for this synthetic run"
+        aria-label="Interpretation limits for this generated run"
       >
-        <span>Actions + answers: synthetic</span>
+        <span>Actions + answers: generated</span>
         <span>Human respondents: 0</span>
         <span>Not a forecast</span>
         <span>Sources: starting conditions only</span>
@@ -98,7 +98,7 @@
         <div>
           <strong>No generated action has been saved yet.</strong>
           <p>
-            The run is active. This area will show each saved synthetic action
+            The run is active. This area will show each saved generated action
             without making claims about people or outcomes outside this run.
           </p>
         </div>
@@ -116,11 +116,11 @@
           </strong>
           <strong v-else>No generated actions are recorded.</strong>
           <p v-if="hasCompleted">
-            This is an empty synthetic run record, not evidence about people
+            This is an empty generated run record, not evidence about people
             or any real-world outcome.
           </p>
           <p v-else>
-            Begin the run to create a synthetic activity record under the
+            Begin the run to create a generated activity record under the
             reviewed assumptions.
           </p>
         </div>
@@ -140,7 +140,7 @@
             <li
               v-for="item in recordItems"
               :key="item.id"
-              data-origin="synthetic-generated"
+              data-origin="generated"
             >
               <span class="record-number" aria-hidden="true">{{ item.sequence }}</span>
               <article>
@@ -150,7 +150,7 @@
                 </header>
                 <p>{{ item.text }}</p>
                 <footer>
-                  Synthetic generated action · recorded inside this run
+                  generated generated action · recorded inside this run
                 </footer>
               </article>
             </li>
@@ -191,7 +191,7 @@
         <span class="section-index">Next boundary</span>
         <h3 id="handoff-heading">Validate with people outside this run</h3>
         <p>
-          Open the decision brief to turn recorded synthetic activity into
+          Open the decision brief to turn recorded generated activity into
           possible paths, source gaps, and questions for real conversations.
         </p>
         <div v-if="reportError" class="handoff-error" role="alert">
@@ -237,7 +237,7 @@
       <summary>
         <span>
           <strong>Technical run details</strong>
-          <small>Readiness, synthetic interaction diagnostics, and process notes</small>
+          <small>Readiness, generated interaction diagnostics, and process notes</small>
         </span>
         <b aria-hidden="true">+</b>
       </summary>
@@ -274,7 +274,7 @@
           <span class="detail-number">02</span>
           <div>
             <h3 id="activity-heading">Record inventory</h3>
-            <p>Counts saved synthetic actions only. They are not a sample size.</p>
+            <p>Counts saved generated actions only. They are not a sample size.</p>
             <dl class="readiness-list">
               <div>
                 <dt>Saved actions</dt>
@@ -291,7 +291,7 @@
         <section class="detail-section" aria-labelledby="patterns-heading">
           <span class="detail-number">03</span>
           <div>
-            <h3 id="patterns-heading">Synthetic interaction diagnostics</h3>
+            <h3 id="patterns-heading">generated interaction diagnostics</h3>
             <p>
               Descriptive values from this generated interaction graph. They
               are not population measures or real-world confidence scores.
@@ -329,7 +329,7 @@
               :disabled="!canReview"
               @click="$emit('load-metrics')"
             >
-              {{ canReview ? "Load synthetic diagnostics" : "Available after the run" }}
+              {{ canReview ? "Load generated diagnostics" : "Available after the run" }}
             </button>
           </div>
         </section>
@@ -437,7 +437,7 @@ const runDeck = computed(() => {
   if (isRunning.value) {
     return "This screen records model-generated actions under the reviewed assumptions. It does not observe people.";
   }
-  return "Review the decision and conditions before the synthetic run begins.";
+  return "Review the decision and conditions before the generated run begins.";
 });
 
 const totalRounds = computed(() =>
@@ -1037,8 +1037,9 @@ const handleDetailsToggle = (event) => {
 .meaning-boundary > p {
   margin: 1rem -1.25rem -1.25rem;
   padding: 0.85rem 1.25rem;
-  background: var(--signal);
-  color: var(--ink-deep);
+  border-top: 3px solid var(--signal);
+  background: var(--ink-deep);
+  color: var(--attention);
   font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.45;
@@ -1048,7 +1049,10 @@ const handleDetailsToggle = (event) => {
   display: grid;
   gap: 1rem;
   padding: 1.5rem 1rem;
-  background: var(--signal);
+  /* Human-validation boundary uses the light transfer surface per DIRECTION_C;
+     red stays on buttons, not on fields. */
+  border-top: 4px solid var(--signal);
+  background: var(--paper-transfer);
   color: var(--ink-deep);
 }
 

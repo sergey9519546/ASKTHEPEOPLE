@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   chatWithReport: vi.fn(),
   getAgentLog: vi.fn(),
   getReport: vi.fn(),
-  askSyntheticProfiles: vi.fn(),
+  askGeneratedProfiles: vi.fn(),
   exportGeneratedResponsesCSV: vi.fn(),
   getRunStatusDetail: vi.fn(),
   getSimulationControlStatus: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock("../api/report", () => ({
 }));
 
 vi.mock("../api/simulation", () => ({
-  askSyntheticProfiles: mocks.askSyntheticProfiles,
+  askGeneratedProfiles: mocks.askGeneratedProfiles,
   exportGeneratedResponsesCSV: mocks.exportGeneratedResponsesCSV,
   getRunStatusDetail: mocks.getRunStatusDetail,
   getSimulationControlStatus: mocks.getSimulationControlStatus,
@@ -59,7 +59,7 @@ const successfulReport = {
   data: {
     outline: {
       title: "Weekend transit decision brief",
-      summary: "A bounded synthetic report.",
+      summary: "A bounded generated report.",
       sections: [],
     },
   },

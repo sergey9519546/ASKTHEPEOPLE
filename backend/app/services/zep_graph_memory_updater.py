@@ -63,7 +63,7 @@ class AgentActivity:
         description = describe_func()
         
         return (
-            "[SYNTHETIC_SIMULATION_OBSERVATION; HUMAN_RESPONDENTS=0; "
+            "[GENERATED_SIMULATION_OBSERVATION; HUMAN_RESPONDENTS=0; "
             f"PLATFORM={self.platform}; ROUND={self.round_num}] "
             f"{self.agent_name}: {description}"
         )

@@ -14,7 +14,11 @@
     >
       AGPL-3.0
     </a>
-    <a href="/docs/PROVENANCE.md" target="_blank" rel="noopener noreferrer">
+    <a
+      href="https://github.com/sergey9519546/ASKTHEPEOPLE/blob/main/PROVENANCE.md"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
       Provenance
     </a>
     <a
@@ -41,7 +45,7 @@
   border-right: 1px solid var(--line-dark);
   color: var(--paper-muted);
   font-family: var(--font-mono);
-  font-size: 0.58rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.045em;
   text-decoration: none;

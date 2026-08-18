@@ -109,6 +109,40 @@ def test_claim_is_atomic_across_store_instances(tmp_path):
     assert sorted(value for value in claimed_ids if value) == [control["control_id"]]
 
 
+def test_claim_next_treats_permission_error_as_lost_claim(tmp_path, monkeypatch):
+    """Windows can surface a lost hard-link reservation as ERROR_ACCESS_DENIED
+    (PermissionError) instead of FileExistsError in a concurrent claim race.
+    claim_next must degrade to 'no claim' rather than crash the worker."""
+    import app.services.runtime_control_store as runtime_control_module
+
+    store = _store(tmp_path)
+    store.enqueue("stop", {}, ["twitter"])
+
+    def _denied_link(_source, _destination):
+        raise PermissionError(13, "Access is denied")
+
+    monkeypatch.setattr(runtime_control_module.os, "link", _denied_link)
+    assert store.claim_next("twitter") is None
+
+
+def test_atomic_create_json_treats_permission_error_as_already_exists(
+    tmp_path, monkeypatch
+):
+    """The no-overwrite publish seam must treat a Windows access-denied race
+    exactly like FileExistsError: return False, never crash the publisher."""
+    import app.services.runtime_control_store as runtime_control_module
+    from app.services.runtime_control_store import _atomic_create_json
+
+    target = tmp_path / "receipt.json"
+
+    def _denied_link(_source, _destination):
+        raise PermissionError(13, "Access is denied")
+
+    monkeypatch.setattr(runtime_control_module.os, "link", _denied_link)
+    assert _atomic_create_json(target, {"status": "completed"}) is False
+    assert not target.exists()
+
+
 def test_claim_is_atomic_across_processes(tmp_path):
     store = _store(tmp_path)
     control = store.enqueue("resume", {}, ["reddit"])

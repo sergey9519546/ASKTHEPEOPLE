@@ -24,12 +24,12 @@ from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
 
 logger = get_logger('askthepeople.zep_tools')
 
-SYNTHETIC_RECORD_DISCLOSURE = (
+GENERATED_RECORD_DISCLOSURE = (
     "Fictional generated scenario record. 0 human respondents. "
     "Not testimony. Not public opinion. Not representative behavior. "
     "Not a forecast."
 )
-SYNTHETIC_PROBE_PROMPT_PREFIX = (
+GENERATED_PROBE_PROMPT_PREFIX = (
     "Produce a fictional generated scenario record from the supplied "
     "synthetic profile state. Treat persona, memory, and prior actions "
     "only as generated run inputs. Do not claim to be a real person or "
@@ -338,7 +338,7 @@ class AgentInterview:
             "is_testimony": False,
             "is_public_opinion": False,
             "is_forecast": False,
-            "disclosure": SYNTHETIC_RECORD_DISCLOSURE,
+            "disclosure": GENERATED_RECORD_DISCLOSURE,
             "agent_name": self.agent_name,
             "agent_role": self.agent_role,
             "agent_bio": self.agent_bio,
@@ -351,7 +351,7 @@ class AgentInterview:
     
     def to_text(self) -> str:
         text = f"**Generated profile: {self.agent_name}** ({self.agent_role})\n"
-        text += f"{SYNTHETIC_RECORD_DISCLOSURE}\n"
+        text += f"{GENERATED_RECORD_DISCLOSURE}\n"
         text += f"_Fictional profile seed: {self.agent_bio}_\n\n"
         text += f"**Scenario probe:** {self.question}\n\n"
         text += f"**Generated response record:** {self.response}\n"
@@ -419,7 +419,7 @@ class InterviewResult:
             "is_public_opinion": False,
             "is_representative": False,
             "is_forecast": False,
-            "disclosure": SYNTHETIC_RECORD_DISCLOSURE,
+            "disclosure": GENERATED_RECORD_DISCLOSURE,
             "scenario_topic": self.interview_topic,
             "probe_prompts": self.interview_questions,
             "generated_record_count": self.interviewed_count,
@@ -438,7 +438,7 @@ class InterviewResult:
         """Convert to detailed text format for LLM understanding and report citation"""
         text_parts = [
             "## Synthetic Perspective Probe",
-            SYNTHETIC_RECORD_DISCLOSURE,
+            GENERATED_RECORD_DISCLOSURE,
             f"**Scenario topic:** {self.interview_topic}",
             (
                 "**Generated profiles processed:** "
@@ -1574,7 +1574,7 @@ Return the list of sub-queries in JSON format."""
         combined_prompt = "\n".join([f"{i+1}. {q}" for i, q in enumerate(result.interview_questions)])
         
         # Constrain engine output to an explicitly fictional record.
-        optimized_prompt = f"{SYNTHETIC_PROBE_PROMPT_PREFIX}{combined_prompt}"
+        optimized_prompt = f"{GENERATED_PROBE_PROMPT_PREFIX}{combined_prompt}"
         
         # Step 4: Ask both platform models for synthetic response records.
         try:

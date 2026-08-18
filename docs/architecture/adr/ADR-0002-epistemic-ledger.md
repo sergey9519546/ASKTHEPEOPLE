@@ -80,7 +80,7 @@ and is acknowledged as such in
 Reaching the ledger requires:
 
 - Every persisted fact to carry an `origin` (USER_STATED,
-  SOURCE_EXTRACTED, ASSUMPTION_DECLARED, SYNTHETIC_GENERATED,
+  SOURCE_EXTRACTED, ASSUMPTION_DECLARED, GENERATED_GENERATED,
   EXTERNAL_HUMAN_EVIDENCE, SYSTEM_METADATA) and an `epistemic_role`.
 - A domain validation layer that rejects the prohibited
   relationships (`SOURCE SEGMENT -> proves -> POSSIBLE PATH`,

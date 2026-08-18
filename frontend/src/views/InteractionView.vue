@@ -1,17 +1,15 @@
 <template>
   <div class="app-view-root">
-    <TruthRail />
     <!-- HEADER -->
     <header class="app-header">
-      <button
+      <a
         class="header-left"
-        type="button"
-        aria-label="Ask The People — home"
-        @click="router.push('/')"
+        href="/"
+        aria-label="Ask The People / generated Decision Explorer — home"
       >
         <span class="brand-monogram">ATP</span>
         <span class="brand-full">ASK THE PEOPLE</span>
-      </button>
+      </a>
 
       <div class="header-center">
         <div
@@ -46,7 +44,9 @@
     </header>
 
     <!-- CONTENT -->
-    <main class="workbench-viewport" :class="`mode-${viewMode}`">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <h1 class="view-title">Explore the findings</h1>
+    <main id="main-content" class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
         class="panel-container left"
@@ -154,24 +154,27 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { useWindowRoute } from "../composables/useWindowContext.js";
+import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import { getGraphData, getProject } from "../api/graph";
 import { getReport } from "../api/report";
 import { getSimulation } from "../api/simulation";
 import GraphPanel from "../components/GraphPanel.vue";
 import Step5Interaction from "../components/Step5Interaction.vue";
-import TruthRail from "../components/TruthRail.vue";
 import {
   RecordedGraphIdentityError,
   recordedGraphReadError,
   resolveRecordedGraphIdentity,
 } from "../utils/recordedGraphIdentity";
 
-const route = useRoute();
 const router = useRouter();
+const windowRoute = useWindowRoute();
+const { setContext } = useWorkspaceState();
 
 const viewMode = ref("workbench");
-const currentReportId = ref(route.params.reportId);
+const currentReportId = ref(windowRoute.value.params.reportId);
+if (currentReportId.value) setContext({ reportId: currentReportId.value });
 const simulationId = ref(null);
 const projectData = ref(null);
 const graphIdentity = ref(null);
@@ -343,7 +346,7 @@ const refreshGraph = async () => {
 };
 
 watch(
-  () => route.params.reportId,
+  () => windowRoute.value.params.reportId,
   (newId) => {
     if (!newId) return;
     currentReportId.value = newId;
@@ -401,8 +404,9 @@ onMounted(() => {
   transform: none;
 }
 .brand-monogram {
-  background: var(--signal);
-  color: var(--ink);
+  border: 1px solid var(--signal);
+  background: var(--ink-deep);
+  color: var(--signal);
   padding: 5px 9px 4px;
   font-family: var(--font-display);
   font-size: 1.18rem;
@@ -529,13 +533,13 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 0 20px;
-  background: var(--signal);
+  background: var(--ink-raised);
 }
 .wb-label {
   font-weight: 700;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
-  color: var(--ink);
+  color: var(--paper);
   text-transform: uppercase;
 }
 .wb-content {
@@ -560,8 +564,9 @@ onMounted(() => {
   width: 4.25rem;
   height: 4.25rem;
   place-items: center;
-  background: var(--signal);
-  color: var(--ink);
+  border: 2px solid var(--signal);
+  background: var(--ink-deep);
+  color: var(--signal);
   font-family: var(--font-display);
   font-size: 1.65rem;
 }

@@ -62,7 +62,7 @@ const completedReport = {
     simulation_requirement: "Should weekend service change?",
     outline: {
       title: "Scenario findings",
-      summary: "A bounded synthetic summary.",
+      summary: "A bounded generated summary.",
       sections: [
         {
           title: "Possible path",

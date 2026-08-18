@@ -36,7 +36,7 @@
       >
         <span>01</span>
         <strong>Explain the report</strong>
-        <small>Interpret the existing synthetic report</small>
+        <small>Interpret the existing generated report</small>
       </button>
       <button
         type="button"
@@ -781,7 +781,7 @@ import {
   normalizeLogPage,
 } from "../api/report";
 import {
-  askSyntheticProfiles,
+  askGeneratedProfiles,
   exportGeneratedResponsesCSV,
   getRunStatusDetail,
   getSimulationControlStatus,
@@ -948,7 +948,7 @@ const conversationHeading = computed(() => {
 
 const conversationBoundary = computed(() =>
   chatTarget.value === "report_agent"
-    ? "This AI explains and challenges the existing synthetic report. It does not add testimony, field research, or real-world validation."
+    ? "This AI explains and challenges the existing generated report. It does not add testimony, field research, or real-world validation."
     : "Each reply is newly generated in character from a fictional profile brief. It is not something a person said or believes.",
 );
 
@@ -1309,7 +1309,7 @@ const sendMessage = async () => {
         });
       }
     } else {
-      const response = await askSyntheticProfiles({
+      const response = await askGeneratedProfiles({
         simulation_id: props.simulationId,
         questions: [
           {
@@ -1381,7 +1381,7 @@ const askSelectedProfiles = async () => {
     `Generating responses from ${selectedAgents.value.size} fictional profiles…`,
   );
   try {
-    const response = await askSyntheticProfiles({
+    const response = await askGeneratedProfiles({
       simulation_id: props.simulationId,
       questions: Array.from(selectedAgents.value).map((profileIndex) => ({
         agent_id: profileIndex,
@@ -1628,7 +1628,7 @@ watch(
   width: 8rem;
   height: 130%;
   transform: rotate(7deg);
-  background: var(--signal);
+  background: linear-gradient(105deg, transparent 40%, rgba(242, 235, 221, 0.08) 60%, transparent 80%);
   content: "";
   pointer-events: none;
 }
@@ -1836,8 +1836,9 @@ watch(
   width: 3rem;
   height: 3rem;
   place-items: center;
-  border: 2px solid currentColor;
-  background: var(--signal);
+  border: 2px solid var(--signal);
+  background: var(--ink-deep);
+  color: var(--signal);
   font-family: var(--font-display);
   font-size: 1.45rem;
 }
@@ -2422,7 +2423,8 @@ watch(
 .question-composer {
   padding: 1rem clamp(1.2rem, 3vw, 2.5rem);
   border-bottom: 1px solid rgba(242, 235, 221, 0.1);
-  background: var(--signal);
+  border-left: 4px solid var(--signal);
+  background: var(--ink-soft);
 }
 
 .conversation-sheet.is-fictional .question-composer {

@@ -1,11 +1,12 @@
 <template>
   <section class="interaction-record" aria-labelledby="interaction-record-title">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header class="record-header">
       <div class="record-lockup">
         <span class="record-index" aria-hidden="true">04</span>
         <div>
           <p>Run record / generated activity</p>
-          <h3 id="interaction-record-title">What happened inside this run</h3>
+          <h2 id="interaction-record-title">What happened inside this run</h2>
           <span>
             Read every saved generated record in chronological order. This
             screen records model output; it does not report people’s views.
@@ -18,7 +19,7 @@
         data-testid="interaction-truth-boundary"
         aria-label="Interpretation limits for this run record"
       >
-        <span>Actions + answers: synthetic</span>
+        <span>Actions + answers: generated</span>
         <span>Human respondents: 0</span>
         <span>Does not measure people</span>
         <span>Not a forecast</span>
@@ -143,7 +144,7 @@
             <li
               v-for="(record, recordIndex) in chronologicalRecords"
               :key="`${recordKey(record)}:${recordIndex}`"
-              data-origin="synthetic-generated"
+              data-origin="generated"
             >
               <span class="record-number" aria-hidden="true">
                 {{ String(recordIndex + 1).padStart(2, "0") }}
@@ -166,7 +167,7 @@
                   No text preview was saved for this generated record.
                 </span>
                 <footer>
-                  Origin: synthetic generated · not a human statement
+                  Origin: generated generated · not a human statement
                 </footer>
               </article>
             </li>

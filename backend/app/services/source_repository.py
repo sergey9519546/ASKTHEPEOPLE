@@ -80,24 +80,76 @@ class SourceRepository:
                 "project_id": project_id, "display_name": display_name,
                 "actor_id": created_by_actor_id, "now": now,
             })
-        return cls.get_source(source_id)
+        return cls.get_source(
+            source_id,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            project_id=project_id,
+        )
 
     @classmethod
-    def get_source(cls, source_id: UUID) -> Optional[Dict[str, Any]]:
+    def _scoped_source_clauses(
+        cls,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        project_id: UUID,
+    ) -> tuple[List[str], Dict[str, Any]]:
+        """Build tenant-scope WHERE fragments for source lookups (ADR-0009)."""
+        clauses: List[str] = []
+        params: Dict[str, Any] = {}
+        clauses.append("organization_id = :org_id")
+        params["org_id"] = organization_id
+        clauses.append("workspace_id = :ws_id")
+        params["ws_id"] = workspace_id
+        clauses.append("project_id = :project_id")
+        params["project_id"] = project_id
+        return clauses, params
+
+    @classmethod
+    def get_source(
+        cls,
+        source_id: UUID,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        project_id: UUID,
+    ) -> Optional[Dict[str, Any]]:
         engine = cls._get_engine()
+        clauses, params = cls._scoped_source_clauses(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            project_id=project_id,
+        )
+        clauses.insert(0, "id = :id")
+        params["id"] = source_id
         with engine.connect() as conn:
-            row = conn.execute(text("""
-                SELECT * FROM dw_sources WHERE id = :id
-            """), {"id": source_id}).mappings().first()
+            row = conn.execute(text(
+                f"SELECT * FROM dw_sources WHERE {' AND '.join(clauses)}"
+            ), params).mappings().first()
             return dict(row) if row else None
 
     @classmethod
-    def get_source_by_public_id(cls, public_id: str) -> Optional[Dict[str, Any]]:
+    def get_source_by_public_id(
+        cls,
+        public_id: str,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        project_id: UUID,
+    ) -> Optional[Dict[str, Any]]:
         engine = cls._get_engine()
+        clauses, params = cls._scoped_source_clauses(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            project_id=project_id,
+        )
+        clauses.insert(0, "public_id = :public_id")
+        params["public_id"] = public_id
         with engine.connect() as conn:
-            row = conn.execute(text("""
-                SELECT * FROM dw_sources WHERE public_id = :public_id
-            """), {"public_id": public_id}).mappings().first()
+            row = conn.execute(text(
+                f"SELECT * FROM dw_sources WHERE {' AND '.join(clauses)}"
+            ), params).mappings().first()
             return dict(row) if row else None
 
     @classmethod
@@ -178,15 +230,34 @@ class SourceRepository:
                 UPDATE dw_sources SET current_version_id = :version_id, updated_at = :now
                 WHERE id = :source_id
             """), {"version_id": version_id, "source_id": source_id, "now": now})
-        return cls.get_source_version(version_id)
+        return cls.get_source_version(
+            version_id,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            project_id=project_id,
+        )
 
     @classmethod
-    def get_source_version(cls, version_id: UUID) -> Optional[Dict[str, Any]]:
+    def get_source_version(
+        cls,
+        version_id: UUID,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        project_id: UUID,
+    ) -> Optional[Dict[str, Any]]:
         engine = cls._get_engine()
+        clauses, params = cls._scoped_source_clauses(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            project_id=project_id,
+        )
+        clauses.insert(0, "id = :id")
+        params["id"] = version_id
         with engine.connect() as conn:
-            row = conn.execute(text("""
-                SELECT * FROM dw_source_versions WHERE id = :id
-            """), {"id": version_id}).mappings().first()
+            row = conn.execute(text(
+                f"SELECT * FROM dw_source_versions WHERE {' AND '.join(clauses)}"
+            ), params).mappings().first()
             return dict(row) if row else None
 
     @classmethod

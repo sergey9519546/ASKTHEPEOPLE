@@ -262,7 +262,7 @@ class TestTruthRailComponent:
             content = f.read()
         
         required_truth_statements = (
-            "ACTIONS + ANSWERS: SYNTHETIC",
+            "ACTIONS + ANSWERS: GENERATED",
             "HUMAN RESPONDENTS: 0",
             "NOT A FORECAST",
             "SOURCES: STARTING CONDITIONS ONLY",
@@ -288,60 +288,52 @@ class TestTruthRailComponent:
 
 
 class TestViewIntegration:
-    """Test that TruthRail is integrated into all workflow views"""
-    
-    def test_home_view_has_truth_rail(self):
-        """Verify Home.vue imports and uses TruthRail"""
-        view_path = os.path.join(
-            os.path.dirname(__file__),
-            "../../frontend/src/views/Home.vue"
-        )
-        
-        with open(view_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        assert 'from "../components/TruthRail.vue"' in content or \
-               'from \'../components/TruthRail.vue\'' in content
+    """Test that the truth rail is guaranteed across every workflow surface.
+
+    The rail was historically imported per-view, which let a new view silently
+    ship without it. It now lives once in DesktopShell — the OS chrome that
+    hosts every route view as a window — so the guarantee is structural: any
+    view wired into the shell's app registry inherits the rail.
+    """
+
+    FRONTEND = os.path.join(os.path.dirname(__file__), "../../frontend/src")
+
+    def _read(self, relpath):
+        with open(os.path.join(self.FRONTEND, relpath), 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def test_shell_renders_truth_rail(self):
+        """The desktop shell renders the truth rail once, above every window."""
+        content = self._read("components/DesktopShell.vue")
+        assert 'from "./TruthRail.vue"' in content or \
+               "from './TruthRail.vue'" in content
         assert "<TruthRail" in content
-    
-    def test_process_view_has_truth_rail(self):
-        """Verify MainView.vue (formerly Process.vue) imports and uses TruthRail"""
-        view_path = os.path.join(
-            os.path.dirname(__file__),
-            "../../frontend/src/views/MainView.vue"
-        )
-        
-        with open(view_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        assert 'TruthRail' in content
-        assert "<TruthRail" in content
-    
-    def test_main_view_has_truth_rail(self):
-        """Verify MainView.vue imports and uses TruthRail"""
-        view_path = os.path.join(
-            os.path.dirname(__file__),
-            "../../frontend/src/views/MainView.vue"
-        )
-        
-        with open(view_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        assert 'TruthRail' in content
-        assert "<TruthRail" in content
-    
-    def test_interaction_view_has_truth_rail(self):
-        """Verify InteractionView.vue imports and uses TruthRail"""
-        view_path = os.path.join(
-            os.path.dirname(__file__),
-            "../../frontend/src/views/InteractionView.vue"
-        )
-        
-        with open(view_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        assert 'TruthRail' in content
-        assert "<TruthRail" in content
+
+    def test_app_hosts_desktop_shell(self):
+        """The root App.vue hosts the shell, so the rail is always mounted."""
+        content = self._read("App.vue")
+        assert 'from "./components/DesktopShell.vue"' in content or \
+               "from './components/DesktopShell.vue'" in content
+        assert "<DesktopShell" in content
+
+    def test_workflow_views_are_registered_in_shell(self):
+        """Every workflow view is wired into the shell's app registry.
+
+        Each route view renders inside a shell window and the shell owns the
+        rail, so registration is what guarantees the rail overlays the view.
+        A view that exists but is not registered would bypass the shell.
+        """
+        content = self._read("composables/useDesktop.js")
+        for view in (
+            "Home.vue",
+            "MainView.vue",
+            "SimulationView.vue",
+            "SimulationRunView.vue",
+            "ReportView.vue",
+            "InteractionView.vue",
+        ):
+            assert view in content, \
+                f"{view} is not registered in the desktop shell"
 
 
 if __name__ == "__main__":

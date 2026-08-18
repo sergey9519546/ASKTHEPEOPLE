@@ -204,15 +204,15 @@ export const getEnvStatus = (data) => {
 };
 
 /**
- * Ask one or more synthetic profiles a follow-up question.
+ * Ask one or more generated profiles a follow-up question.
  * @param {Object} data - { simulation_id, questions: [{ agent_id, prompt }] }
  */
-export const askSyntheticProfiles = (data) => {
+export const askGeneratedProfiles = (data) => {
   return service.post("/api/simulation/generated-response/batch", data);
 };
 
 // Backwards-compatible export for existing integrations.
-export const interviewAgents = askSyntheticProfiles;
+export const interviewAgents = askGeneratedProfiles;
 
 /**
  * Export generated profile responses as CSV

@@ -198,7 +198,16 @@ class SimulationManager:
         return sim_dir
     
     def _save_simulation_state(self, state: SimulationState):
-        """Save simulation state to file + best-effort mirror to RunRepository."""
+        """Save simulation state to the filesystem lifecycle store.
+
+        The legacy filesystem lifecycle is the current store for simulation
+        run-state. Canonical ``dw_runs`` rows are owned exclusively by
+        ``RunRepository`` (which writes UUIDv7 physical ids and independent
+        ``run_...`` aliases); this method must not mirror rows into it, or the
+        two writers would populate the canonical table with incompatible
+        identities (``uuid5``/``run_{simulation_id}``/fabricated tenants) that
+        fail the domain's UUIDv7 invariant when read back.
+        """
         sim_dir = self._get_simulation_dir(state.simulation_id)
         state_file = os.path.join(sim_dir, "state.json")
 
@@ -208,86 +217,6 @@ class SimulationManager:
             json.dump(state.to_dict(), f, ensure_ascii=False, indent=2)
 
         self._simulations[state.simulation_id] = state
-
-        # Best-effort dual-write mirror to the canonical runs table when
-        # Supabase persistence is configured. The filesystem remains the
-        # primary store until the full Task 5 cutover; this mirror gives
-        # durable run history for observability and the future canonical
-        # switch. Like the audit log, a mirror failure must not break the
-        # operation being saved.
-        self._mirror_to_run_repository(state)
-
-    # Map the 10-state SimulationStatus to the closest 20-state RunState.
-    _SIM_TO_RUN_STATE = {
-        SimulationStatus.CREATED: "DRAFT",
-        SimulationStatus.PREPARING: "PREPARING",
-        SimulationStatus.NEEDS_REVIEW: "NEEDS_REVIEW",
-        SimulationStatus.READY: "READY",
-        SimulationStatus.RUNNING: "GENERATING_PATHS",
-        SimulationStatus.PAUSED: "STOP_REQUESTED",
-        SimulationStatus.STOPPED: "STOPPED",
-        SimulationStatus.COMPLETED: "COMPLETED",
-        SimulationStatus.INTERRUPTED: "FAILED_RETRYABLE",
-        SimulationStatus.FAILED: "FAILED_TERMINAL",
-    }
-
-    def _mirror_to_run_repository(self, state: SimulationState) -> None:
-        """Best-effort mirror of the simulation state to the runs table.
-
-        Uses a deterministic UUID derived from the simulation_id so repeated
-        saves UPSERT the same row. Does NOT call the domain transition policy
-        (that requires guard facts the current lifecycle doesn't produce) —
-        this is a state mirror for observability, not a canonical write.
-        """
-        try:
-            from ..config import Config as _Cfg
-            if not getattr(_Cfg, "USE_SUPABASE_PERSISTENCE", False):
-                return
-            from .supabase_client import is_storage_configured
-            if not is_storage_configured():
-                return
-
-            import uuid as _uuid
-            from sqlalchemy import text as _text
-
-            from .supabase_client import storage as _storage
-            run_uuid = _uuid.uuid5(_uuid.NAMESPACE_DNS, state.simulation_id)
-            run_state = self._SIM_TO_RUN_STATE.get(
-                state.status,
-                "DRAFT" if isinstance(state.status, str) else state.status.value,
-            )
-            now_str = datetime.now().isoformat()
-            # Simple UPSERT — insert if not exists, update state + version if it does.
-            with _storage.engine.begin() as conn:
-                conn.execute(_text("""
-                    INSERT INTO dw_runs (
-                        id, public_id, organization_id, workspace_id,
-                        run_config_id, state, version, stop_fence,
-                        human_respondents, is_forecast, output_origin,
-                        created_at, updated_at
-                    ) VALUES (
-                        :id, :public_id, :org_id, :ws_id,
-                        :cfg_id, :state, 1, 0,
-                        0, false, 'synthetic',
-                        :now, :now
-                    )
-                    ON CONFLICT (id) DO UPDATE SET
-                        state = EXCLUDED.state,
-                        updated_at = EXCLUDED.updated_at,
-                        version = dw_runs.version + 1
-                """), {
-                    "id": run_uuid,
-                    "public_id": f"run_{state.simulation_id}",
-                    "org_id": _uuid.uuid5(_uuid.NAMESPACE_DNS, "default-org"),
-                    "ws_id": _uuid.uuid5(_uuid.NAMESPACE_DNS, "default-workspace"),
-                    "cfg_id": _uuid.uuid5(_uuid.NAMESPACE_DNS, f"cfg-{state.simulation_id}"),
-                    "state": run_state,
-                    "now": now_str,
-                })
-        except Exception:
-            # Best-effort: the filesystem save already succeeded. A mirror
-            # failure must not break the operation being saved.
-            pass
     
     def _load_simulation_state(self, simulation_id: str) -> Optional[SimulationState]:
         """Load simulation status from file"""
@@ -842,7 +771,7 @@ class SimulationManager:
             reference = InputReferenceV1(
                 ref_id=f"graph_record_{suffix}",
                 role="graph_record",
-                origin="SYNTHETIC_GENERATED",
+                origin="GENERATED_GENERATED",
             )
             references.append(reference)
             records.append(

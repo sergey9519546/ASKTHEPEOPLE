@@ -68,7 +68,7 @@ export const normalizeReportEvidence = (response) => {
       return {
         ...record,
         trace_id: traceId.replace("_claim_", "_trace_"),
-        source_type: String(item.source_type || "synthetic_observation"),
+        source_type: String(item.source_type || "generated_observation"),
         excerpt: String(item.excerpt || ""),
         human_respondents: Number(item.human_respondents) || 0,
         interpretation:

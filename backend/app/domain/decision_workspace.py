@@ -12,7 +12,7 @@ class EpistemicOrigin(str, Enum):
     USER_STATED = "USER_STATED"
     SOURCE_EXTRACTED = "SOURCE_EXTRACTED"
     ASSUMPTION_DECLARED = "ASSUMPTION_DECLARED"
-    SYNTHETIC_GENERATED = "SYNTHETIC_GENERATED"
+    GENERATED_GENERATED = "GENERATED_GENERATED"
     EXTERNAL_HUMAN_EVIDENCE = "EXTERNAL_HUMAN_EVIDENCE"
     SYSTEM_METADATA = "SYSTEM_METADATA"
 
@@ -121,7 +121,7 @@ class PathStep(BaseModel):
     )
     sequence: int = Field(ge=1)
     statement: str = Field(min_length=1, max_length=1200)
-    origin: Literal[EpistemicOrigin.SYNTHETIC_GENERATED]
+    origin: Literal[EpistemicOrigin.GENERATED_GENERATED]
 
 
 class PossiblePath(BaseModel):
@@ -139,7 +139,7 @@ class PossiblePath(BaseModel):
     )
     label: str = Field(pattern=r"^P-\d{2}$")
     branch_reason: str = Field(min_length=1, max_length=1200)
-    origin: Literal[EpistemicOrigin.SYNTHETIC_GENERATED]
+    origin: Literal[EpistemicOrigin.GENERATED_GENERATED]
     steps: tuple[PathStep, ...] = Field(min_length=1)
     truth: TruthBundle = Field(default_factory=TruthBundle.synthetic)
 

@@ -1,13 +1,12 @@
 <template>
   <div
     class="truth-rail"
-    role="alert"
-    aria-live="polite"
-    aria-label="ACTIONS + ANSWERS: SYNTHETIC. HUMAN RESPONDENTS: 0. NOT A FORECAST. SOURCES: STARTING CONDITIONS ONLY. HUMAN VALIDATION: OUTSIDE THIS RUN"
+    role="note"
+    aria-label="ACTIONS + ANSWERS: GENERATED. HUMAN RESPONDENTS: 0. NOT A FORECAST. SOURCES: STARTING CONDITIONS ONLY. HUMAN VALIDATION: OUTSIDE THIS RUN"
   >
     <div class="truth-rail-content">
       <span class="truth-rail-text">
-        <strong class="truth-rail-item">ACTIONS + ANSWERS: SYNTHETIC</strong>
+        <strong class="truth-rail-item">ACTIONS + ANSWERS: GENERATED</strong>
         <span class="truth-rail-item">HUMAN RESPONDENTS: 0</span>
         <span class="truth-rail-item">NOT A FORECAST</span>
         <span class="truth-rail-item">SOURCES: STARTING CONDITIONS ONLY</span>
@@ -62,6 +61,7 @@
 }
 
 .truth-rail-text strong {
+  color: var(--attention);
   font-weight: 800;
   letter-spacing: 0.05em;
 }

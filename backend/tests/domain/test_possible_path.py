@@ -47,7 +47,7 @@ def _make_path(display_code="P-01", title="Path A", content_seed="a", distinct_s
     return PossiblePath(
         id=uid,
         public_id=f"path_{uid.hex[:32]}",
-        semantic_id=f"path_set_{uid.hex[:32]}",
+        semantic_id=f"path_sem_{uid.hex[:32]}",
         run_id=uuid4(),
         path_set_id=uuid4(),
         display_code=display_code,
@@ -136,6 +136,18 @@ def test_extra_fields_rejected():
     data = _make_path().model_dump()
     data["probability"] = 0.8
     with pytest.raises(ValidationError, match="extra"):
+        PossiblePath(**data)
+
+
+def test_semantic_lineage_id_uses_path_sem_namespace():
+    """The semantic lineage ID namespace is ``path_sem_`` (Task 6 brief
+    §"Semantic lineage identity"), not the ``path_set_`` public-ID namespace."""
+    data = _make_path().model_dump()
+    data["semantic_id"] = f"path_sem_{uuid4().hex[:32]}"
+    PossiblePath(**data)  # accepted
+
+    data["semantic_id"] = f"path_set_{uuid4().hex[:32]}"
+    with pytest.raises(ValidationError, match="semantic_id"):
         PossiblePath(**data)
 
 

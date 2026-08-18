@@ -371,7 +371,7 @@ const doStartSimulation = async () => {
 
   resetRuntime();
   isStarting.value = true;
-  addLog("Starting both synthetic conversation spaces…");
+  addLog("Starting both generated conversation spaces…");
   emit("update-status", "processing");
 
   try {

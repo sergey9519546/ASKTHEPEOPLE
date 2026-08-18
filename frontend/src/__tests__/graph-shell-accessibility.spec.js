@@ -217,7 +217,7 @@ describe("report and follow-up shell accessibility contracts", () => {
     });
     await flushPromises();
 
-    expect(interaction.get(".header-left").element.tagName).toBe("BUTTON");
+    expect(interaction.get(".header-left").element.tagName).toBe("A");
     expect(
       interaction.get(".view-mode-selector").attributes("aria-label"),
     ).toContain("conversation view");
@@ -253,7 +253,7 @@ describe("report and follow-up shell accessibility contracts", () => {
     });
     await flushPromises();
 
-    expect(report.get(".header-left").element.tagName).toBe("BUTTON");
+    expect(report.get(".header-left").element.tagName).toBe("A");
     expect(report.get(".view-mode-selector").attributes("aria-label")).toContain(
       "decision-brief view",
     );
@@ -287,8 +287,8 @@ describe("global recovery and focus contracts", () => {
       global: {
         stubs: {
           AccessKeyGate: true,
+          DesktopShell: true,
           ProjectLinks: true,
-          RouterView: true,
           ToastContainer: true,
         },
       },

@@ -17,10 +17,10 @@
         The link may be outdated or incomplete. Return to the start to open a
         saved project or begin a new scenario.
       </p>
-      <button type="button" @click="router.push({ name: 'Home' })">
+      <a class="nav-home-link" href="/" aria-label="Return to the start">
         Return to the start
         <span aria-hidden="true">→</span>
-      </button>
+      </a>
     </section>
 
     <footer>
@@ -55,8 +55,9 @@ const router = useRouter();
   min-height: 100%;
   padding: clamp(2rem, 5vw, 5rem) clamp(1.5rem, 4vw, 4rem);
   overflow: hidden;
-  background: var(--signal);
-  color: var(--ink);
+  border-right: 4px solid var(--signal);
+  background: var(--ink);
+  color: var(--paper);
 }
 
 .not-found-view > aside::after {
@@ -66,7 +67,7 @@ const router = useRouter();
   width: 10rem;
   height: 58%;
   transform: rotate(9deg);
-  background: var(--ink-deep);
+  background: linear-gradient(105deg, transparent 40%, rgba(242, 235, 221, 0.08) 60%, transparent 80%);
   content: "";
 }
 
@@ -147,7 +148,7 @@ const router = useRouter();
   line-height: 1.6;
 }
 
-.not-found-view button {
+.not-found-view .nav-home-link {
   display: inline-flex;
   gap: 2rem;
   align-items: center;
@@ -165,14 +166,15 @@ const router = useRouter();
   font-weight: 400;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-decoration: none;
 }
 
-.not-found-view button:hover {
+.not-found-view .nav-home-link:hover {
   background: var(--paper-strong);
   transform: translateX(0.3rem);
 }
 
-.not-found-view button span {
+.not-found-view .nav-home-link span {
   font-family: var(--font-sans);
   font-size: 1.5rem;
   font-weight: 700;
@@ -236,14 +238,14 @@ const router = useRouter();
     font-size: clamp(4rem, 20vw, 6rem);
   }
 
-  .not-found-view button {
+  .not-found-view .nav-home-link {
     width: 100%;
     min-width: 0;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .not-found-view button {
+  .not-found-view .nav-home-link {
     transition: none;
   }
 }

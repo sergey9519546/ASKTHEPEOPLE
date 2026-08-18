@@ -223,7 +223,7 @@ def test_experimental_episode_is_indelibly_labeled_synthetic():
 
     episode = activity.to_episode_text()
 
-    assert episode.startswith("[SYNTHETIC_SIMULATION_OBSERVATION;")
+    assert episode.startswith("[GENERATED_SIMULATION_OBSERVATION;")
     assert "HUMAN_RESPONDENTS=0" in episode
     assert "A possible path" in episode
 
@@ -262,7 +262,7 @@ def test_report_retrieves_generated_activity_from_observation_store(
         {"query": "Weekend service", "limit": 10},
     )
 
-    assert "PROVENANCE: SYNTHETIC_OBSERVATION" in result
+    assert "PROVENANCE: GENERATED_OBSERVATION" in result
     assert '"evidence_class": "synthetic_observation"' in result
     assert '"human_respondents": 0' in result
     assert "Weekend service might shift trips." in result

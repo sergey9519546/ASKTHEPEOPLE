@@ -447,6 +447,13 @@ in CSS and SVG; the semantic route list required by
 [`adr/ADR-0006-route-map-list-parity.md`](adr/ADR-0006-route-map-list-parity.md)
 is **TARGET**.
 
+The workspace is a persistent desktop shell
+([`frontend/src/components/DesktopShell.vue`](../../frontend/src/components/DesktopShell.vue)):
+a masthead, a journey step-spine launcher, draggable/tileable windows that
+host the existing route views, and a taskbar. The shell owns the permanent
+five-fact Truth Rail, so every primary route carries the disclosure. Window
+state persists across refresh and deep links resolve through the router.
+
 ## Gaps to the target architecture
 
 The integration audit identifies six release gates

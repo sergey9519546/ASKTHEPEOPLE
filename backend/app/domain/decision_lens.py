@@ -101,7 +101,7 @@ class InputReferenceV1(BaseModel):
             },
             "graph_record": {
                 EpistemicOrigin.SOURCE_EXTRACTED,
-                EpistemicOrigin.SYNTHETIC_GENERATED,
+                EpistemicOrigin.GENERATED_GENERATED,
             },
         }
         if self.origin not in permitted[self.role]:

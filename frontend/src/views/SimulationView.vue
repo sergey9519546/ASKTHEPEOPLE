@@ -2,9 +2,9 @@
   <div class="bauhaus-view-root">
     <!-- HEADER -->
     <header class="bauhaus-header">
-      <button class="header-left" type="button" @click="router.push('/')">
+      <a class="header-left" href="/" aria-label="Ask The People / generated Decision Explorer — home">
         <span class="brand-full">ASK THE PEOPLE</span>
-      </button>
+      </a>
 
       <div class="header-center">
         <div
@@ -46,7 +46,9 @@
     </div>
 
     <!-- CONTENT -->
-    <main class="workbench-viewport" :class="`mode-${viewMode}`">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <h1 class="view-title">Set assumptions</h1>
+    <main id="main-content" class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
         class="panel-container left"
@@ -92,7 +94,7 @@
 
     <!-- FOOTER -->
     <footer class="bauhaus-footer-mini">
-      <div class="f-block">Synthetic scenarios · 0 human respondents</div>
+      <div class="f-block">generated scenarios · 0 human respondents</div>
       <div class="f-block">Use outputs as hypotheses, not forecasts</div>
     </footer>
   </div>
@@ -100,7 +102,9 @@
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { useWindowRoute } from "../composables/useWindowContext.js";
+import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import { getGraphData, getProject } from "../api/graph";
 import { getSimulation } from "../api/simulation";
 import GraphPanel from "../components/GraphPanel.vue";
@@ -111,11 +115,13 @@ import {
   resolveRecordedGraphIdentity,
 } from "../utils/recordedGraphIdentity";
 
-const route = useRoute();
 const router = useRouter();
+const windowRoute = useWindowRoute();
+const { setContext } = useWorkspaceState();
 
 const viewMode = ref("workbench");
-const currentSimulationId = ref(route.params.simulationId);
+const currentSimulationId = ref(windowRoute.value.params.simulationId);
+if (currentSimulationId.value) setContext({ simulationId: currentSimulationId.value });
 const projectData = ref(null);
 const graphIdentity = ref(null);
 const graphData = ref(null);

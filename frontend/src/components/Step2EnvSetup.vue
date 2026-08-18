@@ -1,5 +1,6 @@
 <template>
   <div class="env-setup-panel">
+    <h2 class="sr-only">Assumption preparation</h2>
     <div class="scroll-container">
       <section
         class="preparation-banner"
@@ -41,7 +42,7 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">01</span>
-            <span class="step-title">Create synthetic perspectives</span>
+            <span class="step-title">Create generated perspectives</span>
           </div>
           <div class="step-status">
             <span v-if="preparationStatus === 'error'" class="badge error">NEEDS ATTENTION</span>
@@ -137,7 +138,7 @@
           <p class="api-note">ASSUMPTIONS</p>
           <p class="description">
             Review the channels, timing, and participation rules that will shape
-            this synthetic run.
+            this generated run.
           </p>
 
           <!-- Config Blocks -->
@@ -634,7 +635,7 @@
                   >
                 </div>
                 <div class="dimension-card">
-                  <span class="dim-title">Synthetic memory context</span>
+                  <span class="dim-title">generated memory context</span>
                   <span class="dim-desc"
                     >Generated context used during the run</span
                   >
@@ -642,7 +643,7 @@
                 <div class="dimension-card">
                   <span class="dim-title">Generated connection patterns</span>
                   <span class="dim-desc"
-                    >Connections used inside this synthetic scenario</span
+                    >Connections used inside this generated scenario</span
                   >
                 </div>
               </div>
@@ -1000,7 +1001,7 @@ const startPrepareSimulation = async () => {
 
   phase.value = 1;
   addLog("Scenario workspace opened.");
-  addLog("Creating synthetic perspectives and starting conditions…");
+  addLog("Creating generated perspectives and starting conditions…");
   emit("update-status", "processing");
 
   try {

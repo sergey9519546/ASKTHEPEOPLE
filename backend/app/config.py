@@ -240,6 +240,16 @@ class Config:
         if f.strip()
     ]
 
+    # Dev/test-only actor-context installer (see services/actor_context_installer.py).
+    # The canonical source-persistence boundary reads ``g.actor_context``, but
+    # the production OIDC/membership resolver behind ADR-0009 is not built yet.
+    # This flag lets local dev and CI install a stable LEGACY_DEV SERVICE scope
+    # so the persistence seam can be exercised end-to-end. It is a no-op unless
+    # DEBUG is also true, and Config.validate() refuses it in production.
+    DEV_ACTOR_CONTEXT_ENABLED = os.environ.get(
+        'DEV_ACTOR_CONTEXT_ENABLED', 'False'
+    ).lower() == 'true'
+
     # OASIS Platform Available Actions Configuration
     OASIS_TWITTER_ACTIONS = [
         'CREATE_POST', 'LIKE_POST', 'REPOST', 'FOLLOW', 'DO_NOTHING', 'QUOTE_POST'
@@ -372,6 +382,15 @@ class Config:
                 "The source-ingestion boundary (quarantine, scanning, isolated "
                 "parsing, tenant auth, object storage, outbox) is not complete. "
                 "See Task 4 §5 production blockers."
+            )
+        # The dev/test actor-context installer must never run in production:
+        # it would fabricate a tenant scope and bypass the real OIDC/membership
+        # resolver that ADR-0009 requires.
+        if not cls.DEBUG and cls.DEV_ACTOR_CONTEXT_ENABLED:
+            errors.append(
+                "DEV_ACTOR_CONTEXT_ENABLED=true is not allowed in production. "
+                "It installs a synthetic LEGACY_DEV actor scope that bypasses "
+                "the server-derived tenant context required by ADR-0009."
             )
         # If formats are configured but include anything other than 'txt',
         # reject — only TXT is eligible for V1.

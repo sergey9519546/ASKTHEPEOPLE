@@ -172,7 +172,7 @@
             <div class="model-grid">
               <fieldset class="model-card">
                 <legend>Scenario model</legend>
-                <p>Creates profiles and synthetic conversation actions.</p>
+                <p>Creates profiles and generated conversation actions.</p>
                 <label>
                   <span>API key</span>
                   <span class="secret-field">
@@ -640,8 +640,9 @@ onUnmounted(() => {
 .settings-index {
   display: grid;
   place-items: center;
-  background: var(--signal);
-  color: var(--ink);
+  border-right: 4px solid var(--signal);
+  background: var(--ink-deep);
+  color: var(--paper);
   font-family: var(--font-display);
   font-size: 3.3rem;
   letter-spacing: -0.03em;

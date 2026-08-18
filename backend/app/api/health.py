@@ -2,6 +2,9 @@
 Health & Readiness API Endpoints
 """
 import os
+import threading
+import time
+
 from flask import Blueprint, jsonify, current_app
 from redis import Redis
 from sqlalchemy import text
@@ -16,9 +19,100 @@ from ..utils.build_revision import resolve_deployed_revision
 health_bp = Blueprint('health', __name__)
 logger = get_logger('askthepeople.health')
 
+# Hard wall-clock ceiling for every /health probe (seconds). /health is the
+# container HEALTHCHECK target (Dockerfile: urllib timeout=3, HEALTHCHECK
+# timeout=5) and must answer even when Redis/Celery/DB are dead or
+# black-holed (SYN dropped, no RST). A probe that cannot answer inside the
+# budget degrades its component instead of stalling liveness. The original
+# implementation took ~10s when the broker was down — an unbounded Redis
+# connect plus Celery's broker connection retry — which tripped the
+# HEALTHCHECK and would restart the container on any broker hiccup.
+PROBE_DEADLINE_SECONDS = 1.5
+
 
 def _revision() -> str:
     return resolve_deployed_revision() or 'unknown'
+
+
+def _probe_with_deadline(fn):
+    """Run fn on a daemon thread; return its result iff it finishes within
+    PROBE_DEADLINE_SECONDS, else None (reported as degraded).
+
+    The daemon thread keeps running after a timeout but cannot stall the
+    process or the request: it is a liveness probe, not a critical task, and
+    the socket timeouts inside each probe bound it to a few seconds at most.
+    """
+    box = {}
+
+    def _target():
+        # Never let a probe exception escape into a background thread: an
+        # abandoned thread must exit silently when its own socket timeout
+        # fires, not print an unhandled traceback to stderr on every
+        # degraded health check.
+        try:
+            box['value'] = fn()
+        except Exception:
+            box['value'] = False
+
+    worker = threading.Thread(target=_target, daemon=True)
+    worker.start()
+    worker.join(PROBE_DEADLINE_SECONDS)
+    if worker.is_alive():
+        logger.warning(
+            "health probe exceeded deadline reason=probe_timeout "
+            "timeout_s=%s",
+            PROBE_DEADLINE_SECONDS,
+            extra={"privacy_safe": True},
+        )
+        return None
+    return box.get('value')
+
+
+def _run_probes_concurrently():
+    """Run the database, redis and celery probes concurrently so /health
+    latency tracks the slowest single probe (~1.5s) instead of their sum.
+
+    Flask's app context does not propagate into child threads (verified
+    against Flask 3.1 / Werkzeug 3.1), so the app object is captured in the
+    request thread and pushed into each capture thread; the module-level
+    check_* functions remain the patch seam used by tests.
+    """
+    app = current_app._get_current_object()
+    results = {}
+
+    def _capture(name):
+        fn = {
+            'database': check_database,
+            'redis': check_redis,
+            'celery': check_celery,
+        }[name]
+        with app.app_context():
+            try:
+                results[name] = fn()
+            except Exception:
+                results[name] = False
+
+    workers = [
+        threading.Thread(target=_capture, args=(name,), daemon=True)
+        for name in ('database', 'redis', 'celery')
+    ]
+    for worker in workers:
+        worker.start()
+
+    # Shared deadline with budget accounting: concurrent threads must not be
+    # joined for the full deadline each (that would reserialize the sum).
+    deadline = PROBE_DEADLINE_SECONDS + 0.5
+    start = time.monotonic()
+    for worker in workers:
+        remaining = deadline - (time.monotonic() - start)
+        if remaining > 0:
+            worker.join(remaining)
+
+    return (
+        results.get('database') is True,
+        results.get('redis') is True,
+        results.get('celery') is True,
+    )
 
 
 def check_zep_dependency():
@@ -27,41 +121,81 @@ def check_zep_dependency():
 
 
 def check_database():
-    """Check database connectivity (PostgreSQL or SQLite)"""
+    """Check database connectivity (PostgreSQL or SQLite), deadline-bounded."""
     try:
-        from app.db import get_engine
-        engine = get_engine()
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return True
+        return _probe_with_deadline(_database_probe) is True
     except Exception:
-        # Database not configured or not available
-        return False  # Report actual state instead of always True
+        return False
+
+
+def _database_probe() -> bool:
+    from app.db import get_engine
+
+    engine = get_engine()
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+    return True
 
 
 def check_redis():
-    """Check Redis connectivity"""
+    """Check Redis connectivity, deadline-bounded."""
     try:
-        redis_url = current_app.config.get('REDIS_URL')
-        if redis_url and not redis_url.startswith('memory://'):
-            client = Redis.from_url(redis_url, socket_timeout=1.0)
-            return client.ping()
-        else:
-            return True  # Memory fallback or not configured
+        app = current_app._get_current_object()
+        return _probe_with_deadline(lambda: _redis_probe(app)) is True
     except Exception:
         return False
+
+
+def _redis_probe(app) -> bool:
+    redis_url = app.config.get('REDIS_URL')
+    if redis_url and not redis_url.startswith('memory://'):
+        client = Redis.from_url(
+            redis_url,
+            socket_timeout=PROBE_DEADLINE_SECONDS,
+            socket_connect_timeout=PROBE_DEADLINE_SECONDS,
+        )
+        try:
+            return client.ping()
+        finally:
+            client.close()
+    else:
+        return True  # Memory fallback or not configured
 
 
 def check_celery():
-    """Check Celery worker availability"""
+    """Deadline-bounded Celery worker availability check."""
     try:
-        from celery import current_app as celery_app
-        inspector = celery_app.control.inspect(timeout=1.0)
-        stats = inspector.stats()
-        return stats is not None and len(stats) > 0
+        return _probe_with_deadline(_celery_probe) is True
     except Exception:
-        # Keep web liveness independent, but never claim an unverified worker.
         return False
+
+
+def _celery_probe() -> bool:
+    from urllib.parse import urlsplit
+    import socket
+    from celery import current_app as celery_app
+
+    # Fast-fail at the TCP layer before kombu's broker-connection retry loop
+    # can engage. A dead broker would otherwise keep the abandoned probe
+    # thread alive retrying for minutes after the deadline gives up on it
+    # (a thread leak on every degraded health check).
+    broker_url = celery_app.conf.broker_url or ''
+    if not broker_url.startswith('memory://'):
+        parts = urlsplit(broker_url)
+        host = parts.hostname or 'localhost'
+        if parts.scheme in ('amqp', 'amqps'):
+            port = parts.port or 5672
+        else:
+            port = parts.port or 6379
+        with socket.create_connection(
+            (host, port),
+            timeout=PROBE_DEADLINE_SECONDS,
+        ):
+            pass  # broker answers at TCP level; proceed to the real probe
+
+    inspector = celery_app.control.inspect(timeout=PROBE_DEADLINE_SECONDS)
+    stats = inspector.stats()
+    return stats is not None and len(stats) > 0
 
 
 @health_bp.route('/', methods=['GET'], strict_slashes=False)
@@ -88,10 +222,8 @@ def health():
         os.W_OK,
     )
 
-    # Check all components
-    db_ok = check_database()
-    redis_ok = check_redis()
-    celery_ok = check_celery()
+    # Check all components concurrently, each deadline-bounded
+    db_ok, redis_ok, celery_ok = _run_probes_concurrently()
 
     # Only storage failure is fatal — the app cannot function without writable storage.
     # Redis and DB unavailability are degraded: app starts, tasks queue when Redis recovers.
@@ -133,9 +265,7 @@ def readiness():
         os.W_OK,
     )
 
-    db_ok = check_database()
-    redis_ok = check_redis()
-    celery_ok = check_celery()
+    db_ok, redis_ok, celery_ok = _run_probes_concurrently()
 
     try:
         zep_status = check_zep_dependency()
@@ -159,6 +289,10 @@ def readiness():
         and zep_status.get('reason') == 'available'
         and zep_status.get('stale') is False
     )
+
+    # readiness reflects a measured state today, not an optimistic prediction:
+    # it is locked by the deploy workflow's "verify Zep-backed production
+    # readiness" step, which blocks gate passes on an honest probe.
     ready = storage_writable and db_ok and redis_ok and zep_ready
 
     payload = {
@@ -184,5 +318,4 @@ def readiness():
         'redis': 'ok' if redis_ok else 'error',
     }
 
-    return jsonify(payload), 200 if ready else 503
-# Health endpoint with component status
+    return jsonify(payload), 200 if ready else 503

@@ -49,11 +49,24 @@ def test_ontology_worker_uses_immutable_celery_delivery_id(
     saves = []
 
     class _Generator:
-        def generate(self, _text, requirements=None):
+        # Mirrors the real OntologyGenerator.generate signature
+        # (document_texts: List[str], simulation_requirement: str,
+        #  additional_context: Optional[str]). If the task ever regresses to
+        # passing a raw string or an unexpected `requirements=` keyword, this
+        # raises TypeError and the test fails — pinning the call shape.
+        def generate(
+            self,
+            document_texts,
+            simulation_requirement=None,
+            additional_context=None,
+        ):
+            assert isinstance(document_texts, list), (
+                "task must pass document_texts as a list"
+            )
             return {
-                "success": True,
-                "ontology": {"entity_types": [], "edge_types": []},
-                "summary": "safe summary",
+                "entity_types": [],
+                "edge_types": [],
+                "analysis_summary": "safe summary",
             }
 
     monkeypatch.setattr(graph_tasks, "TaskManager", lambda: manager)
@@ -82,6 +95,88 @@ def test_ontology_worker_uses_immutable_celery_delivery_id(
     assert manager.updates[0][0] == "immutable-celery-id"
     assert manager.completions[0][0] == "immutable-celery-id"
     assert saves == [{"_ontology_task_id": "immutable-celery-id"}]
+
+
+def test_ontology_task_runs_against_real_generator_contract(
+    eager_celery,
+    monkeypatch,
+):
+    """Pin the task to the REAL OntologyGenerator contract (no mock).
+
+    The task previously called ``generator.generate(text, requirements=...)``
+    (wrong signature) and checked ``result.get("success")`` while reading
+    ``result["ontology"]``/``result["summary"]`` — none of which match the real
+    generator, which takes ``(document_texts: List[str], simulation_requirement,
+    additional_context)`` and returns ``{entity_types, edge_types,
+    analysis_summary}``. Tests passed because the fake generator encoded the
+    task's wrong assumption.
+
+    This test runs the REAL OntologyGenerator end-to-end (only the LLM
+    transport is stubbed, so no network call in CI). If the task ever regresses
+    to a wrong call shape it raises TypeError; if it reads the wrong result
+    shape the project is left FAILED instead of ONTOLOGY_GENERATED.
+    """
+    import app.services.ontology_generator as og_module
+
+    project = _project()
+    manager = _RecordingTaskManager()
+    saves = []
+
+    class _FakeLLM:
+        def chat_with_registry_prompt(self, **kwargs):
+            return {
+                "data": {
+                    "entity_types": [
+                        {"name": "Commuter", "description": "A regular bus user"},
+                        {
+                            "name": "CityOfficial",
+                            "description": "A transport official",
+                        },
+                    ],
+                    "edge_types": [
+                        {"name": "affected_by", "description": "relationship"},
+                    ],
+                    "analysis_summary": "synthetic summary",
+                }
+            }
+
+    # The real OntologyGenerator() constructor builds LLMClient(prefer_boost=True).
+    # Swap that transport for a stub so the real generate() runs its signature,
+    # _validate_and_process, and return shape without a network call.
+    monkeypatch.setattr(og_module, "LLMClient", lambda **kwargs: _FakeLLM())
+
+    monkeypatch.setattr(graph_tasks, "TaskManager", lambda: manager)
+    monkeypatch.setattr(
+        graph_tasks.ProjectManager,
+        "get_project",
+        lambda _project_id: project,
+    )
+    monkeypatch.setattr(
+        graph_tasks.ProjectManager,
+        "save_project",
+        lambda value, **kwargs: saves.append((value, kwargs)),
+    )
+
+    result = graph_tasks.generate_ontology_task.apply(
+        kwargs={
+            "project_id": "project-1",
+            "text": "What could happen if the city raises bus fares?",
+            "requirements": "What could happen if the city raises bus fares?",
+            "task_id": "ontology-real-contract",
+        },
+        task_id="ontology-real-contract",
+    ).get(propagate=True)
+
+    assert result == {"success": True, "project_id": "project-1"}
+    assert project.status == ProjectStatus.ONTOLOGY_GENERATED
+    assert project.analysis_summary == "synthetic summary"
+    # The real generator adds Person/Organization fallbacks, so the persisted
+    # ontology is structurally valid and non-empty.
+    entity_names = {e["name"] for e in project.ontology["entity_types"]}
+    assert {"Commuter", "CityOfficial", "Person", "Organization"} <= entity_names
+    assert "affected_by" in {e["name"] for e in project.ontology["edge_types"]}
+    assert manager.completions[0][0] == "ontology-real-contract"
+    assert manager.completions[0][1]["ontology"] == project.ontology
 
 
 def test_synchronous_build_runs_the_complete_zep_sequence_and_returns_data():

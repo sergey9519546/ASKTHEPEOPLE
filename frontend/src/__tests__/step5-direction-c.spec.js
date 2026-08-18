@@ -42,7 +42,7 @@ describe("Step 5 Direction C interaction contracts", () => {
 
   it("preserves report chat, fictional response, export, stop, and map actions", () => {
     expect(step5).toContain("chatWithReport({");
-    expect(step5).toContain("askSyntheticProfiles({");
+    expect(step5).toContain("askGeneratedProfiles({");
     expect(step5).toContain("exportGeneratedResponsesCSV(");
     expect(step5).toContain("stopSimulation({");
     expect(step5).toContain("<OpinionMap");
@@ -95,7 +95,7 @@ describe("Step 5 Direction C interaction contracts", () => {
     expect(opinionMap).toContain("Does not measure people");
     expect(opinionMap).toContain("Not a forecast");
     expect(opinionMap).toContain('class="interaction-run-record-list"');
-    expect(opinionMap).toContain('data-origin="synthetic-generated"');
+    expect(opinionMap).toContain('data-origin="generated"');
     expect(opinionMap).toContain('data-testid="latest-record-inspector"');
     expect(opinionMap).toContain('class="technical-record"');
     expect(opinionMap).toContain("Initial load plus manual refresh");

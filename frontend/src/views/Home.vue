@@ -1,19 +1,17 @@
 <template>
   <div class="public-signal-home">
-    <TruthRail />
     <a class="skip-link" href="#decision">Skip to the decision</a>
 
     <header class="signal-masthead">
-      <button class="brand-block" type="button" aria-label="ASKTHEPEOPLE / Synthetic Decision Explorer home" @click="scrollToSection('decision')">
+<button class="brand-block" type="button" aria-label="ASKTHEPEOPLE home" @click="scrollToSection('decision')">
         <span>ASKTHEPEOPLE</span>
-        <span>SYNTHETIC DECISION EXPLORER</span>
       </button>
 
       <div class="masthead-copy">
-        <p class="masthead-kicker">Synthetic scenario explorer</p>
+        <p class="masthead-kicker">Generated scenario explorer</p>
         <h1>See the paths before you choose.</h1>
         <p class="masthead-summary">
-          Stress-test a decision with source-informed synthetic scenarios.
+          Stress-test a decision with source-informed generated scenarios.
         </p>
       </div>
 
@@ -26,15 +24,9 @@
       </div>
 
       <nav class="signal-nav" aria-label="Page sections">
-        <button class="nav-tab active" type="button" @click="scrollToSection('decision')">
-          The decision
-        </button>
-        <button class="nav-tab" type="button" @click="scrollToSection('method')">
-          Map the scenarios
-        </button>
-        <button class="nav-tab" type="button" @click="scrollToSection('validate')">
-          Validate with people
-        </button>
+        <a class="nav-tab active" href="#decision" @click.prevent="scrollToSection('decision')">The decision</a>
+        <a class="nav-tab" href="#method" @click.prevent="scrollToSection('method')">Map the scenarios</a>
+        <a class="nav-tab" href="#validate" @click.prevent="scrollToSection('validate')">Validate with people</a>
         <button class="settings-button" type="button" aria-label="Open model settings" @click="openSettings()">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"></path>
@@ -52,7 +44,7 @@
               <label for="decision-question">The decision</label>
               <div class="readiness-badge" :class="sourceReadiness.levelClass">
                 <span class="readiness-dot"></span>
-                <span class="readiness-text">{{ sourceReadiness.label }} ({{ sourceReadiness.score }}%)</span>
+                <span class="readiness-text">{{ sourceReadiness.label }}</span>
               </div>
             </div>
 
@@ -93,7 +85,7 @@
                 <span class="grammar-item" title="Critical uncertainty">U-01</span>
                 <span class="grammar-item" title="Generated profile / decision lens">GP-01</span>
                 <span class="grammar-item" title="Possible path">P-01</span>
-                <span class="grammar-item" title="Synthetic action">SA-01</span>
+                <span class="grammar-item" title="generated action">SA-01</span>
                 <span class="grammar-item" title="Decision consideration">DC-01</span>
                 <span class="grammar-item" title="Validation question">VQ-01</span>
                 <span class="grammar-item" title="Related run record">RR-01</span>
@@ -218,7 +210,7 @@
             <label class="use-policy-ack">
               <input v-model="usePolicyAcknowledged" type="checkbox" required />
               <span>
-                I understand this is synthetic exploration, not human evidence
+                I understand this is generated exploration, not human evidence
                 or a consequential-decision tool.
               </span>
             </label>
@@ -244,13 +236,13 @@
         <header class="section-heading">
           <p>How the workspace works</p>
           <h2 id="method-heading">One decision. Several plausible paths.</h2>
-          <span>Each branch is a synthetic possibility to inspect, challenge, and validate.</span>
+          <span>Each branch is a generated possibility to inspect, challenge, and validate.</span>
         </header>
 
         <div
           ref="routeMap"
           class="route-map"
-          aria-label="How a run flows: optional source material informs reviewed assumptions; the assumptions branch into three equal-weight possible paths of synthetic actions; the synthetic run ends at a hard break, and validation with people happens outside the system."
+          aria-label="How a run flows: optional source material informs reviewed assumptions; the assumptions branch into three equal-weight possible paths of generated actions; the generated run ends at a hard break, and validation with people happens outside the system."
         >
           <article class="route-stage stage-source">
             <header class="stage-head">
@@ -354,7 +346,7 @@
 
           <div class="route-break">
             <span class="break-rule" aria-hidden="true"></span>
-            <span class="break-label">Synthetic run ends</span>
+            <span class="break-label">generated run ends</span>
           </div>
 
           <article id="validate" class="route-stage stage-validate">
@@ -363,7 +355,7 @@
               <span class="stage-name">Validate with people</span>
             </header>
             <div class="validate-tile">
-              <span class="validate-eyebrow">Outside the synthetic run</span>
+              <span class="validate-eyebrow">Outside the generated run</span>
               <svg viewBox="0 0 40 32" aria-hidden="true">
                 <circle cx="20" cy="8" r="5"></circle>
                 <circle cx="8" cy="13" r="4"></circle>
@@ -485,7 +477,7 @@
     <footer class="signal-footer">
       <div class="footer-statement">
         <strong>ASK THE PEOPLE</strong>
-        <span>A tool for exploring synthetic scenarios before real-world research.</span>
+        <span>A tool for exploring generated scenarios before real-world research.</span>
       </div>
       <div class="footer-disclosure">
         <span>Outputs are generated, not observed.</span>
@@ -504,16 +496,17 @@ import { getTemplates } from "../api/graph";
 import { getSimulationHistory } from "../api/simulation";
 import { fetchSourceUrls } from "../api/sources.js";
 import SettingsModal from "../components/SettingsModal.vue";
-import TruthRail from "../components/TruthRail.vue";
 import {
   closeSettings,
   openSettings,
   settingsOpen,
 } from "../composables/useCommandPalette.js";
+import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import { setPendingUpload } from "../store/pendingUpload.js";
 import { savedRunDestination } from "../utils/workflow.js";
 
 const router = useRouter();
+const { setContext } = useWorkspaceState();
 const formData = ref({
   simulationRequirement: "",
   projectName: "",
@@ -581,29 +574,26 @@ const applyPreset = (preset) => {
   formData.value.simulationRequirement = preset.requirement;
   formData.value.projectName = preset.projectName;
   formData.value.additionalContext = preset.context;
-  usePolicyAcknowledged.value = true;
+  // Consent is an explicit act: a quick-start preset fills the form but must
+  // never silently pre-accept the generated-exploration acknowledgment.
 };
 
 const sourceReadiness = computed(() => {
-  const reqLen = formData.value.simulationRequirement.trim().length;
-  const fileCount = files.value.length;
-  const hasUrls = urlInput.value.trim().length > 0;
-  const ctxLen = formData.value.additionalContext.trim().length;
+  // Neutral prompt-detail signal: describes what the workspace contains, never
+  // a quality/precision claim (prompt length and file count cannot imply it).
+  const hasContext = formData.value.additionalContext.trim().length > 0;
+  const hasSources = files.value.length > 0 || urlInput.value.trim().length > 0;
 
-  let score = 0;
-  if (reqLen >= 12) score += 35;
-  if (reqLen >= 60) score += 15;
-  if (fileCount > 0) score += Math.min(fileCount * 15, 30);
-  if (hasUrls) score += 10;
-  if (ctxLen > 20) score += 10;
-
-  if (score >= 75) {
-    return { score, label: "High-Precision Scenario", levelClass: "level-high" };
-  } else if (score >= 40) {
-    return { score, label: "Grounded Scenario", levelClass: "level-medium" };
-  } else {
-    return { score, label: "Initial Prompt", levelClass: "level-low" };
+  if (hasSources && hasContext) {
+    return { label: "Decision + context + sources", levelClass: "level-high" };
   }
+  if (hasSources) {
+    return { label: "Decision + sources", levelClass: "level-medium" };
+  }
+  if (hasContext) {
+    return { label: "Decision + context", levelClass: "level-medium" };
+  }
+  return { label: "Decision only", levelClass: "level-low" };
 });
 
 const canSubmit = computed(
@@ -748,7 +738,7 @@ const fetchUrls = async () => {
     // Add fetched files to the files array
     // Convert API response format to File-like objects
     for (const fileData of data.files) {
-      // Create a synthetic File object that matches what file upload produces
+      // Create a generated File object that matches what file upload produces
       const blob = new Blob([`Fetched from: ${fileData.source_url}`], { type: "text/plain" });
       const file = new File([blob], fileData.name, { type: "text/plain" });
       // Store the source URL as a property for later reference
@@ -790,6 +780,11 @@ const startSimulation = () => {
   if (!canSubmit.value || loading.value) return;
 
   loading.value = true;
+  setContext({
+    projectName: formData.value.projectName.trim(),
+    simulationRequirement: question,
+    additionalContext: formData.value.additionalContext.trim(),
+  });
   setPendingUpload(
     files.value,
     question,
@@ -878,7 +873,7 @@ const formatDate = (value) => {
 };
 
 // Counterfactual branches carry forked_from / forked_at_turn from
-// /api/simulation/history. Phrased as provenance of a synthetic run — a branch
+// /api/simulation/history. Phrased as provenance of a generated run — a branch
 // is another exploration, not an alternative outcome.
 const branchLabel = (run) => {
   if (!run?.forked_from) return "";
@@ -936,7 +931,15 @@ fetchHistory();
   transform: translateY(0);
 }
 
-.signal-masthead { min-height: 16rem;
+.signal-masthead {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(13rem, 18vw) minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand copy disclosure"
+    "brand nav nav";
+  min-height: 10.5rem;
   border-bottom: 1px solid var(--line-dark);
   background: var(--ink-deep);
 }
@@ -985,7 +988,7 @@ fetchHistory();
 .masthead-copy {
   grid-area: copy;
   align-self: end;
-  padding: 2rem clamp(2rem, 4vw, 4.5rem) 1.4rem;
+  padding: 1.5rem clamp(2rem, 4vw, 4.5rem) 1.1rem;
 }
 
 .masthead-kicker,
@@ -1054,30 +1057,30 @@ fetchHistory();
   grid-area: nav;
   display: flex;
   align-items: stretch;
-  min-height: 4rem;
+  min-height: 3.2rem;
   padding-left: clamp(2rem, 4vw, 4.5rem);
 }
 
 .nav-tab,
 .settings-button {
-  min-height: 3rem;
+  min-height: 2.6rem;
   border: 0;
   border-left: 1px solid var(--line-dark);
   background: transparent;
   color: var(--paper-muted);
-  font-family: var(--font-display);
-  font-size: 1rem;
+  text-decoration: none;
+  font-size: 0.92rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .nav-tab {
-  padding: 0.8rem clamp(1rem, 2.3vw, 2.5rem);
+  padding: 0.55rem clamp(1rem, 2.3vw, 2.5rem);
 }
 
 .nav-tab.active {
   align-self: center;
-  min-height: 3rem;
+  min-height: 2.6rem;
   margin-right: 0.8rem;
   border-left: 0;
   background: var(--signal);
@@ -1547,8 +1550,8 @@ fetchHistory();
 
 /* Route Ledger — the route grammar drawn as one continuous route:
    source informs the assumption gate (the only object allowed to branch),
-   three equal-weight possible paths carry synthetic actions in sequence,
-   and a hard break ends the synthetic run before validation with people. */
+three equal-weight possible paths carry generated actions in sequence,
+    and a hard break ends the generated run before validation with people. */
 .route-map {
   display: grid;
   grid-template-columns:
@@ -1841,7 +1844,7 @@ fetchHistory();
   animation: node-in var(--duration-quick) var(--ease-out) forwards;
 }
 
-/* The break: the synthetic run terminates here. Lanes stop dead at the
+/* The break: the generated run terminates here. Lanes stop dead at the
    dashed rule; validation lives on the other side of it. */
 .route-break {
   position: relative;
@@ -1873,7 +1876,7 @@ fetchHistory();
   writing-mode: vertical-rl;
 }
 
-/* Validation tile: the white transfer surface — outside the synthetic run. */
+/* Validation tile: the white transfer surface — outside the generated run. */
 .validate-tile {
   display: flex;
   flex: 1;
@@ -2181,8 +2184,9 @@ fetchHistory();
 }
 
 .template-list button:hover {
-  background: var(--signal);
-  color: var(--ink);
+  border-color: var(--signal);
+  background: var(--signal-faint);
+  color: var(--paper);
 }
 
 .template-list button:hover .template-number,
@@ -2775,8 +2779,6 @@ fetchHistory();
 }
 .readiness-badge.level-high .readiness-dot {
   background: var(--success);
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
-  animation: readinessPulse 2s infinite ease-in-out;
 }
 
 .readiness-badge.level-medium {
@@ -2785,13 +2787,6 @@ fetchHistory();
 }
 .readiness-badge.level-medium .readiness-dot {
   background: var(--signal);
-  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
-  animation: readinessPulse 2s infinite ease-in-out;
-}
-
-@keyframes readinessPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.65; transform: scale(1.18); }
 }
 
 .readiness-badge.level-low {

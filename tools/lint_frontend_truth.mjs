@@ -8,7 +8,7 @@ const VISIBLE_ATTRIBUTE_PATTERN =
   /\b(aria-label|title|placeholder|alt|content)\s*=\s*(["'])([\s\S]*?)\2/g;
 
 export const REQUIRED_TRUTH_RAIL_FACTS = [
-  "ACTIONS + ANSWERS: SYNTHETIC",
+  "ACTIONS + ANSWERS: GENERATED",
   "HUMAN RESPONDENTS: 0",
   "NOT A FORECAST",
   "SOURCES: STARTING CONDITIONS ONLY",
@@ -17,7 +17,7 @@ export const REQUIRED_TRUTH_RAIL_FACTS = [
 
 const PRODUCT_NAME_PATTERN = /\bask\s*the\s*people\b/i;
 const APPROVED_PRODUCT_DESCRIPTOR_PATTERN =
-  /\b(?:synthetic decision explorer|synthetic scenario exploration|research-planning handoff)\b/i;
+  /\b(?:generated decision explorer|generated scenario exploration|synthetic decision explorer|synthetic scenario exploration|research-planning handoff)\b/i;
 
 const TERM_PATTERNS = [
   /\bpredict(?:s|ed|ing|ion|ions|ive)?\b/gi,
@@ -293,11 +293,40 @@ function frontendSourceRoot(frontendDirectory) {
   return resolve(frontendDirectory, "src");
 }
 
+function shellRendersSharedRail(sourceRoot) {
+  const shellPath = resolve(sourceRoot, "components/DesktopShell.vue");
+  if (!existsSync(shellPath)) return false;
+  const source = readFileSync(shellPath, "utf8");
+  const railTag = /<TruthRail\b([^>]*)\/?\s*>/.exec(source);
+  return (
+    Boolean(railTag) &&
+    !/\bv-(?:if|show)\b/.test(railTag?.[1] ?? "") &&
+    /import\s+TruthRail\s+from\s+["'][^"']+TruthRail\.vue["']/.test(source)
+  );
+}
+
+function countDesktopApps(sourceRoot) {
+  const desktopPath = resolve(sourceRoot, "composables/useDesktop.js");
+  if (!existsSync(desktopPath)) return 0;
+  const source = readFileSync(desktopPath, "utf8");
+  const appsMatch = source.match(/export const DESKTOP_APPS = \[([\s\S]*?)\];/);
+  if (!appsMatch) return 0;
+  const count = (appsMatch[1].match(/\bid\s*:/g) || []).length;
+  return count;
+}
+
 export function auditPrimarySurfaceTruthRails(
   frontendDirectory,
   repositoryRoot = resolve(frontendSourceRoot(frontendDirectory), "../.."),
 ) {
   const sourceRoot = frontendSourceRoot(frontendDirectory);
+
+  // The desktop shell renders the permanent five-fact Truth Rail once for the
+  // whole workspace, so every route is covered when it is present.
+  if (shellRendersSharedRail(sourceRoot)) {
+    return { gaps: [], routesChecked: countDesktopApps(sourceRoot) };
+  }
+
   const routerPath = resolve(sourceRoot, "router/index.js");
   const routerSource = readFileSync(routerPath, "utf8");
   const imports = new Map();

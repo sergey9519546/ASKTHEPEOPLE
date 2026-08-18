@@ -2,15 +2,14 @@
   <div class="bauhaus-view-root">
     <!-- HEADER -->
     <header class="bauhaus-header">
-      <button
+      <a
         class="header-left run-brand"
-        type="button"
-        aria-label="Ask The People — home"
-        @click="router.push('/')"
+        href="/"
+        aria-label="Ask The People / generated Decision Explorer — home"
       >
         <span class="brand-monogram">ASK</span>
         <span class="brand-full">THE PEOPLE</span>
-      </button>
+      </a>
 
       <div class="header-center">
         <div
@@ -55,7 +54,9 @@
     </div>
 
     <!-- CONTENT -->
-    <main class="workbench-viewport" :class="`view-${viewMode}`">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <h1 class="view-title">Run scenarios</h1>
+    <main id="main-content" class="workbench-viewport" :class="`view-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
         v-if="viewMode !== 'workbench'"
@@ -115,7 +116,9 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { useWindowRoute } from "../composables/useWindowContext.js";
+import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import { getGraphData, getProject } from "../api/graph";
 import {
   closeSimulationEnv,
@@ -131,14 +134,21 @@ import {
   resolveRecordedGraphIdentity,
 } from "../utils/recordedGraphIdentity";
 
-const route = useRoute();
 const router = useRouter();
+const windowRoute = useWindowRoute();
+const { setContext } = useWorkspaceState();
 
 const viewMode = ref("workbench");
-const currentSimulationId = ref(route.params.simulationId);
+const currentSimulationId = ref(windowRoute.value.params.simulationId);
 const maxRounds = ref(
-  route.query.maxRounds ? parseInt(route.query.maxRounds) : null,
+  windowRoute.value.query.maxRounds ? parseInt(windowRoute.value.query.maxRounds) : null,
 );
+if (currentSimulationId.value) {
+  setContext({
+    simulationId: currentSimulationId.value,
+    maxRounds: maxRounds.value,
+  });
+}
 const minutesPerRound = ref(30);
 const projectData = ref(null);
 const graphIdentity = ref(null);
@@ -397,15 +407,16 @@ onUnmounted(stopGraphRefresh);
 
 .run-brand {
   border: 0;
+  border-left: 4px solid var(--signal);
   border-radius: 0;
-  background: var(--signal);
-  color: var(--ink);
+  background: var(--ink-deep);
+  color: var(--paper);
   text-align: left;
 }
 
 .run-brand:hover {
-  background: var(--signal-strong) !important;
-  color: var(--ink) !important;
+  background: var(--ink) !important;
+  color: var(--paper-strong) !important;
 }
 
 .brand-full {

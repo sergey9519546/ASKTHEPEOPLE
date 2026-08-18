@@ -270,9 +270,9 @@ button,
 
 button:hover,
 .btn:hover {
-  border-color: var(--signal);
-  background: var(--signal);
-  color: var(--ink);
+  border-color: var(--line-strong);
+  background: var(--bg-hover);
+  color: var(--paper);
 }
 
 button:active,
@@ -471,7 +471,9 @@ select:focus-visible {
   min-width: 0;
   padding: 0.8rem 1.1rem !important;
   border-right: 1px solid var(--line-dark);
-  background: var(--signal) !important;
+  /* Red demoted to a thin wayfinding edge — the brand field is ink. */
+  border-left: 4px solid var(--signal);
+  background: var(--ink-deep) !important;
   color: var(--paper) !important;
 }
 
@@ -648,11 +650,11 @@ select:focus-visible {
   min-height: 2.65rem;
   padding: 0.55rem 0.9rem !important;
   border-bottom: 1px solid var(--line-dark) !important;
-  background: var(--signal) !important;
+  background: var(--ink-raised) !important;
 }
 
 .wb-label {
-  color: var(--ink) !important;
+  color: var(--paper) !important;
   font-family: var(--font-display) !important;
   font-size: 0.9rem !important;
   letter-spacing: 0.04em !important;
@@ -861,11 +863,11 @@ select:focus-visible {
 .modal-content,
 .crash-banner,
 .access-gate-card {
-  border: 1px solid var(--signal) !important;
+  border: 1px solid var(--ink) !important;
   border-radius: 0 !important;
   background: var(--paper) !important;
   color: var(--ink) !important;
-  box-shadow: 0.9rem 0.9rem 0 var(--signal-deep) !important;
+  box-shadow: 0.55rem 0.55rem 0 rgba(0, 0, 0, 0.7) !important;
 }
 
 .modal-container :is(h1, h2, h3, label, p, span),
@@ -992,4 +994,30 @@ select:focus-visible {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* Skip-link baseline — files may add local scoped variants on top. */
+.skip-link {
+  position: absolute;
+  top: -4rem;
+  left: 0;
+  padding: 0.5rem 1rem;
+  background: var(--signal);
+  color: var(--ink);
+  z-index: 10000;
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+}
+.skip-link:focus {
+  top: 0;
+}
+
+/* Anchor scroll offset for sticky mastheads and truth rails. */
+h1[id],
+h2[id],
+h3[id],
+#main-content {
+  scroll-margin-top: 4rem;
 }

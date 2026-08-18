@@ -289,14 +289,14 @@ def test_possible_path_includes_ordered_synthetic_steps_and_truth() -> None:
         id="step-1",
         sequence=1,
         statement="A plausible consequence is explored.",
-        origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+        origin=EpistemicOrigin.GENERATED_GENERATED,
     )
     path = PossiblePath(
         id="path-1",
         run_id="run-1",
         label="P-01",
         branch_reason="A declared assumption creates this branch.",
-        origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+        origin=EpistemicOrigin.GENERATED_GENERATED,
         steps=(step,),
     )
 
@@ -325,14 +325,14 @@ def test_possible_path_rejects_invalid_stable_ids(
         "id": "step-1",
         "sequence": 1,
         "statement": "A plausible consequence is explored.",
-        "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+        "origin": EpistemicOrigin.GENERATED_GENERATED,
     }
     path_data = {
         "id": "path-1",
         "run_id": "run-1",
         "label": "P-01",
         "branch_reason": "A declared assumption creates this branch.",
-        "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+        "origin": EpistemicOrigin.GENERATED_GENERATED,
     }
 
     with pytest.raises(ValidationError):
@@ -367,7 +367,7 @@ def test_server_ids_reject_non_canonical_shapes(field: str, invalid_id: str) -> 
         "id": "step-1",
         "sequence": 1,
         "statement": "A plausible consequence is explored.",
-        "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+        "origin": EpistemicOrigin.GENERATED_GENERATED,
     }
 
     with pytest.raises(ValidationError):
@@ -381,7 +381,7 @@ def test_server_ids_reject_non_canonical_shapes(field: str, invalid_id: str) -> 
                     "run_id": "run-1",
                     "label": "P-01",
                     "branch_reason": "A declared assumption creates this branch.",
-                    "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+                    "origin": EpistemicOrigin.GENERATED_GENERATED,
                     path_field: invalid_id,
                 },
                 steps=(PathStep(**step_data),),
@@ -410,7 +410,7 @@ def test_possible_path_rejects_labels_outside_p_number_format(
         id="step-1",
         sequence=1,
         statement="A plausible consequence is explored.",
-        origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+        origin=EpistemicOrigin.GENERATED_GENERATED,
     )
 
     with pytest.raises(ValidationError):
@@ -419,7 +419,7 @@ def test_possible_path_rejects_labels_outside_p_number_format(
             run_id="run-1",
             label=invalid_label,
             branch_reason="A declared assumption creates this branch.",
-            origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+            origin=EpistemicOrigin.GENERATED_GENERATED,
             steps=(step,),
         )
 
@@ -433,7 +433,7 @@ def test_possible_path_requires_at_least_one_step() -> None:
             run_id="run-1",
             label="P-01",
             branch_reason="A declared assumption creates this branch.",
-            origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+            origin=EpistemicOrigin.GENERATED_GENERATED,
             steps=(),
         )
 
@@ -446,7 +446,7 @@ def test_path_step_sequence_starts_at_one() -> None:
             id="step-1",
             sequence=0,
             statement="A plausible consequence is explored.",
-            origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+            origin=EpistemicOrigin.GENERATED_GENERATED,
         )
 
 
@@ -461,7 +461,7 @@ def test_possible_path_requires_contiguous_step_sequence_in_tuple_order(
             id=f"step-{index}",
             sequence=sequence,
             statement=f"Synthetic step {index}.",
-            origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+            origin=EpistemicOrigin.GENERATED_GENERATED,
         )
         for index, sequence in enumerate(sequences, start=1)
     )
@@ -472,7 +472,7 @@ def test_possible_path_requires_contiguous_step_sequence_in_tuple_order(
             run_id="run-1",
             label="P-01",
             branch_reason="A declared assumption creates this branch.",
-            origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+            origin=EpistemicOrigin.GENERATED_GENERATED,
             steps=steps,
         )
 
@@ -485,7 +485,7 @@ def test_possible_paths_and_steps_require_synthetic_origin(model_name: str) -> N
         "id": "step-1",
         "sequence": 1,
         "statement": "A plausible consequence is explored.",
-        "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+        "origin": EpistemicOrigin.GENERATED_GENERATED,
     }
 
     with pytest.raises(ValidationError):
@@ -520,7 +520,7 @@ def test_possible_path_text_fields_enforce_contract_limits(
         "id": "step-1",
         "sequence": 1,
         "statement": "A plausible consequence is explored.",
-        "origin": EpistemicOrigin.SYNTHETIC_GENERATED,
+        "origin": EpistemicOrigin.GENERATED_GENERATED,
     }
 
     with pytest.raises(ValidationError):
@@ -532,7 +532,7 @@ def test_possible_path_text_fields_enforce_contract_limits(
                 run_id="run-1",
                 label="P-01",
                 branch_reason=invalid_statement,
-                origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+                origin=EpistemicOrigin.GENERATED_GENERATED,
                 steps=(PathStep(**step_data),),
             )
 
@@ -553,7 +553,7 @@ def test_domain_models_reject_assignment(model_name: str) -> None:
         id="step-1",
         sequence=1,
         statement="A plausible consequence is explored.",
-        origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+        origin=EpistemicOrigin.GENERATED_GENERATED,
     )
     models_and_assignments = {
         "truth": (TruthBundle.synthetic(), "output_origin", "human"),
@@ -575,7 +575,7 @@ def test_domain_models_reject_assignment(model_name: str) -> None:
                 run_id="run-1",
                 label="P-01",
                 branch_reason="A declared assumption creates this branch.",
-                origin=EpistemicOrigin.SYNTHETIC_GENERATED,
+                origin=EpistemicOrigin.GENERATED_GENERATED,
                 steps=(step,),
             ),
             "label",

@@ -219,7 +219,7 @@ Rules:
   condition, declared assumption, critical uncertainty, or disclosed graph
   record. The validator resolves every reference; generation cannot invent IDs.
 - A generated lens with no source-segment basis uses an approved assumption or
-  uncertainty reference and remains `SYNTHETIC_GENERATED`; it never receives a
+  uncertainty reference and remains `GENERATED_GENERATED`; it never receives a
   fabricated source location.
 - Sensitive attributes are empty by default. Adding one requires a separate
   relevance statement, retention/export restriction, and per-attribute review

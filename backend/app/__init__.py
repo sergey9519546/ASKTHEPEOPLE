@@ -233,10 +233,29 @@ def create_app(config_class=Config):
         # Only protect API routes
         if not request.path.startswith('/api/'):
             return None
-        auth = request.headers.get('Authorization', '')
-        token = auth[7:] if auth.startswith('Bearer ') else None
-        if not token or not hmac.compare_digest(str(token), str(expected)):
+
+        def _unauthorized():
             return jsonify({"success": False, "error": "unauthorized"}), 401
+
+        # Any malformed, non-ASCII, or otherwise unparseable Authorization
+        # header must reject with 401 — never propagate an internal 500 that
+        # could leak server state or behave inconsistently across inputs.
+        try:
+            auth = request.headers.get('Authorization', '')
+            if not auth.startswith('Bearer '):
+                return _unauthorized()
+            token = auth[7:]
+            if not token or not hmac.compare_digest(str(token), str(expected)):
+                return _unauthorized()
+        except Exception:
+            return _unauthorized()
+        return None
+
+    # Dev/test-gated actor context for the canonical source-persistence seam.
+    # No-op in production (DEBUG=false) and when the flag is unset. The real
+    # OIDC/membership resolver behind ADR-0009 replaces this when it lands.
+    from .services.actor_context_installer import install_dev_actor_context
+    install_dev_actor_context(app)
     
     @app.after_request
     def log_response(response):

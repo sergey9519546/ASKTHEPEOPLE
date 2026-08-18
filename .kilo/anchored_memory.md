@@ -9,7 +9,7 @@ Verified (this turn):
 - Frontend: 147 passed / 22 files.
 - Docs validator: 0 errors / 0 warnings (PASS).
 - `task.py:240` `_positive_int_env` present; zero stale references; doc citations fixed.
-- `git status`: clean; last commit `96c0248`.
+- `git status`: clean; last commit `8bfb8d6`.
 - `results.json`: reconciled (passed:9 / skipped:3) — no fabricated provenance issue.
 
 Closed: 4th review-round synthesis verdict completed. Sub-agent findings:

@@ -55,7 +55,7 @@ def upgrade() -> None:
         sa.Column('content_json', sa.JSON(), nullable=False),
         sa.Column('content_sha256', sa.String(64), nullable=False),
         sa.Column('distinctness_sha256', sa.String(64), nullable=False),
-        sa.Column('origin', sa.String(32), nullable=False, server_default='SYNTHETIC_GENERATED'),
+        sa.Column('origin', sa.String(32), nullable=False, server_default='GENERATED_GENERATED'),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id'),
     )

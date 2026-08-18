@@ -68,6 +68,15 @@ const categories = [
       { label: "Dismiss Overlays", keys: "Esc" },
     ],
   },
+  {
+    name: "Window management",
+    items: [
+      { label: "Close the active window", keys: "Ctrl + W / ⌘W" },
+      { label: "Cycle open windows", keys: "Ctrl + Tab" },
+      { label: "Cycle windows (alternate)", keys: "Alt + `" },
+      { label: "Tile all windows", keys: "Ctrl + K → Tile all windows" },
+    ],
+  },
 ];
 </script>
 

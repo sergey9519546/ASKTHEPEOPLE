@@ -4,7 +4,7 @@
       <h3 id="fork-heading">Branch this exploration</h3>
       <p>
         Copy this run up to a chosen turn and continue it separately. Both stay
-        available, so you can compare two synthetic explorations of the same
+        available, so you can compare two generated explorations of the same
         decision. Branching changes nothing about the run it came from.
       </p>
     </header>
@@ -20,6 +20,8 @@
           :max="maxTurn"
           :disabled="busy"
           inputmode="numeric"
+          autocomplete="off"
+          name="fork-turn"
           :aria-describedby="error ? 'fork-error' : 'fork-turn-hint'"
         />
       </label>

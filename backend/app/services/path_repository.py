@@ -132,8 +132,10 @@ class PathRepository:
         # Semantic lineage is server-issued and independent of the physical
         # row ID. The full revision/lineage resolver remains behind the Task
         # 6 persistence gate; this transition repository must never derive a
-        # semantic alias from a physical UUID.
-        semantic_id = new_public_id("path_set", new_uuid7())
+        # semantic alias from a physical UUID. The semantic namespace is
+        # ``path_sem_`` (Task 6 §"Semantic lineage identity"), not the
+        # ``path_set_`` public-ID namespace.
+        semantic_id = f"path_sem_{new_uuid7().hex}"
         engine = cls._get_engine()
         with engine.begin() as conn:
             conn.execute(text("""
@@ -152,7 +154,7 @@ class PathRepository:
                     :display_code, :title,
                     :branch_trigger, :bounded_rationale, :scenario_frame,
                     CAST(:content_json AS JSON), :content_sha256, :distinctness_sha256,
-                    'SYNTHETIC_GENERATED', :now
+                    'GENERATED_GENERATED', :now
                 )
             """), {
                 "id": path_id, "public_id": public_id, "semantic_id": semantic_id,

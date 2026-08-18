@@ -14,7 +14,7 @@ def test_executive_exporter_generates_valid_html_deck():
         "title": "Service-change scenario exploration",
         "summary": "The synthetic run surfaced three paths to validate with people.",
         "sections": [
-            {"title": "1. SYNTHETIC PATHS", "content": "Generated observations diverged after the second round."},
+            {"title": "1. GENERATED PATHS", "content": "Generated observations diverged after the second round."},
             {"title": "2. VALIDATION PLAN", "content": "Interview affected riders before making a decision."}
         ]
     }
@@ -31,7 +31,7 @@ def test_executive_exporter_generates_valid_html_deck():
     assert "Service-change scenario exploration" in html
     assert "0.42" in html
     assert "0.55" in html
-    assert "SYNTHETIC PATHS" in html
+    assert "GENERATED PATHS" in html
     assert "VALIDATION PLAN" in html
     assert "0 HUMAN RESPONDENTS" in html
     assert "NO POPULATION REPRESENTED" in html

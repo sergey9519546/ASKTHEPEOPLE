@@ -1,5 +1,6 @@
 <template>
   <div class="workbench-panel">
+    <h2 class="sr-only">Source map construction</h2>
     <div class="scroll-container scrollbar-thin">
       <!-- Step 01: Ontology -->
       <div
@@ -242,7 +243,7 @@
         <div class="card-content">
           <p class="api-note">NEXT: SET ASSUMPTIONS</p>
           <p class="description">
-            Review the map, then define how the synthetic scenario should run.
+            Review the map, then define how the generated scenario should run.
           </p>
           <button
             class="action-btn"
@@ -1004,14 +1005,22 @@ const handleDetailKeydown = (event) => {
   text-transform: uppercase;
 }
 
+/* Badges are status marks, not CTAs: neutral field, semantic tint, red edge
+   only on the active/processing state. */
 .badge,
 .badge.success,
-.badge.processing,
 .badge.accent {
-  border: 1px solid var(--signal);
+  border: 1px solid var(--line-strong);
   border-radius: 0;
-  background: var(--signal);
-  color: var(--ink);
+  background: var(--ink-raised);
+  color: var(--paper-muted);
+}
+
+.badge.processing {
+  border: 1px solid var(--signal-rule);
+  border-radius: 0;
+  background: var(--signal-tint);
+  color: var(--signal-soft);
 }
 
 .badge.pending {

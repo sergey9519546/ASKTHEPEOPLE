@@ -241,7 +241,12 @@ def register_source_routes(simulation_bp):
             return _tenant_context_unavailable()
 
         from ...services.source_repository import SourceRepository
-        source = SourceRepository.get_source_by_public_id(source_id)
+        source = SourceRepository.get_source_by_public_id(
+            source_id,
+            organization_id=actor_context.organization_id,
+            workspace_id=actor_context.workspace_id,
+            project_id=actor_context.project_id,
+        )
         if not source or not _record_in_actor_scope(source, actor_context):
             return jsonify({
                 "success": False,
@@ -252,7 +257,12 @@ def register_source_routes(simulation_bp):
         version_id = source.get("current_version_id")
         version = None
         if version_id:
-            version = SourceRepository.get_source_version(version_id)
+            version = SourceRepository.get_source_version(
+                version_id,
+                organization_id=actor_context.organization_id,
+                workspace_id=actor_context.workspace_id,
+                project_id=actor_context.project_id,
+            )
             if (
                 not version
                 or version.get("source_id") != source.get("id")
@@ -316,7 +326,12 @@ def register_source_routes(simulation_bp):
         # candidate-review logic (accept/revise/exclude) is pure and tested;
         # this is the persistence seam.
         from ...services.source_repository import SourceRepository
-        source = SourceRepository.get_source_by_public_id(source_id)
+        source = SourceRepository.get_source_by_public_id(
+            source_id,
+            organization_id=actor_context.organization_id,
+            workspace_id=actor_context.workspace_id,
+            project_id=actor_context.project_id,
+        )
         if not source or not _record_in_actor_scope(source, actor_context):
             return jsonify({
                 "success": False,
@@ -330,7 +345,12 @@ def register_source_routes(simulation_bp):
                 "error": "source_version_not_found",
             }), 404
 
-        version = SourceRepository.get_source_version(version_id)
+        version = SourceRepository.get_source_version(
+            version_id,
+            organization_id=actor_context.organization_id,
+            workspace_id=actor_context.workspace_id,
+            project_id=actor_context.project_id,
+        )
         if (
             not version
             or version.get("source_id") != source.get("id")

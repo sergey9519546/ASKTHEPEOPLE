@@ -27,7 +27,7 @@
           aria-describedby="palette-hint"
           autocomplete="off"
           spellcheck="false"
-          placeholder="Search commands"
+          placeholder="Search commands…"
           @keydown.down.prevent="move(1)"
           @keydown.up.prevent="move(-1)"
           @keydown.enter.prevent="runActive"
@@ -84,6 +84,13 @@ import {
   paletteOpen,
   togglePalette,
 } from "../composables/useCommandPalette.js";
+import {
+  activeWindow,
+  closeAllWindows,
+  closeWindow,
+  cycleWindow,
+  tileWindows,
+} from "../composables/useDesktop.js";
 
 const router = useRouter();
 const route = useRoute();
@@ -130,6 +137,33 @@ const commands = computed(() => [
     group: "Navigate",
     available: () => route.name === "Report" || route.name === "Interaction",
     run: () => router.back(),
+  },
+  {
+    id: "tile-windows",
+    label: "Tile all windows",
+    group: "Window",
+    run: () => tileWindows(),
+  },
+  {
+    id: "close-window",
+    label: "Close the active window",
+    group: "Window",
+    available: () => Boolean(activeWindow.value),
+    run: () => {
+      if (activeWindow.value) closeWindow(activeWindow.value.key);
+    },
+  },
+  {
+    id: "close-all-windows",
+    label: "Close all windows",
+    group: "Window",
+    run: () => closeAllWindows(),
+  },
+  {
+    id: "next-window",
+    label: "Focus the next window",
+    group: "Window",
+    run: () => cycleWindow(1),
   },
 ]);
 

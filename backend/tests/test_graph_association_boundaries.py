@@ -445,8 +445,13 @@ def test_ontology_provider_error_result_is_not_persisted_or_returned_raw(
     project.status = ProjectStatus.CREATED
 
     class FailingGenerator:
-        def generate(self, _text, requirements=None):
-            assert requirements is None
+        def generate(
+            self,
+            document_texts,
+            simulation_requirement=None,
+            additional_context=None,
+        ):
+            assert simulation_requirement is None
             return {"success": False, "error": "provider-secret-detail"}
 
     monkeypatch.setattr(graph_tasks, "TaskManager", lambda: manager)
@@ -487,7 +492,12 @@ def test_ontology_provider_exception_is_collapsed_to_stable_task_failure(
     project.status = ProjectStatus.CREATED
 
     class FailingGenerator:
-        def generate(self, _text, requirements=None):
+        def generate(
+            self,
+            document_texts,
+            simulation_requirement=None,
+            additional_context=None,
+        ):
             raise RuntimeError("provider-secret-detail")
 
     monkeypatch.setattr(graph_tasks, "TaskManager", lambda: manager)
@@ -527,11 +537,16 @@ def test_ontology_task_envelope_failure_does_not_downgrade_persisted_success(
     saves = []
 
     class SuccessfulGenerator:
-        def generate(self, _text, requirements=None):
+        def generate(
+            self,
+            document_texts,
+            simulation_requirement=None,
+            additional_context=None,
+        ):
             return {
-                "success": True,
-                "ontology": {"entity_types": [], "edge_types": []},
-                "summary": "bounded summary",
+                "entity_types": [],
+                "edge_types": [],
+                "analysis_summary": "bounded summary",
             }
 
     monkeypatch.setattr(graph_tasks, "TaskManager", lambda: manager)

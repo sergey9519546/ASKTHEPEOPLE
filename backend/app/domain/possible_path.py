@@ -102,7 +102,7 @@ class PathStep(BaseModel):
     sequence: int = Field(ge=1)
     statement: str = _BOUNDED_TEXT
     bounded_rationale: str = _BOUNDED_RATIONALE
-    origin: Literal["SYNTHETIC_GENERATED"] = "SYNTHETIC_GENERATED"
+    origin: Literal["GENERATED_GENERATED"] = "GENERATED_GENERATED"
 
 
 class Consideration(BaseModel):
@@ -161,7 +161,7 @@ class PossiblePath(BaseModel):
     # Identity
     id: UUID
     public_id: str = Field(pattern=r"^path_[0-9a-f]{32}$")
-    semantic_id: str = Field(pattern=r"^path_set_[0-9a-f]{32}$")
+    semantic_id: str = Field(pattern=r"^path_sem_[0-9a-f]{32}$")
     run_id: UUID
     path_set_id: UUID
 
@@ -191,7 +191,7 @@ class PossiblePath(BaseModel):
     conflicts: tuple[PathConflict, ...] = Field(default_factory=tuple)
 
     # Immutable truth bundle (shared definition from decision_workspace)
-    origin: Literal["SYNTHETIC_GENERATED"] = "SYNTHETIC_GENERATED"
+    origin: Literal["GENERATED_GENERATED"] = "GENERATED_GENERATED"
     truth_human_respondents: int = Field(default=0, ge=0, le=0)
     truth_is_forecast: bool = False
     truth_output_origin: str = Field(default="synthetic")

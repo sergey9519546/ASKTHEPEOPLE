@@ -274,7 +274,7 @@ def generate_ontology():
                 max_length=PROJECT_NAME_MAX,
                 required=True,
             )
-            bounded_text(
+            additional_context = bounded_text(
                 request.form.get('additional_context', ''),
                 field="additional_context",
                 max_length=ADDITIONAL_CONTEXT_MAX,
@@ -307,11 +307,14 @@ def generate_ontology():
                 "error": exc.code,
                 "message": exc.message,
             }), 400
-        if not uploaded_files or all(not f.filename for f in uploaded_files):
-            return jsonify({
-                "success": False,
-                "error": "Please upload at least one document file"
-            }), 400
+        # Prompt-only runs are a designed first-class path ("Continue without
+        # source material" — DIRECTION_C.md / ROUTE_GRAMMAR.md). The user's own
+        # decision text becomes the starting material: sources are "starting
+        # conditions only" under the product truth contract, and the decision
+        # question plus extra context are user-supplied starting conditions, so
+        # extracting the ontology and source map from them is provenance-safe —
+        # no generated reasoning enters the map.
+        prompt_only = not uploaded_files or all(not f.filename for f in uploaded_files)
 
         # Validate provider configuration only after rejecting malformed input.
         if not Config.LLM_API_KEY:
@@ -322,11 +325,26 @@ def generate_ontology():
         project.simulation_requirement = simulation_requirement
         logger.info(f"Created project: {project.project_id}")
 
-        # Save files and extract text synchronously (fast — no LLM call yet)
+        # Build source material. With uploaded files, extract text from them;
+        # for a prompt-only run, the user's own decision text is the starting
+        # material — it flows through the exact same ontology / graph / profile
+        # pipeline, and is provenance-safe by construction (user-supplied).
         document_texts = []
         all_text = ""
 
-        for file in uploaded_files:
+        if prompt_only:
+            prompt_source = "\n\n".join(
+                part for part in (simulation_requirement, additional_context) if part
+            )
+            all_text = TextProcessor.preprocess_text(prompt_source)
+            document_texts.append(all_text)
+            logger.info(
+                "Prompt-only run: decision text is the starting material "
+                "(%d characters)",
+                len(all_text),
+            )
+
+        for file in (uploaded_files if not prompt_only else []):
             if file and file.filename and allowed_file(file.filename):
                 # P0 adversarial-upload defense (audit §5 P0). The extension
                 # allowlist above is a first line; validate_file_upload adds

@@ -287,7 +287,7 @@ class CandidateStartingConditionRecord(_ScopedRecord):
     ordinal: int = Field(ge=0)
     proposed_statement: str = Field(min_length=1, max_length=4000)
     proposed_statement_sha256: str
-    extraction_origin: Literal["SYNTHETIC_GENERATED"] = "SYNTHETIC_GENERATED"
+    extraction_origin: Literal["GENERATED_GENERATED"] = "GENERATED_GENERATED"
     disposition: CandidateDisposition
     disposition_reason_code: str | None = None
     disposition_reason_note: str | None = None

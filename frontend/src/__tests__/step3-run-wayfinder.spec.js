@@ -65,14 +65,14 @@ describe("Step3RunWayfinder", () => {
       "What could happen if weekend bus service is reduced?",
     );
     const truthBoundary = wrapper.get('[data-testid="run-truth-boundary"]');
-    expect(truthBoundary.text()).toContain("Actions + answers: synthetic");
+    expect(truthBoundary.text()).toContain("Actions + answers: generated");
     expect(truthBoundary.text()).toContain("Human respondents: 0");
     expect(truthBoundary.text()).toContain("Not a forecast");
     expect(truthBoundary.text()).toContain("Human validation: outside this run");
 
     const record = wrapper.get('[data-testid="run-record-list"]');
     expect(record.element.tagName).toBe("OL");
-    expect(record.findAll('li[data-origin="synthetic-generated"]')).toHaveLength(3);
+    expect(record.findAll('li[data-origin="generated"]')).toHaveLength(3);
     expect(record.text().indexOf("Weekend rider")).toBeLessThan(
       record.text().indexOf("Small business owner"),
     );

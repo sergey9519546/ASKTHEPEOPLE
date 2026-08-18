@@ -2,15 +2,14 @@
   <div class="bauhaus-view-root">
     <!-- HEADER -->
     <header class="bauhaus-header">
-      <button
+      <a
         class="header-left"
-        type="button"
-        aria-label="Ask The People — home"
-        @click="router.push('/')"
+        href="/"
+        aria-label="Ask The People / generated Decision Explorer — home"
       >
         <span class="brand-monogram">ATP</span>
         <span class="brand-full">ASK THE PEOPLE</span>
-      </button>
+      </a>
 
       <div class="header-center">
         <div
@@ -45,7 +44,9 @@
     </header>
 
     <!-- CONTENT -->
-    <main class="workbench-viewport" :class="`mode-${viewMode}`">
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <h1 class="view-title">Review the run</h1>
+    <main id="main-content" class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
         class="panel-container left"
@@ -130,7 +131,7 @@
 
     <!-- FOOTER -->
     <footer class="bauhaus-footer-mini">
-      <div class="f-block">Synthetic report · 0 human respondents</div>
+      <div class="f-block">generated report · 0 human respondents</div>
       <div class="f-block">Validate material decisions with people</div>
     </footer>
   </div>
@@ -138,7 +139,9 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
+import { useWindowRoute } from "../composables/useWindowContext.js";
+import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import { getGraphData, getProject } from "../api/graph";
 import { getReport } from "../api/report";
 import { getSimulation } from "../api/simulation";
@@ -150,11 +153,13 @@ import {
   resolveRecordedGraphIdentity,
 } from "../utils/recordedGraphIdentity";
 
-const route = useRoute();
 const router = useRouter();
+const windowRoute = useWindowRoute();
+const { setContext } = useWorkspaceState();
 
 const viewMode = ref("workbench");
-const currentReportId = ref(route.params.reportId);
+const currentReportId = ref(windowRoute.value.params.reportId);
+if (currentReportId.value) setContext({ reportId: currentReportId.value });
 const simulationId = ref(null);
 const projectData = ref(null);
 const graphIdentity = ref(null);
@@ -241,6 +246,7 @@ const loadReportData = async () => {
 
     const reportData = reportRes.data;
     simulationId.value = reportData.simulation_id;
+    if (simulationId.value) setContext({ simulationId: simulationId.value });
     currentStatus.value =
       reportData.status === "failed"
         ? "failed"
@@ -322,7 +328,7 @@ const refreshGraph = async () => {
 };
 
 watch(
-  () => route.params.reportId,
+  () => windowRoute.value.params.reportId,
   (newId) => {
     if (!newId) return;
     currentReportId.value = newId;

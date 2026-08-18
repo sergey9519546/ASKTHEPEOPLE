@@ -63,7 +63,7 @@ primary brand or action color.
 ## Brand lockup
 
 ```text
-ASKTHEPEOPLE / SYNTHETIC DECISION EXPLORER
+ASKTHEPEOPLE / GENERATED DECISION EXPLORER
 Explore assumptions before you ask. Validate with people after.
 ```
 
@@ -278,7 +278,7 @@ The map is a controlled semantic system.
 Five rectangular cells separated by hard rules; 48–52 px high.
 
 ```text
-ACTIONS + ANSWERS: SYNTHETIC | HUMAN RESPONDENTS: 0 | NOT A FORECAST |
+ACTIONS + ANSWERS: GENERATED | HUMAN RESPONDENTS: 0 | NOT A FORECAST |
 SOURCES: STARTING CONDITIONS ONLY | HUMAN VALIDATION: OUTSIDE THIS RUN
 ```
 
@@ -287,7 +287,7 @@ SOURCES: STARTING CONDITIONS ONLY | HUMAN VALIDATION: OUTSIDE THIS RUN
 Two wrapped lines, never a horizontal carousel:
 
 ```text
-SYNTHETIC · 0 HUMAN RESPONDENTS · NOT A FORECAST
+GENERATED · 0 HUMAN RESPONDENTS · NOT A FORECAST
 SOURCES SET INPUTS ONLY · VALIDATE WITH PEOPLE OUTSIDE
 ```
 
@@ -303,8 +303,8 @@ This creates a stable visual narrative:
 
 ```text
 CREAM — DEFINE AND REVIEW
-CHARCOAL — EXPLORE SYNTHETIC POSSIBILITIES
-LIGHT CREAM — LEAVE THE SYNTHETIC SYSTEM AND VALIDATE
+CHARCOAL — EXPLORE GENERATED POSSIBILITIES
+LIGHT CREAM — LEAVE THE GENERATED SYSTEM AND VALIDATE
 ```
 
 Do not use these surfaces merely as decorative alternation.
@@ -318,7 +318,7 @@ Do not use these surfaces merely as decorative alternation.
 | `--ink` | `#111313` | Main dark field and primary text |
 | `--paper` | `#F2EBDD` | Forms and reading surfaces |
 | `--paper-transfer` | `#F7F0E2` | Human-validation boundary |
-| `--signal` | `#F04B3D` | Current step, active route, brand field, single primary action |
+| `--signal` | `#F04B3D` | Current step, active route, thin wayfinding edge, single primary action |
 | `--signal-strong` | `#FF5D4F` | Hover or pressed action field |
 | `--signal-deep` | `#982D24` | Accessible red text on cream and hard-offset action shadow |
 | `--attention` | `#FFD51D` | Focus, warning, and small attention marks only |
@@ -681,6 +681,102 @@ documentation system.
 
 ---
 
+## Design convergence ledger — combined direction
+
+Two design directions were merged into one canonical surface: the
+**web-OS desktop shell** (structural) and the **ink/paper restyle**
+(visual). Each divergence below was resolved explicitly; the resolution is
+normative and supersedes any earlier per-view or per-component treatment.
+
+Status legend: **CURRENT** = implemented and verified in the tree.
+
+### D1 — Truth Rail placement: shell-level, once
+
+- Divergence: the original design rendered a Truth Rail inside individual
+  views (Home, InteractionView, SimulationRunView each mounted
+  `<TruthRail />`); the shell direction hoisted it into the desktop chrome.
+- Resolution: the rail renders **once, in the shell**, never per-view.
+  `frontend/src/components/DesktopShell.vue:3` mounts `<TruthRail />`;
+  the views carry zero TruthRail references
+  (`frontend/src/views/Home.vue`, `frontend/src/views/InteractionView.vue`,
+  `frontend/src/views/SimulationRunView.vue`). Every window is therefore
+  covered by the same disclosure with no duplication or drift.
+- Emphasis: the rail's fact labels use the attention accent —
+  `.truth-rail-text strong { color: var(--attention) }`
+  (`frontend/src/components/TruthRail.vue:64-65`).
+
+### D2 — Masthead: a two-level system
+
+- Divergence: the original Home masthead was a single tall stack
+  (`min-height: 16rem`); the shell added global chrome; the restyle made
+  the in-window masthead a compact grid.
+- Resolution:
+  - **Shell chrome masthead** — `DesktopMasthead.vue` (`desktop-masthead`):
+    brand + descriptor, workspace label, commands, and the standing
+    `GENERATED · NOT A FORECAST` marker. This is the only masthead above
+    the desktop chrome.
+  - **In-window masthead** (State the decision) — the compact three-column
+    grid: `grid-template-areas: "brand copy disclosure" / "brand nav nav"`,
+    `min-height: 10.5rem` (`frontend/src/views/Home.vue:944-952`), with a
+    3.2rem nav rail and 2.6rem nav tabs
+    (`frontend/src/views/Home.vue:1070,1076,1093`).
+  - The 16rem stacked masthead is discontinued.
+
+### D3 — Badges: neutral field, semantic tint, red only on active
+
+- Divergence: the original badges were solid signal-red fields; the restyle
+  made badges status marks, not CTAs.
+- Resolution (`frontend/src/components/Step1GraphBuild.vue:523-544`):
+  - `success` → attention tint;
+  - `processing` → signal tint (the **only** red badge state);
+  - `accent` → violet tint;
+  - `pending` → neutral `ink-raised` field.
+  Red is reserved for the active/processing state.
+
+### D4 — Signal red demoted to a thin wayfinding edge
+
+- Divergence: the original used full red fields for brand surfaces, hover
+  fills, and status overlays; the restyle demoted red to a wayfinding
+  accent and made the brand field ink.
+- Resolution — red is a **wayfinding edge / active-state accent**, never a
+  full brand field:
+  - Brand fields are ink: `.app-process-root > .app-header > .header-left`
+    uses `background: var(--ink-deep)` with a 4px red left edge
+    (`frontend/src/assets/design-tokens.css:474-480`); `.wb-label` is paper
+    (`frontend/src/assets/design-tokens.css:656`); `run-brand` is ink-deep
+    with a 4px red edge (`frontend/src/views/SimulationRunView.vue:407-416`);
+    `brand-monogram` is ink-deep with a red outline
+    (`frontend/src/views/InteractionView.vue:405-406`); `settings-index` is
+    ink-deep with a 4px red right edge
+    (`frontend/src/components/SettingsModal.vue:640`).
+  - Hover fills are neutral: `button:hover` uses `--line-strong` /
+    `--bg-hover` with paper text, not red
+    (`frontend/src/assets/design-tokens.css:271-276`); template hover uses
+    `--signal-faint` (`frontend/src/views/Home.vue`).
+  - Status overlays are paper with a red outline and a hard offset shadow:
+    `.status-overlay-hint` / `.completion-hint`
+    (`frontend/src/components/GraphPanel.vue:678,693`).
+  - Surfaces keep ink borders and a black hard-offset shadow:
+    `.modal-container` / `.modal-content` / `.crash-banner` /
+    `.access-gate-card` (`frontend/src/assets/design-tokens.css:863-870`).
+  - Attention boundaries keep red as a top edge on ink or the
+    paper-transfer field: `.meaning-boundary`
+    (`frontend/src/components/Step3RunWayfinder.vue:999`);
+    `.question-composer` (`frontend/src/components/Step5Interaction.vue:2423-2426`);
+    NotFound aside (`frontend/src/views/NotFoundView.vue:49-58`).
+
+### D5 — The desktop shell is the canonical workspace surface
+
+The persistent desktop shell (`frontend/src/components/DesktopShell.vue`)
+hosts the masthead, the journey step-spine launcher, draggable/tileable
+step windows, the taskbar, and a session that restores open windows and
+preserves deep links on refresh. Step views render **inside** windows; the
+shell chrome (masthead, dock, taskbar) is the only chrome above them. See
+the "Project-specific design status" section below for the full
+CURRENT / PARTIAL / TARGET state.
+
+---
+
 ## Project-specific design status (baseline `8b616dc7`)
 
 The Civic Wayfinding visual system is implemented in
@@ -694,12 +790,19 @@ is **TARGET**. Owned by `askthepeople-frontend-steward`.
 - Frontend is Vue 3 + Vite + vue-router. Built into
   `frontend/dist/` and served by
   [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
+- The workspace renders as a persistent desktop shell
+  (`frontend/src/components/DesktopShell.vue`): a masthead, a
+  journey step-spine launcher, draggable/tileable windows for each
+  step, a taskbar, and a session that restores open windows and
+  preserves deep links on refresh. The shell is the sole host of
+  the five-fact Truth Rail, so every primary route is covered.
 - Route visualization in the home view uses CSS-driven animations;
   D3 is used in `GraphPanel.vue` for graph rendering. The route
   grammar is documented in [`docs/design/ROUTE_GRAMMAR.md`](ROUTE_GRAMMAR.md).
-- The Truth Rail, the per-screen contextual statements, and the
-  full disclosure block are **not yet rendered** in the
-  frontend. The text disclosures live in
+- The Truth Rail is rendered once in the desktop shell. The
+  per-screen contextual statements and the full disclosure block
+  remain **not yet rendered** in the frontend. The text
+  disclosures live in
   [`README.md:9-12`](../../README.md) and
   [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md).
 - The route-list / map parity test required by ADR-0006 is
@@ -733,7 +836,7 @@ The product lockup is locked in the contract:
 
 ```text
 ASKTHEPEOPLE
-SYNTHETIC DECISION EXPLORER
+GENERATED DECISION EXPLORER
 
 Explore assumptions before you ask.
 Validate with people after.

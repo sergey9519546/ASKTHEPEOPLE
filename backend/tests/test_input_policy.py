@@ -169,6 +169,81 @@ def test_upload_route_rejects_renamed_malicious_file(client, monkeypatch, tmp_pa
     assert not any(tmp_path.joinpath("projects").glob("*"))
 
 
+def test_prompt_only_run_uses_decision_text_as_starting_material(
+    client,
+    monkeypatch,
+):
+    """A no-file (prompt-only) run is a designed first-class path
+    (DIRECTION_C / ROUTE_GRAMMAR "Continue without source material"): the
+    user's own decision text becomes the starting material and flows through
+    the same ontology/graph pipeline instead of being rejected with a 400.
+    """
+    from app.models.project import ProjectManager
+    from app.models.task import TaskManager
+
+    captured = {}
+
+    class FakeProject:
+        def __init__(self, project_id):
+            self.project_id = project_id
+            self.files = []
+            self.total_text_length = 0
+
+    def fake_save_extracted_text(project_id, text):
+        captured["extracted_text"] = text
+
+    def fake_save_project(project, **_kwargs):
+        captured["project_id"] = project.project_id
+
+    def fake_create_task(*_args, **_kwargs):
+        return "task_prompt_only"
+
+    class FakeTask:
+        def apply_async(self, **kwargs):
+            captured["dispatch_kwargs"] = kwargs
+
+    monkeypatch.setattr(
+        ProjectManager,
+        "create_project",
+        lambda name: FakeProject("proj_prompt_only"),
+    )
+    monkeypatch.setattr(
+        ProjectManager, "save_extracted_text", fake_save_extracted_text
+    )
+    monkeypatch.setattr(ProjectManager, "save_project", fake_save_project)
+    monkeypatch.setattr(TaskManager, "create_task", fake_create_task)
+    monkeypatch.setattr(
+        "app.tasks.graph_tasks.generate_ontology_task",
+        FakeTask(),
+    )
+
+    response = client.post(
+        "/api/graph/ontology/generate",
+        data={
+            "simulation_requirement": (
+                "What could happen if the city raises bus fares by 15%?"
+            ),
+            "project_name": "Prompt-only run",
+            "additional_context": "Focus on commuters and authority revenue.",
+            "intended_use": "scenario_planning",
+            "use_policy_acknowledged": "true",
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 202
+    payload = response.get_json()
+    assert payload["success"] is True
+    assert payload["data"]["project_id"] == "proj_prompt_only"
+    assert response.headers["Location"] == "/api/graph/task/task_prompt_only"
+    # The user's own decision text is persisted as the starting material.
+    assert "bus fares by 15%" in captured["extracted_text"]
+    assert "commuters and authority revenue" in captured["extracted_text"]
+    # And queued into the ontology task as its source text.
+    dispatched_text = captured["dispatch_kwargs"]["kwargs"]["text"]
+    assert "bus fares by 15%" in dispatched_text
+
+
 def test_canonical_upload_fails_before_local_parser_or_project_write(
     client,
     monkeypatch,
