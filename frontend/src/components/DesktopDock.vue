@@ -1,5 +1,5 @@
 <template>
-  <nav
+  <nav aria-live="polite" aria-atomic="true"
     class="desktop-dock"
     :class="{ 'is-collapsed': props.collapsed }"
     aria-label="Workspace launcher"
@@ -115,6 +115,7 @@ function onToggleKey(event) {
   if (event.key === "Enter" || event.key === " " || event.code === "Space") {
     event.preventDefault();
     emit("toggle");
+    requestAnimationFrame(function() { if (event && event.target) event.target.focus(); });
   }
 }
 
@@ -343,6 +344,18 @@ function startOver() {
     font-size: var(--text-sm);
   }
 }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-dock { transition: none !important; }
+}
 </style>
+
+
+
+
+
+
+
 
 

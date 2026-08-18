@@ -198,7 +198,7 @@ onBeforeUnmount(() => {
   color: var(--paper);
 }
 
-.desktop-main {
+.desktop-main { gap: var(--space-2);
   display: flex;
   flex: 1;
   min-height: 0;
@@ -222,7 +222,7 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 860px) {
-  .desktop-main {
+  .desktop-main { gap: var(--space-2);
   display: flex;
   flex: 1;
   min-height: 0;
@@ -267,4 +267,5 @@ onBeforeUnmount(() => {
   display: none !important;
 }
 </style>
+
 
