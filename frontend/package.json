@@ -15,7 +15,7 @@
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/source-sans-3": "^5.3.0",
     "@fontsource/staatliches": "^5.3.0",
-    "@lucide/vue": "^1.27.0",
+    "@lucide/vue": "^1.31.0",
     "axios": "^1.13.2",
     "d3": "^7.9.0",
     "vue": "^3.5.24",
