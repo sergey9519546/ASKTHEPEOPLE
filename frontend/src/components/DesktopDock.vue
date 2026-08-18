@@ -1,7 +1,7 @@
 <template>
-  <nav class="desktop-dock" aria-label="Workspace launcher">
+  <nav class="desktop-dock" :class="{ "is-collapsed": props.collapsed }" aria-label="Workspace launcher" @click.self="emit("toggle")">
     <div class="dock-heading">
-      <span class="dock-heading-text">Journey</span>
+      <h3 class="dock-heading-text">Journey</h3>
       <span class="dock-heading-note">Sequence only</span>
     </div>
 
@@ -16,7 +16,8 @@
             'is-unavailable': !isAvailable(app),
           }"
           :aria-current="isActive(app) ? 'step' : undefined"
-          :disabled="!isAvailable(app) && !isOpen(app)"
+          :aria-disabled="!isAvailable(app) && !isOpen(app)"
+          :aria-expanded="isOpen(app)"
           :title="availabilityHint(app)"
           @click="launch(app)"
         >
@@ -33,7 +34,7 @@
     </ul>
 
     <div class="dock-heading dock-heading-system">
-      <span class="dock-heading-text">System</span>
+      <h3 class="dock-heading-text">System</h3>
     </div>
 
     <ul class="dock-apps dock-apps-system" role="list">
@@ -68,6 +69,8 @@ import { clearState } from "../composables/useWorkspaceState.js";
 import { toast } from "../utils/toast.js";
 
 const router = useRouter();
+const props = defineProps({ collapsed: Boolean });
+const emit = defineEmits(["toggle"]);
 
 const isOpen = (app) => Boolean(windowForApp(app.id));
 const isActive = (app) => {
@@ -108,11 +111,34 @@ function startOver() {
 </script>
 
 <style scoped>
+.desktop-dock.is-collapsed {
+  width: var(--dock-collapsed-width, 3rem);
+  min-width: 3rem;
+  overflow: hidden;
+}
+.desktop-dock.is-collapsed .dock-heading,
+.desktop-dock.is-collapsed .dock-heading-system,
+.desktop-dock.is-collapsed .dock-title,
+.desktop-dock.is-collapsed .dock-state,
+.desktop-dock.is-collapsed .dock-heading-note {
+  display: none;
+}
+.desktop-dock.is-collapsed .dock-app {
+  grid-template-columns: 2.6rem;
+  justify-content: center;
+  border-left: 0;
+  padding: var(--space-1);
+}
+.desktop-dock.is-collapsed .dock-code {
+  font-size: 0.55rem;
+  opacity: 1;
+  color: var(--attention) !important;
+}
 .desktop-dock {
   display: flex;
   flex-direction: column;
-  width: 15rem;
-  min-width: 15rem;
+  width: var(--dock-width);
+  min-width: var(--dock-width);
   overflow-y: auto;
   border-right: 1px solid var(--line-dark);
   background: var(--ink-deep);
@@ -122,8 +148,8 @@ function startOver() {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.85rem 1rem 0.4rem;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-1);
   border-bottom: 1px solid var(--line-dark);
 }
 
@@ -150,7 +176,7 @@ function startOver() {
   display: flex;
   flex-direction: column;
   margin: 0;
-  padding: 0.4rem 0;
+  padding: var(--space-1) 0;
   list-style: none;
 }
 
@@ -162,10 +188,10 @@ function startOver() {
   display: grid;
   grid-template-columns: 2.6rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   width: 100%;
-  min-height: 2.8rem;
-  padding: 0.4rem 1rem;
+  min-height: var(--space-7);
+  padding: var(--space-1) var(--space-4);
   border: 0;
   border-left: 3px solid transparent;
   border-radius: 0;
@@ -238,7 +264,30 @@ function startOver() {
 }
 
 @media (max-width: 860px) {
-  .desktop-dock {
+  .desktop-dock.is-collapsed {
+  width: var(--dock-collapsed-width, 3rem);
+  min-width: 3rem;
+  overflow: hidden;
+}
+.desktop-dock.is-collapsed .dock-heading,
+.desktop-dock.is-collapsed .dock-heading-system,
+.desktop-dock.is-collapsed .dock-title,
+.desktop-dock.is-collapsed .dock-state,
+.desktop-dock.is-collapsed .dock-heading-note {
+  display: none;
+}
+.desktop-dock.is-collapsed .dock-app {
+  grid-template-columns: 2.6rem;
+  justify-content: center;
+  border-left: 0;
+  padding: var(--space-1);
+}
+.desktop-dock.is-collapsed .dock-code {
+  font-size: 0.55rem;
+  opacity: 1;
+  color: var(--attention) !important;
+}
+.desktop-dock {
     flex-direction: row;
     width: 100%;
     min-width: 0;
@@ -256,15 +305,15 @@ function startOver() {
   .dock-apps,
   .dock-apps-system {
     flex-direction: row;
-    padding: 0.3rem 0.4rem;
+    padding: var(--space-1) var(--space-1);
     border: 0;
   }
 
   .dock-app {
     grid-template-columns: auto;
     width: auto;
-    min-height: 2.4rem;
-    padding: 0.35rem 0.6rem;
+    min-height: var(--space-6);
+    padding: var(--space-1) var(--space-2);
     border-left: 0;
     border-bottom: 2px solid transparent;
   }
@@ -275,7 +324,8 @@ function startOver() {
   }
 
   .dock-title {
-    font-size: 0.7rem;
+    font-size: var(--text-sm);
   }
 }
 </style>
+

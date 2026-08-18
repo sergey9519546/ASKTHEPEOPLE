@@ -39,22 +39,21 @@
 
     <nav ref="workflowPath" class="workflow-path" aria-label="Scenario workflow">
       <a class="skip-link" href="#main-content">Skip to main content</a>
-      <div
+      <button
         v-for="(step, index) in stepNames"
         :key="step"
         :ref="(element) => setWorkflowStepRef(element, index)"
         class="workflow-path-step"
         :class="{ current: currentStep === index + 1, complete: currentStep > index + 1, clickable: index + 1 <= maxCompletedStep }"
         :aria-current="currentStep === index + 1 ? 'step' : undefined"
-        :tabindex="index + 1 <= maxCompletedStep ? 0 : -1"
-        role="button"
+        :aria-disabled="index + 1 > maxCompletedStep"
         :aria-label="`Step ${index + 1}: ${step}`"
+        type="button"
         @click="jumpToStep(index + 1)"
-        @keydown.enter.space.prevent="jumpToStep(index + 1)"
       >
         <span>{{ String(index + 1).padStart(2, "0") }}</span>
         <strong>{{ step }}</strong>
-      </div>
+      </button>
       <p><strong>0 human respondents</strong> · generated scenarios, not a forecast</p>
     </nav>
     <label class="mobile-workflow-picker">
@@ -903,7 +902,7 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 860px) {
   .workflow-path {
     grid-template-columns: repeat(5, minmax(6rem, 1fr));
   }
@@ -915,7 +914,7 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .content-area.view-graph .panel-wrapper.right,
   .content-area.view-workbench .panel-wrapper.left {
     display: none !important;
@@ -930,7 +929,7 @@ onUnmounted(() => {
   }
 }
 
-@media (max-width: 620px) {
+@media (max-width: 560px) {
   .workspace-error {
     align-items: stretch;
     flex-direction: column;

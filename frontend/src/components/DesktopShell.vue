@@ -4,7 +4,7 @@
     <DesktopMasthead />
 
     <div class="desktop-main">
-      <DesktopDock />
+      <DesktopDock :collapsed="dockCollapsed" @toggle="dockCollapsed = !dockCollapsed" />
 
       <main
         class="desktop-surface"
@@ -51,6 +51,7 @@ const route = useRoute();
 const router = useRouter();
 
 const isNarrow = ref(false);
+  const dockCollapsed = ref(true);
 let syncing = false;
 let narrowQuery = null;
 
