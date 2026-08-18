@@ -1,5 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "python backend/scripts/block_legacy_railway_deploy.py",
+  "buildCommand": "npm --prefix frontend run build",
   "outputDirectory": "frontend/dist"
 }

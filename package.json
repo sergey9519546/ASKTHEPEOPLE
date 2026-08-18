@@ -10,7 +10,7 @@
     "backend": "cd backend && uv run python run.py",
     "backend:test": "cd backend && .\\.venv\\Scripts\\pytest -q",
     "frontend": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend run build",
+    "build": "python backend/scripts/guard_vercel_build.py && npm --prefix frontend run build",
     "test": "npm --prefix frontend test --silent",
     "verify": "npm run test && npm run build && npm run backend:test"
   },
