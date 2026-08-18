@@ -1,5 +1,14 @@
 <template>
-  <nav class="desktop-dock" :class="{ "is-collapsed": props.collapsed }" aria-label="Workspace launcher" @click.self="emit("toggle")">
+  <nav
+    class="desktop-dock"
+    :class="{ 'is-collapsed': props.collapsed }"
+    aria-label="Workspace launcher"
+    :aria-expanded="!props.collapsed"
+    :title="props.collapsed ? 'Expand workspace spine (click, Enter, or Space)' : 'Collapse workspace spine (click, Enter, or Space)'"
+    tabindex="0"
+    @click.self="emit('toggle')"
+    @keydown.self="onToggleKey($event)"
+  >
     <div class="dock-heading">
       <h3 class="dock-heading-text">Journey</h3>
       <span class="dock-heading-note">Sequence only</span>
@@ -100,6 +109,13 @@ function launch(app) {
     return;
   }
   openApp(app.id, route);
+}
+
+function onToggleKey(event) {
+  if (event.key === "Enter" || event.key === " " || event.code === "Space") {
+    event.preventDefault();
+    emit("toggle");
+  }
 }
 
 function startOver() {
@@ -328,4 +344,5 @@ function startOver() {
   }
 }
 </style>
+
 
