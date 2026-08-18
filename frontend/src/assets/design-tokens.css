@@ -1021,3 +1021,11 @@ h3[id],
 #main-content {
   scroll-margin-top: 4rem;
 }
+
+
+/* Typography pairing: Archivo Narrow + Source Sans 3 (design decision applied) */
+@import ""@fontsource/archivo-narrow/latin.css"";
+@import ""@fontsource/source-sans-3/latin.css"";
+
+
+@media (max-width: 320px) { html { min-width: 20rem; font-size: 14px; } body { overflow-x: hidden; } .desktop-masthead { flex-direction: column; min-height: auto; } .masthead-lockup { min-width: 0; padding: 0.5rem; } .desktop-dock { width: 100% !important; flex-direction: row !important; } .step-card { padding: 0.75rem; } .stats-grid { grid-template-columns: 1fr; } }

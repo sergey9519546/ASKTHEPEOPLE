@@ -78,9 +78,9 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .desktop-masthead {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.7fr) minmax(18rem, 1fr) minmax(15rem, 0.9fr);
   align-items: stretch;
-  gap: 0;
   min-height: 3.4rem;
   border-bottom: 1px solid var(--line-dark);
   background: var(--ink-deep);
@@ -230,3 +230,5 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+
+
