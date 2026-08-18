@@ -7,7 +7,7 @@ GRAPH_RECORD_INTERPRETATION = (
     "Model-generated extraction from submitted or pre-existing graph material; "
     "not independently verified and not evidence of causality."
 )
-SYNTHETIC_OUTPUT_DISCLOSURE_TEXT = (
+GENERATED_OUTPUT_DISCLOSURE_TEXT = (
     "SYNTHETIC SCENARIOS · 0 HUMAN RESPONDENTS · NO POPULATION REPRESENTED · "
     "NOT PUBLIC OPINION · NOT A CAUSAL ESTIMATE · NOT CALIBRATED · "
     "NOT A FORECAST"

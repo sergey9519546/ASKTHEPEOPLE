@@ -3,7 +3,7 @@ from app.services.report_agent import (
     PLAN_SYSTEM_PROMPT,
     REACT_OBSERVATION_TEMPLATE,
     SECTION_SYSTEM_PROMPT_TEMPLATE,
-    SYNTHETIC_REPORT_DISCLOSURE,
+    GENERATED_REPORT_DISCLOSURE,
     Report,
     ReportAgent,
     ReportOutline,
@@ -15,7 +15,7 @@ from app.services.report_evidence import _evidence_metadata
 
 
 def test_report_disclosure_is_explicit_and_non_predictive():
-    disclosure = SYNTHETIC_REPORT_DISCLOSURE.lower()
+    disclosure = GENERATED_REPORT_DISCLOSURE.lower()
     assert "human respondents: 0" in disclosure
     assert "evidence type: synthetic" in disclosure
     assert "not a survey" in disclosure
@@ -28,7 +28,7 @@ def test_report_disclosure_is_explicit_and_non_predictive():
         summary="Possible paths",
         sections=[ReportSection(title="Path A", content="Generated activity")],
     ).to_markdown()
-    assert SYNTHETIC_REPORT_DISCLOSURE in markdown
+    assert GENERATED_REPORT_DISCLOSURE in markdown
 
 
 def test_report_serializers_keep_structured_truth_when_content_is_detached():

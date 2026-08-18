@@ -21,7 +21,7 @@ from app.services.claim_boundary import (
     synthetic_output_disclosure,
     fictional_profile_disclosure,
     synthetic_activity_disclosure,
-    SYNTHETIC_OUTPUT_DISCLOSURE_TEXT,
+    GENERATED_OUTPUT_DISCLOSURE_TEXT,
 )
 
 
@@ -288,11 +288,11 @@ def test_export_disclosure_blocks(eval_results_path):
     print("\nTesting export disclosure blocks...")
     
     # Test that disclosure text is defined and non-empty
-    assert SYNTHETIC_OUTPUT_DISCLOSURE_TEXT, "Disclosure text must be defined"
-    assert len(SYNTHETIC_OUTPUT_DISCLOSURE_TEXT) > 50, "Disclosure text must be substantial"
+    assert GENERATED_OUTPUT_DISCLOSURE_TEXT, "Disclosure text must be defined"
+    assert len(GENERATED_OUTPUT_DISCLOSURE_TEXT) > 50, "Disclosure text must be substantial"
     
     # Check that disclosure contains key terms
-    disclosure_lower = SYNTHETIC_OUTPUT_DISCLOSURE_TEXT.lower()
+    disclosure_lower = GENERATED_OUTPUT_DISCLOSURE_TEXT.lower()
     required_terms = [
         'synthetic',
         '0 human respondents',
@@ -305,8 +305,8 @@ def test_export_disclosure_blocks(eval_results_path):
         if term not in disclosure_lower:
             missing_terms.append(term)
     
-    print(f"\n  Disclosure text: '{SYNTHETIC_OUTPUT_DISCLOSURE_TEXT[:80]}...'")
-    print(f"  Length: {len(SYNTHETIC_OUTPUT_DISCLOSURE_TEXT)} characters")
+    print(f"\n  Disclosure text: '{GENERATED_OUTPUT_DISCLOSURE_TEXT[:80]}...'")
+    print(f"  Length: {len(GENERATED_OUTPUT_DISCLOSURE_TEXT)} characters")
     print(f"  Required terms found: {len(required_terms) - len(missing_terms)}/{len(required_terms)}")
     
     if missing_terms:
@@ -314,7 +314,7 @@ def test_export_disclosure_blocks(eval_results_path):
     
     # Save results
     results = {
-        "disclosure_text_length": len(SYNTHETIC_OUTPUT_DISCLOSURE_TEXT),
+        "disclosure_text_length": len(GENERATED_OUTPUT_DISCLOSURE_TEXT),
         "disclosure_terms_complete": len(missing_terms) == 0,
         "disclosure_missing_terms": missing_terms
     }

@@ -44,7 +44,7 @@ from .zep_tools import (
 
 logger = get_logger('askthepeople.report_agent')
 
-SYNTHETIC_REPORT_DISCLOSURE = (
+GENERATED_REPORT_DISCLOSURE = (
     "**Human respondents: 0. Evidence type: synthetic.** "
     "This report describes possible paths generated inside a model-driven "
     "scenario. It is not a survey, measure of public opinion, forecast, "
@@ -59,7 +59,7 @@ GRAPH_RETRIEVAL_PROVENANCE_NOTICE = (
     "source trace.\n\n"
 )
 OBSERVATION_RETRIEVAL_PROVENANCE_NOTICE = (
-    "[PROVENANCE: SYNTHETIC_OBSERVATION] These records were generated inside "
+    "[PROVENANCE: GENERATED_OBSERVATION] These records were generated inside "
     "this simulation run. Human respondents: 0. They are not source evidence "
     "or observed behavior.\n\n"
 )
@@ -479,7 +479,7 @@ class ReportOutline:
         """Convert to Markdown format"""
         md = f"# {self.title}\n\n"
         md += f"> {self.summary}\n\n"
-        md += f"> {SYNTHETIC_REPORT_DISCLOSURE}\n\n"
+        md += f"> {GENERATED_REPORT_DISCLOSURE}\n\n"
         for section in self.sections:
             md += section.to_markdown()
         return md
@@ -634,18 +634,32 @@ You write synthetic scenario-exploration reports. You can inspect the generated
 behavior, speech, and interactions of every synthetic Agent in one configured
 simulation run.
 
-[Non-Negotiable Truth Boundary]
-- Human respondents: 0.
-- Agents, posts, comments, actions, and interviews are generated, not observed people.
-- The run is not a survey, focus group, measure of public opinion, forecast,
-  prediction, causal estimate, digital twin, or calibrated likelihood model.
-- A large synthetic population is not a representative sample.
-- Generated consistency, frequency, or metrics do not establish real-world
-  probability, prevalence, confidence, or evidence strength.
-- Refer to "possible paths," "generated actors," and "within this run."
-- Never write that people, the public, or a demographic group will believe or do
-  something. Instead write that a generated persona did something and turn it
-  into a hypothesis to validate with real people.
+[Your Task — Quality First]
+Create a rigorous scenario-exploration report. Rigor here means:
+- Every plausible path receives explicit exposure, including paths that weaken
+  the central scenario or expose contradictions in the starting conditions.
+- Source material is treated as context, not confirmation: surface where the
+  source is strong, where it is thin, and where the interpretation is contested.
+- Platform differences are explored mechanistically — explain what in the
+  platform rules or configuration produced divergent outcomes, not merely that
+  they diverged.
+- Uncertainty is named with specificity: identify which stakeholder is missing,
+  which assumption is doing the most work, and what evidence would weaken or
+  eliminate each path.
+- Each path ends with a testable hypothesis about what real-human research
+  should investigate next.
+
+[Epistemic Boundary]
+This run is synthetic. Human respondents: 0. Agents, posts, comments, actions,
+and interviews are generated inside a configured model, not observed people.
+The run is not a survey, focus group, measure of public opinion, forecast,
+prediction, causal estimate, digital twin, or calibrated likelihood model.
+Generated consistency, frequency, or internal metrics do not establish real-world
+probability, prevalence, or evidence strength.
+Refer to "possible paths," "generated actors," and "within this run."
+Never write that people, the public, or a demographic group will believe or do
+something. Instead write that a generated persona did something and turn it
+into a hypothesis to validate with real people.
 
 [Evidence Classes]
 Keep these separate:
@@ -659,14 +673,6 @@ Keep these separate:
    documented; do not invent it.
 If provenance is unclear, state "origin unclear" rather than upgrading a record
 to a source fact.
-
-[Your Task]
-Create a concise scenario report that:
-1. Restates the decision, source basis, and important assumptions.
-2. Maps multiple possible paths without ranking them by likelihood.
-3. Describes what emerged inside this run, including platform differences.
-4. Makes uncertainty, missing stakeholders, weak support, and contradictions visible.
-5. Converts paths into questions and evidence needs for real-human validation.
 
 [Required Sections]
 - Decision, Sources, and Assumptions
@@ -722,7 +728,71 @@ Scenario Question and Injected Conditions: {simulation_requirement}
 Current Section to write: {section_title}
 
 ===============================================================
-[Truth Boundary]
+[Quality Standard — What Makes This Section Useful]
+===============================================================
+
+A rigorous section does three things:
+1. Surfaces what the simulation actually shows — not just that an event
+   occurred but what mechanism produced it and why it is surprising or
+   informative for the decision.
+2. Exposes limits and tensions — thin source coverage, contradictory paths,
+   stakeholders who have not yet been modeled, assumptions on which the
+   section's conclusions most heavily rest.
+3. Connects to what needs to be tested externally — end the section with a
+   specific research question that a real participant study could answer.
+
+Weak sections list events without interpreting them. Strong sections explain
+why the events matter for the decision and where the reasoning is most
+fragile. Prefer one well-grounded insight over three surface-level summaries.
+
+===============================================================
+[Most Important Rules - Must Follow]
+===============================================================
+
+1. [Ground every run-specific claim in retrieved records]
+   - All simulation claims must come from tool results. Forbidden to use
+     your own knowledge or general-domain reasoning to write report content
+     about the simulated scenario.
+   - Call tools at least 3 times per section (maximum 5).
+
+2. [Interpret, do not just list]
+   - Describe what a retrieved record implies, not merely that it exists.
+   - Identify causal or structural mechanisms when the retrieval supports
+     them: "X triggered Y because Z" rather than "X and Y both occurred."
+
+3. [Surface weakness explicitly]
+   - If source coverage is thin, say so directly.
+   - If two retrieved records contradict each other, name the contradiction.
+   - If a path depends on an assumption that has not been checked, label it
+     an assumption and explain which evidence would falsify it.
+
+4. [Label Generated Excerpts]
+   - Agent speech and behavior are synthetic observations.
+   - Display excerpts as labeled generated records, for example:
+     > Generated Agent 12: "generated content..."
+   - Never attribute generated words to a real group or named person.
+
+5. [Language Consistency - Labeled Excerpts Use the Report Language]
+   - Content returned by tools may include English or mixed Chinese-English expressions.
+   - Even if simulation requirements and original materials are in Chinese, the report must be written entirely in English for this localized version.
+   - Ensure all labeled excerpts are in clear English. If a record is Chinese, translate it to English.
+   - Maintain original meaning during translation, ensuring natural flow.
+   - This rule applies to both the main text and labeled blockquotes (">" format).
+
+6. [Separate Evidence Classes]
+   - Clearly distinguish source facts, configuration assumptions, synthetic
+     observations, internal metrics, and model interpretation.
+   - A graph record is not automatically a verified source fact.
+   - Do not add information that does not exist in the simulation
+   - If provenance or support is lacking, state so truthfully.
+
+7. [Convert paths into testable research questions]
+   - Each plausible path described in the section should surface at least one
+     question that real-human research could investigate.
+   - Do not rank paths by likelihood. Describe their relative conditions.
+
+===============================================================
+[Epistemic Boundary]
 ===============================================================
 
 - Human respondents: 0.
@@ -735,40 +805,6 @@ Current Section to write: {section_title}
 - Use conditional language: "within this run," "one possible path," and "a
   hypothesis to validate."
 - Do not contradict or dilute the disclosure inserted into the report header.
-
-===============================================================
-[Most Important Rules - Must Follow]
-===============================================================
-
-1. [Use Tools to Inspect the Synthetic Run]
-   - All run-specific claims must come from retrieved records.
-   - Forbidden to use your own knowledge to write report content
-   - Call tools at least 3 times per section (maximum 5).
-
-2. [Label Generated Excerpts]
-   - Agent speech and behavior are synthetic observations.
-   - Display excerpts as labeled generated records, for example:
-     > Generated Agent 12: "generated content..."
-   - Never attribute generated words to a real group or named person.
-
-3. [Language Consistency - Labeled Excerpts Use the Report Language]
-   - Content returned by tools may include English or mixed Chinese-English expressions.
-   - Even if simulation requirements and original materials are in Chinese, the report must be written entirely in English for this localized version.
-   - Ensure all labeled excerpts are in clear English. If a record is Chinese, translate it to English.
-   - Maintain original meaning during translation, ensuring natural flow.
-   - This rule applies to both the main text and labeled blockquotes (">" format).
-
-4. [Separate Evidence Classes]
-   - Clearly distinguish source facts, configuration assumptions, synthetic
-     observations, internal metrics, and model interpretation.
-   - A graph record is not automatically a verified source fact.
-   - Do not add information that does not exist in the simulation
-   - If provenance or support is lacking, state so truthfully.
-
-5. [Write for Validation]
-   - Describe multiple possible paths without ranking likelihood.
-   - Name missing stakeholders and alternate explanations.
-   - End with questions or external evidence needed from real people.
 
 ===============================================================
 [[WARN] Formatting Specification - Extremely Important!]
@@ -1090,12 +1126,15 @@ class ReportAgent:
         self.console_logger: Optional[ReportConsoleLogger] = None
         self._generation_lease: ReportGenerationLease | None = None
 
-        # Load pre-computed simulation metrics (may be None if not yet computed)
+        # Load pre-computed simulation metrics (may be None if not yet computed).
+        # Always initialise the attribute so downstream code can read it even
+        # when the import or load fails.
+        self._simulation_metrics: Optional[Dict[str, Any]] = None
         try:
             from .validation_engine import ValidationEngine
-            self._simulation_metrics: Optional[Dict[str, Any]] = ValidationEngine.load_metrics(simulation_id)
+            self._simulation_metrics = ValidationEngine.load_metrics(simulation_id)
         except Exception:
-            self._simulation_metrics = None
+            pass
 
         logger.info(f"ReportAgent initialized: graph_id={graph_id}, simulation_id={simulation_id}")
 
@@ -1562,6 +1601,71 @@ class ReportAgent:
                 sections=[],
             ))
     
+    def _build_metrics_context(self) -> str:
+        """Return a formatted metrics block for injection into section-generation prompts.
+
+        Returns an empty string when no metrics are available so callers can
+        unconditionally concatenate. The block frames metrics as within-run
+        descriptive diagnostics, not as validated evidence.
+
+        Uses ``getattr`` because some test fixtures construct ``ReportAgent``
+        via ``__new__`` and skip ``__init__`` entirely.
+        """
+        metrics = getattr(self, "_simulation_metrics", None)
+        if not metrics:
+            return ""
+        m = self._simulation_metrics
+        return (
+            "\n\n## Within-Run Generated Interaction Metrics\n"
+            "These are descriptive calculations over synthetic actions only. "
+            "They do not measure people, constitute external validation, or "
+            "provide calibrated evidence. Use them to characterise what "
+            "happened inside this run, not to assert anything about the "
+            "real world.\n"
+            f"- Network modularity Q (polarization label): {m.get('polarization_index', 0):.3f}\n"
+            f"- Gini of generated action counts: {m.get('engagement_gini', 0):.3f}\n"
+            f"- Within-community share of generated interaction edges: "
+            f"{m.get('echo_chamber_score', 0):.3f}\n"
+            f"- Generated communities detected: {m.get('community_count', 'N/A')}\n"
+            f"- Generated actions counted: {m.get('total_actions', 0)}\n"
+            f"- Distinct generated agents active: {m.get('total_agents', 'N/A')}\n"
+        )
+
+    def _validate_section_quality(
+        self,
+        content: str,
+        section_title: str,
+        tool_calls_count: int,
+    ) -> tuple[bool, str]:
+        """Lightweight quality gate for generated section text.
+
+        Checks for minimum substance, not epistemic compliance (which is
+        already handled by the claim boundary and truth rail). Returns
+        ``(passed, reason)`` where ``reason`` is empty on success or
+        describes the failure.
+        """
+        cleaned = (content or "").strip()
+        if len(cleaned) < 120:
+            return (
+                False,
+                "section_content_too_short: "
+                f"{len(cleaned)} characters; minimum 120 required",
+            )
+        if tool_calls_count < 2:
+            return (
+                False,
+                "insufficient_retrieval: "
+                f"only {tool_calls_count} tool call(s); at least 2 required",
+            )
+        paragraphs = [p.strip() for p in cleaned.split("\n\n") if p.strip()]
+        if len(paragraphs) < 2:
+            return (
+                False,
+                "insufficient_structure: "
+                "section must contain at least 2 non-empty paragraphs",
+            )
+        return True, ""
+
     def _generate_section_react(
         self, 
         section: ReportSection,
@@ -1602,7 +1706,7 @@ class ReportAgent:
             simulation_requirement=self.simulation_requirement,
             section_title=section.title,
             tools_description=self._get_tools_description(),
-        )
+        ) + self._build_metrics_context()
 
         # Build user prompt - each completed chapter passes a maximum of 4000 characters
         if previous_sections:
@@ -1630,6 +1734,7 @@ class ReportAgent:
         max_iterations = 5  # Max iteration rounds
         min_tool_calls = 3  # Min tool calls required
         conflict_retries = 0  # Sequential conflicts between tool call and Final Answer
+        quality_retries = 0  # Section-quality gate retries
         used_tools = set()  # Record called tool names
         all_tools = {
             "insight_forge",
@@ -1756,6 +1861,27 @@ class ReportAgent:
                 final_answer = strip_reasoning_scaffold(
                     response.split("Final Answer:")[-1]
                 )
+
+                passed, reason = self._validate_section_quality(
+                    final_answer, section.title, tool_calls_count
+                )
+                if (
+                    not passed
+                    and quality_retries < 2
+                    and tool_calls_count < min_tool_calls
+                ):
+                    quality_retries += 1
+                    messages.append({"role": "assistant", "content": response})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "[Quality Check] This section needs improvement: "
+                            f"{reason}. Please revise and expand it before "
+                            "outputting Final Answer."
+                        ),
+                    })
+                    continue
+
                 logger.info(
                     "Report section %s generation complete (tool_calls=%s)",
                     section_index,
@@ -1868,6 +1994,26 @@ class ReportAgent:
             # preamble; scrub before it becomes the published section.
             final_answer = strip_reasoning_scaffold(response)
 
+            passed, reason = self._validate_section_quality(
+                final_answer, section.title, tool_calls_count
+            )
+            if (
+                not passed
+                and quality_retries < 2
+                and tool_calls_count < min_tool_calls
+            ):
+                quality_retries += 1
+                messages.append({"role": "assistant", "content": response})
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "[Quality Check] This section needs improvement: "
+                        f"{reason}. Please revise and expand it before "
+                        "outputting Final Answer."
+                    ),
+                })
+                continue
+
             if self.report_logger:
                 self.report_logger.log_section_content(
                     section_title=section.title,
@@ -1905,7 +2051,16 @@ class ReportAgent:
             # Forced closure without the marker: the whole response, preamble
             # included, used to be adopted as the section verbatim.
             final_answer = strip_reasoning_scaffold(response)
-        
+
+        passed, reason = self._validate_section_quality(
+            final_answer, section.title, tool_calls_count
+        )
+        if not passed:
+            logger.warning(
+                "Report section %s failed quality gate at forced closure: %s",
+                section_index, reason,
+            )
+
         # Record section content generation complete log
         if self.report_logger:
             self.report_logger.log_section_content(
@@ -2732,7 +2887,7 @@ class ReportManager:
         # Build report header
         md_content = f"# {outline.title}\n\n"
         md_content += f"> {outline.summary}\n\n"
-        md_content += f"> {SYNTHETIC_REPORT_DISCLOSURE}\n\n"
+        md_content += f"> {GENERATED_REPORT_DISCLOSURE}\n\n"
         md_content += f"---\n\n"
         
         # Read all section files in order

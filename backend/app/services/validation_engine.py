@@ -329,9 +329,6 @@ class ValidationEngine:
                 "action_count_difference": metrics_b.total_actions - metrics_a.total_actions,
             },
             "descriptive_assessment": assessment,
-            # Kept for compatibility; this is a generated-run diagnostic, not
-            # a strategic recommendation or real-world effect estimate.
-            "strategic_assessment": assessment,
             "interpretation": {
                 "human_respondents": 0,
                 "calibration": "not_calibrated",
