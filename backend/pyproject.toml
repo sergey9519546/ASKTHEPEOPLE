@@ -19,7 +19,7 @@ dependencies = [
     "redis>=5.0.0",
     # Database
     "sqlalchemy>=2.0.0",
-    "alembic>=1.13.0",
+    "alembic>=1.19.1",
     "psycopg[binary]>=3.2.0",  # PostgreSQL driver for SQLAlchemy 2 sync
     # Supabase — Storage + Auth client (Postgres goes through SQLAlchemy/psycopg)
     "supabase>=2.6.0",
@@ -31,14 +31,14 @@ dependencies = [
     # LLM-Related
     "openai>=1.0.0",
     # Zep Cloud
-    "zep-cloud==3.13.0",
+    "zep-cloud==3.27.0",
     # OASIS Social Media Simulation
     "camel-oasis==0.2.5",
     "camel-ai==0.2.78",  # pinned: camel-oasis==0.2.5 requires exactly this version
     # OASIS imports torch directly from its recommendation engine; CPU build explicit
     "torch==2.13.0",
     # OASIS imports SentenceTransformer at module load
-    "sentence-transformers==5.6.1",
+    "sentence-transformers==5.7.0",
     # Security advisory override
     "transformers==5.14.1",
     # MCP server compatibility pin
@@ -70,7 +70,7 @@ explicit = true
 
 [tool.uv]
 override-dependencies = [
-    "sentence-transformers==5.6.1",
+    "sentence-transformers==5.7.0",
     "unstructured; sys_platform == 'never'",
     "pillow>=12.3.0",
     "pytest>=9.1.1,<10",
