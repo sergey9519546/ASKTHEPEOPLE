@@ -15,7 +15,7 @@
     "verify": "npm run test && npm run build && npm run backend:test"
   },
   "devDependencies": {
-    "concurrently": "^10.0.4"
+    "concurrently": "^10.0.5"
   },
   "engines": {
     "node": ">=24.0.0 <25"
