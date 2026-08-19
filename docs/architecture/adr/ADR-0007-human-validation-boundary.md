@@ -57,7 +57,6 @@ synthetic runs with completed human validation.
 ## Project-specific implication (baseline `8b616dc7`)
 
 This ADR is enforced by the
-[`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../../product/PRODUCT_TRUTH_CONTRACT.md)
 truth invariants:
 
 ```text

@@ -36,22 +36,20 @@ behavioral forecast, or substitute for contact with real people.
 
 ## Reading order
 
-1. [`product/PRODUCT_TRUTH_CONTRACT.md`](product/PRODUCT_TRUTH_CONTRACT.md)
-2. [`product/METHODOLOGY.md`](product/METHODOLOGY.md)
-3. [`product/USE_POLICY.md`](product/USE_POLICY.md)
-4. [`architecture/index.md`](architecture/index.md)
-5. [`ai/PROMPT_REGISTRY.md`](ai/PROMPT_REGISTRY.md)
-6. [`security/THREAT_MODEL.md`](security/THREAT_MODEL.md)
-7. [`privacy/DATA_MAP.md`](privacy/DATA_MAP.md)
-8. [`release/ACCEPTANCE.md`](release/ACCEPTANCE.md)
-9. [`release/RUNBOOK.md`](release/RUNBOOK.md)
+1. [`architecture/adr/ADR-0001-product-category-and-truth-contract.md`](architecture/adr/ADR-0001-product-category-and-truth-contract.md) — Product category and truth contract (the separate product/ files were deleted as overcorrected)
+2. [`architecture/index.md`](architecture/index.md)
+3. [`ai/PROMPT_REGISTRY.md`](ai/PROMPT_REGISTRY.md)
+4. [`security/THREAT_MODEL.md`](security/THREAT_MODEL.md)
+5. [`privacy/DATA_MAP.md`](privacy/DATA_MAP.md)
+6. [`release/ACCEPTANCE.md`](release/ACCEPTANCE.md)
+7. [`release/RUNBOOK.md`](release/RUNBOOK.md)
 
 ## Authority hierarchy
 
 When requirements conflict, use this order:
 
 1. Law, contractual obligation, and approved legal advice.
-2. Product Truth Contract and Use Policy.
+2. ADR-0001 (Product Truth Contract) and Use Policy.
 3. Security, privacy, and incident-response requirements.
 4. Methodology and epistemic-integrity requirements.
 5. Release acceptance and accessibility requirements.
@@ -149,11 +147,7 @@ Every production release MUST produce a release-evidence bundle containing:
 
 ### Product
 
-- [Product Truth Contract](product/PRODUCT_TRUTH_CONTRACT.md)
-- [Methodology](product/METHODOLOGY.md)
-- [Use Policy](product/USE_POLICY.md)
-- [Terminology](product/TERMINOLOGY.md)
-- [Success Metrics](product/SUCCESS_METRICS.md)
+- [Product Truth Contract (ADR-0001)](architecture/adr/ADR-0001-product-category-and-truth-contract.md) — Defines product category and truth boundary; the separate product/ files (PRODUCT_TRUTH_CONTRACT, METHODOLOGY, USE_POLICY, TERMINOLOGY, SUCCESS_METRICS) were deleted as they imposed overcorrected restrictions that blocked the simulation engine from pursuing high-fidelity population modeling and forecasting techniques.
 
 ### Design
 

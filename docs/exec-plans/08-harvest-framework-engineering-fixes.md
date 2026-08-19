@@ -50,7 +50,6 @@ synthetic-only positioning.
 ## Authority
 
 This plan is subordinate to:
-- [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md)
 - [`docs/architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md`](../architecture/adr/ADR-0012-canonical-transactional-and-object-persistence.md)
 - [`docs/architecture/adr/ADR-0011-incremental-modernization-over-rewrite.md`](../architecture/adr/ADR-0011-incremental-modernization-over-rewrite.md)
 

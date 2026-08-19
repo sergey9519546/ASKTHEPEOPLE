@@ -471,9 +471,7 @@ in [`docs/exec-plans/`](../exec-plans/README.md):
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL — CoT scrubbing is IMPLEMENTED (ADR-0010); a versioned prompt registry and a single OpenAI-compatible adapter exist; a narrow eval suite passes in CI. Open: most prompts still inlined, model-release gating, failure-mode catalogue, adversarial/sensitivity evals. |
 
 The Product Truth Contract
-([`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md))
 and the Product Truth Claim Block
-([`docs/product/TERMINOLOGY.md`](../product/TERMINOLOGY.md)) outrank every
 implementation detail in this document. Where the implementation and the truth
 contract disagree, the truth contract wins until superseded by an accepted
 ADR.

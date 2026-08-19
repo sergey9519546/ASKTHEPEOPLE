@@ -54,6 +54,4 @@ No profile may claim to represent, measure, predict, or validate any real person
 
 ## References
 
-- [`docs/product/METHODOLOGY.md`](../product/METHODOLOGY.md) — Methodological framework
-- [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md) — Claim boundary and truth invariants
 - [`docs/architecture/index.md`](../architecture/index.md) — System architecture

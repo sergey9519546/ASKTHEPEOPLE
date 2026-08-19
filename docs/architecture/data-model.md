@@ -660,7 +660,6 @@ SYSTEM_METADATA
 
 The closed role vocabulary and all edge semantics are controlled by
 `epistemic-ledger/v2` in
-[`PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md). Canonical
 assertions store one of those exact roles; display labels are not roles.
 
 ### `epistemic_edges`

@@ -493,7 +493,6 @@ documentation examples) is **TARGET**. Gate 5, owned by
   PDF, DOCX, PNG), email templates, share previews, seed data,
   or marketing pages.
 - The Truth Rail and the per-screen contextual statements
-  ([`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md))
   are not yet rendered in the frontend.
 - The disclosure block required by the contract is not
   automatically attached to detached artifacts.
@@ -516,7 +515,6 @@ documentation examples) is **TARGET**. Gate 5, owned by
 ### Terminology enforcement
 
 The terminology linter in
-[`docs/product/TERMINOLOGY.md`](../product/TERMINOLOGY.md) defines
 canonical terms, preferred terms, and prohibited terms. The CI
 linter enforces a subset today. The full coverage is **TARGET**
 and is part of gate 5.

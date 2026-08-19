@@ -418,8 +418,6 @@ Before the simulation engine starts, **ALL** must be ✅:
 
 ## References
 
-- [`docs/product/METHODOLOGY.md`](../product/METHODOLOGY.md) — Methodology §Required decision intake, §Source-material method, §Assumption method, §Critical uncertainties
-- [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md) — Epistemic Ledger forbidden triples
 - [`docs/research/synthetic-decision-lenses.md`](../research/synthetic-decision-lenses.md) — Profile library and approval
 - [`docs/research/scenario-rules.md`](../research/scenario-rules.md) — Participation protocol
 - [`docs/architecture/state-machines.md`](../architecture/state-machines.md) — Preparation state machine

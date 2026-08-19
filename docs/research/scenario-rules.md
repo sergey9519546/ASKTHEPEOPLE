@@ -488,8 +488,6 @@ Every simulation artifact carries immutable provenance:
 
 ## References
 
-- [`docs/product/METHODOLOGY.md`](../product/METHODOLOGY.md) — Methodological framework
-- [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md) — Claim boundary and truth invariants
 - [`docs/research/synthetic-decision-lenses.md`](../research/synthetic-decision-lenses.md) — Profile library
 - [`docs/architecture/state-machines.md`](../architecture/state-machines.md) — Four independent state machines
 - [`backend/app/services/simulation_config_generator.py`](../../backend/app/services/simulation_config_generator.py) — Config generation

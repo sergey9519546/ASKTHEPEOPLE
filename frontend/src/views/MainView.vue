@@ -442,6 +442,7 @@ const handleNewProject = async () => {
     const response = await generateOntology(formData);
     if (!response.success) {
       error.value = response.error || "The source material could not be read.";
+      clearPendingUpload();
       return;
     }
 
@@ -455,15 +456,29 @@ const handleNewProject = async () => {
     startPollingOntologyTask(response.data.task_id);
   } catch (caughtError) {
     error.value = caughtError.message || "The source material could not be uploaded.";
+    clearPendingUpload();
   } finally {
     loading.value = false;
   }
 };
 
 const startPollingOntologyTask = (taskId) => {
-  stopOntologyPolling();
-  pollOntologyTask(taskId);
-  ontologyPollTimer = setInterval(() => pollOntologyTask(taskId), 3000);
+  stopPollingOntologyTask();
+  const startTime = Date.now();
+  const TIMEOUT_MS = 5 * 60 * 1000;
+
+  const poll = async () => {
+    if (Date.now() - startTime > TIMEOUT_MS) {
+      stopPollingOntologyTask();
+      error.value = "Ontology generation timed out after 5 minutes.";
+      loading.value = false;
+      return;
+    }
+    await pollOntologyTask(taskId);
+  };
+
+  poll();
+  ontologyPollTimer = setInterval(poll, 3000);
 };
 
 const stopOntologyPolling = () => {

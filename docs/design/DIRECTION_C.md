@@ -804,7 +804,6 @@ is **TARGET**. Owned by `askthepeople-frontend-steward`.
   remain **not yet rendered** in the frontend. The text
   disclosures live in
   [`README.md:9-12`](../../README.md) and
-  [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md).
 - The route-list / map parity test required by ADR-0006 is
   missing. There is no automated check that every node, edge,
   and action in the visual map has a corresponding list entry.

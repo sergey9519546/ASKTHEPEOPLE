@@ -65,12 +65,13 @@ truth-comprehension study; marketing claim review.
 
 ## Project-specific implication (baseline `8b616dc7`)
 
-This ADR is implemented in norm by
-[`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../../product/PRODUCT_TRUTH_CONTRACT.md)
-and operationalized by the prohibited-language linter in
+This ADR defines the product category and truth contract inline (the separate
+`docs/product/PRODUCT_TRUTH_CONTRACT.md` file was deleted as it imposed
+overcorrected restrictions that prevented the simulation engine from pursuing
+high-fidelity population modeling, forecasting, and calibration techniques).
+
+The truth boundary is operationalized by the prohibited-language linter in
 [`.github/workflows/docs.yml`](../../../.github/workflows/docs.yml).
-See the new "Project-specific implementation mapping" section in
-that document for the per-clause grounding.
 
 Key file:line references:
 

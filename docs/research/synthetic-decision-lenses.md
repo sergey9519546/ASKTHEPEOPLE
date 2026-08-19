@@ -548,8 +548,6 @@ The profile's `constraints`, `accessConditions`, `incentives`, `switchingCosts`,
 
 ## References
 
-- [`docs/product/METHODOLOGY.md`](../product/METHODOLOGY.md) — Generated profile schema and design rules
-- [`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md) — Claim boundary and truth invariants
 - [`docs/architecture/span-verified-trait-inference.md`](../architecture/span-verified-trait-inference.md) — Trait inference mechanics
 - [`backend/app/services/profile_validators.py`](../../backend/app/services/profile_validators.py) — Enforcement implementation
 - [`backend/app/services/oasis_profile_generator.py`](../../backend/app/services/oasis_profile_generator.py) — Profile-to-OASIS conversion

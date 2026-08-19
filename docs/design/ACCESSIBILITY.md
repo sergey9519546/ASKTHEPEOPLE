@@ -279,7 +279,6 @@ test program**. Gate 1 + gate 5, owned by
   [`adr/ADR-0006-route-map-list-parity.md`](../architecture/adr/ADR-0006-route-map-list-parity.md)
   is not yet rendered.
 - The Truth Rail and the per-screen contextual statements
-  ([`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md))
   are not yet rendered in the frontend.
 - The disclosure block required by the contract is not
   automatically attached to exports, social cards, or share

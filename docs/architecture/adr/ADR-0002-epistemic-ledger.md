@@ -66,7 +66,6 @@ serialization tests; migration reconciliation report.
 The Epistemic Ledger is **not yet implemented**. See
 [`docs/architecture/data-model.md` §"Epistemic Ledger — TARGET"](../data-model.md)
 for the per-aggregate gap and
-[`docs/product/PRODUCT_TRUTH_CONTRACT.md` §"Epistemic Ledger"](../../product/PRODUCT_TRUTH_CONTRACT.md)
 for the origin types, epistemic roles, and allowed/prohibited
 relationships that the data model must enforce.
 
@@ -75,7 +74,6 @@ The current closest analogue is the `report_evidence` service
 which carries a per-source-type evidence score. That score is a
 heuristic by source type, NOT a calibrated confidence or a citation,
 and is acknowledged as such in
-[`docs/product/SUCCESS_METRICS.md`](../../product/SUCCESS_METRICS.md).
 
 Reaching the ledger requires:
 

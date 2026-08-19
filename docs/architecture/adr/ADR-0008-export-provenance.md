@@ -82,7 +82,6 @@ submit:
 and receive a CSV under the ASKTHEPEOPLE wordmark. The server cannot
 prove those rows originated from the referenced simulation. The fields
 `respondent_id` and `evidence_score` are also the exact terms the
-[`docs/product/TERMINOLOGY.md`](../../product/TERMINOLOGY.md) lexicon
 prohibits in public APIs.
 
 ### Required correction (per audit)
@@ -111,7 +110,6 @@ The server MUST:
 ### Disclosure-block requirement
 
 The Truth Rail disclosure block (see
-[`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../../product/PRODUCT_TRUTH_CONTRACT.md)
 §"Truth-preserving detached artifacts") MUST be rendered on every
 exported file. CSV MUST add it as a fixed footer row; JSON MUST add it
 as a top-level `_disclosure` field; PDF and DOCX MUST add a header and a

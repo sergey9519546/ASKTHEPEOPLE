@@ -224,7 +224,6 @@ regression test. Gate 5 is owned by `askthepeople-ai-eval-steward`.
   outputs. The doc's deterministic truth and terminology
   validators are missing.
 - The Truth Rail and the per-screen contextual statements
-  ([`docs/product/PRODUCT_TRUTH_CONTRACT.md`](../product/PRODUCT_TRUTH_CONTRACT.md))
   are not yet rendered in `frontend/src/`. The frontend is a
   Vue 3 + Vite + D3 application; the Truth Rail rendering is
   gate 5.

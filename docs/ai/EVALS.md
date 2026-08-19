@@ -473,7 +473,6 @@ Gate 5 is owned by `askthepeople-ai-eval-steward`.
 - `claim_boundary.py` enforces a per-source-type evidence
   heuristic. It is acknowledged as a heuristic, not a calibrated
   confidence, in
-  [`docs/product/SUCCESS_METRICS.md`](../product/SUCCESS_METRICS.md).
 - The `report_evidence.py` service carries a per-source-type
   evidence score; the README discloses that this is a
   per-source-type heuristic, not a calibrated measurement

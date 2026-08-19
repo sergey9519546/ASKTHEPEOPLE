@@ -345,8 +345,8 @@ onMounted(() => {
 <style scoped>
 .bauhaus-view-root {
   height: 100vh;
-  background: var(--bg-color);
-  color: var(--text-primary);
+  background: var(--ink);
+  color: var(--paper);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -354,8 +354,8 @@ onMounted(() => {
 
 .bauhaus-header {
   height: 70px;
-  background: var(--surface-color);
-  border-bottom: 1px solid var(--border-color);
+  background: var(--ink-soft);
+  border-bottom: 1px solid var(--line-dark);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -386,8 +386,8 @@ onMounted(() => {
   transform: none;
 }
 .brand-monogram {
-  background: var(--accent-color);
-  color: white;
+  background: var(--signal);
+  color: var(--ink);
   padding: 4px 8px;
   font-weight: 700;
   font-size: 1rem;
@@ -447,7 +447,7 @@ onMounted(() => {
   font-size: 11px;
 }
 .step-val {
-  color: var(--accent-secondary);
+  color: var(--attention);
   font-family: var(--font-mono);
 }
 .status-box {
@@ -464,7 +464,7 @@ onMounted(() => {
   border-radius: 50%;
 }
 .status-box.processing .status-dot {
-  background: var(--accent-color);
+  background: var(--signal);
   animation: flash 1s infinite alternate;
 }
 .status-box.completed .status-dot {
@@ -489,8 +489,8 @@ onMounted(() => {
 .panel-container {
   height: 100%;
   transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
+  background: var(--ink-soft);
+  border: 1px solid var(--line-dark);
   border-radius: var(--radius-md);
   box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.04), 0 1px 3px -1px rgba(15, 23, 42, 0.02);
   overflow: hidden;
@@ -503,7 +503,7 @@ onMounted(() => {
 }
 .workbench-header {
   height: 50px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--line-dark);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -513,7 +513,7 @@ onMounted(() => {
   font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.5px;
-  color: var(--text-secondary);
+  color: var(--paper-muted);
   text-transform: uppercase;
 }
 .wb-content {
@@ -614,15 +614,15 @@ onMounted(() => {
 .bauhaus-footer-mini {
   height: 40px;
   padding: 0 40px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--line-dark);
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-family: var(--font-mono);
   font-weight: 500;
   font-size: 9px;
-  color: var(--text-secondary);
-  background: var(--surface-color);
+  color: var(--paper-muted);
+  background: var(--ink-soft);
 }
 
 @media (max-width: 1100px) {
