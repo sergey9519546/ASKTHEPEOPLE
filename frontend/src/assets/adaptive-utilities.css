@@ -1,0 +1,468 @@
+/* Adaptive UI Utilities
+ * 
+ * CSS utilities that work with the guided context system to create
+ * progressive disclosure, contextual emphasis, and intelligent defaults.
+ * 
+ * These classes are applied automatically by useAdaptiveUI based on
+ * user capability, workflow phase, and interaction patterns.
+ */
+
+/* ===== CORE VISIBILITY STATES ===== */
+
+/* Hidden: Element not relevant in current context */
+.adaptive-hidden {
+  display: none !important;
+}
+
+/* Primary: Most important, always prominent */
+.adaptive-primary {
+  order: -2;
+  opacity: 1;
+  /* Primary elements get visual priority */
+}
+
+/* Secondary: Visible but less emphasized */
+.adaptive-secondary {
+  order: -1;
+  opacity: 0.95;
+}
+
+/* Available: Accessible but not prominent */
+.adaptive-available {
+  order: 0;
+  opacity: 0.85;
+}
+
+/* Revealed: User has interacted, maintain full visibility */
+.adaptive-revealed {
+  opacity: 1 !important;
+}
+
+/* ===== CAPABILITY MODES ===== */
+
+/* Expert mode: More compact, less decoration */
+.adaptive-expert-mode {
+  /* Components can use this to reduce padding, font size, etc. */
+}
+
+.adaptive-expert-mode .adaptive-help-text {
+  display: none;
+}
+
+.adaptive-expert-mode .adaptive-explanation {
+  display: none;
+}
+
+/* First-time mode: More guidance */
+.adaptive-first-time .adaptive-help-text {
+  display: block;
+}
+
+/* ===== EMPHASIS LAYERS ===== */
+
+/* Error layer: Errors take priority */
+.adaptive-layer-error {
+  /* Error-related content gets visual priority */
+  order: -10;
+}
+
+.adaptive-layer-error .adaptive-error-content {
+  display: block;
+  border-left: 3px solid var(--error);
+  background: rgba(231, 91, 82, 0.1);
+  padding: 0.875rem 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Attention layer: Needs user attention */
+.adaptive-layer-attention {
+  order: -5;
+}
+
+.adaptive-layer-attention .adaptive-attention-marker {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--attention);
+  animation: pulse-attention 2s infinite;
+}
+
+@keyframes pulse-attention {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
+/* Action layer: Primary action emphasized */
+.adaptive-layer-action .adaptive-primary-action {
+  /* Make primary action more prominent */
+  padding: 0.875rem 1.5rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+/* Context layer: Contextual information emphasized */
+.adaptive-layer-context .adaptive-context-panel {
+  border-left: 2px solid var(--signal);
+}
+
+/* ===== PROGRESSIVE DISCLOSURE STATES ===== */
+
+/* Collapsed: Show trigger only */
+.progressive-collapsed {
+  /* The trigger is visible */
+}
+
+.progressive-collapsed .progressive-content {
+  display: none;
+}
+
+/* Preview: Show summary with expand option */
+.progressive-preview .progressive-full-content {
+  display: none;
+}
+
+.progressive-preview .progressive-preview-content {
+  display: block;
+}
+
+/* Expanded: Show full content */
+.progressive-expanded .progressive-trigger {
+  display: none;
+}
+
+.progressive-expanded .progressive-content {
+  display: block;
+}
+
+/* ===== INTERACTION STATES ===== */
+
+/* Interacted: User has engaged with this element */
+.adaptive-interacted {
+  /* Mark as seen/used */
+}
+
+.adaptive-interacted::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 60%;
+  background: var(--signal);
+  opacity: 0.3;
+}
+
+/* Paused: User is spending time here */
+.adaptive-paused {
+  /* Potentially surface more help or options */
+}
+
+/* ===== LAYOUT MODES ===== */
+
+/* Linear: Step-by-step flow */
+.adaptive-layout-linear {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Focus: Single primary surface */
+.adaptive-layout-focus .adaptive-primary {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+.adaptive-layout-focus .adaptive-secondary,
+.adaptive-layout-focus .adaptive-available {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* Spatial: Map or diagram-based */
+.adaptive-layout-spatial {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* Split: Side-by-side comparison */
+.adaptive-layout-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* ===== CONTEXTUAL TEXT ===== */
+
+/* Different text levels for different capabilities */
+.adaptive-text-minimal {
+  /* Terse labels for experts */
+  font-size: 0.8125rem;
+}
+
+.adaptive-text-contextual {
+  /* Balanced for practiced users */
+  font-size: 0.875rem;
+}
+
+.adaptive-text-essential {
+  /* Clear for quick exploration */
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.adaptive-text-detailed {
+  /* Full explanation for first-time users */
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* ===== STATUS INDICATORS ===== */
+
+/* Adaptive status that changes based on context */
+.adaptive-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.adaptive-status.processing {
+  background: rgba(255, 213, 29, 0.15);
+  color: var(--attention);
+}
+
+.adaptive-status.ready {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4CAF50;
+}
+
+.adaptive-status.error {
+  background: rgba(231, 91, 82, 0.15);
+  color: var(--error);
+}
+
+.adaptive-status.waiting {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--paper-dim);
+}
+
+/* ===== HELP AND GUIDANCE ===== */
+
+/* Contextual help block */
+.adaptive-help {
+  padding: 0.875rem 1rem;
+  border-left: 3px solid var(--attention);
+  background: rgba(255, 213, 29, 0.08);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  animation: fadeInHelp 0.3s ease;
+}
+
+@keyframes fadeInHelp {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.adaptive-help-icon {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.5rem;
+  vertical-align: middle;
+}
+
+/* Help that can be dismissed */
+.adaptive-help-dismissible {
+  position: relative;
+  padding-right: 2.5rem;
+}
+
+.adaptive-help-dismiss {
+  position: absolute;
+  top: 0.875rem;
+  right: 1rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--paper-muted);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.adaptive-help-dismiss:hover {
+  color: var(--paper);
+}
+
+/* ===== TRANSITIONS ===== */
+
+/* Smooth reveal animation */
+.adaptive-reveal {
+  animation: revealElement 0.3s ease;
+}
+
+@keyframes revealElement {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Smooth hide animation */
+.adaptive-hide {
+  animation: hideElement 0.2s ease forwards;
+}
+
+@keyframes hideElement {
+  from {
+    opacity: 1;
+    max-height: 500px;
+  }
+  to {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+
+/* Honor reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .adaptive-reveal,
+  .adaptive-hide,
+  .adaptive-help,
+  .adaptive-layer-attention .adaptive-attention-marker {
+    animation: none;
+  }
+  
+  .progressive-expanded .progressive-content,
+  .progressive-collapsed .progressive-trigger {
+    transition: none;
+  }
+}
+
+/* ===== RESPONSIVE ADAPTATIONS ===== */
+
+@media (max-width: 760px) {
+  /* On mobile, spatial and split become linear */
+  .adaptive-layout-spatial,
+  .adaptive-layout-split {
+    grid-template-columns: 1fr;
+  }
+  
+  /* More compact spacing */
+  .adaptive-layout-linear {
+    gap: 1rem;
+  }
+  
+  /* Help blocks more compact */
+  .adaptive-help {
+    padding: 0.75rem 0.875rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* ===== UTILITY CLASSES ===== */
+
+/* Manually mark something as primary (override adaptive) */
+.u-force-primary {
+  order: -2 !important;
+  opacity: 1 !important;
+}
+
+/* Manually hide (override adaptive) */
+.u-force-hidden {
+  display: none !important;
+}
+
+/* Show only for first-time users */
+.u-first-time-only {
+  /* Will be hidden by adaptive system for other capability levels */
+}
+
+/* Show only for experts */
+.u-expert-only {
+  /* Will be hidden by adaptive system for non-experts */
+}
+
+/* Prevent adaptive system from hiding */
+.u-always-visible {
+  display: block !important;
+  opacity: 1 !important;
+}
+
+/* ===== DEBUG UTILITIES (Remove in production) ===== */
+
+/* Show what adaptive level elements have */
+.adaptive-debug .adaptive-primary::before {
+  content: 'PRIMARY';
+  display: inline-block;
+  padding: 2px 6px;
+  background: #4CAF50;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.adaptive-debug .adaptive-secondary::before {
+  content: 'SECONDARY';
+  display: inline-block;
+  padding: 2px 6px;
+  background: #2196F3;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.adaptive-debug .adaptive-available::before {
+  content: 'AVAILABLE';
+  display: inline-block;
+  padding: 2px 6px;
+  background: #FF9800;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: 8px;
+}
+
+.adaptive-debug .adaptive-hidden::before {
+  content: 'HIDDEN';
+  display: inline-block;
+  padding: 2px 6px;
+  background: #F44336;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: 8px;
+}
