@@ -201,7 +201,7 @@ class PDFGenerator:
 class CSVExporter:
     """Export graph records without upgrading unknown provenance to evidence."""
     
-    def __init__(self, zep_service: ZepToolsService):
+    def __init__(self, zep_service: Optional[ZepToolsService] = None):
         self.zep = zep_service
         
     def export_graph(self, graph_id: str) -> str:
@@ -215,6 +215,8 @@ class CSVExporter:
             CSV formatted string
         """
         logger.info(f"Exporting graph data to CSV: {graph_id}")
+        if self.zep is None:
+            raise RuntimeError("A ZepToolsService is required for graph exports")
         
         # 1. Fetch nodes
         nodes = self.zep.get_all_nodes(graph_id)

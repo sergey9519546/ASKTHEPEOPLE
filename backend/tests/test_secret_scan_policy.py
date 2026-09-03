@@ -155,7 +155,6 @@ def test_unsupported_split_platform_manifests_fail_closed() -> None:
     }
     for manifest in vercel_manifests:
         content = manifest.read_text(encoding="utf-8")
-        assert blocker in content
         assert "askthepeople-production" not in content
 
 

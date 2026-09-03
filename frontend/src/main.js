@@ -3,6 +3,7 @@ import App from "./App.vue";
 import router from "./router";
 import { hasCrashed } from "./composables/useCrashState.js";
 import "./assets/design-tokens.css";
+import "./assets/adaptive-utilities.css";
 
 const app = createApp(App);
 

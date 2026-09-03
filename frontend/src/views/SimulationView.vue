@@ -105,6 +105,10 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useWindowRoute } from "../composables/useWindowContext.js";
 import { useWorkspaceState } from "../composables/useWorkspaceState.js";
+import {
+  normalizeStatus,
+  useStatusPresentation,
+} from "../composables/useStatusPresentation.js";
 import { getGraphData, getProject } from "../api/graph";
 import { getSimulation } from "../api/simulation";
 import GraphPanel from "../components/GraphPanel.vue";
@@ -129,15 +133,15 @@ const graphLoading = ref(false);
 const systemLogs = ref([]);
 const currentStatus = ref("processing");
 const error = ref("");
-const statusLabel = computed(
-  () =>
-    ({
-      completed: "Ready",
-      error: "Needs attention",
-      failed: "Needs attention",
-      processing: "Preparing",
-    })[currentStatus.value] || "Preparing",
-);
+const statusLabel = useStatusPresentation(currentStatus, {
+  labels: {
+    completed: "Ready",
+    error: "Needs attention",
+    failed: "Needs attention",
+    processing: "Preparing",
+  },
+  fallback: "Preparing",
+}).label;
 const hasGraphContent = computed(
   () =>
     Number(graphData.value?.node_count || 0) > 0 ||
@@ -183,7 +187,7 @@ const addLog = (msg) => {
 };
 
 const updateStatus = (status) => {
-  currentStatus.value = status === "failed" ? "error" : status;
+  currentStatus.value = normalizeStatus(status, { remap: { failed: "error" } });
 };
 
 const toggleMaximize = (target) =>

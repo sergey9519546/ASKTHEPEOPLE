@@ -789,6 +789,7 @@ import {
   stopSimulation,
 } from "../api/simulation";
 import OpinionMap from "./OpinionMap.vue";
+import { usePolling } from "../composables/usePolling.js";
 
 const props = defineProps({
   reportId: String,
@@ -834,7 +835,7 @@ const runStatusLoadState = ref("loading");
 const pollingError = ref("");
 const isRetryingWorkspace = ref(false);
 const isReconnecting = ref(false);
-let statusTimer = null;
+const statusPoller = usePolling({ intervalMs: STATUS_POLL_INTERVAL_MS, immediate: false });
 let statusPollInFlight = null;
 let loadRequestId = 0;
 let activeContextKey = "";
@@ -1562,14 +1563,14 @@ const handleDocumentClick = (event) => {
 
 onMounted(() => {
   loadData();
-  statusTimer = window.setInterval(pollStatus, STATUS_POLL_INTERVAL_MS);
+  statusPoller.start(pollStatus);
   document.addEventListener("click", handleDocumentClick);
 });
 
 onUnmounted(() => {
   loadRequestId += 1;
   document.removeEventListener("click", handleDocumentClick);
-  if (statusTimer) window.clearInterval(statusTimer);
+  statusPoller.stop();
 });
 
 watch(

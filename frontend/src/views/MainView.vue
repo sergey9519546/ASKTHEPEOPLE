@@ -173,7 +173,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useWindowRoute } from "../composables/useWindowContext.js";
 import { useWorkspaceState } from "../composables/useWorkspaceState.js";
@@ -185,7 +185,7 @@ import {
   getTaskStatus,
 } from "../api/graph";
 import GraphPanel from "../components/GraphPanel.vue";
-import Step1GraphBuild from "../components/Step1GraphBuild.vue";
+import Step1GraphBuild from "../components/Step1GraphBuildRefactored.vue";
 import Step2EnvSetup from "../components/Step2EnvSetup.vue";
 import Step3Simulation from "../components/Step3Simulation.vue";
 import Step4Report from "../components/Step4Report.vue";
@@ -193,10 +193,25 @@ import Step5Interaction from "../components/Step5Interaction.vue";
 import { clearPendingUpload, getPendingUpload } from "../store/pendingUpload";
 import { listSimulations } from "../api/simulation";
 import { deriveWorkflowStep } from "../utils/workflow.js";
+import { useGuidedContext } from "../composables/useGuidedContext.js";
+import { useCapabilityTracking } from "../composables/useCapabilityTracking.js";
+import { usePolling } from "../composables/usePolling.js";
 
 const router = useRouter();
 const windowRoute = useWindowRoute();
 const { setContext } = useWorkspaceState();
+const { setPhase, WORKFLOW_PHASES } = useGuidedContext();
+useCapabilityTracking();
+
+// Each workflow step maps to a guided-context phase so child step components
+// and the shared guidance system agree on where the user is.
+const STEP_TO_PHASE = {
+  1: WORKFLOW_PHASES.MAPPING,
+  2: WORKFLOW_PHASES.CONFIGURING,
+  3: WORKFLOW_PHASES.REVIEWING,
+  4: WORKFLOW_PHASES.EXPLORING,
+  5: WORKFLOW_PHASES.VALIDATING,
+};
 
 const viewMode = ref("workbench");
 const currentStep = ref(1);
@@ -213,6 +228,8 @@ watch(currentStep, (newStep) => {
   if (newStep > maxCompletedStep.value) {
     maxCompletedStep.value = newStep;
   }
+  const phase = STEP_TO_PHASE[newStep];
+  if (phase) setPhase(phase);
 }, { immediate: true });
 
 const jumpToStep = (targetStep) => {
@@ -249,9 +266,18 @@ const hasGraphContent = computed(
     (Array.isArray(graphData.value?.nodes) && graphData.value.nodes.length > 0),
 );
 
-let pollTimer = null;
-let graphPollTimer = null;
-let ontologyPollTimer = null;
+// Each polling lifecycle is owned by a usePolling instance; the view keeps only
+// the per-loop success/error branching in the poll functions below.
+const ontologyPoller = usePolling({
+  intervalMs: 3000,
+  timeoutMs: 5 * 60 * 1000,
+  onTimeout: () => {
+    error.value = "Ontology generation timed out after 5 minutes.";
+    loading.value = false;
+  },
+});
+const graphPoller = usePolling({ intervalMs: 10000 });
+const taskPoller = usePolling({ intervalMs: 2000 });
 let recoveryAction = null;
 
 const showRecoverableError = (message, action = null) => {
@@ -463,35 +489,14 @@ const handleNewProject = async () => {
 };
 
 const startPollingOntologyTask = (taskId) => {
-  stopPollingOntologyTask();
-  const startTime = Date.now();
-  const TIMEOUT_MS = 5 * 60 * 1000;
-
-  const poll = async () => {
-    if (Date.now() - startTime > TIMEOUT_MS) {
-      stopPollingOntologyTask();
-      error.value = "Ontology generation timed out after 5 minutes.";
-      loading.value = false;
-      return;
-    }
-    await pollOntologyTask(taskId);
-  };
-
-  poll();
-  ontologyPollTimer = setInterval(poll, 3000);
-};
-
-const stopOntologyPolling = () => {
-  if (!ontologyPollTimer) return;
-  clearInterval(ontologyPollTimer);
-  ontologyPollTimer = null;
+  ontologyPoller.start(() => pollOntologyTask(taskId));
 };
 
 const pollOntologyTask = async (taskId) => {
   try {
     const response = await getTaskStatus(taskId);
     if (!response.success) {
-      stopOntologyPolling();
+      ontologyPoller.stop();
       showRecoverableError(
         "Source-reading progress could not be checked. Your uploaded material is still saved.",
         () => startPollingOntologyTask(taskId),
@@ -509,16 +514,16 @@ const pollOntologyTask = async (taskId) => {
     };
 
     if (task.status === "completed") {
-      stopOntologyPolling();
+      ontologyPoller.stop();
       ontologyProgress.value = null;
       projectData.value = task.result;
       await startBuildGraph();
     } else if (task.status === "failed") {
-      stopOntologyPolling();
+      ontologyPoller.stop();
       error.value = task.error || task.message || "The sources could not be mapped.";
     }
   } catch (caughtError) {
-    stopOntologyPolling();
+    ontologyPoller.stop();
     showRecoverableError(
       "Source-reading updates stopped. Try reconnecting to the saved task.",
       () => startPollingOntologyTask(taskId),
@@ -618,9 +623,7 @@ const startBuildGraph = async () => {
 };
 
 const startGraphPolling = () => {
-  stopGraphPolling();
-  fetchGraphData();
-  graphPollTimer = setInterval(fetchGraphData, 10000);
+  graphPoller.start(fetchGraphData);
 };
 
 const fetchGraphData = async () => {
@@ -633,14 +636,14 @@ const fetchGraphData = async () => {
     if (graphResponse.success) {
       graphData.value = graphResponse.data;
     } else {
-      stopGraphPolling();
+      graphPoller.stop();
       showRecoverableError(
         "Source-map updates paused. The saved workspace is still available.",
         startGraphPolling,
       );
     }
   } catch (caughtError) {
-    stopGraphPolling();
+    graphPoller.stop();
     showRecoverableError(
       "Source-map updates paused. Try reconnecting to the saved workspace.",
       startGraphPolling,
@@ -650,16 +653,14 @@ const fetchGraphData = async () => {
 };
 
 const startPollingTask = (taskId) => {
-  stopPolling();
-  pollTaskStatus(taskId);
-  pollTimer = setInterval(() => pollTaskStatus(taskId), 2000);
+  taskPoller.start(() => pollTaskStatus(taskId));
 };
 
 const pollTaskStatus = async (taskId) => {
   try {
     const response = await getTaskStatus(taskId);
     if (!response.success) {
-      stopPolling();
+      taskPoller.stop();
       showRecoverableError(
         "Source-map progress could not be checked. The saved task can be retried.",
         () => startPollingTask(taskId),
@@ -676,8 +677,8 @@ const pollTaskStatus = async (taskId) => {
     };
 
     if (task.status === "completed") {
-      stopPolling();
-      stopGraphPolling();
+      taskPoller.stop();
+      graphPoller.stop();
       currentPhase.value = 2;
       const projectResponse = await getProject(currentProjectId.value);
       if (projectResponse.success && projectResponse.data?.graph_id) {
@@ -685,11 +686,11 @@ const pollTaskStatus = async (taskId) => {
         await loadGraph(projectResponse.data.project_id, projectResponse.data.graph_id);
       }
     } else if (task.status === "failed") {
-      stopPolling();
+      taskPoller.stop();
       error.value = task.error || "The source map could not be completed.";
     }
   } catch (caughtError) {
-    stopPolling();
+    taskPoller.stop();
     showRecoverableError(
       "Source-map progress updates stopped. Try reconnecting to the saved task.",
       () => startPollingTask(taskId),
@@ -720,30 +721,12 @@ const refreshGraph = () => {
   }
 };
 
-const stopPolling = () => {
-  if (!pollTimer) return;
-  clearInterval(pollTimer);
-  pollTimer = null;
-};
-
-const stopGraphPolling = () => {
-  if (!graphPollTimer) return;
-  clearInterval(graphPollTimer);
-  graphPollTimer = null;
-};
-
 watch(currentStep, () => nextTick(keepCurrentStepVisible));
 
 onMounted(async () => {
   await initProject();
   await nextTick();
   keepCurrentStepVisible();
-});
-
-onUnmounted(() => {
-  stopPolling();
-  stopGraphPolling();
-  stopOntologyPolling();
 });
 </script>
 

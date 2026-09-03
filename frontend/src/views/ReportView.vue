@@ -145,6 +145,10 @@ import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import { getGraphData, getProject } from "../api/graph";
 import { getReport } from "../api/report";
 import { getSimulation } from "../api/simulation";
+import {
+  normalizeStatus,
+  useStatusPresentation,
+} from "../composables/useStatusPresentation.js";
 import GraphPanel from "../components/GraphPanel.vue";
 import Step4Report from "../components/Step4Report.vue";
 import {
@@ -171,14 +175,14 @@ const shellError = ref(null);
 const currentStatus = ref("processing");
 let loadSequence = 0;
 
-const statusLabel = computed(
-  () =>
-    ({
-      processing: "BUILDING",
-      completed: "READY",
-      failed: "NEEDS ATTENTION",
-    })[currentStatus.value] || "NEEDS ATTENTION",
-);
+const statusLabel = useStatusPresentation(currentStatus, {
+  labels: {
+    processing: "BUILDING",
+    completed: "READY",
+    failed: "NEEDS ATTENTION",
+  },
+  fallback: "NEEDS ATTENTION",
+}).label;
 
 // Layout Styles
 const leftPanelStyle = computed(() => {
@@ -219,9 +223,10 @@ const addLog = (msg) => {
 };
 
 const updateStatus = (status) => {
-  currentStatus.value = ["processing", "completed", "failed"].includes(status)
-    ? status
-    : "failed";
+  currentStatus.value = normalizeStatus(status, {
+    allowed: ["processing", "completed", "failed"],
+    fallback: "failed",
+  });
 };
 
 const toggleMaximize = (target) =>

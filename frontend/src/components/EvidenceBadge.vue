@@ -103,7 +103,7 @@ const icon = computed(() => {
 const ariaLabel = computed(() => {
   let label = `Evidence level ${props.evidenceLevel}: ${levelLabel.value}. `;
   if (props.isForecast) {
-    label += "Forecast claim permitted within registered scope. ";
+    label += "Registered scenario boundary active. ";
   } else {
     label += "Not a forecast. ";
   }

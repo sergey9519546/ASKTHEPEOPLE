@@ -23,11 +23,25 @@
 
         <div class="card-content">
           <p class="api-note">SOURCE READING</p>
+          <!-- Truth-critical caveat stays visible for every user; the mechanism
+               explanation fades as the user gains experience. -->
           <p class="description">
-            A model proposes actor, place, concept, and relationship categories
-            from the submitted material. Review them: they may be incomplete,
-            ambiguous, or wrong.
+            Review these: they may be incomplete, ambiguous, or wrong.
           </p>
+          <ContextualHelp
+            help-id="source-reading-mechanism"
+            concept="entity_extraction"
+            variant="inline"
+            :auto-show-phases="['mapping']"
+            :content="{
+              first_use:
+                'A model proposes actor, place, concept, and relationship categories from the material you submitted. These become the building blocks for the generated scenario.',
+              learning:
+                'The proposed categories come from your source material and shape the scenario.',
+              practiced: 'Categories proposed from your source material.',
+              expert: null,
+            }"
+          />
 
           <!-- Loading / Progress -->
           <div
@@ -295,6 +309,7 @@
 import { computed, nextTick, ref } from "vue";
 import { useRouter } from "vue-router";
 import { createSimulation } from "../api/simulation";
+import ContextualHelp from "./ContextualHelp.vue";
 
 const router = useRouter();
 

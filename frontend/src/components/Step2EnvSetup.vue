@@ -677,13 +677,14 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import {
   getPrepareStatus,
   getSimulationConfigRealtime,
   getSimulationProfilesRealtime,
   prepareSimulation,
 } from "../api/simulation";
+import { usePolling } from "../composables/usePolling.js";
 
 const props = defineProps({
   simulationId: String,
@@ -732,7 +733,7 @@ watch(currentStage, (newStage) => {
     newStage === "generating_config"
   ) {
     phase.value = 2;
-    if (!configTimer) {
+    if (!configPoller.isPolling.value) {
       addLog("Drafting the conversation spaces and starting conditions…");
       startConfigPolling();
     }
@@ -844,14 +845,14 @@ const latestActivityMessage = computed(
   () => props.systemLogs.at(-1)?.msg || preparationMessage.value,
 );
 
-let pollTimer = null;
-let profilesTimer = null;
-let configTimer = null;
-
 // Polling intervals (ms)
 const STATUS_POLL_INTERVAL_MS = 2000;
 const PROFILES_POLL_INTERVAL_MS = 3000;
 const CONFIG_POLL_INTERVAL_MS = 2000;
+
+const preparePoller = usePolling({ intervalMs: STATUS_POLL_INTERVAL_MS, immediate: false });
+const profilesPoller = usePolling({ intervalMs: PROFILES_POLL_INTERVAL_MS, immediate: false });
+const configPoller = usePolling({ intervalMs: CONFIG_POLL_INTERVAL_MS, immediate: false });
 
 const displayProfiles = computed(() => {
   if (showProfilesDetail.value) {
@@ -1046,29 +1047,11 @@ const startPrepareSimulation = async () => {
   }
 };
 
-const startPolling = () => {
-  stopPolling();
-  pollTimer = setInterval(pollPrepareStatus, STATUS_POLL_INTERVAL_MS);
-};
+const startPolling = () => preparePoller.start(pollPrepareStatus);
+const stopPolling = () => preparePoller.stop();
 
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
-  }
-};
-
-const startProfilesPolling = () => {
-  stopProfilesPolling();
-  profilesTimer = setInterval(fetchProfilesRealtime, PROFILES_POLL_INTERVAL_MS);
-};
-
-const stopProfilesPolling = () => {
-  if (profilesTimer) {
-    clearInterval(profilesTimer);
-    profilesTimer = null;
-  }
-};
+const startProfilesPolling = () => profilesPoller.start(fetchProfilesRealtime);
+const stopProfilesPolling = () => profilesPoller.stop();
 
 const pollPrepareStatus = async () => {
   if (!taskId.value && !props.simulationId) return;
@@ -1209,17 +1192,8 @@ const fetchProfilesRealtime = async (surfaceFailure = false) => {
   }
 };
 
-const startConfigPolling = () => {
-  stopConfigPolling();
-  configTimer = setInterval(fetchConfigRealtime, CONFIG_POLL_INTERVAL_MS);
-};
-
-const stopConfigPolling = () => {
-  if (configTimer) {
-    clearInterval(configTimer);
-    configTimer = null;
-  }
-};
+const startConfigPolling = () => configPoller.start(fetchConfigRealtime);
+const stopConfigPolling = () => configPoller.stop();
 
 const fetchConfigRealtime = async () => {
   if (!props.simulationId) return;
@@ -1312,12 +1286,6 @@ const loadPreparedData = async () => {
 onMounted(() => {
   addLog("Assumption review opened.");
   startPrepareSimulation();
-});
-
-onUnmounted(() => {
-  stopPolling();
-  stopProfilesPolling();
-  stopConfigPolling();
 });
 </script>
 

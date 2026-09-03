@@ -460,7 +460,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   exportReportPDF,
@@ -473,6 +473,7 @@ import {
   normalizeReportEvidence,
   outlineSectionTitles,
 } from "../api/report";
+import { usePolling } from "../composables/usePolling.js";
 
 const router = useRouter();
 
@@ -878,17 +879,15 @@ const handleExportTXT = async () => {
   }
 };
 
-let timer = null;
+const logPoller = usePolling({ intervalMs: LOG_POLL_INTERVAL_MS, immediate: false });
 
-const stopPolling = () => {
-  if (timer) window.clearInterval(timer);
-  timer = null;
-};
+const stopPolling = () => logPoller.stop();
 
 const startPolling = () => {
-  stopPolling();
   if (!hasTerminalFailure.value) {
-    timer = window.setInterval(fetchLogs, LOG_POLL_INTERVAL_MS);
+    logPoller.start(fetchLogs);
+  } else {
+    logPoller.stop();
   }
 };
 
@@ -1070,10 +1069,6 @@ onMounted(async () => {
     startPolling();
     await fetchLogs();
   }
-});
-
-onUnmounted(() => {
-  stopPolling();
 });
 </script>
 

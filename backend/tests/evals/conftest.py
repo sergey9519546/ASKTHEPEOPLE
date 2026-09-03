@@ -34,9 +34,10 @@ def client(app):
 
 
 @pytest.fixture
-def profile_generator():
-    """Create profile generator instance."""
-    return OasisProfileGenerator()
+def profile_generator(monkeypatch):
+    """Create profile generator instance with mock test configuration."""
+    monkeypatch.setenv("LLM_API_KEY", "test-eval-mock-key-32characterslong!")
+    return OasisProfileGenerator(api_key="test-eval-mock-key-32characterslong!")
 
 
 @pytest.fixture

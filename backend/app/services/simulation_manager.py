@@ -191,9 +191,9 @@ class SimulationManager:
         self._simulations: Dict[str, SimulationState] = {}
 
     def _get_simulation_dir(self, simulation_id: str) -> str:
-        """Get simulation data directory"""
-        from ..utils.safe_path import safe_join
-        sim_dir = safe_join(self._base_dir(), simulation_id)
+        """Get simulation data directory (delegates to SimulationPaths)."""
+        from .simulation_paths import SimulationPaths
+        sim_dir = SimulationPaths.simulation_dir(simulation_id)
         os.makedirs(sim_dir, exist_ok=True)
         return sim_dir
     
@@ -209,7 +209,8 @@ class SimulationManager:
         fail the domain's UUIDv7 invariant when read back.
         """
         sim_dir = self._get_simulation_dir(state.simulation_id)
-        state_file = os.path.join(sim_dir, "state.json")
+        from .simulation_paths import SimulationPaths
+        state_file = SimulationPaths.state_file(state.simulation_id)
 
         state.updated_at = datetime.now().isoformat()
 
@@ -223,8 +224,9 @@ class SimulationManager:
         if simulation_id in self._simulations:
             return self._simulations[simulation_id]
         
+        from .simulation_paths import SimulationPaths
         sim_dir = self._get_simulation_dir(simulation_id)
-        state_file = os.path.join(sim_dir, "state.json")
+        state_file = SimulationPaths.state_file(simulation_id)
         
         if not os.path.exists(state_file):
             return None
@@ -453,13 +455,14 @@ class SimulationManager:
                     )
             
             # Set real-time save paths (prefer Reddit JSON format)
+            from .simulation_paths import SimulationPaths
             realtime_output_path = None
             realtime_platform = "reddit"
             if state.enable_reddit:
-                realtime_output_path = os.path.join(sim_dir, "reddit_profiles.json")
+                realtime_output_path = SimulationPaths.reddit_profiles_file(simulation_id)
                 realtime_platform = "reddit"
             elif state.enable_twitter:
-                realtime_output_path = os.path.join(sim_dir, "twitter_profiles.csv")
+                realtime_output_path = SimulationPaths.twitter_profiles_file(simulation_id)
                 realtime_platform = "twitter"
             
             if use_archetypes:
@@ -484,12 +487,12 @@ class SimulationManager:
                         f"{len(profiles)} profiles; the maximum is "
                         f"{PREPARED_PROFILE_MAX}."
                     )
-                write_json(os.path.join(sim_dir, "archetypes.json"), [a.to_dict() for a in archetypes])
+                write_json(SimulationPaths.archetypes_file(simulation_id), [a.to_dict() for a in archetypes])
 
                 state.profiles_count = len(profiles)
                 canonical_agents = build_canonical_agents_from_profiles(profiles)
-                write_json(canonical_agents_path(sim_dir), canonical_agents)
-                write_json(relationship_bootstrap_path(sim_dir), [])
+                write_json(SimulationPaths.canonical_profiles_file(simulation_id), canonical_agents)
+                write_json(SimulationPaths.relationship_bootstrap_file(simulation_id), [])
                 write_exports_from_canonical(sim_dir, canonical_agents)
             else:
                 # ========== Normal entity-zip path ==========
@@ -578,7 +581,7 @@ class SimulationManager:
                 )
             
             # Save configuration file
-            config_path = os.path.join(sim_dir, "simulation_config.json")
+            config_path = SimulationPaths.config_file(simulation_id)
             with open(config_path, 'w', encoding='utf-8') as f:
                 f.write(sim_params.to_json())
 
@@ -819,20 +822,20 @@ class SimulationManager:
     
     def get_profiles(self, simulation_id: str, platform: str = "reddit") -> List[Dict[str, Any]]:
         """Get simulation Agent Profile"""
+        from .simulation_paths import SimulationPaths
         state = self._load_simulation_state(simulation_id)
         if not state:
             raise ValueError(f"Simulation does not exist: {simulation_id}")
         
-        sim_dir = self._get_simulation_dir(simulation_id)
         if platform == "twitter":
-            profile_path = os.path.join(sim_dir, "twitter_profiles.csv")
+            profile_path = SimulationPaths.twitter_profiles_file(simulation_id)
             if not os.path.exists(profile_path):
                 return []
             import csv
             with open(profile_path, 'r', encoding='utf-8', newline='') as f:
                 return list(csv.DictReader(f))
 
-        profile_path = os.path.join(sim_dir, "reddit_profiles.json")
+        profile_path = SimulationPaths.reddit_profiles_file(simulation_id)
         if not os.path.exists(profile_path):
             return []
         with open(profile_path, 'r', encoding='utf-8') as f:
@@ -840,8 +843,8 @@ class SimulationManager:
     
     def get_simulation_config(self, simulation_id: str) -> Optional[Dict[str, Any]]:
         """Get simulation configuration"""
-        sim_dir = self._get_simulation_dir(simulation_id)
-        config_path = os.path.join(sim_dir, "simulation_config.json")
+        from .simulation_paths import SimulationPaths
+        config_path = SimulationPaths.config_file(simulation_id)
         
         if not os.path.exists(config_path):
             return None
@@ -850,26 +853,27 @@ class SimulationManager:
             return json.load(f)
 
     def get_preflight(self, simulation_id: str) -> Optional[Dict[str, Any]]:
-        sim_dir = self._get_simulation_dir(simulation_id)
-        return read_json(os.path.join(sim_dir, "preflight.json"))
+        from .simulation_paths import SimulationPaths
+        return read_json(SimulationPaths.preflight_file(simulation_id))
 
     def get_diagnostics(self, simulation_id: str) -> Dict[str, Any]:
-        sim_dir = self._get_simulation_dir(simulation_id)
+        from .simulation_paths import SimulationPaths
         return {
-            "canonical_agents": read_json(os.path.join(sim_dir, "agent_profiles.canonical.json"), default=[]),
-            "entity_type_registry": read_json(os.path.join(sim_dir, "entity_type_registry.json"), default=[]),
-            "relationship_bootstrap": read_json(os.path.join(sim_dir, "agent_relationship_bootstrap.json"), default=[]),
-            "model_resolution": read_json(os.path.join(sim_dir, "model_resolution.json"), default={}),
-            "preflight": read_json(os.path.join(sim_dir, "preflight.json"), default=None),
-            "run_manifest": read_json(os.path.join(sim_dir, "run_manifest.json"), default=None),
+            "canonical_agents": read_json(SimulationPaths.canonical_profiles_file(simulation_id), default=[]),
+            "entity_type_registry": read_json(SimulationPaths.entity_type_registry_file(simulation_id), default=[]),
+            "relationship_bootstrap": read_json(SimulationPaths.relationship_bootstrap_file(simulation_id), default=[]),
+            "model_resolution": read_json(SimulationPaths.model_resolution_file(simulation_id), default={}),
+            "preflight": read_json(SimulationPaths.preflight_file(simulation_id), default=None),
+            "run_manifest": read_json(SimulationPaths.run_manifest_file(simulation_id), default=None),
         }
     
     def get_run_instructions(self, simulation_id: str) -> Dict[str, str]:
         """Get running instructions"""
+        from .simulation_paths import SimulationPaths
         sim_dir = self._get_simulation_dir(simulation_id)
-        config_path = os.path.join(sim_dir, "simulation_config.json")
-        scripts_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../scripts'))
-        parallel_script = os.path.join(scripts_dir, "run_parallel_simulation.py")
+        config_path = SimulationPaths.config_file(simulation_id)
+        scripts_dir = SimulationPaths.scripts_dir()
+        parallel_script = SimulationPaths.run_parallel_script()
         parallel_command = (
             f'python "{parallel_script}" --config "{config_path}"'
         )
@@ -890,4 +894,149 @@ class SimulationManager:
                 f"   - Run Reddit separately: {parallel_command} --reddit-only\n"
                 f"   - Run both platforms in parallel: {parallel_command}"
             )
+        }
+
+    def is_runnable(self, simulation_id: str) -> tuple[bool, dict]:
+        """Check if a simulation is prepared and can be started.
+        
+        This is the authoritative readiness check, used by execution routes to
+        determine whether /start should accept the simulation. It validates:
+        
+        1. Status is in the prepared set (uses SimulationStatus enum)
+        2. Config file exists (config_generated=True)
+        3. Preflight passed (preflight.json status="passed")
+        4. Decision-lens admission check passed (if decision_lens_runtime.json exists)
+        
+        Returns:
+            (is_runnable: bool, info: dict) — info contains reason/diagnostics
+        """
+        import os
+        import json
+        from .simulation_paths import SimulationPaths
+        from .decision_lens_repository import DecisionLensAdmissionError
+        from .simulation_preflight import assert_decision_lens_execution_admission
+        
+        simulation_dir = self._get_simulation_dir(simulation_id)
+        
+        if not os.path.exists(simulation_dir):
+            return False, {"reason": "Simulation directory does not exist"}
+        
+        # Load state
+        state = self._load_simulation_state(simulation_id)
+        if not state:
+            return False, {"reason": "Could not load simulation state"}
+        
+        # Check status using enum
+        try:
+            status_enum = SimulationStatus(state.status)
+        except ValueError:
+            return False, {
+                "reason": f"Invalid status: {state.status}",
+                "status": state.status,
+            }
+        
+        # The prepared set: "ready", "preparing" (with config_generated=True),
+        # "running", "completed", "stopped", "interrupted".
+        # "failed" is excluded — a failed run does NOT prove preparation succeeded.
+        # "preparing" qualifies only with config_generated=True (covers the race
+        # where prepare task finishes but status hasn't flipped yet).
+        prepared_statuses = {
+            SimulationStatus.READY,
+            SimulationStatus.PREPARING,
+            SimulationStatus.RUNNING,
+            SimulationStatus.COMPLETED,
+            SimulationStatus.STOPPED,
+            SimulationStatus.INTERRUPTED,
+        }
+        
+        if status_enum not in prepared_statuses:
+            return False, {
+                "reason": f"Status not prepared: {state.status}",
+                "status": state.status,
+            }
+        
+        # Check config exists
+        # Honor state.config_generated flag, not just file existence
+        # (the test suite may seed files but flag config_generated=False)
+        config_generated = getattr(state, 'config_generated', False)
+        if not config_generated:
+            return False, {
+                "reason": "Config not generated",
+                "status": state.status,
+                "config_generated": False,
+            }
+        
+        # Also verify file exists
+        config_path = SimulationPaths.config_file(simulation_id)
+        if not os.path.exists(config_path):
+            return False, {
+                "reason": "Config file missing",
+                "status": state.status,
+                "config_generated": config_generated,
+            }
+        
+        # Check preflight
+        preflight_path = SimulationPaths.preflight_file(simulation_id)
+        preflight_passed = False
+        if os.path.exists(preflight_path):
+            with open(preflight_path, 'r', encoding='utf-8') as pf:
+                preflight_data = json.load(pf)
+            preflight_passed = preflight_data.get("status") == "passed"
+        
+        if not preflight_passed:
+            return False, {
+                "reason": "Preflight not passed",
+                "status": state.status,
+                "config_generated": config_generated,
+                "preflight_passed": False,
+            }
+        
+        # Decision-lens admission check
+        decision_lens_runtime = SimulationPaths.decision_lens_runtime_file(simulation_id)
+        uses_decision_lens_boundary = os.path.exists(decision_lens_runtime)
+        admission_error = None
+        
+        if uses_decision_lens_boundary:
+            try:
+                assert_decision_lens_execution_admission(simulation_dir)
+            except DecisionLensAdmissionError as exc:
+                admission_error = {
+                    "code": exc.code,
+                    "remediation": exc.remediation,
+                }
+        
+        if admission_error is not None:
+            return False, {
+                "reason": "Decision-lens admission check failed",
+                "admission_error": admission_error,
+            }
+        
+        # Compute profiles_count based on execution boundary
+        profiles_count = 0
+        if uses_decision_lens_boundary:
+            with open(decision_lens_runtime, 'r', encoding='utf-8') as f:
+                runtime_data = json.load(f)
+            adapters = runtime_data.get("adapters", []) if isinstance(runtime_data, dict) else []
+            profiles_count = len(adapters) if isinstance(adapters, list) else 0
+        else:
+            # Legacy: count from reddit_profiles.json
+            reddit_profiles = SimulationPaths.reddit_profiles_file(simulation_id)
+            if os.path.exists(reddit_profiles):
+                with open(reddit_profiles, 'r', encoding='utf-8') as f:
+                    profiles_data = json.load(f)
+                profiles_count = len(profiles_data) if isinstance(profiles_data, list) else 0
+        
+        # All checks passed
+        return True, {
+            "status": state.status.value if isinstance(state.status, SimulationStatus) else state.status,
+            "entities_count": state.entities_count,
+            "profiles_count": profiles_count,
+            "entity_types": state.entity_types,
+            "config_generated": config_generated,
+            "preflight_passed": preflight_passed,
+            "execution_boundary": (
+                "decision_lens_reviewed"
+                if uses_decision_lens_boundary
+                else "legacy_profile_artifact_non_executable"
+            ),
         }

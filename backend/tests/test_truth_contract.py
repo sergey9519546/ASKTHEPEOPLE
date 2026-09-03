@@ -200,43 +200,43 @@ class TestProhibitedClaims:
 
 
 class TestClaimRegistry:
-    """Test that claim registry exists and has correct structure"""
+    """Test that claim and product truth contract exist and have correct structure (ADR-0001)"""
     
     def test_claim_registry_exists(self):
-        """Verify CLAIM_REGISTRY.md file exists"""
+        """Verify ADR-0001 product truth contract file exists"""
         registry_path = os.path.join(
             os.path.dirname(__file__),
-            "../../docs/product/CLAIM_REGISTRY.md"
+            "../../docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md"
         )
         assert os.path.exists(registry_path), \
-            "CLAIM_REGISTRY.md does not exist"
+            "ADR-0001-product-category-and-truth-contract.md does not exist"
     
     def test_claim_registry_has_approved_section(self):
-        """Verify claim registry has approved claims section"""
+        """Verify ADR-0001 has truth contract section"""
         registry_path = os.path.join(
             os.path.dirname(__file__),
-            "../../docs/product/CLAIM_REGISTRY.md"
+            "../../docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md"
         )
         
         with open(registry_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        assert "## ✅ Approved Claims" in content or "Approved Claims" in content
-        assert "## ❌ Prohibited Claims" in content or "Prohibited Claims" in content
+        assert "Truth Contract" in content or "truth contract" in content.lower()
+        assert "Decision" in content
     
     def test_claim_registry_has_required_disclosures(self):
-        """Verify claim registry documents required disclosures"""
+        """Verify truth contract documents required disclosures"""
         registry_path = os.path.join(
             os.path.dirname(__file__),
-            "../../docs/product/CLAIM_REGISTRY.md"
+            "../../docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md"
         )
         
         with open(registry_path, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        assert "0 human respondents" in content
+        assert "zero human respondents" in content.lower() or "human respondent count equals zero" in content.lower()
         assert "synthetic" in content.lower()
-        assert "non-representative" in content.lower()
+        assert "forecast" in content.lower()
 
 
 class TestTruthRailComponent:

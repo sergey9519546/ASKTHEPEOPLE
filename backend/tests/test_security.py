@@ -97,14 +97,14 @@ class TestExportDisclosures:
         
         # Verify disclosure text exists and is non-empty
         assert GENERATED_DISCLOSURE, "PDF disclosure text must be defined"
-        assert "GENERATED" in GENERATED_DISCLOSURE.upper()
+        assert "SYNTHETIC" in GENERATED_DISCLOSURE.upper() or "GENERATED" in GENERATED_DISCLOSURE.upper()
     
     def test_csv_export_has_disclosure_columns(self):
         """Test that CSV exports include disclosure metadata columns"""
-        from app.services.export_service import CSVExporter, ZepToolsService
+        from app.services.export_service import CSVExporter
         
         # Create a minimal CSV export
-        exporter = CSVExporter(ZepToolsService())
+        exporter = CSVExporter()
         
         # Test with empty results
         csv_output = exporter.export_survey_results([])

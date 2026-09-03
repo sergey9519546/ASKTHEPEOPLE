@@ -28,12 +28,6 @@ from . import simulation_bp
 from ..config import Config
 from ..services.simulation_manager import SimulationManager, SimulationStatus
 from ..services.simulation_runner import SimulationRunner
-from ..services.claim_boundary import (
-    fictional_profile_disclosure,
-    synthetic_activity_disclosure,
-    synthetic_config_disclosure,
-    synthetic_output_disclosure,
-)
 from ..utils.logger import get_logger
 from ..utils.input_policy import (
     ARCHETYPE_COUNT_MAX,
@@ -59,40 +53,22 @@ def _safe_sim_dir(simulation_id: str) -> str:
     """Resolve a validated simulation run-state directory (path-traversal safe).
 
     Centralizes OASIS_SIMULATION_DATA_DIR joins; raises SafePathError on bad ids.
+    
+    Delegates to SimulationPaths for canonical path construction.
     """
-    return safe_join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+    from ..services.simulation_paths import SimulationPaths
+    return SimulationPaths.simulation_dir(simulation_id)
 
 
-def _with_profile_truth(profiles):
-    """Attach non-human provenance to detached API profile records."""
-    disclosed = []
-    for profile in profiles if isinstance(profiles, list) else []:
-        if isinstance(profile, dict):
-            disclosed.append({**profile, **fictional_profile_disclosure()})
-        else:
-            disclosed.append(profile)
-    return disclosed
-
-
-def _with_activity_truth(records):
-    """Attach synthetic-run provenance to detached API activity records."""
-    disclosed = []
-    for record in records if isinstance(records, list) else []:
-        if isinstance(record, dict):
-            disclosed.append({**record, **synthetic_activity_disclosure()})
-        else:
-            disclosed.append(record)
-    return disclosed
-
-
-def _with_config_truth(config):
-    """Ensure old and new config payloads carry the same truth contract."""
-    if not isinstance(config, dict):
-        return config
-    disclosed = dict(config)
-    disclosed["truth_status"] = synthetic_output_disclosure()
-    disclosed["control_metadata"] = synthetic_config_disclosure()
-    return disclosed
+# Truth-contract wrappers now live in the presentation seam (`api/presentation.py`).
+# These aliases remain so existing route imports keep working; new code should
+# import `with_profile_truth` / `with_activity_truth` / `with_config_truth`
+# from `..presentation` directly.
+from .presentation import (
+    with_profile_truth as _with_profile_truth,
+    with_activity_truth as _with_activity_truth,
+    with_config_truth as _with_config_truth,
+)
 
 
 def _resolve_graph_memory_request(
@@ -239,186 +215,13 @@ def optimize_interview_prompt(prompt: str, bypass: bool = False) -> str:
 
 def _check_simulation_prepared(simulation_id: str) -> tuple:
     """
-    Check if simulation is already prepared
+    Check if simulation is prepared (delegates to SimulationManager.is_runnable).
     
-    Checking conditions:
-    1. state.json exists and status is 'ready'
-    2. Required files exist: reddit_profiles.json, twitter_profiles.csv, simulation_config.json
-    
-    Note: Running scripts (run_*.py) are kept in the backend/scripts/ directory and no longer copied to the simulation directory
-    
-    Args:
-        simulation_id: Simulation ID
-        
     Returns:
         (is_prepared: bool, info: dict)
     """
-    import os
-    from ..config import Config
-    
-    simulation_dir = _safe_sim_dir(simulation_id)
-    
-    # Check if directory exists
-    if not os.path.exists(simulation_dir):
-        return False, {"reason": "Simulation directory does not exist"}
-    
-    # Reviewed decision-lens runs deliberately do not emit executable legacy
-    # profile exports. Keep the legacy shape readable, while recognizing the
-    # new runtime artifact as the preparation contract for current runs.
-    decision_lens_runtime_file = os.path.join(
-        simulation_dir, "decision_lens_runtime.v1.json"
-    )
-    uses_decision_lens_boundary = os.path.exists(decision_lens_runtime_file)
-    required_files = (
-        [
-            "state.json",
-            "simulation_config.json",
-            "decision_lens_runtime.v1.json",
-            "preflight.json",
-        ]
-        if uses_decision_lens_boundary
-        else [
-            "state.json",
-            "simulation_config.json",
-            "agent_profiles.canonical.json",
-            "entity_type_registry.json",
-            "reddit_profiles.json",
-            "twitter_profiles.csv",
-            "preflight.json",
-        ]
-    )
-    
-    # Check if files exist
-    existing_files = []
-    missing_files = []
-    for f in required_files:
-        file_path = os.path.join(simulation_dir, f)
-        if os.path.exists(file_path):
-            existing_files.append(f)
-        else:
-            missing_files.append(f)
-    
-    if missing_files:
-        return False, {
-            "reason": "Missing required files",
-            "missing_files": missing_files,
-            "existing_files": existing_files
-        }
-    
-    # Check status in state.json
-    state_file = os.path.join(simulation_dir, "state.json")
-    try:
-        import json
-        with open(state_file, 'r', encoding='utf-8') as f:
-            state_data = json.load(f)
-        
-        status = state_data.get("status", "")
-        config_generated = state_data.get("config_generated", False)
-        
-        # Detailed logs
-        logger.debug(f"Detect simulation preparation status: {simulation_id}, status={status}, config_generated={config_generated}")
-        
-        # If config_generated=True and files exist, consider preparation complete.
-        # Audit P1 fix ("Contradictory lifecycle semantics"): the old list
-        # included "failed", which let /start re-launch a simulation whose run
-        # had failed. "failed" means the run broke — it is NOT proof that
-        # preparation is complete and runnable. Only genuinely prepared or
-        # post-run-success statuses qualify. ("preparing" qualifies only with
-        # config_generated=True below, covering the prepare-task-finished-but-
-        # status-unflipped race without the old read-side rewrite.)
-        prepared_statuses = [
-            "ready", "preparing", "running", "completed", "stopped", "interrupted",
-        ]
-        preflight_file = os.path.join(simulation_dir, "preflight.json")
-        preflight_passed = False
-        if os.path.exists(preflight_file):
-            with open(preflight_file, 'r', encoding='utf-8') as pf:
-                preflight_data = json.load(pf)
-            preflight_passed = preflight_data.get("status") == "passed"
-
-        admission_error = None
-        if uses_decision_lens_boundary:
-            from ..services.decision_lens_repository import (
-                DecisionLensAdmissionError,
-            )
-            from ..services.simulation_preflight import (
-                assert_decision_lens_execution_admission,
-            )
-
-            try:
-                assert_decision_lens_execution_admission(simulation_dir)
-            except DecisionLensAdmissionError as exc:
-                admission_error = {
-                    "code": exc.code,
-                    "remediation": exc.remediation,
-                }
-
-        if (
-            status in prepared_statuses
-            and config_generated
-            and preflight_passed
-            and admission_error is None
-        ):
-            # Get file statistics
-            config_file = os.path.join(simulation_dir, "simulation_config.json")
-            
-            profiles_count = 0
-            if uses_decision_lens_boundary:
-                with open(
-                    decision_lens_runtime_file, "r", encoding="utf-8"
-                ) as runtime_handle:
-                    runtime_data = json.load(runtime_handle)
-                adapters = (
-                    runtime_data.get("adapters", [])
-                    if isinstance(runtime_data, dict)
-                    else []
-                )
-                profiles_count = len(adapters) if isinstance(adapters, list) else 0
-            else:
-                profiles_file = os.path.join(
-                    simulation_dir, "reddit_profiles.json"
-                )
-                with open(profiles_file, 'r', encoding='utf-8') as f:
-                    profiles_data = json.load(f)
-                    profiles_count = len(profiles_data) if isinstance(profiles_data, list) else 0
-            
-            # Audit P1 fix: a status READ must not rewrite canonical state.
-            # The old code mutated state.json from "preparing" -> "ready" as a
-            # side effect of this check, which raced the prepare task writing
-            # the same file and could corrupt it under concurrent access. The
-            # check still returns is_prepared=True for a genuinely-complete-but-
-            # unflipped simulation; flipping the status is the prepare task's
-            # responsibility (SimulationManager.prepare_simulation sets READY).
-
-            logger.info(f"Simulation {simulation_id} Detection result: Prepared (status={status}, config_generated={config_generated})")
-            return True, {
-                "status": status,
-                "entities_count": state_data.get("entities_count", 0),
-                "profiles_count": profiles_count,
-                "entity_types": state_data.get("entity_types", []),
-                "config_generated": config_generated,
-                "preflight_passed": preflight_passed,
-                "execution_boundary": (
-                    "decision_lens_reviewed"
-                    if uses_decision_lens_boundary
-                    else "legacy_profile_artifact_non_executable"
-                ),
-                "created_at": state_data.get("created_at"),
-                "updated_at": state_data.get("updated_at"),
-                "existing_files": existing_files
-            }
-        else:
-            logger.info(f"Simulation {simulation_id} Detection result: Not prepared (status={status}, config_generated={config_generated})")
-            return False, {
-                "reason": f"Status not in prepared list or config_generated is false: status={status}, config_generated={config_generated}",
-                "status": status,
-                "config_generated": config_generated,
-                "preflight_passed": preflight_passed,
-                "admission_error": admission_error,
-            }
-            
-    except Exception as e:
-        return False, {"reason": f"Failed to read state file: {str(e)}"}
+    manager = SimulationManager()
+    return manager.is_runnable(simulation_id)
 
 
 def _get_report_summary_for_simulation(simulation_id: str):

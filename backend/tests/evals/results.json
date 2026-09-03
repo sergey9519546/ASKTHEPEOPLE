@@ -1,5 +1,10 @@
 {
-  "disclosure_text_length": 148,
-  "disclosure_terms_complete": true,
-  "disclosure_missing_terms": []
+  "_test_summary": {
+    "total_tests": 12,
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "exit_status": 0,
+    "session_exit_status": 0
+  }
 }

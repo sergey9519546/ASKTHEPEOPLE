@@ -115,10 +115,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useWindowRoute } from "../composables/useWindowContext.js";
 import { useWorkspaceState } from "../composables/useWorkspaceState.js";
+import { usePolling } from "../composables/usePolling.js";
 import { getGraphData, getProject } from "../api/graph";
 import {
   closeSimulationEnv,
@@ -321,17 +322,9 @@ const refreshGraph = async () => {
   );
 };
 
-let graphRefreshTimer = null;
-const startGraphRefresh = () => {
-  if (graphRefreshTimer) return;
-  graphRefreshTimer = setInterval(refreshGraph, 30000);
-};
-const stopGraphRefresh = () => {
-  if (graphRefreshTimer) {
-    clearInterval(graphRefreshTimer);
-    graphRefreshTimer = null;
-  }
-};
+const graphRefreshPoller = usePolling({ intervalMs: 30000, immediate: false });
+const startGraphRefresh = () => graphRefreshPoller.start(refreshGraph);
+const stopGraphRefresh = () => graphRefreshPoller.stop();
 
 watch(isSimulating, (val) => (val ? startGraphRefresh() : stopGraphRefresh()), {
   immediate: true,
@@ -341,7 +334,6 @@ onMounted(() => {
   addLog("Scenario run view opened.");
   loadSimulationData();
 });
-onUnmounted(stopGraphRefresh);
 </script>
 
 <style scoped>
