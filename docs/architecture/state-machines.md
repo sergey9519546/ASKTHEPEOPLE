@@ -400,7 +400,7 @@ The deeper P1 finding — the single conflated `SimulationStatus` enum
 conflating preparation/execution/environment/report/task state — remains
 TARGET; resolving it needs the four independent state machines (gate 2). The
 full audit text is in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §5 P1](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#5-release-blocking-findings).
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §5 P1](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#5-release-blocking-findings).
 
 ### Status of the target state machines
 
@@ -421,7 +421,7 @@ The doc's "Rules common to all state machines" require that **transitions
 occur through a domain command, never direct UI/database mutation**. The
 current code does not have a domain command surface. The audit's
 decomposition target
-([`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §7](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#7-correct-target-architecture))
+([`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §7](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#7-correct-target-architecture))
 names the application-command layer at
 `backend/app/application/commands/{create_simulation,prepare_simulation,start_run,stop_run,close_environment}.py`.
 None of these exists today. Tracked in

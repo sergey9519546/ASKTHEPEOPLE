@@ -117,7 +117,7 @@ validator and the prohibited-language linter on every push and PR that
 touches `docs/`.
 
 The three P0 release-blocker findings in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md)
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md)
 are closed:
 
 | P0 | Fix | Doc anchor |

@@ -1,3 +1,14 @@
+---
+title: "COMMIT STAGING GUIDE"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # Commit Staging Guide — Session 2026-09-03
 
 ## Overview

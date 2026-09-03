@@ -1,10 +1,21 @@
+---
+title: "RAILWAY FREE TRIAL STRATEGY"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # STATUS: DEPRECATED / DO NOT USE
 
 > This legacy cost guide is retained for audit only. Its split-service advice
 > is unsafe for the current filesystem-backed state. Follow
-> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+> [`../release/RUNBOOK.md`](../release/RUNBOOK.md).
 
-# Railway Free Trial Strategy — Historical
+## Railway Free Trial Strategy — Historical
 
 You have $5 free trial credits. Don't waste them.
 
@@ -88,13 +99,13 @@ stderr_logfile_maxbytes=0
 Add supervisor installation in Dockerfile (before CMD):
 
 ```dockerfile
-# Install supervisor
+## Install supervisor
 RUN pip install supervisor
 
-# Copy supervisor config
+## Copy supervisor config
 COPY supervisord.conf /app/supervisord.conf
 
-# Create log directory
+## Create log directory
 RUN mkdir -p /var/log/supervisor
 ```
 

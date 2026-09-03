@@ -1,3 +1,14 @@
+---
+title: "QUICK REFERENCE"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # ⚡ QUICK REFERENCE — INTELLIGENT GUIDANCE SYSTEM
 
 ## ✅ Status: READY TO DEPLOY
@@ -21,8 +32,8 @@ git add frontend/src/composables/useGuidedContext.js \
         frontend/src/components/ContextualHelp.vue \
         frontend/src/components/Step1GraphBuildRefactored.vue \
         frontend/src/assets/adaptive-utilities.css \
-        docs/design/*.md \
-        TODOS_COMPLETE.md \
+        ../design/*.md \
+        ../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md \
         READY_TO_DEPLOY.md
 
 # Commit with descriptive message
@@ -100,10 +111,10 @@ git push staging main
 | Document | Purpose | Lines |
 |----------|---------|-------|
 | [READY_TO_DEPLOY.md](READY_TO_DEPLOY.md) | Complete deployment guide | 350 |
-| [TODOS_COMPLETE.md](TODOS_COMPLETE.md) | Todo completion summary | 420 |
-| [DEPLOYMENT_READINESS.md](docs/design/DEPLOYMENT_READINESS.md) | Full deployment procedures | 650 |
-| [QUICK_START_INTEGRATION.md](docs/design/QUICK_START_INTEGRATION.md) | 5-minute test integration | 280 |
-| [PROGRESSIVE_INTELLIGENCE_GUIDE.md](docs/design/PROGRESSIVE_INTELLIGENCE_GUIDE.md) | Complete philosophy | 650 |
+| [../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md](../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md) | Todo completion summary | 420 |
+| [DEPLOYMENT_READINESS.md](../design/DEPLOYMENT_READINESS.md) | Full deployment procedures | 650 |
+| [QUICK_START_INTEGRATION.md](../design/QUICK_START_INTEGRATION.md) | 5-minute test integration | 280 |
+| [PROGRESSIVE_INTELLIGENCE_GUIDE.md](../design/PROGRESSIVE_INTELLIGENCE_GUIDE.md) | Complete philosophy | 650 |
 
 ---
 
@@ -136,8 +147,8 @@ git push staging main
 - (+ 1 supporting file)
 
 **Documentation (10):**
-- All in `docs/design/` (9 files)
-- `TODOS_COMPLETE.md`
+- All in `../design/` (9 files)
+- `../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md`
 - `READY_TO_DEPLOY.md`
 
 ---

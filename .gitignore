@@ -60,6 +60,11 @@ gui-test-screenshots/
 **/.playwright-cli/
 output/
 
+# Temporary and scratch directories
+scratch/
+temp/
+tmp/
+
 # 文档与测试程序
 mydoc/
 mytest/
@@ -67,6 +72,8 @@ mytest/
 # 日志文件
 backend/logs/
 *.log
+log/
+logs/
 
 # 上传文件
 backend/uploads/

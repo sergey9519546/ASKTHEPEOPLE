@@ -1,9 +1,20 @@
+---
+title: "RAILWAY SETUP"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # STATUS: DEPRECATED / DO NOT USE
 
 > This legacy setup guide is retained for audit only. It does not implement the
-> approved topology. Follow [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+> approved topology. Follow [`../release/RUNBOOK.md`](../release/RUNBOOK.md).
 
-# Railway Production Setup Guide (Historical)
+## Railway Production Setup Guide (Historical)
 
 This guide walks through setting up ASKTHEPEOPLE on Railway with proper Celery worker configuration.
 
@@ -39,8 +50,8 @@ In your web service settings → Variables tab, add:
 SECRET_KEY=<generate with: python -c "import secrets; print(secrets.token_urlsafe(32))">
 FLASK_DEBUG=false
 APP_TOKEN=<generate with: python -c "import secrets; print(secrets.token_urlsafe(32))">
-LLM_API_KEY=<your-openai-key>
-ZEP_API_KEY=<your-zep-cloud-key>
+LLM_API_KEY=# YOUR_OPENAI_KEY_HERE (replace with actual key)
+ZEP_API_KEY=# YOUR_ZEP_CLOUD_KEY_HERE (replace with actual key)
 CORS_ORIGINS=https://${{RAILWAY_PUBLIC_DOMAIN}}
 ```
 
@@ -50,8 +61,8 @@ CORS_ORIGINS=https://${{RAILWAY_PUBLIC_DOMAIN}}
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_MODEL_NAME=gpt-4o-mini
 LLM_BOOST_MODEL_NAME=gpt-4o
-BRAVE_SEARCH_API_KEY=<your-brave-key>
-SENTRY_DSN=<your-sentry-dsn>
+BRAVE_SEARCH_API_KEY=# YOUR_BRAVE_KEY_HERE (replace with actual key)
+SENTRY_DSN=# YOUR_SENTRY_DSN_HERE (replace with actual DSN)
 ALLOW_RUNTIME_SETTINGS=false
 LOG_LEVEL=INFO
 ```

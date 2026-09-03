@@ -1,10 +1,21 @@
+---
+title: "CELERY WORKER SETUP"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # STATUS: DEPRECATED / DO NOT USE
 
 > This legacy worker guide predates the reviewed single-host TRANSITION
 > topology and is retained for audit only. Follow
-> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+> [`../release/RUNBOOK.md`](../release/RUNBOOK.md).
 
-# Celery Worker Setup for Production (Historical)
+## Celery Worker Setup for Production (Historical)
 
 ## Problem Summary
 
@@ -183,56 +194,56 @@ celery -A app.celery_app control shutdown # Graceful shutdown
 ### 1. Check Redis connectivity
 ```bash
 curl http://localhost:5001/health
-# Should show: "redis": "ok"
+## Should show: "redis": "ok"
 ```
 
 ### 2. Check worker is consuming
 ```bash
-# In worker logs, you should see:
-# [tasks]
-#   . tasks.generate_ontology_task
-#   . tasks.build_graph_task
-#   . tasks.prepare_simulation_task
-#   . tasks.run_simulation_task
-#   . tasks.generate_report_task
+## In worker logs, you should see:
+## [tasks]
+##   . tasks.generate_ontology_task
+##   . tasks.build_graph_task
+##   . tasks.prepare_simulation_task
+##   . tasks.run_simulation_task
+##   . tasks.generate_report_task
 
-# Then try an ontology generation and watch logs:
-# [INFO/MainProcess] Task tasks.generate_ontology_task[<uuid>] received
-# [INFO/ForkPoolWorker-1] Task tasks.generate_ontology_task[<uuid>] succeeded in 23.4s
+## Then try an ontology generation and watch logs:
+## [INFO/MainProcess] Task tasks.generate_ontology_task[<uuid>] received
+## [INFO/ForkPoolWorker-1] Task tasks.generate_ontology_task[<uuid>] succeeded in 23.4s
 ```
 
 ### 3. Full smoke test
 ```bash
-# 1. Upload files → ontology generation
+## 1. Upload files → ontology generation
 curl -X POST http://localhost:5001/api/graph/ontology/generate \
   -H "Authorization: Bearer $APP_TOKEN" \
   -F "files=@test.pdf" \
   -F "simulation_requirement=Test" \
   -F "project_name=Test"
 
-# Response should be 202 with task_id
-# Poll: GET /api/graph/task/{task_id}
-# Should progress from pending → processing → completed
+## Response should be 202 with task_id
+## Poll: GET /api/graph/task/{task_id}
+## Should progress from pending → processing → completed
 
-# 2. Build graph
+## 2. Build graph
 curl -X POST http://localhost:5001/api/graph/build \
   -H "Authorization: Bearer $APP_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"project_id": "<id>"}'
 
-# 3. Prepare simulation
+## 3. Prepare simulation
 curl -X POST http://localhost:5001/api/simulation/prepare \
   -H "Authorization: Bearer $APP_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"simulation_id": "<id>"}'
 
-# 4. Generate report
+## 4. Generate report
 curl -X POST http://localhost:5001/api/report/generate \
   -H "Authorization: Bearer $APP_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"simulation_id": "<id>"}'
 
-# All should return 202 and progress to completion
+## All should return 202 and progress to completion
 ```
 
 ## Known Limitations (Documented, Not Blocking)

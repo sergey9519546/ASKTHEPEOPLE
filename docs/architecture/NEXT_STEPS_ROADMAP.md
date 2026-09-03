@@ -1,3 +1,14 @@
+---
+title: "NEXT STEPS ROADMAP"
+status: "Reference"
+version: "1.0.0"
+owner: "Architecture"
+last_reviewed: "2026-08-18"
+review_cycle: "As needed"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "architecture planning"
+---
+
 # ASKTHEPEOPLE: Next Tasks & Product Roadmap
 
 Following the successful implementation of the **Core AI Simulation Engine Upgrade** (Memory Stream & Reflection Engine, Dynamic Topologies & Homophily Rewiring, Multi-Model Complexity Tiering, and Counterfactual Scenario Branching), this document outlines the next logical priorities to achieve full production readiness and a best-in-class user experience.

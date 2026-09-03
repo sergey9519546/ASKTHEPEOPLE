@@ -1,3 +1,15 @@
+---
+title: "ASKTHEPEOPLE GODMODE Build Plan"
+status: "Reference"
+version: "1.0.0"
+owner: "Architecture"
+last_reviewed: "2026-08-18"
+review_cycle: "As needed"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "architecture, implementation strategy, release gates"
+note: "Forensic audit synthesis and implementation roadmap"
+---
+
 # ASKTHEPEOPLE
 ## /GODMODE Product Audit, Research-Backed Build Plan, and Master Build Prompt
 

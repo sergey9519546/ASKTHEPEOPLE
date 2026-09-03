@@ -77,7 +77,7 @@ Key file:line references:
 
 - The naked ASKTHEPEOPLE wordmark is currently visible alone in
   legacy route names
-  ([`audit P2`](../../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#5-release-blocking-findings)):
+  ([`audit P2`](../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#5-release-blocking-findings)):
   `/interview`, `/interview/all`, `/interview/batch`, `/opinions`,
   `/export/survey`, and the `interviews_count`,
   `export_survey_results` fields. These will receive the deprecation

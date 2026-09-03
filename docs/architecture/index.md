@@ -24,7 +24,7 @@ This document is the project-specific architecture entry point for
 **ASKTHEPEOPLE / Synthetic Decision Explorer** at the current implementation
 baseline. It is derived from the actual code under
 [`backend/app/`](../../backend/app/) and the integration audit recorded in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md).
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md).
 The target state described in the original audit and in
 [`data-model.md`](data-model.md) / [`state-machines.md`](state-machines.md) is
 still aspirational; current-versus-target divergences are listed explicitly so
@@ -83,7 +83,7 @@ that no PR can claim the target without an acceptance-evidence bundle.
 
 The Flask application is created by [`create_app()`](../../backend/app/__init__.py:25).
 The route responsibility contract is
-[`auth → parse → authorize → dispatch → present`](../..//ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#7-correct-target-architecture).
+[`auth → parse → authorize → dispatch → present`](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#7-correct-target-architecture).
 Current implementation of that contract is **PARTIAL**: most routes handle all
 five steps inline and additionally start threads, open SQLite, scan report
 directories, and build exports.
@@ -457,7 +457,7 @@ state persists across refresh and deep links resolve through the router.
 ## Gaps to the target architecture
 
 The integration audit identifies six release gates
-([`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order)).
+([`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order)).
 The TRANSITION work for each is owned by the corresponding agent and tracked
 in [`docs/exec-plans/`](../exec-plans/README.md):
 

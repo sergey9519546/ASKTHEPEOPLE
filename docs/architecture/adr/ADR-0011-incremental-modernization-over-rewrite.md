@@ -71,7 +71,7 @@ evidence, compatibility impact, migration sequence, rollback, and ownership.
 ## Project-specific implication (baseline `8b616dc7`)
 
 This ADR is the rollout order for the 6-gate refactor defined in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](../../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order)
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order)
 and recorded in
 [`docs/architecture/index.md` §"Gaps to the target architecture"](../index.md).
 

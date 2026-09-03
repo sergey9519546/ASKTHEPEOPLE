@@ -1,9 +1,20 @@
+---
+title: "FREE DEPLOYMENT GUIDE"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # Free Deployment Guide ($0/month)
 
 > **STATUS: DEPRECATED / DO NOT USE**
 > This legacy pricing and topology guide is retained for audit only. Its service
 > limits and deployment instructions are not current release evidence. Follow
-> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md) and re-verify every host's
+> [`../release/RUNBOOK.md`](../release/RUNBOOK.md) and re-verify every host's
 > official current limits before selecting infrastructure.
 
 You have $5 Railway trial credits. You need **free long-term hosting**.

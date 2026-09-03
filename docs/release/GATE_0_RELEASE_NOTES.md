@@ -14,7 +14,7 @@ related_adrs: "ADR-0003, ADR-0004, ADR-0005, ADR-0008, ADR-0009, ADR-0012"
 # Gate 0 — Release notes (immediate correctness and security)
 
 This is the release evidence for the three P0 release-blocker findings in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md) §5.
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](../architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md) §5.
 Each P0 is closed by a structural fix and a corresponding test. The full
 release evidence bundle per [`ACCEPTANCE.md`](ACCEPTANCE.md) is
 **TARGET** and lands with gate 4 + gate 5; this document is the
@@ -290,4 +290,4 @@ The 6-gate program is tracked in
 Mavis specialist agent and tracked by the corresponding execution
 plan. Gate 0 (this document) is structurally closed. The remaining
 gates 1–5 land per the dependency order in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md) §13.
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](../architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md) §13.

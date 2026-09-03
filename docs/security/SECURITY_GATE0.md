@@ -1,10 +1,22 @@
+---
+title: "Security Gate 0 Historical Record"
+status: "Reference"
+version: "1.0.0"
+owner: "Security"
+last_reviewed: "2026-08-18"
+review_cycle: "As needed"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "security fixes, gate 0"
+note: "Historical record - see docs/security/ for current security documentation"
+---
+
 # STATUS: HISTORICAL / NOT RELEASE EVIDENCE
 
 > This earlier gate snapshot is not current deployment authorization. Follow
-> [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md) and the normative
+> [`../release/RUNBOOK.md`](../release/RUNBOOK.md) and the normative
 > security documentation under `docs/security/`.
 
-# Security P0 Fixes - Gate 0 (Phase 1.2, Historical)
+## Security P0 Fixes - Gate 0 (Phase 1.2, Historical)
 
 ## Summary
 

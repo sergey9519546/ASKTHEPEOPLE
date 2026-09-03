@@ -1,9 +1,20 @@
+---
+title: "RAILWAY QUICK FIX"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # Railway Deployment Quick Fix
 
 > **STATUS: DEPRECATED / DO NOT USE**
 > This legacy incident note is retained for audit only. Adding variables does
 > not repair canonical persistence or coordinated web/worker/beat deployment.
-> Follow [`docs/release/RUNBOOK.md`](docs/release/RUNBOOK.md).
+> Follow [`../release/RUNBOOK.md`](../release/RUNBOOK.md).
 
 ## Current Status
 - ✅ App deployed at https://askthepeople-production-8325.up.railway.app/

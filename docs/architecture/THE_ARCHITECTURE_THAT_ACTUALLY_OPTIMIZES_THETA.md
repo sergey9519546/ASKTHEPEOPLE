@@ -1,3 +1,14 @@
+---
+title: "THE ARCHITECTURE THAT ACTUALLY OPTIMIZES THETA"
+status: "Reference"
+version: "1.0.0"
+owner: "Architecture"
+last_reviewed: "2026-08-18"
+review_cycle: "As needed"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "architecture planning"
+---
+
 # The Architecture That Actually Optimizes θ*
 
 **Date:** 2026-08-19 (Final)  

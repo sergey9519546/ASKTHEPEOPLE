@@ -1,3 +1,14 @@
+---
+title: "READY TO DEPLOY"
+status: "Reference"
+version: "1.0.0"
+owner: "Release Operator"
+last_reviewed: "2026-09-03"
+review_cycle: "Per deployment"
+baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
+applies_to: "deployment procedures"
+---
+
 # 🚀 READY TO DEPLOY — EXECUTIVE SUMMARY
 
 ## Mission: Complete ✅
@@ -94,20 +105,20 @@ frontend/src/assets/adaptive-utilities.css
 
 **Documentation (9 files):**
 ```
-docs/design/PROGRESSIVE_INTELLIGENCE_GUIDE.md
-docs/design/INTELLIGENT_GUIDANCE_IMPLEMENTATION.md
-docs/design/INTELLIGENT_GUIDANCE_COMPLETE.md
-docs/design/COMPONENT_MIGRATION_CHECKLIST.md
-docs/design/QUICK_START_INTEGRATION.md
-docs/design/STEP2_MIGRATION_STRATEGY.md
-docs/design/STEP3_STEP4_MIGRATION_STRATEGY.md
-docs/design/DEPLOYMENT_READINESS.md
-docs/design/IMPLEMENTATION_COMPLETE.md
+../design/PROGRESSIVE_INTELLIGENCE_GUIDE.md
+../design/INTELLIGENT_GUIDANCE_IMPLEMENTATION.md
+../design/INTELLIGENT_GUIDANCE_COMPLETE.md
+../design/COMPONENT_MIGRATION_CHECKLIST.md
+../design/QUICK_START_INTEGRATION.md
+../design/STEP2_MIGRATION_STRATEGY.md
+../design/STEP3_STEP4_MIGRATION_STRATEGY.md
+../design/DEPLOYMENT_READINESS.md
+../design/IMPLEMENTATION_COMPLETE.md
 ```
 
 **Summary (1 file):**
 ```
-TODOS_COMPLETE.md
+../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md
 ```
 
 ---
@@ -128,18 +139,18 @@ git add frontend/src/components/Step1GraphBuildRefactored.vue
 git add frontend/src/assets/adaptive-utilities.css
 
 # Add documentation
-git add docs/design/PROGRESSIVE_INTELLIGENCE_GUIDE.md
-git add docs/design/INTELLIGENT_GUIDANCE_IMPLEMENTATION.md
-git add docs/design/INTELLIGENT_GUIDANCE_COMPLETE.md
-git add docs/design/COMPONENT_MIGRATION_CHECKLIST.md
-git add docs/design/QUICK_START_INTEGRATION.md
-git add docs/design/STEP2_MIGRATION_STRATEGY.md
-git add docs/design/STEP3_STEP4_MIGRATION_STRATEGY.md
-git add docs/design/DEPLOYMENT_READINESS.md
-git add docs/design/IMPLEMENTATION_COMPLETE.md
+git add ../design/PROGRESSIVE_INTELLIGENCE_GUIDE.md
+git add ../design/INTELLIGENT_GUIDANCE_IMPLEMENTATION.md
+git add ../design/INTELLIGENT_GUIDANCE_COMPLETE.md
+git add ../design/COMPONENT_MIGRATION_CHECKLIST.md
+git add ../design/QUICK_START_INTEGRATION.md
+git add ../design/STEP2_MIGRATION_STRATEGY.md
+git add ../design/STEP3_STEP4_MIGRATION_STRATEGY.md
+git add ../design/DEPLOYMENT_READINESS.md
+git add ../design/IMPLEMENTATION_COMPLETE.md
 
 # Add summary
-git add TODOS_COMPLETE.md
+git add ../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md
 ```
 
 ### 2. Commit with Descriptive Message
@@ -362,11 +373,11 @@ Then:               DEPLOY TO STAGING
 
 ## Key Documents for Reference
 
-1. **[TODOS_COMPLETE.md](TODOS_COMPLETE.md)** ← Todo completion summary
-2. **[DEPLOYMENT_READINESS.md](docs/design/DEPLOYMENT_READINESS.md)** ← Deployment procedures
-3. **[IMPLEMENTATION_COMPLETE.md](docs/design/IMPLEMENTATION_COMPLETE.md)** ← Technical summary
-4. **[QUICK_START_INTEGRATION.md](docs/design/QUICK_START_INTEGRATION.md)** ← 5-minute integration test
-5. **[PROGRESSIVE_INTELLIGENCE_GUIDE.md](docs/design/PROGRESSIVE_INTELLIGENCE_GUIDE.md)** ← Full philosophy
+1. **[../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md](../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md)** ← Todo completion summary
+2. **[DEPLOYMENT_READINESS.md](../design/DEPLOYMENT_READINESS.md)** ← Deployment procedures
+3. **[IMPLEMENTATION_COMPLETE.md](../design/IMPLEMENTATION_COMPLETE.md)** ← Technical summary
+4. **[QUICK_START_INTEGRATION.md](../design/QUICK_START_INTEGRATION.md)** ← 5-minute integration test
+5. **[PROGRESSIVE_INTELLIGENCE_GUIDE.md](../design/PROGRESSIVE_INTELLIGENCE_GUIDE.md)** ← Full philosophy
 
 ---
 
