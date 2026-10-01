@@ -10,7 +10,7 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">01</span>
-            <span class="step-title">Read the source material</span>
+            <span class="step-title">{{ stepOneTitle }}</span>
           </div>
           <div class="step-status">
             <span v-if="currentPhase > 0" class="badge success">Completed</span>
@@ -158,7 +158,7 @@
             <span class="tag-label">People, places, and concepts</span>
             <div class="tags-list">
               <button
-                v-for="entity in projectData.ontology.entity_types"
+                v-for="entity in visibleEntityTypes"
                 :key="entity.name"
                 class="entity-tag clickable"
                 type="button"
@@ -167,27 +167,59 @@
                 {{ entity.name }}
               </button>
             </div>
+            <ProgressiveGuidance
+              v-if="remainingEntityTypes.length"
+              id="remaining-entities"
+              level="secondary"
+              :expandable="true"
+            >
+              <template #preview>
+                +{{ remainingEntityTypes.length }} more entities
+              </template>
+              <template #default>
+                <div class="tags-list">
+                  <button
+                    v-for="entity in remainingEntityTypes"
+                    :key="entity.name"
+                    class="entity-tag clickable"
+                    type="button"
+                    @click="openOntologyItem(entity, 'entity')"
+                  >
+                    {{ entity.name }}
+                  </button>
+                </div>
+              </template>
+            </ProgressiveGuidance>
           </div>
 
           <!-- Generated Relation Tags -->
-          <div
+          <ProgressiveGuidance
             v-if="projectData?.ontology?.edge_types"
-            class="tags-container"
-            :class="{ dimmed: selectedOntologyItem }"
+            id="relationship-types"
+            level="available"
+            :capabilities="['learning', 'practiced', 'expert']"
           >
-            <span class="tag-label">Relationship categories proposed from the sources</span>
-            <div class="tags-list">
-              <button
-                v-for="rel in projectData.ontology.edge_types"
-                :key="rel.name"
-                class="entity-tag clickable"
-                type="button"
-                @click="openOntologyItem(rel, 'relation')"
+            <template #trigger-label>relationship categories</template>
+            <template #default>
+              <div
+                class="tags-container"
+                :class="{ dimmed: selectedOntologyItem }"
               >
-                {{ rel.name }}
-              </button>
-            </div>
-          </div>
+                <span class="tag-label">Relationship categories proposed from the sources</span>
+                <div class="tags-list">
+                  <button
+                    v-for="rel in projectData.ontology.edge_types"
+                    :key="rel.name"
+                    class="entity-tag clickable"
+                    type="button"
+                    @click="openOntologyItem(rel, 'relation')"
+                  >
+                    {{ rel.name }}
+                  </button>
+                </div>
+              </div>
+            </template>
+          </ProgressiveGuidance>
         </div>
       </div>
 
@@ -199,7 +231,7 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">02</span>
-            <span class="step-title">Source map connections</span>
+            <span class="step-title">{{ stepTwoTitle }}</span>
           </div>
           <div class="step-status">
             <span v-if="currentPhase > 1" class="badge success"
@@ -245,7 +277,7 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">03</span>
-            <span class="step-title">Source map ready</span>
+            <span class="step-title">{{ stepThreeTitle }}</span>
           </div>
           <div class="step-status">
             <span v-if="currentPhase >= 2" class="badge accent"
@@ -309,7 +341,9 @@
 import { computed, nextTick, ref } from "vue";
 import { useRouter } from "vue-router";
 import { createSimulation } from "../api/simulation";
+import { useAdaptiveUI } from "../composables/useAdaptiveUI";
 import ContextualHelp from "./ContextualHelp.vue";
+import ProgressiveGuidance from "./ProgressiveGuidance.vue";
 
 const router = useRouter();
 
@@ -323,6 +357,8 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["next-step"]);
+
+const { adaptiveCopy } = useAdaptiveUI();
 
 const selectedOntologyItem = ref(null);
 const detailDialog = ref(null);
@@ -339,6 +375,44 @@ const graphStats = computed(() => {
   const types = props.projectData?.ontology?.entity_types?.length || 0;
   return { nodes, edges, types };
 });
+
+// Entity tags: the first six stay always visible; the rest are progressive.
+const visibleEntityTypes = computed(() =>
+  (props.projectData?.ontology?.entity_types ?? []).slice(0, 6),
+);
+const remainingEntityTypes = computed(() =>
+  (props.projectData?.ontology?.entity_types ?? []).slice(6),
+);
+
+// Step titles adapt to the user's capability level. The truth caveats in the
+// card bodies below are intentionally NOT adaptive: they stay for everyone.
+const stepOneTitle = computed(() =>
+  adaptiveCopy("step_read_sources", {
+    first_use: "See what was read from your material",
+    learning: "Review the reading results",
+    practiced: "Reading results",
+    expert: "Source reading",
+    default: "Read the source material",
+  }),
+);
+const stepTwoTitle = computed(() =>
+  adaptiveCopy("step_map_connections", {
+    first_use: "How the items connect to each other",
+    learning: "Connections in the source map",
+    practiced: "Map connections",
+    expert: "Connections",
+    default: "Source map connections",
+  }),
+);
+const stepThreeTitle = computed(() =>
+  adaptiveCopy("step_map_ready", {
+    first_use: "Your source map is ready to review",
+    learning: "Source map ready to review",
+    practiced: "Source map ready",
+    expert: "Map ready",
+    default: "Source map ready",
+  }),
+);
 
 const hasProjectReferences = computed(
   () => Boolean(props.projectData?.project_id && props.projectData?.graph_id),

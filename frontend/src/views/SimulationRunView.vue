@@ -38,7 +38,7 @@
         </div>
         <div class="status-box" :class="currentStatus">
           <span class="status-dot"></span>
-          <span class="status-msg">{{ statusText }}</span>
+          <span class="status-msg">{{ statusLabel }}</span>
         </div>
       </div>
     </header>
@@ -119,6 +119,10 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useWindowRoute } from "../composables/useWindowContext.js";
 import { useWorkspaceState } from "../composables/useWorkspaceState.js";
+import {
+  normalizeStatus,
+  useStatusPresentation,
+} from "../composables/useStatusPresentation.js";
 import { usePolling } from "../composables/usePolling.js";
 import { getGraphData, getProject } from "../api/graph";
 import {
@@ -187,11 +191,15 @@ const rightPanelStyle = computed(() => {
   return { width: "50%", opacity: 1, transform: "translateX(0)" };
 });
 
-const statusText = computed(() => {
-  if (currentStatus.value === "error") return "Needs attention";
-  if (currentStatus.value === "completed") return "Run complete";
-  return "Run in progress";
-});
+const statusLabel = useStatusPresentation(currentStatus, {
+  labels: {
+    completed: "Run complete",
+    error: "Needs attention",
+    failed: "Needs attention",
+    processing: "Run in progress",
+  },
+  fallback: "Run in progress",
+}).label;
 
 const isSimulating = computed(() => currentStatus.value === "processing");
 
@@ -216,7 +224,9 @@ const addLog = (msg) => {
   if (systemLogs.value.length > 200) systemLogs.value.shift();
 };
 
-const updateStatus = (status) => (currentStatus.value = status);
+const updateStatus = (status) => {
+  currentStatus.value = normalizeStatus(status, { remap: { failed: "error" } });
+};
 
 const toggleMaximize = (target) =>
   (viewMode.value = viewMode.value === target ? "workbench" : target);

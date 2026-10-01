@@ -195,6 +195,7 @@ import { listSimulations } from "../api/simulation";
 import { deriveWorkflowStep } from "../utils/workflow.js";
 import { useGuidedContext } from "../composables/useGuidedContext.js";
 import { useCapabilityTracking } from "../composables/useCapabilityTracking.js";
+import { useStatusPresentation } from "../composables/useStatusPresentation.js";
 import { usePolling } from "../composables/usePolling.js";
 
 const router = useRouter();
@@ -337,16 +338,24 @@ const statusClass = computed(() => {
   return "processing";
 });
 
-const statusText = computed(() => {
-  if (error.value) return "Needs attention";
-  if (currentStep.value > 1) {
-    return {
+// Runtime step status → header label. The error and phase-based branches in
+// statusText below keep their own special-casing; only the lookup is shared.
+const stepRuntimeStatusLabel = useStatusPresentation(
+  computed(() => stepRuntimeStatus.value),
+  {
+    labels: {
       completed: "Ready",
       error: "Needs attention",
       failed: "Needs attention",
       processing: "Preparing",
-    }[stepRuntimeStatus.value] || "Preparing";
-  }
+    },
+    fallback: "Preparing",
+  },
+).label;
+
+const statusText = computed(() => {
+  if (error.value) return "Needs attention";
+  if (currentStep.value > 1) return stepRuntimeStatusLabel.value;
   if (currentPhase.value >= 2) {
     return hasGraphContent.value ? "Ready" : "Needs attention";
   }
