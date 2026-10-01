@@ -4,12 +4,12 @@ Step 2: Zep Entity Reading & Filtering, OASIS Simulation Preparation & Running (
 """
 
 import traceback
-from flask import request, jsonify
+from flask import request
 
 from .. import simulation_bp
 from ..simulation import optimize_interview_prompt
 from .. import limiter
-from ..presentation import error_response, present
+from ..presentation import error_response, present, present_raw
 from ...config import Config
 from ...services.simulation_runner import SimulationRunner
 from ...services.claim_boundary import synthetic_output_disclosure
@@ -147,15 +147,18 @@ def interview_agent():
             timeout=timeout
         )
 
-        return jsonify({
+        # present_raw, not present(): the operation itself reports whether it
+        # succeeded, so the flag must stay dynamic (a hardcoded success:True
+        # would lie about a failed interview).
+        return present_raw({
             "success": result.get("success", False),
             "data": result,
             "disclosure": synthetic_output_disclosure(),
         })
-        
+
     except ValueError as e:
         return error_response(str(e), status=400)
-        
+
     except TimeoutError as e:
         return error_response(
             f"Timeout waiting for generated profile response: {str(e)}",
@@ -304,7 +307,8 @@ def interview_agents_batch():
             timeout=timeout
         )
 
-        return jsonify({
+        # Same dynamic-flag rule as the single follow-up above.
+        return present_raw({
             "success": result.get("success", False),
             "data": result,
             "disclosure": synthetic_output_disclosure(),
@@ -411,7 +415,8 @@ def interview_all_agents():
             timeout=timeout
         )
 
-        return jsonify({
+        # Same dynamic-flag rule as the single follow-up above.
+        return present_raw({
             "success": result.get("success", False),
             "data": result,
             "disclosure": synthetic_output_disclosure(),

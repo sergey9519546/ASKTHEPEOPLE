@@ -5,10 +5,10 @@ Step 2: Zep Entity Reading & Filtering, OASIS Simulation Preparation & Running (
 
 import os
 import traceback
-from flask import request, jsonify
+from flask import request
 
 from .. import simulation_bp
-from ..presentation import error_response, present
+from ..presentation import error_response, present, present_raw
 from ..simulation import (
     _resolve_graph_memory_request,
     _check_simulation_prepared,
@@ -84,32 +84,34 @@ def _enqueue_runtime_control(
     manager = SimulationManager()
     simulation_state = manager.get_simulation(simulation_id)
     if simulation_state is None:
-        return None, ({
-            "success": False,
-            "code": "simulation_not_found",
-            "error": f"Simulation does not exist: {simulation_id}",
-        }, 404)
+        # Each failure below is built through the presentation seam; the
+        # returned (response, status) tuple is what the route handlers return.
+        return None, error_response(
+            f"Simulation does not exist: {simulation_id}",
+            status=404,
+            code="simulation_not_found",
+        )
 
     run_state = SimulationRunner.get_run_state(simulation_id)
     run_status = _runner_status_value(run_state)
     if run_state is None:
-        return None, ({
-            "success": False,
-            "code": "simulation_not_active",
-            "error": "simulation_not_active",
-            "message": "Runtime controls require an active persisted run.",
-            "simulation_id": simulation_id,
-        }, 409)
+        return None, error_response(
+            "simulation_not_active",
+            status=409,
+            code="simulation_not_active",
+            message="Runtime controls require an active persisted run.",
+            simulation_id=simulation_id,
+        )
 
     attempt_id = getattr(run_state, "attempt_id", None)
     fencing_token = getattr(run_state, "fencing_token", None)
     if not attempt_id or fencing_token is None:
-        return None, ({
-            "success": False,
-            "code": "runtime_attempt_unavailable",
-            "error": "runtime_attempt_unavailable",
-            "message": "The active run has no durable ownership identity.",
-        }, 409)
+        return None, error_response(
+            "runtime_attempt_unavailable",
+            status=409,
+            code="runtime_attempt_unavailable",
+            message="The active run has no durable ownership identity.",
+        )
 
     control_store = RuntimeControlStore(
         _safe_sim_dir(simulation_id),
@@ -135,13 +137,13 @@ def _enqueue_runtime_control(
         command_type == "stop" and run_status == RunnerStatus.STOPPING.value
     )
     if not accepts_control:
-        return None, ({
-            "success": False,
-            "code": "simulation_not_active",
-            "error": "simulation_not_active",
-            "message": "Runtime controls require an active persisted run.",
-            "simulation_id": simulation_id,
-        }, 409)
+        return None, error_response(
+            "simulation_not_active",
+            status=409,
+            code="simulation_not_active",
+            message="Runtime controls require an active persisted run.",
+            simulation_id=simulation_id,
+        )
 
     active_platforms = _active_control_platforms(run_state)
     requested_targets = list(requested_platforms or active_platforms)
@@ -153,22 +155,22 @@ def _enqueue_runtime_control(
         or len(targets) != len(requested_targets)
         or any(platform not in active_platforms for platform in requested_targets)
     ):
-        return None, ({
-            "success": False,
-            "code": "runtime_platform_not_active",
-            "error": "runtime_platform_not_active",
-            "message": "Every target platform must be active in this run.",
-            "active_platforms": active_platforms,
-        }, 409)
+        return None, error_response(
+            "runtime_platform_not_active",
+            status=409,
+            code="runtime_platform_not_active",
+            message="Every target platform must be active in this run.",
+            active_platforms=active_platforms,
+        )
 
     if command_type == "stop" and set(targets) != set(active_platforms):
-        return None, ({
-            "success": False,
-            "code": "stop_requires_all_active_platforms",
-            "error": "stop_requires_all_active_platforms",
-            "message": "Stopping a run requires every active platform.",
-            "active_platforms": active_platforms,
-        }, 409)
+        return None, error_response(
+            "stop_requires_all_active_platforms",
+            status=409,
+            code="stop_requires_all_active_platforms",
+            message="Stopping a run requires every active platform.",
+            active_platforms=active_platforms,
+        )
 
     if command_type == "stop":
         idempotency_key = (
@@ -429,20 +431,22 @@ def start_simulation():
                 error=str(celery_err),
                 public_error="simulation_dispatch_unavailable",
             )
-            resp = jsonify({
-                "success": False,
-                "code": "simulation_dispatch_unavailable",
-                "error": "simulation_dispatch_unavailable",
-                "message": (
+            resp, status = error_response(
+                "simulation_dispatch_unavailable",
+                status=503,
+                code="simulation_dispatch_unavailable",
+                message=(
                     "Simulation execution could not be queued. "
                     "Try again after the worker service is available."
                 ),
-                "simulation_id": simulation_id,
-                "task_id": task_id,
-            })
-            resp.status_code = 503
+                simulation_id=simulation_id,
+                task_id=task_id,
+            )
+            # error_response applies its status only when the (response,
+            # status) tuple is returned, so return the tuple — not the bare
+            # response — after attaching the retry hint.
             resp.headers["Retry-After"] = "5"
-            return resp
+            return resp, status
 
         response_runner_status = "queued"
 
@@ -499,8 +503,8 @@ def stop_simulation():
             idempotency_key=request.headers.get("Idempotency-Key"),
         )
         if error:
-            payload, status = error
-            return jsonify(payload), status
+            # error is already a seam-built (response, status) tuple.
+            return error
         return _queued_control_response(simulation_id, control)
     except ValueError as exc:
         status = 409 if str(exc) == "idempotency_key_conflict" else 400
@@ -528,8 +532,8 @@ def create_runtime_control(simulation_id: str):
             request.headers.get("Idempotency-Key"),
         )
         if error:
-            payload, status = error
-            return jsonify(payload), status
+            # error is already a seam-built (response, status) tuple.
+            return error
         return _queued_control_response(simulation_id, control)
     except ValueError as exc:
         status = 409 if str(exc) == "idempotency_key_conflict" else 400
@@ -602,8 +606,8 @@ def inject_simulation_event(simulation_id: str):
             request.headers.get("Idempotency-Key"),
         )
         if error:
-            error_payload, status = error
-            return jsonify(error_payload), status
+            # error is already a seam-built (response, status) tuple.
+            return error
         return _queued_control_response(simulation_id, control)
     except ValueError as exc:
         return error_response(
@@ -867,9 +871,12 @@ def close_simulation_env():
             state.status = SimulationStatus.COMPLETED
             manager._save_simulation_state(state)
         
-        return jsonify({
+        # present_raw, not present(): close_simulation_env reports its own
+        # success/failure, so the flag must stay dynamic (a hardcoded
+        # success:True would contradict the audit P1 lifecycle rule above).
+        return present_raw({
             "success": result.get("success", False),
-            "data": result
+            "data": result,
         })
         
     except ValueError as e:

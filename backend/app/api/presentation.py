@@ -16,6 +16,7 @@ Callers get:
 
     present(data, status=200, extra=None)          -> success response
     error_response(error, status=400, **extra)     -> error response
+    present_raw(payload, status=200)                -> caller-owned payload
     with_profile_truth(records)                     -> detached profile records
     with_activity_truth(records)                    -> detached activity records
     with_config_truth(config)                       -> detached config payload
@@ -42,6 +43,26 @@ def present(data=None, *, status: int = 200, extra: dict | None = None):
     if extra:
         payload.update(extra)
     resp = jsonify(payload)
+    resp.status_code = status
+    return resp
+
+
+def present_raw(payload, *, status: int = 200):
+    """Emit a success-family payload whose shape is owned by the caller.
+
+    For results where the operation itself reports success/failure (e.g.
+    control-plane acknowledgements) and a hardcoded success:True would lie.
+    Ensures the payload is a dict with a boolean "success" key; use the
+    ordinary present()/error_response() everywhere else.
+
+    Normalization is deterministic, never a crash: a non-dict payload becomes
+    ``{"success": False}`` and a dict without a "success" key gains
+    ``success: False`` — a caller that cannot certify success must not be
+    upgraded to one by omission.
+    """
+    body = dict(payload) if isinstance(payload, dict) else {}
+    body.setdefault("success", False)
+    resp = jsonify(body)
     resp.status_code = status
     return resp
 

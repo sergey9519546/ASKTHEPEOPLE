@@ -19,11 +19,11 @@ import os
 import traceback
 from datetime import datetime
 
-from flask import jsonify, request
+from flask import request
 from werkzeug.utils import secure_filename
 
 from .. import simulation_bp
-from ..presentation import error_response, present
+from ..presentation import error_response, present, present_raw
 from ..simulation import (
     _enrich_simulation_summary,
     _get_report_summary_for_simulation,
@@ -473,11 +473,15 @@ def get_simulation_metrics(simulation_id: str):
 
         run_state = SimulationRunner.get_run_state(simulation_id)
         if run_state and run_state.runner_status in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
-            # Left as a literal envelope: an error-shaped payload answered at
-            # HTTP 200, and its extra key is "status", which collides with
-            # error_response's own `status` keyword.
-            return jsonify({
-                "success": False,
+            # present_raw, not error_response: this is a locked wire format —
+            # an error-shaped payload answered at HTTP 200 — and its "status"
+            # extra key collides with error_response's own `status` keyword.
+            # Rather than teaching error_response to carry an HTTP-status-
+            # shaped extra, the caller-owned payload goes through present_raw,
+            # which normalizes the missing success flag to False without
+            # touching the "status" key. Do not "fix" the 200 to a 4xx here:
+            # clients (including the frontend poller) branch on the body.
+            return present_raw({
                 "error": "simulation_not_complete",
                 "status": run_state.runner_status.value,
             })
