@@ -655,10 +655,10 @@ count in each component:
 | Component | `ProgressiveGuidance` | `ContextualHelp` | Adaptive copy | Strategy checklist |
 |---|---:|---:|---:|---|
 | `Step1GraphBuild.vue` | 5 | 2 | 4 | complete |
-| `Step2EnvSetup.vue` | **0** | 3 | 3 | [`STEP2_MIGRATION_STRATEGY.md`](../design/STEP2_MIGRATION_STRATEGY.md) lines 282-314 |
-| `Step3RunWayfinder.vue` | **0** | **0** | 0 | [`STEP3_STEP4_MIGRATION_STRATEGY.md`](../design/STEP3_STEP4_MIGRATION_STRATEGY.md) lines 206-209 |
-| `Step4Report.vue` | **0** | **0** | 0 | [`STEP3_STEP4_MIGRATION_STRATEGY.md`](../design/STEP3_STEP4_MIGRATION_STRATEGY.md) lines 419-427 |
-| `Step5Interaction.vue` | **0** | **0** | 2 | not planned |
+| `Step2EnvSetup.vue` | 4 | 3 | 3 | [`STEP2_MIGRATION_STRATEGY.md`](../design/STEP2_MIGRATION_STRATEGY.md) lines 290-325 — progressive profile display landed (2026-10-01); Sessions 2-5 (help/adaptive-copy depth) remain |
+| `Step3RunWayfinder.vue` | **0** | 3 | 0 | [`STEP3_STEP4_MIGRATION_STRATEGY.md`](../design/STEP3_STEP4_MIGRATION_STRATEGY.md) lines 214-225 — contextual help landed (2026-10-01) for the run boundaries and diagnostics concepts; the truth boundary itself is deliberately NOT capability-wrapped (hiding it would violate the truth contract) |
+| `Step4Report.vue` | **0** | 2 | 0 | [`STEP3_STEP4_MIGRATION_STRATEGY.md`](../design/STEP3_STEP4_MIGRATION_STRATEGY.md) lines 427-439 — contextual help landed (2026-10-01) for the report-records concept; the export controls keep the native `<details>` disclosure because `ProgressiveGuidance`'s availability tier would hide the Markdown/TXT exports from first-use users entirely (caught by `frontend/src/__tests__/report-recovery.spec.js`) |
+| `Step5Interaction.vue` | **0** | **0** | 2 (`actionLabel`) | not planned |
 
 These checklists are the authoritative work items for the migration;
 [`../design/COMPONENT_MIGRATION_CHECKLIST.md`](../design/COMPONENT_MIGRATION_CHECKLIST.md)

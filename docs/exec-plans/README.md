@@ -42,10 +42,15 @@ Each plan MUST maintain:
 | [05](05-brief-handoff-exports-and-provenance.md) | Decision brief, follow-up, research handoff, and detached truth |
 | [06](06-security-privacy-observability-and-operations.md) | Production risk, privacy, telemetry, deletion, incident, and deployment controls |
 | [07](07-evals-accessibility-and-release.md) | Comprehensive evaluation, comprehension, accessibility, and release proof |
+| [08](08-harvest-framework-engineering-fixes.md) | Gate 1–3 accelerators harvested from the framework-engineering review |
+| [09](09-source-material-workflow-improvements.md) | Source-material workflow: decision-only mode, URL ingestion, auto-research |
 
 Plan 00 gates all later plans. Plans 01 and 02 can proceed in parallel after
 the census. Plans 03–05 are ordered. Plan 06 begins with Plan 00 and continues
-through the program. Plan 07 begins early with test fixtures and completes last.
+through the program. Plan 07 begins early with test fixtures and completes
+last. Plans 08 and 09 are accelerators layered onto gates 1–3 and the
+source-material workflow respectively; they depend on the plans whose work
+they harvest (08 follows 03–05, 09 follows 05) and do not gate any plan.
 
 ## Evidence repository
 
@@ -76,7 +81,7 @@ authorized and redacted.
 ## Project-specific implementation status (baseline `8b616dc7`)
 
 This directory is the operational program for the 6-gate refactor.
-All 8 numbered plans (00-07) plus this README are project-specific
+All 10 numbered plans (00-09) plus this README are project-specific
 at the current baseline.
 
 **Owner:** The 8 plans are owned by the corresponding Mavis
