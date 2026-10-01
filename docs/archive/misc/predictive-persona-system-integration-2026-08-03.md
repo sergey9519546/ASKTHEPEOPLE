@@ -1,13 +1,36 @@
 ---
 title: "Predictive Persona System: Integration Architecture"
-status: "Design"
-version: "1.1.0"
+status: "Superseded"
+version: "2.0.0"
 created: "2026-08-03"
 owner: "askthepeople-architect"
 last_reviewed: "2026-08-03"
+superseded_by: "docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md"
+archived: "2026-10-01"
 ---
 
 # Predictive Persona System: Integration Architecture
+
+> **SUPERSEDED — RETAINED FOR AUDIT ONLY. DO NOT IMPLEMENT.**
+>
+> Archived 2026-10-01. This document contradicts accepted
+> [ADR-0001](../../architecture/adr/ADR-0001-product-category-and-truth-contract.md).
+>
+> **The specific violation.** Its Vision section states the target capability as:
+>
+> > "If we launch product X at price P, there's a **68% probability** of
+> > hitting 10K users in month 1, with Competitor Z undercutting by 20% in week
+> > 3."
+>
+> That is a calibrated probability of human market behaviour, presented as a
+> product capability. ADR-0001 and the truth rail prohibit exactly this:
+> `HUMAN RESPONDENTS: 0`, `NOT A FORECAST`, and the standing ban on
+> "predict what people will do" and "predict public response". A generated
+> agent population cannot produce a real 68%, and shipping the claim would
+> falsify the disclosure the product is required to carry.
+>
+> Retained because it is the origin document for the persona-engine naming that
+> still appears in retired modules, not because it describes intended behavior.
 
 ## Vision
 

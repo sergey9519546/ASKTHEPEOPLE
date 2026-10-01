@@ -269,7 +269,7 @@ For agents and CI, the operational contract is at
 - [Privacy: data map](docs/privacy/DATA_MAP.md), [retention](docs/privacy/RETENTION.md), [subprocessors](docs/privacy/SUBPROCESSORS.md)
 - [AI: prompt registry](docs/ai/PROMPT_REGISTRY.md), [evals](docs/ai/EVALS.md), [model releases](docs/ai/MODEL_RELEASES.md), [failure modes](docs/ai/FAILURE_MODES.md)
 - [Design Direction C — Civic Wayfinding](docs/design/DIRECTION_C.md), [route grammar](docs/design/ROUTE_GRAMMAR.md), [accessibility](docs/design/ACCESSIBILITY.md), [content system](docs/design/CONTENT_SYSTEM.md)
-- [Execution plans](docs/exec-plans/README.md) (8 plans, dependency-ordered)
+- [Execution plans](docs/exec-plans/README.md) (10 numbered plans, dependency-ordered)
 - [Release acceptance](docs/release/ACCEPTANCE.md) and [runbook](docs/release/RUNBOOK.md)
 - [Source register](docs/SOURCES.md) — research and standards backing the docs
 

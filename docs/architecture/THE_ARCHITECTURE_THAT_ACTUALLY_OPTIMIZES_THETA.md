@@ -150,8 +150,8 @@ Rolling window comparison: recent loss vs baseline loss. If drift > 15%, suspend
 6. `backend/app/services/capability_registry.py` — Evidence tracking
 7. `backend/app/schemas/capability.py` — Pydantic models
 8. `backend/app/api/capability.py` — API endpoints
-9. `frontend/src/components/EvidenceBadge.vue` — Truth boundary UI
-10. `docs/architecture/PREDICTIVE_SIMULATION_ROADMAP.md` — 48-week plan
+9. `frontend/src/components/EvidenceBadge.vue` — Truth boundary UI (deleted 2026-10-01, unreferenced)
+10. `docs/archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md` — 48-week plan (SUPERSEDED by ADR-0001; archived)
 11. `IMPLEMENTATION_SUMMARY.md` — Original summary (now superseded)
 
 ## What's Still Missing (Critical Gaps)
@@ -288,12 +288,12 @@ Registry → Badges → Roadmap → Backtest → Simulator → Loss → Optimize
 ## Files Created (Total: 15)
 
 ### Sprint 1 (Bureaucracy):
-1. `docs/architecture/PREDICTIVE_SIMULATION_ROADMAP.md`
+1. `docs/archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md` (archived; superseded by ADR-0001)
 2. `backend/db/migrations/20260819_add_capability_registry.sql`
 3. `backend/app/services/capability_registry.py`
 4. `backend/app/schemas/capability.py`
 5. `backend/app/api/capability.py`
-6. `frontend/src/components/EvidenceBadge.vue`
+6. `frontend/src/components/EvidenceBadge.vue` (deleted 2026-10-01, unreferenced)
 7. `IMPLEMENTATION_SUMMARY.md`
 
 ### Sprint 2 (Engine):

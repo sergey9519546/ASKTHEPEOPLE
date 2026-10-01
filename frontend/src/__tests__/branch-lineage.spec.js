@@ -38,9 +38,9 @@ describe('branch lineage in the recent-runs list', () => {
   const home = readFileSync(resolve('src/views/Home.vue'), 'utf8');
 
   it('renders the marker on the live home surface, not a dead component', () => {
-    // HistoryDatabase.vue also lists runs but was deliberately dropped from
-    // Home.vue in the Direction C redesign and is not in the built bundle.
-    // The recent-runs list in Home.vue is the surface users actually see.
+// HistoryDatabase.vue also listed runs but was dropped from Home.vue in the
+  // Direction C redesign and has since been deleted. The recent-runs list in
+  // Home.vue is the surface users actually see.
     expect(home).toContain('run.forked_from');
     expect(home).toContain('run-branch');
   });

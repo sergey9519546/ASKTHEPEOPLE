@@ -100,8 +100,8 @@ been re-verified against the code; those are the authoritative per-plan claims.
 | [05](05-brief-handoff-exports-and-provenance.md) | Operational | Partially landed; export provenance derives from canonical attempt records |
 | [06](06-security-privacy-observability-and-operations.md) | Operational | Partially landed; gate 4 observability remains NOT STARTED |
 | [07](07-evals-accessibility-and-release.md) | Operational | Partially landed; eval suite runs in CI, release gate closed |
-| [08](08-harvest-framework-engineering-fixes.md) | Proposed | 4 of 5 fixes done — see its status-reconciliation block |
-| [09](09-source-material-workflow-improvements.md) | Proposed | Tiers 1 and 2 shipped; Tier 3 not started |
+| [08](08-harvest-framework-engineering-fixes.md) | Partially Delivered | 4 of 5 fixes done — see its status-reconciliation block |
+| [09](09-source-material-workflow-improvements.md) | Partially Delivered | Tiers 1 and 2 shipped; Tier 3 not started |
 
 Plans 00-07 are `status: "Operational"`, meaning "this is the procedure," not
 "this is finished." An earlier revision of this README claimed all eight plans

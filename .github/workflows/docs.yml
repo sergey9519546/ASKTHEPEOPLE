@@ -5,10 +5,21 @@ name: Documentation system
 # itself. Required per INTEGRATION_GUIDE.md §5 (CI enforcement of the
 # documentation contract).
 #
-# The doc system is normative: docs/product/PRODUCT_TRUTH_CONTRACT.md and the
-# 12 ADRs are the authority. A pull request that violates the structural
-# rules MUST be fixed before merge. A pull request that introduces prohibited
-# outcome language in user-facing copy MUST be fixed before merge.
+# The doc system is normative: ADR-0001
+# (docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md) and
+# the 12 ADRs are the authority. The docs/product/ directory that previously
+# held the truth contract was folded into ADR-0001 at 3f27ca7 and no longer
+# exists; every reference to it here was corrected on 2026-10-01.
+#
+# A pull request that violates the structural rules MUST be fixed before merge.
+# A pull request that introduces prohibited outcome language in user-facing copy
+# MUST be fixed before merge.
+#
+# CAUTION when editing the two grep gates below: any ERE passed to `grep -E`
+# must be a single line. A multi-line parenthesised group does not compile,
+# and because both pipelines end in `|| true` the error is swallowed and the
+# gate reports PASS unconditionally. Both gates now assert that their pattern
+# compiles before scanning, so this failure mode fails loudly instead.
 
 on:
   push:
@@ -16,17 +27,25 @@ on:
     paths:
       - "docs/**"
       - "tools/validate_docs.py"
+      - "tools/lint_frontend_truth.mjs"
+      - "frontend/src/**"
+      - "backend/app/**"
       - ".github/workflows/docs.yml"
       - "INTEGRATION_GUIDE.md"
-      - "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md"
+      - "AGENTS.md"
+      - "README.md"
   pull_request:
     branches: [main]
     paths:
       - "docs/**"
       - "tools/validate_docs.py"
+      - "tools/lint_frontend_truth.mjs"
+      - "frontend/src/**"
+      - "backend/app/**"
       - ".github/workflows/docs.yml"
       - "INTEGRATION_GUIDE.md"
-      - "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md"
+      - "AGENTS.md"
+      - "README.md"
   workflow_call:
 
 permissions:
@@ -62,83 +81,121 @@ jobs:
         #   - all footnote refs and defs balance
         #   - all relative links resolve and stay inside the repo
         #   - ADR numbers are unique and every ADR is in the ADR index
-        #   - critical truth clauses present in PRODUCT_TRUTH_CONTRACT.md
-        #   - critical methodology clauses present in METHODOLOGY.md
+        #   - critical truth clauses present in ADR-0001
+        #   - critical methodology clauses present in the build plan
         # Scoped to docs/ only; archive/ is exempt.
         run: python tools/validate_docs.py
 
       - name: Check for naked ASKTHEPEOPLE wordmark
-        # The naked wordmark is prohibited outside a legal footer or
-        # trademark context. PRODUCT_TRUTH_CONTRACT.md and TERMINOLOGY.md
-        # both require the full brand unit (Synthetic Decision Explorer +
-        # tagline) whenever the product is named. This linter is a
-        # smoke test for blatant violations in user-facing copy under
-        # docs/product/, docs/design/, docs/release/, and the repo root.
-        # The check is intentionally narrow: a positive hit is a
-        # release-blocker; a miss is not a guarantee of compliance.
+        # The naked wordmark is prohibited outside a legal footer or trademark
+        # context. Per ADR-0001 the product is named "ASKTHEPEOPLE — Synthetic
+        # Decision Explorer"; the descriptor must accompany the wordmark in
+        # USER-FACING copy. This is a smoke test: a positive hit is a
+        # release-blocker, a miss is not a guarantee of compliance.
+        #
+        # Scope is the user-facing doc surfaces: the repo front door and the
+        # release/privacy documents a customer or operator reads. Internal
+        # records — ADRs, architecture notes, design analyses, prompt
+        # templates, doc titles — name the product as a subject of engineering
+        # work; requiring the brand descriptor on "ASKTHEPEOPLE combines user
+        # statements" or a document title produces 50 false positives and no
+        # safety. The brand rule exists so a *user* never sees a bare
+        # wordmark and infers a prediction product. The genuinely user-facing
+        # product surface is the frontend, gated separately by
+        # tools/lint_frontend_truth.mjs via
+        # frontend/src/__tests__/product-truth-guard.spec.js.
         env:
           PRODUCT_NAME: "ASKTHEPEOPLE"
         run: |
           set -e
-          # Allowlist: places where the wordmark alone is permitted.
-          ALLOWLIST_REGEX='(
-            ^docs/archive/
-            | /archive/
-            | LICENSE
-            | /LICENSES/
-            | README\.md
-            | INTEGRATION_GUIDE\.md
-            | ASKTHEPEOPLE_GODMODE_BUILDPLAN\.md
-            | THIRD_PARTY_NOTICES\.md
-            | PROVENANCE\.md
-            | docs/product/PRODUCT_TRUTH_CONTRACT\.md
-            | docs/product/TERMINOLOGY\.md
-            | docs/product/USE_POLICY\.md
-            | docs/architecture/adr/ADR-0001-product-category-and-truth-contract\.md
-          )'
-          # Scan product/, design/, release/ for the wordmark outside
-          # the three allowlisted product docs. Hits there mean the
-          # brand unit is missing in a user-facing surface.
-          HITS=$(grep -RIn --include="*.md" -E "\\b${PRODUCT_NAME}\\b" docs/ \
+          # MUST stay on ONE line. A multi-line parenthesised group makes grep -E
+          # fail with "Unmatched ( or \(", and because the pipeline ends in
+          # `|| true` the error is swallowed, HITS comes back empty, and this
+          # gate silently passes on every file. That is what happened: the
+          # pattern was multi-line until 2026-10-01 and the gate had never once
+          # caught a violation. scripts/release/check-docs-gates.sh asserts
+          # that this pattern still compiles and still fires.
+          SCAN_PATHS=(
+            "README.md"
+            "docs/release/"
+            "docs/privacy/"
+          )
+          # Documents exempt from the check: brand-rule statements, legal and
+          # archive material.
+          ALLOWLIST_REGEX='(^docs/archive/|/archive/|LICENSE|/LICENSES/|README\.md|INTEGRATION_GUIDE\.md|ASKTHEPEOPLE_GODMODE_BUILDPLAN\.md|THIRD_PARTY_NOTICES\.md|PROVENANCE\.md|docs/release/ACCEPTANCE\.md|docs/privacy/DATA_MAP\.md|docs/privacy/SUBPROCESSORS\.md)'
+          # Non-prose occurrences: URLs, filesystem paths, asset filenames and
+          # JSON/YAML response literals. These are identifiers, not claims.
+          NON_PROSE_REGEX='(https?://|assets/|C:/Users|/c/Users|"service":|"repo":|github\.com)'
+          # An approved descriptor on the same line makes the mention a proper
+          # brand unit rather than a naked wordmark. Kept identical to
+          # APPROVED_PRODUCT_DESCRIPTOR_PATTERN in tools/lint_frontend_truth.mjs;
+          # if one changes, change both.
+          DESCRIPTOR_REGEX='(generated decision explorer|generated scenario exploration|synthetic decision explorer|synthetic scenario exploration|research-planning handoff)'
+          for probe in "${ALLOWLIST_REGEX}" "${NON_PROSE_REGEX}" "${DESCRIPTOR_REGEX}"; do
+            printf 'x\n' | grep -Eiq "${probe}" 2>/dev/null
+            if [ $? -eq 2 ]; then
+              echo "FATAL: pattern does not compile; this gate is inert:"
+              echo "  ${probe}"
+              exit 2
+            fi
+          done
+          # Flag the wordmark ONLY where it is not accompanied by a descriptor.
+          # Checking "does the wordmark appear" instead would flag correctly
+          # branded lines too, which is what the earlier allowlist was working
+          # around.
+          HITS=$(grep -RIni --include="*.md" -E "\b${PRODUCT_NAME}\b" "${SCAN_PATHS[@]}" 2>/dev/null \
             | grep -vE "${ALLOWLIST_REGEX}" \
+            | grep -vE "${NON_PROSE_REGEX}" \
+            | grep -vEi "${DESCRIPTOR_REGEX}" \
             || true)
           if [ -n "${HITS}" ]; then
             echo "Naked ASKTHEPEOPLE wordmark found in user-facing copy:"
             echo "${HITS}"
             echo
-            echo "Per PRODUCT_TRUTH_CONTRACT.md, the wordmark MUST be paired"
-            echo "with the 'SYNTHETIC DECISION EXPLORER' descriptor and the"
-            echo "tagline 'Explore assumptions before you ask. Validate with"
-            echo "people after.' See docs/product/TERMINOLOGY.md."
+            echo "Per ADR-0001 (docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md),"
+            echo "the wordmark MUST be paired with the 'SYNTHETIC DECISION EXPLORER'"
+            echo "descriptor. See ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §41 and"
+            echo "tools/lint_frontend_truth.mjs APPROVED_PRODUCT_DESCRIPTOR_PATTERN."
             exit 1
           fi
 
       - name: Check for prohibited outcome language
-        # These phrases are prohibited in user-facing copy per
-        # PRODUCT_TRUTH_CONTRACT.md and ASKTHEPEOPLE_GODMODE_BUILDPLAN.md
-        # Part I §9. They imply a measurement, prediction, or
-        # representativeness claim that the product does not support.
-        # Scans docs/product/, docs/design/, docs/release/ (the
-        # user-facing surfaces) and the repo root README.
+        # These phrases are prohibited in user-facing copy per ADR-0001 and
+        # ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §41. They imply a measurement,
+        # prediction, or representativeness claim the product does not support.
+        # Scans the user-facing doc surfaces plus the repo root README.
+        # Scope was widened on 2026-10-01 from (docs/product, docs/design,
+        # docs/release) to also cover docs/architecture, docs/ai and
+        # docs/privacy; docs/product never existed and was silently skipped.
         env:
           PROHIBITED: "predict what people will do|predict public response|ask thousands of people instantly|know what people think|human-level accuracy|digital twin of (your|the) (audience|users|customers|people)|bias-free personas|scientifically proven (people |)simulation|representative synthetic sample|validate the decision (with|using) ASKTHEPEOPLE"
-        run: |
+run: |
           set -e
           SCAN_PATHS=(
             "README.md"
-            "docs/product/"
             "docs/design/"
             "docs/release/"
+            "docs/architecture/"
+            "docs/ai/"
+            "docs/privacy/"
           )
           # The documents that DEFINE the prohibition necessarily quote the
-          # phrases they ban: USE_POLICY.md carries the canonical list and
-          # PRODUCT_TRUTH_CONTRACT.md enumerates it again in its claim rules.
-          # Scanning them for the phrases they exist to prohibit is a false
-          # positive by construction, so they are exempted here exactly as they
-          # already are in the wordmark check above. Every other file under the
-          # scanned paths is still checked.
-          DEFINING_DOCS='^docs/product/(PRODUCT_TRUTH_CONTRACT|USE_POLICY|TERMINOLOGY)\.md:'
+          # phrases they ban, so scanning them is a false positive by
+          # construction. The truth contract now lives in ADR-0001 (the
+          # docs/product/ directory was folded into it at 3f27ca7 and no
+          # longer exists); the terminology list lives in the build plan.
+          # MUST stay on ONE line for the same reason as the allowlist above.
+          DEFINING_DOCS='^(docs/architecture/adr/ADR-0001-product-category-and-truth-contract\.md|docs/architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN\.md|docs/architecture/ULTRAPLAN\.md):'
           PATTERN="${PROHIBITED}"
+          for regex_probe in "${DEFINING_DOCS}" "${PATTERN}"; do
+            printf 'x\n' | grep -E "${regex_probe}" >/dev/null 2>&1
+            if [ $? -eq 2 ]; then
+              echo "FATAL: pattern does not compile; this gate is inert:"
+              echo "  ${regex_probe}"
+              printf 'x\n' | grep -E "${regex_probe}" || true
+              exit 2
+            fi
+          done
           HITS=$(grep -RInE "${PATTERN}" "${SCAN_PATHS[@]}" 2>/dev/null \
             | grep -vE "${DEFINING_DOCS}" \
             || true)
@@ -146,12 +203,10 @@ jobs:
             echo "Prohibited outcome language found in user-facing copy:"
             echo "${HITS}"
             echo
-            echo "See docs/product/PRODUCT_TRUTH_CONTRACT.md and"
-            echo "ASKTHEPEOPLE_GODMODE_BUILDPLAN.md Part I §9 'Prohibited"
-            echo "promises' for the full list. If a phrase is used in a"
-            echo "negation or qualification that is approved, move the"
-            # shellcheck disable=SC2016
-            echo "content under an explicit heading that is allowlisted in"
-            echo "tools/validate_docs.py or add a narrow exception here."
+            echo "See docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md"
+            echo "and ASKTHEPEOPLE_GODMODE_BUILDPLAN.md §41 'Prohibited synthetic-outcome"
+            echo "terms' for the full list. If a phrase is used in a negation or"
+            echo "qualification that is approved, move the content under an explicit"
+            echo "heading that is allowlisted above, or add a narrow exception here."
             exit 1
           fi

@@ -47,11 +47,9 @@
           <div class="step-status">
             <span v-if="preparationStatus === 'error'" class="badge error">NEEDS ATTENTION</span>
             <span v-else-if="profiles.length > 0 && phase > 1" class="badge success"
-              >COMPLETED</span
-            >
+              >COMPLETED</span>
             <span v-else-if="preparationStatus === 'processing' && phase >= 1" class="badge processing"
-              >{{ profiles.length }} / {{ expectedTotal || "?" }}</span
-            >
+              >{{ profiles.length }} / {{ expectedTotal || "?" }}</span>
             <span v-else class="badge pending">WAITING</span>
           </div>
         </div>
@@ -80,7 +78,7 @@
           <!-- Profiles Grid -->
           <div v-if="profiles.length > 0" class="profiles-list">
             <button
-              v-for="profile in displayProfiles"
+              v-for="profile in visibleProfiles"
               :key="profile.id"
               class="profile-card"
               type="button"
@@ -102,29 +100,64 @@
                   v-for="topic in profile.interested_topics?.slice(0, 3)"
                   :key="topic"
                   class="topic-tag"
-                  >{{ topic }}</span
-                >
+                  >{{ topic }}</span>
                 <span
                   v-if="profile.interested_topics?.length > 3"
                   class="topic-more"
-                  >+{{ profile.interested_topics.length - 3 }}</span
-                >
+                  >+{{ profile.interested_topics.length - 3 }}</span>
               </div>
             </button>
           </div>
-          <p v-else class="empty-state">
+
+          <!-- Progressive guidance: reveals the remaining generated profiles
+               beyond the first six; the first six always render directly. -->
+          <ProgressiveGuidance
+            v-if="profiles.length > 6 && remainingProfiles.length"
+            id="remaining-profiles"
+            level="secondary"
+            :expandable="true"
+          >
+            <template #preview>
+              +{{ remainingProfiles.length }} more profiles
+            </template>
+            <template #default>
+              <div class="profiles-list">
+                <button
+                  v-for="profile in remainingProfiles"
+                  :key="profile.id"
+                  class="profile-card"
+                  type="button"
+                  :aria-label="`Review generated profile ${profile.name || profile.username}`"
+                  @click="selectProfile(profile)"
+                >
+                  <div class="profile-header">
+                    <span class="profile-realname">{{ profile.name }}</span>
+                    <span class="profile-username">@{{ profile.username }}</span>
+                  </div>
+                  <div class="profile-meta">
+                    <span class="profile-profession">{{
+                      profile.profession || "Generated profile"
+                    }}</span>
+                  </div>
+                  <p class="profile-bio">{{ truncateBio(profile.bio) }}</p>
+                  <div class="profile-topics">
+                    <span
+                      v-for="topic in profile.interested_topics?.slice(0, 3)"
+                      :key="topic"
+                      class="topic-tag"
+                      >{{ topic }}</span>
+                    <span
+                      v-if="profile.interested_topics?.length > 3"
+                      class="topic-more"
+                      >+{{ profile.interested_topics.length - 3 }}</span>
+                  </div>
+                </button>
+              </div>
+            </template>
+          </ProgressiveGuidance>
+          <p v-if="profiles.length === 0" class="empty-state">
             Generated profiles will appear here when they are ready.
           </p>
-
-          <div class="action-section" v-if="profiles.length > 6">
-            <button
-              class="action-btn secondary"
-              type="button"
-              @click="showProfilesDetail = !showProfilesDetail"
-            >
-              {{ showProfilesDetail ? "Show fewer" : "View all profiles" }}
-            </button>
-          </div>
         </div>
       </div>
 
@@ -142,8 +175,7 @@
             <span v-if="preparationStatus === 'error'" class="badge error">NEEDS ATTENTION</span>
             <span v-else-if="phase > 2" class="badge success">COMPLETED</span>
             <span v-else-if="phase === 2" class="badge processing"
-              >GENERATING</span
-            >
+              >GENERATING</span>
             <span v-else class="badge pending">WAITING</span>
           </div>
         </div>
@@ -311,8 +343,7 @@
             <span v-if="preparationStatus === 'error'" class="badge error">NEEDS ATTENTION</span>
             <span v-else-if="phase > 3" class="badge success">READY</span>
             <span v-else-if="phase === 3" class="badge processing"
-              >DEFINING</span
-            >
+              >DEFINING</span>
             <span v-else class="badge pending">WAITING</span>
           </div>
         </div>
@@ -370,8 +401,7 @@
                       <span class="post-role">Generated profile</span>
                       <div class="post-agent-info">
                         <span class="post-username"
-                          >@{{ getAgentUsername(post.poster_agent_id ?? post.agent_id) }}</span
-                        >
+                          >@{{ getAgentUsername(post.poster_agent_id ?? post.agent_id) }}</span>
                         <span class="post-id">{{ platformLabel(post.platform) }}</span>
                       </div>
                     </div>
@@ -418,8 +448,7 @@
                 <span class="section-title">Scenario length</span>
                 <span class="section-desc"
                   >Choose how long the generated interactions should
-                  continue.</span
-                >
+                  continue.</span>
               </div>
               <div class="header-right">
                 <label class="switch-control">
@@ -500,8 +529,7 @@
                           {{
                             simulationConfig?.time_config
                               ?.total_simulation_hours || "?"
-                          }}H</span
-                        >
+                          }}H</span>
                       </div>
                       <div class="auto-desc">
                         <p>Suggested from the source map and starting conditions.</p>
@@ -574,8 +602,7 @@
                   selectedProfile.name
                 }}</span>
                 <span class="modal-username"
-                  >@{{ selectedProfile.username }}</span
-                >
+                  >@{{ selectedProfile.username }}</span>
               </div>
               <span class="modal-profession">{{
                 selectedProfile.profession || "Generated profile"
@@ -598,8 +625,7 @@
               <div class="info-item">
                 <span class="info-label">Generated age</span>
                 <span class="info-value"
-                  >{{ selectedProfile.age || "-" }} yrs</span
-                >
+                  >{{ selectedProfile.age || "-" }} yrs</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Generated gender</span>
@@ -642,8 +668,7 @@
                   v-for="topic in selectedProfile.interested_topics"
                   :key="topic"
                   class="topic-item"
-                  >{{ topic }}</span
-                >
+                  >{{ topic }}</span>
               </div>
             </div>
 
@@ -659,20 +684,17 @@
                 <div class="dimension-card">
                   <span class="dim-title">Response tendencies</span>
                   <span class="dim-desc"
-                    >Behavioral habits and style preferences</span
-                  >
+                    >Behavioral habits and style preferences</span>
                 </div>
                 <div class="dimension-card">
                   <span class="dim-title">generated memory context</span>
                   <span class="dim-desc"
-                    >Generated context used during the run</span
-                  >
+                    >Generated context used during the run</span>
                 </div>
                 <div class="dimension-card">
                   <span class="dim-title">Generated connection patterns</span>
                   <span class="dim-desc"
-                    >Connections used inside this generated scenario</span
-                  >
+                    >Connections used inside this generated scenario</span>
                 </div>
               </div>
 
@@ -714,6 +736,7 @@ import {
 } from "../api/simulation";
 import { usePolling } from "../composables/usePolling.js";
 import ContextualHelp from "./ContextualHelp.vue";
+import ProgressiveGuidance from "./ProgressiveGuidance.vue";
 import { useAdaptiveUI } from "../composables/useAdaptiveUI.js";
 
 const props = defineProps({
@@ -771,7 +794,6 @@ const entityTypes = ref([]);
 const expectedTotal = ref(null);
 const simulationConfig = ref(null);
 const selectedProfile = ref(null);
-const showProfilesDetail = ref(true);
 const preparationStatus = ref("idle");
 const preparationError = ref("");
 const profileDialog = ref(null);
@@ -919,12 +941,13 @@ const preparePoller = usePolling({ intervalMs: STATUS_POLL_INTERVAL_MS, immediat
 const profilesPoller = usePolling({ intervalMs: PROFILES_POLL_INTERVAL_MS, immediate: false });
 const configPoller = usePolling({ intervalMs: CONFIG_POLL_INTERVAL_MS, immediate: false });
 
-const displayProfiles = computed(() => {
-  if (showProfilesDetail.value) {
-    return profiles.value;
-  }
-  return profiles.value.slice(0, 6);
-});
+// Progressive display: the first six profiles render directly; the rest are
+// revealed through the remaining-profiles ProgressiveGuidance section.
+const VISIBLE_PROFILE_LIMIT = 6;
+
+const visibleProfiles = computed(() => profiles.value.slice(0, VISIBLE_PROFILE_LIMIT));
+
+const remainingProfiles = computed(() => profiles.value.slice(VISIBLE_PROFILE_LIMIT));
 
 const getAgentUsername = (agentId) => {
   if (profiles.value && profiles.value.length > agentId && agentId >= 0) {
@@ -2504,9 +2527,7 @@ input:checked + .switch-track::after {
 
 .assumption-brief p {
   font-size: 0.85rem;
-  color: var(--paper-muted);
-  line-height: 1.5;
-  margin: 0;
+  color: var(--ink-muted);
 }
 
 .advanced-assumptions {

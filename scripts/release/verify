@@ -8,12 +8,16 @@
 # checklist (RUNBOOK.md:133-146) that can run from a clean checkout today:
 #
 #   1. Documentation validator          tools/validate_docs.py (0 errors required)
-#   2. Frontend tests                   mirrors .github/workflows/ci.yml:133-134
-#   3. Frontend production build        mirrors .github/workflows/ci.yml:136-137
-#   4. Backend tests, evals excluded    mirrors ci.yml:75-81
+#   2. Doc truth-gate self-test        scripts/release/check-docs-gates.sh — proves the
+#                                       two grep gates in .github/workflows/docs.yml
+#                                       actually compile and fire. Both were silently
+#                                       inert until 2026-10-01 (multi-line EREs).
+#   3. Frontend tests                   mirrors .github/workflows/ci.yml:133-134
+#   4. Frontend production build        mirrors .github/workflows/ci.yml:136-137
+#   5. Backend tests, evals excluded    mirrors ci.yml:75-81
 #                                       (pytest -q --ignore=tests/evals, run via
 #                                       uv when available, else the local venv)
-#   5. Secret scan (gitleaks)           mirrors the CI working-tree scan
+#   6. Secret scan (gitleaks)           mirrors the CI working-tree scan
 #                                       (ci.yml:408-415); SKIPped with a
 #                                       warning when gitleaks is not installed
 #                                       (CI still enforces it, ci.yml:364-443)
@@ -159,22 +163,25 @@ docs_validator() {
 run_gate 1 "Documentation validator (tools/validate_docs.py)" \
     docs_validator
 
-run_gate 2 "Frontend tests" \
+run_gate 2 "Doc truth-gate self-test (scripts/release/check-docs-gates.sh)" \
+    bash scripts/release/check-docs-gates.sh
+
+run_gate 3 "Frontend tests" \
     npm --prefix frontend test --silent
 
-run_gate 3 "Frontend production build" \
+run_gate 4 "Frontend production build" \
     npm --prefix frontend run build
 
-run_gate 4 "Backend tests (evals excluded, mirrors ci.yml:81)" \
+run_gate 5 "Backend tests (evals excluded, mirrors ci.yml:81)" \
     backend_pytest
 
 if command -v gitleaks >/dev/null 2>&1; then
-    run_gate 5 "Secret scan (gitleaks working tree)" gitleaks_scan
+    run_gate 6 "Secret scan (gitleaks working tree)" gitleaks_scan
 else
-    skips=$((skips + 1))
-    record "SKIP" 5 "Secret scan (gitleaks binary not installed; CI enforces it)"
-    printf '\n=== Gate 5: Secret scan (gitleaks working tree) ===\n'
-    printf 'Gate 5: SKIP - gitleaks is not installed locally.\n'
+    skips=$((skips+1))
+    record "SKIP" 6 "Secret scan (gitleaks binary not installed; CI enforces it)"
+    printf '\n=== Gate 6: Secret scan (gitleaks working tree) ===\n'
+    printf 'Gate 6: SKIP - gitleaks is not installed locally.\n'
     printf 'CI still enforces the secret scan (.github/workflows/ci.yml:364-443).\n'
 fi
 

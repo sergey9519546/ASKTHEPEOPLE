@@ -11,7 +11,7 @@ last_reviewed: "2026-08-02"
 **Document Version:** 1.0  
 **Last Updated:** 2026-08-02  
 **Compliance Target:** WCAG 2.2 Level AA  
-**Application:** ASKTHEPEOPLE Synthetic Scenario Explorer
+**Application:** ASKTHEPEOPLE — Synthetic Decision Explorer
 
 ---
 

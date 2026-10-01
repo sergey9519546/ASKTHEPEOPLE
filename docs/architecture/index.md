@@ -565,6 +565,24 @@ on inputs the product does not have — see the analysis in
 [`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md). Wiring them would require
 inventing the quantities they consume.
 
+**Gate 5 blocker — the θ-optimization island has no admissible authority.**
+Four unimported modules cite a now-archived roadmap as "Authority":
+`backend/app/optimization/theta_optimizer.py:7`,
+`backend/app/optimization/multi_objective_loss.py:7`,
+`backend/app/optimization/learning_loop.py:6`, and
+`backend/app/simulation/hybrid_simulator.py:6`. That roadmap,
+[`../archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md`](../archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md),
+was archived on 2026-10-01 because its stated objective is to minimize the
+distance between simulated and **observed real-world behaviour** — a
+calibration objective against human outcomes, which the truth rail forbids
+(`NOT A FORECAST`, `HUMAN RESPONDENTS: 0`). Its companion
+[`../archive/misc/predictive-persona-system-integration-2026-08-03.md`](../archive/misc/predictive-persona-system-integration-2026-08-03.md)
+proposed a "target capability" of reporting a **68% probability** of a market
+outcome. Both contradict accepted
+[ADR-0001](adr/ADR-0001-product-category-and-truth-contract.md) and must not be
+implemented. Wiring `app/optimization/` would require a new accepted ADR that
+supersedes ADR-0001 — that is a product decision, not a refactor.
+
 ### Shipped work not previously reflected in any status table
 
 The following is complete at `b868477`. Earlier trackers still described it as
@@ -594,12 +612,40 @@ open.
   views** are still unbuilt.
 - **Release verification gate**: `scripts/release/verify` is the single
   verification entry point required by `../release/RUNBOOK.md:127-131`, invoked
-  by `npm run verify` (`package.json:16`). It runs the documentation validator,
-  frontend tests, the frontend production build, backend tests excluding evals,
-  and a gitleaks scan when the binary is present.
+  by `npm run verify` (`package.json:16`). It runs **six** gates:
+  the documentation validator
+  (`tools/validate_docs.py`), the doc truth-gate self-test
+  (`scripts/release/check-docs-gates.sh`), frontend tests, the frontend
+  production build, backend tests excluding evals, and a gitleaks scan when the
+  binary is present.
+- **Both CI truth gates were inert until 2026-10-01 and are now armed.** The
+  naked-wordmark check and the prohibited-outcome-language check in
+  `.github/workflows/docs.yml` each used a multi-line parenthesised ERE. GNU
+  grep cannot compile that (`Unmatched ( or \(`), and because both pipelines
+  ended in `|| true` the error was swallowed, the hit list came back empty, and
+  the gates reported PASS unconditionally. **The wordmark gate had never caught
+  a single violation in the repository's history.** Both patterns are now
+  single-line, each gate asserts its own patterns compile (grep exits 2 on a
+  regex error, 1 on a clean no-match — testing for a match would fail on a clean
+  tree), and `scripts/release/check-docs-gates.sh` runs as gate 2 of
+  `npm run verify`, planting a violation to prove each gate fires.
+- **The wordmark gate was also logically wrong, not just inert.** It flagged
+  *any* occurrence of the wordmark, so a correctly branded line
+  ("ASKTHEPEOPLE — Synthetic Decision Explorer") was a violation too — which is
+  why it needed an ever-growing allowlist. It now flags the wordmark only where
+  an approved descriptor does **not** accompany it, using the same five
+  descriptors as `tools/lint_frontend_truth.mjs`
+  `APPROVED_PRODUCT_DESCRIPTOR_PATTERN`. Non-prose occurrences (URLs, asset
+  filenames, filesystem paths, JSON response literals) are exempt. Scope is the
+  user-facing surfaces — `README.md`, `docs/release/`, `docs/privacy/` — because
+  an all-of-`docs/` scope produced only internal-prose false positives (ADRs,
+  design analyses, document titles, prompt templates). The current tree has
+  **zero** violations under that scope.
+- **Two documents that contradicted ADR-0001 were archived.** See the truth
+  surface note below.
 - **Step 1 progressive guidance** is live: `ProgressiveGuidance` and
   `ContextualHelp` are used in `frontend/src/components/Step1GraphBuild.vue`
-  (7 and 2 references) with adaptive title copy.
+  (5 and 2 references) with adaptive title copy.
 
 ### Feature-level backlog
 
@@ -618,13 +664,19 @@ These checklists are the authoritative work items for the migration;
 [`../design/COMPONENT_MIGRATION_CHECKLIST.md`](../design/COMPONENT_MIGRATION_CHECKLIST.md)
 is the reusable per-component template and is intentionally blank.
 
-Three tracked Vue files are referenced nowhere and are dead weight:
+Three Vue files that were referenced nowhere have been **deleted** (2026-10-01,
+in their own revertible commit, uncommitted at the time of writing):
 `frontend/src/components/Step1GraphBuildRefactored.vue` (426 lines),
 `frontend/src/components/EvidenceBadge.vue` (290 lines), and
 `frontend/src/components/HistoryDatabase.vue` (1013 lines — removed from
-`Home.vue` by the Direction C redesign `d57898f`; see
-[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md) for the note warning against
-reviving it). Delete them in a separate, revertible commit.
+`Home.vue` by the Direction C redesign `d57898f`). Nothing imported any of
+them, no route rendered them, and the frontend suite passes without them
+(200 tests in 28 files). `HistoryDatabase.vue` was the only one with a note
+warning against reviving it; see
+[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md). A stale comment in
+`frontend/src/__tests__/branch-lineage.spec.js:41-42` still describes
+`HistoryDatabase.vue` as an existing alternative; it asserts on `Home.vue`
+content and passes either way.
 
 ### Blocked on operator actions, not on engineering
 

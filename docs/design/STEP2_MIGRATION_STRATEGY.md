@@ -382,4 +382,7 @@ If any phase causes issues:
 **References:**
 - [Progressive Intelligence Guide](PROGRESSIVE_INTELLIGENCE_GUIDE.md)
 - [Component Migration Checklist](COMPONENT_MIGRATION_CHECKLIST.md)
-- [Step1GraphBuildRefactored.vue](../../frontend/src/components/Step1GraphBuildRefactored.vue) (working example)
+- [`Step1GraphBuild.vue`](../../frontend/src/components/Step1GraphBuild.vue) —
+  the completed reference implementation. It was previously cited via
+  `Step1GraphBuildRefactored.vue`, which was never imported by the application
+  and has been deleted (2026-10-01); this link previously pointed at it.

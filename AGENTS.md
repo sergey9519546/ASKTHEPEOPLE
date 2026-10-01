@@ -576,9 +576,11 @@ not assume a document that says otherwise is right.
   `Home.vue` by the Direction C redesign). Delete them in a separate,
   revertible commit — they are large enough that deleting them alongside a
   feature change makes the review harder for no benefit.
-- **Exec plans 08 and 09 are not in the `docs/exec-plans/README.md` order
-  table** and have no dependency narrative. Root `README.md` also still says
-  "8 plans" against a directory that holds ten numbered plans.
+- ~~**Exec plans 08 and 09 are not in the `docs/exec-plans/README.md` order
+  table** and have no dependency narrative.~~ **Corrected on 2026-10-01.** All
+  ten numbered plans are now in that table with a per-plan status, and root
+  `README.md` no longer says "8 plans". Plans 08 and 09 still lack a dependency
+  narrative — that half remains open.
 - **~2,900 lines of the backtest/optimization island have no production
   importer**: `app/simulation/hybrid_simulator.py`, `app/optimization/*`,
   `app/data/outcome_fetcher.py`, `app/models/baseline_library.py`, driven only

@@ -1,17 +1,57 @@
 ---
 title: "Predictive Simulation Roadmap"
-status: "Draft"
-version: "1.0.0"
+status: "Superseded"
+version: "2.0.0"
 owner: "Architecture"
 last_reviewed: "2026-08-18"
+superseded_by: "docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md"
+archived: "2026-10-01"
 ---
 
 # Predictive Simulation Roadmap
 
+> **SUPERSEDED — RETAINED FOR AUDIT ONLY. DO NOT IMPLEMENT.**
+>
+> Archived 2026-10-01. This document contradicts accepted
+> [ADR-0001](../../architecture/adr/ADR-0001-product-category-and-truth-contract.md),
+> which is the normative product category and truth contract.
+>
+> **Why it is superseded.** Its stated North Star is to "minimize the measurable
+> distance between simulated and subsequently observed real-world behavior,
+> distributions, interactions, and outcomes." That is a calibration objective
+> against observed human behaviour. ADR-0001 classifies ASKTHEPEOPLE as a
+> **Synthetic Decision Explorer** and fixes the truth rail:
+>
+> ```text
+> ACTIONS + ANSWERS: GENERATED
+> HUMAN RESPONDENTS: 0
+> NOT A FORECAST
+> SOURCES: STARTING CONDITIONS ONLY
+> HUMAN VALIDATION: OUTSIDE THIS RUN
+> ```
+>
+> A θ-optimization loop that fits simulated output to observed human behaviour
+> is precisely a forecast by another name. It cannot be adopted under the
+> current truth contract, and adopting it would falsify the run's own
+> disclosure to the user.
+>
+> **Consequence for the code.** Four modules cited this document as
+> "Authority": `backend/app/optimization/theta_optimizer.py`,
+> `multi_objective_loss.py`, `learning_loop.py`, and
+> `backend/app/simulation/hybrid_simulator.py`. None has a production importer
+> — the whole `app/optimization/` island is unimported except by
+> `app/evals/first_backtest.py`, which is itself unimported. Those citations
+> are stale authority claims and the modules must not be wired without a new
+> accepted ADR that supersedes ADR-0001.
+>
+> Retained because it explains the origin of the unimported θ-optimization
+> island, not because it describes intended behavior.
+
 **Status:** DRAFT  
 **Version:** 1.0.0  
 **Date:** 2026-08-19  
-**Authority:** Technical transformation from scenario exploration → calibrated predictive simulation
+**Authority:** SUPERSEDED by ADR-0001 (was: technical transformation from
+scenario exploration → calibrated predictive simulation)
 
 ## North Star
 

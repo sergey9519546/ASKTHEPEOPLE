@@ -158,6 +158,17 @@
         </div>
 
         <aside class="meaning-boundary" aria-labelledby="meaning-boundary-heading">
+          <ContextualHelp
+            helpId="step3-boundaries"
+            concept="run_boundaries"
+            variant="inline"
+            :content="{
+              first_use: 'Three different records appear in this run: the saved action record, the generated path, and human findings. A record lists what happened inside the run, a path is one possible route through it, and a human finding requires direct validation with people. They are not interchangeable.',
+              learning: 'Records, generated paths, and human findings are different things here.',
+              practiced: 'Record ≠ path ≠ human finding.',
+              expert: null,
+            }"
+          />
           <span class="section-index">Do not collapse these stages</span>
           <h4 id="meaning-boundary-heading">Record ≠ path ≠ human finding</h4>
           <dl>
@@ -292,6 +303,17 @@
           <span class="detail-number">03</span>
           <div>
             <h3 id="patterns-heading">generated interaction diagnostics</h3>
+            <ContextualHelp
+              helpId="step3-diagnostics"
+              concept="run_diagnostics"
+              variant="inline"
+              :content="{
+                first_use: 'These are descriptive values from the generated interaction graph inside this run — how actions clustered and concentrated. They describe the run itself and are not population measures or confidence scores about real people.',
+                learning: 'Descriptive values from the generated graph, not real-world measures.',
+                practiced: 'Diagnostics from this generated run.',
+                expert: null,
+              }"
+            />
             <p>
               Descriptive values from this generated interaction graph. They
               are not population measures or real-world confidence scores.
@@ -354,6 +376,7 @@
 
 <script setup>
 import { computed } from "vue";
+import ContextualHelp from "./ContextualHelp.vue";
 
 const props = defineProps({
   runStatus: {

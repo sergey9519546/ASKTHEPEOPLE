@@ -282,13 +282,29 @@ came from a pre-fix run and was stale — re-measure rather than quoting it.
 
 `./scripts/release/verify` (bash; runs under Git Bash on Windows) is now the
 single verification entry point required by `docs/release/RUNBOOK.md:127-131`
-and closes deployment blocker 6 above. It runs, in order: the documentation
-validator (`tools/validate_docs.py`), frontend tests, the frontend production
-build, backend tests with evals excluded (mirroring `.github/workflows/ci.yml:81`),
-and a gitleaks working-tree scan when the `gitleaks` binary is installed
-(skipped with a warning otherwise; CI still enforces the scan). Root
-`npm run verify` invokes this same script; it exits non-zero when any gate
+and closes deployment blocker 6 above. It runs, in order:
+
+| # | Gate | Skips? |
+|---|---|---|
+| 1 | Documentation validator (`tools/validate_docs.py`) | no |
+| 2 | Doc truth-gate self-test (`scripts/release/check-docs-gates.sh`) | no |
+| 3 | Frontend tests (`vitest run`) | no |
+| 4 | Frontend production build (`vite build`) | no |
+| 5 | Backend tests, evals excluded (mirroring `.github/workflows/ci.yml:81`) | no |
+| 6 | gitleaks working-tree scan | yes, with a warning, when the binary is absent; CI still enforces the scan |
+
+Root `npm run verify` invokes this same script; it exits non-zero when any gate
 fails.
+
+Gate 2 was added on 2026-10-01. It exists because both grep gates in
+`.github/workflows/docs.yml` were silently inert: each used a multi-line
+parenthesised ERE that GNU grep cannot compile, and because both pipelines ended
+in `|| true` the compile error was swallowed, the hit list came back empty, and
+the gates reported PASS on every run. The naked-wordmark gate had never caught a
+violation. With the patterns repaired it reports 66 pre-existing violations, so
+that gate is armed but currently failing. `check-docs-gates.sh` asserts the
+patterns compile and that each gate fires on a planted violation, so a future
+regression of this kind cannot pass silently again.
 
 The script resolves a Python interpreter across several names and the
 conventional Windows install roots rather than assuming `python` is on the

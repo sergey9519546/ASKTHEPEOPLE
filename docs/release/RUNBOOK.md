@@ -27,9 +27,9 @@ baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 ## Purpose
 
 This runbook defines how to prepare, deploy, verify, monitor, and roll back an
-ASKTHEPEOPLE release. It covers application code, database migrations, prompts,
-models, validators, policy, content, export templates, infrastructure, and
-provider configuration.
+ASKTHEPEOPLE — Synthetic Decision Explorer — release. It covers application code,
+database migrations, prompts, models, validators, policy, content, export
+templates, infrastructure, and provider configuration.
 
 ## Roles
 
