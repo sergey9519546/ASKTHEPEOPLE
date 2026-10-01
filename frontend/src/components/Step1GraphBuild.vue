@@ -392,6 +392,12 @@ const stepOneTitle = computed(() =>
     learning: "Review the reading results",
     practiced: "Reading results",
     expert: "Source reading",
+    // getContextualCopy selects on explanationLevel, not capability names —
+    // without these keys every call falls through to `default`.
+    detailed: "See what was read from your material",
+    essential: "See what was read from your material",
+    contextual: "Reading results",
+    minimal: "Source reading",
     default: "Read the source material",
   }),
 );
@@ -401,6 +407,10 @@ const stepTwoTitle = computed(() =>
     learning: "Connections in the source map",
     practiced: "Map connections",
     expert: "Connections",
+    detailed: "How the items connect to each other",
+    essential: "How the items connect to each other",
+    contextual: "Map connections",
+    minimal: "Connections",
     default: "Source map connections",
   }),
 );
@@ -410,6 +420,10 @@ const stepThreeTitle = computed(() =>
     learning: "Source map ready to review",
     practiced: "Source map ready",
     expert: "Map ready",
+    detailed: "Your source map is ready to review",
+    essential: "Your source map is ready to review",
+    contextual: "Source map ready",
+    minimal: "Map ready",
     default: "Source map ready",
   }),
 );

@@ -42,7 +42,7 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">01</span>
-            <span class="step-title">Create generated perspectives</span>
+            <span class="step-title">{{ profilesStepTitle }}</span>
           </div>
           <div class="step-status">
             <span v-if="preparationStatus === 'error'" class="badge error">NEEDS ATTENTION</span>
@@ -62,6 +62,20 @@
             Fictional profiles are generated from patterns in the source map.
             They are scenario devices, not observations of real people.
           </p>
+
+          <!-- Contextual help: adds context above the profiles list; it does
+               not replace the "NOT REAL PEOPLE" note and description above. -->
+          <ContextualHelp
+            helpId="generated-perspectives"
+            concept="generated_profiles"
+            variant="inline"
+            :content="{
+              first_use: 'Fictional profiles are generated from patterns in your source map. They act as scenario devices for exploring possible paths — they are not real people and not observations of real people.',
+              learning: 'Generated profiles built from source-map patterns.',
+              practiced: 'Synthetic profiles for this run.',
+              expert: null,
+            }"
+          />
 
           <!-- Profiles Grid -->
           <div v-if="profiles.length > 0" class="profiles-list">
@@ -122,7 +136,7 @@
         <div class="card-header">
           <div class="step-info">
             <span class="step-num">02</span>
-            <span class="step-title">Set the scenario rules</span>
+            <span class="step-title">{{ rulesStepTitle }}</span>
           </div>
           <div class="step-status">
             <span v-if="preparationStatus === 'error'" class="badge error">NEEDS ATTENTION</span>
@@ -143,6 +157,20 @@
 
           <!-- Config Blocks -->
           <div v-if="simulationConfig" class="config-detail-panel">
+            <!-- Contextual help: adds context above the assumption brief; it
+                 does not replace the brief or the advanced-assumptions note. -->
+            <ContextualHelp
+              helpId="conversation-spaces"
+              concept="platform_config"
+              variant="inline"
+              :content="{
+                first_use: 'Two conversation environments are simulated: one favors short fast posts, the other keeps discussion grouped around shared topics. The same starting conditions run in both so their activity can be compared.',
+                learning: 'Two platform types simulated with the same starting conditions.',
+                practiced: 'Two simulated conversation spaces.',
+                expert: null,
+              }"
+            />
+
             <section class="assumption-brief" aria-label="Scenario assumption brief">
               <article>
                 <span>Where activity happens</span>
@@ -685,6 +713,8 @@ import {
   prepareSimulation,
 } from "../api/simulation";
 import { usePolling } from "../composables/usePolling.js";
+import ContextualHelp from "./ContextualHelp.vue";
+import { useAdaptiveUI } from "../composables/useAdaptiveUI.js";
 
 const props = defineProps({
   simulationId: String,
@@ -694,6 +724,41 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["go-back", "next-step", "add-log", "update-status"]);
+
+// Capability-adaptive step titles (presentation only). Variants carry both the
+// capability keys and the explanationLevel keys (minimal | contextual |
+// essential | detailed) that getContextualCopy actually selects on, so the
+// copy adapts at runtime. The caveat copy inside the card bodies below is
+// intentionally NOT adaptive: it stays for everyone.
+const { adaptiveCopy } = useAdaptiveUI();
+
+const profilesStepTitle = computed(() =>
+  adaptiveCopy("step2-profiles-title", {
+    first_use: "Create the fictional profiles",
+    learning: "Create generated perspectives",
+    practiced: "Create generated perspectives",
+    expert: "Profiles",
+    essential: "Create the fictional profiles",
+    detailed: "Create the fictional profiles",
+    contextual: "Create generated perspectives",
+    minimal: "Profiles",
+    default: "Create generated perspectives",
+  }),
+);
+
+const rulesStepTitle = computed(() =>
+  adaptiveCopy("step2-rules-title", {
+    first_use: "Choose the scenario rules",
+    learning: "Set the scenario rules",
+    practiced: "Set the scenario rules",
+    expert: "Rules",
+    essential: "Choose the scenario rules",
+    detailed: "Choose the scenario rules",
+    contextual: "Set the scenario rules",
+    minimal: "Rules",
+    default: "Set the scenario rules",
+  }),
+);
 
 // State
 const phase = ref(0);

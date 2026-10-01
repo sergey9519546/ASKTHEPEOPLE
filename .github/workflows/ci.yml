@@ -75,7 +75,7 @@ jobs:
       - name: Run tests
         env:
           FLASK_DEBUG: "true"
-          SECRET_KEY: "ci-secret-key-for-testing-only"
+          SECRET_KEY: "ci-secret-key-for-testing-only-0000"
           LLM_API_KEY: "ci-test-key"
           ZEP_API_KEY: "ci-test-key"
         run: uv run --frozen pytest -q --ignore=tests/evals
@@ -83,7 +83,7 @@ jobs:
       - name: Run evaluation suite
         env:
           FLASK_DEBUG: "true"
-          SECRET_KEY: "ci-secret-key-for-testing-only"
+          SECRET_KEY: "ci-secret-key-for-testing-only-0000"
           LLM_API_KEY: "ci-test-key"
           ZEP_API_KEY: "ci-test-key"
         run: uv run --frozen pytest tests/evals/ -v --tb=short
