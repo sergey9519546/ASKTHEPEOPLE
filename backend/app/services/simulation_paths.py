@@ -117,18 +117,25 @@ class SimulationPaths:
     
     @staticmethod
     def reddit_profiles_file(simulation_id: str) -> str:
-        """Legacy reddit profiles file path"""
+        """Return the path to reddit_profiles.json."""
         return os.path.join(
             SimulationPaths.simulation_dir(simulation_id),
             "reddit_profiles.json"
         )
 
     @staticmethod
-    def reddit_profiles_file(simulation_id: str) -> str:
-        """Return the path to reddit_profiles.json."""
+    def activity_db_file(simulation_id: str, platform: str) -> str:
+        """Return the per-platform activity database path.
+
+        Single owner of the platform-to-filename layout that
+        ``simulation_activity_reader.ALLOWED_PLATFORMS`` and the route
+        modules previously duplicated. ``platform`` must be ``reddit`` or
+        ``twitter``; callers keep their own membership validation.
+        """
+        filename = f"{platform}_simulation.db"
         return os.path.join(
             SimulationPaths.simulation_dir(simulation_id),
-            "reddit_profiles.json"
+            filename
         )
 
     @staticmethod

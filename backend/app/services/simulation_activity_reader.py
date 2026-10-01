@@ -18,21 +18,42 @@ import sqlite3
 from typing import Dict, List, Optional, Tuple
 
 from ..utils.logger import get_logger
+from .simulation_paths import SimulationPaths
 
 logger = get_logger('askthepeople.services.activity_reader')
 
 
-# Canonical platform→filename map (audit §5 P0 path-escape fix). The platform
+# Placeholder simulation id used only to interrogate the path seam for the
+# per-platform database filename; it is never resolved to a real directory.
+_FILENAME_SEAM_PROBE_ID = "activity-reader"
+
+
+def _platform_db_filename(platform: str) -> str:
+    """Return the per-platform activity DB filename via the canonical seam.
+
+    SimulationPaths.activity_db_file is the single owner of the
+    platform→filename layout; taking the basename of its result keeps this
+    module free of filename literals that could drift from the on-disk
+    layout.
+    """
+    return os.path.basename(
+        SimulationPaths.activity_db_file(_FILENAME_SEAM_PROBE_ID, platform)
+    )
+
+
+# Platform validation set (audit §5 P0 path-escape fix). The platform
 # identifier is request-controlled, so callers MUST resolve it through this
 # allowlist rather than interpolating request text into a path. This is the
 # single source of truth for the /posts read path: the route validates a
 # request platform against it, and read_posts indexes it. Defining it once
 # here removes a drift trap where the route accepts a platform the service
 # cannot resolve (KeyError → 500). Other route modules keep their own copies
-# for now; consolidating those is further gate-1 cleanup.
+# for now; consolidating those is further gate-1 cleanup. The filename values
+# are derived through SimulationPaths.activity_db_file (see
+# _platform_db_filename), not spelled out here.
 ALLOWED_PLATFORMS = {
-    "reddit": "reddit_simulation.db",
-    "twitter": "twitter_simulation.db",
+    platform: _platform_db_filename(platform)
+    for platform in ("reddit", "twitter")
 }
 
 
@@ -133,7 +154,7 @@ def read_comments(
     may not have run or produced comments yet). A locked or corrupt database
     raises DatabaseLocked / DatabaseCorrupt for the route to map to 423/500.
     """
-    db_path = os.path.join(sim_dir, "reddit_simulation.db")
+    db_path = os.path.join(sim_dir, ALLOWED_PLATFORMS["reddit"])
     if not os.path.exists(db_path):
         return []
 

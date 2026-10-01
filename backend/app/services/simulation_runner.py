@@ -235,12 +235,12 @@ class SimulationRunner:
     def _get_run_state_dir(cls, simulation_id: str) -> str:
         """Validate and resolve a simulation run-state directory (path-traversal safe).
 
-        Config.OASIS_SIMULATION_DATA_DIR is the only source for the base path;
-        patch that (not a class attribute) to relocate run-state.
+        Delegates to SimulationPaths.simulation_dir (the canonical path seam).
+        Config.OASIS_SIMULATION_DATA_DIR is still the only source for the base
+        path; patch that (not a class attribute) to relocate run-state.
         """
-        from ..utils.safe_path import safe_join
-        from ..config import Config
-        return safe_join(Config.OASIS_SIMULATION_DATA_DIR, simulation_id)
+        from .simulation_paths import SimulationPaths
+        return SimulationPaths.simulation_dir(simulation_id)
 
     # Scripts directory
     SCRIPTS_DIR = os.path.join(
