@@ -147,3 +147,115 @@ See platform-specific guides for detailed troubleshooting.
 ---
 
 **Need help?** Check the [main documentation](../README.md) or open an issue.
+
+---
+
+## Deployment readiness (2026-09-03)
+
+Read-only release-engineering audit of the deployment manifests against
+`docs/release/RUNBOOK.md`. No manifest file was modified by this audit.
+
+### CI status
+
+Test-suite CI already exists; no additional workflow file was created.
+
+- `.github/workflows/ci.yml` — `backend` job installs with
+  `uv sync --frozen --group dev` and runs `pytest -q --ignore=tests/evals`
+  plus the eval suite (`ci.yml:73-89`); `frontend` job installs with
+  `npm ci` and runs `npm run test` and `npm run build` (`ci.yml:91-140`);
+  plus container smoke tests, a gitleaks secret scan, CodeQL, and a
+  required-checks `gate` job (`ci.yml:452-470`). Triggers on push to
+  `main` and pull requests targeting `main`.
+- `.github/workflows/docs.yml` — runs `python tools/validate_docs.py`
+  plus wordmark and prohibited-language lints (`docs.yml:55-157`);
+  path-filtered to documentation changes.
+- Production deployment from CI is intentionally dark:
+  `deploy-production` requires the repository variable
+  `RAILWAY_PRODUCTION_DEPLOYMENT_ENABLED` to equal `true`
+  (`ci.yml:479-482`). Do not set that variable while the blockers below
+  stand.
+
+### Deployment blockers
+
+1. **Every Procfile process type fails closed by design.** `Procfile:1-3`
+   runs `backend/scripts/block_legacy_railway_deploy.py:8-11`, which
+   always exits 78. Railway, Render (`render.yaml:1-4` declares no
+   services), and Vercel paths are disabled until the
+   canonical-persistence and revision-atomicity gates close
+   (`docs/release/RUNBOOK.md:382-399`). There is no supported PaaS
+   deploy of the current code.
+2. **`npm run setup:all` / `npm run setup:backend` is broken.**
+   `package.json:7` uses `uv sync --frozen --extra dev`, but the dev
+   dependencies are a uv dependency group, not an extra
+   (`backend/pyproject.toml:112-117`); uv rejects the command with
+   "Extra `dev` is not defined". The runbook baseline command
+   `npm run setup:all` (`docs/release/RUNBOOK.md:121`) therefore fails.
+   Fix: use `--group dev`.
+3. **Exposed provider credentials must be revoked and rotated first.**
+   The runbook requires revocation, rotation, usage review, and
+   independent verification of the exposed ZEP, primary-LLM, boost-LLM,
+   and search credentials before any connected run or canary
+   (`docs/release/RUNBOOK.md:531-535`).
+4. **Required secrets are operator-supplied and cannot ship from the
+   repo.** `SECRET_KEY` (refuses startup in production if unset,
+   `backend/app/config.py:117-121`; minimum 32 characters,
+   `backend/app/config.py:32,48`), `APP_TOKEN` (required when
+   `REQUIRE_APP_AUTH=true`, the production default,
+   `backend/app/config.py:135-138`, validated at
+   `backend/app/config.py:351-360`), `LLM_API_KEY` and `ZEP_API_KEY`
+   (`backend/app/config.py:347-350`), and an explicit `CORS_ORIGINS`
+   allowlist (the `*` wildcard is refused in production,
+   `backend/app/config.py:368-373`).
+5. **The only runnable topology is single-host transition Compose, and
+   it must not run from a synced filesystem.** `docker-compose.yml:32,36`
+   requires `BUILD_REVISION` and a mode-0600 `.env.transition` created
+   from `.env.transition.example`; web, worker, beat, and Redis share one
+   `uploads` bind mount (`docker-compose.yml:73,121,176`); the runbook
+   forbids running from OneDrive, Dropbox, NFS, or SMB
+   (`docs/release/RUNBOOK.md:213-218`). The current checkout lives under
+   OneDrive, so a deployer must clone to a local disk first.
+6. **The runbook's unified verification script does not exist.** The
+   required single entry point `./scripts/release/verify`
+   (`docs/release/RUNBOOK.md:129-131`) is absent (no root `scripts/`
+   directory). Per `docs/release/RUNBOOK.md:148` this is an
+   implementation gap to close before release, not a step to skip.
+7. **Provider dashboards must have automatic deployments disabled.**
+   Railway's GitHub integration can autodeploy independently of Actions;
+   the runbook requires the operator to disable autodeploy for every
+   connected Railway, Vercel, and Render service and verify no legacy
+   public origin remains (`docs/release/RUNBOOK.md:392-397`).
+
+### Recommendations
+
+8. Extend `.env.example` with optional variables the backend reads but
+   the example omits: `SUPABASE_S3_ENDPOINT`, `SUPABASE_S3_ACCESS_KEY`,
+   `SUPABASE_S3_SECRET_KEY` (`backend/app/config.py:328-331`),
+   `SOURCE_INGESTION_V1_ENABLED` / `SOURCE_INGESTION_V1_FORMATS`
+   (`backend/app/config.py:232-241`; must stay disabled in production,
+   `backend/app/config.py:379-385`), `DEV_ACTOR_CONTEXT_ENABLED`
+   (`backend/app/config.py:249-251`), `ENABLE_TRAIT_INFERENCE`,
+   `DECISION_LENS_V1_ENABLED`, `RATELIMIT_STORAGE_URI`, and `LOG_FORMAT`.
+   All have safe defaults; none block a deploy.
+9. `npm run verify` is not a complete cross-platform gate:
+   `backend:test` hardcodes the Windows path `.\.venv\Scripts\pytest`
+   (`package.json:11`), and the chain omits `tools/validate_docs.py` and
+   the backend eval suite that CI runs separately (`ci.yml:83-89`).
+10. The local `.env.production` file is stale (untracked and gitignored):
+    it names `BRAVE_API_KEY` where the backend reads
+    `BRAVE_SEARCH_API_KEY` (`backend/app/api/settings.py:30`), an unused
+    `VITE_APP_TOKEN` (the frontend reads only `VITE_API_BASE_URL`,
+    `frontend/src/api/index.js:5`), and retired provider endpoints.
+    Delete or regenerate it; never copy it into a platform.
+11. The legacy guides in this directory predate the runbook: env names
+    such as `OPENAI_API_KEY` and `VITE_API_URL` (below) do not match
+    `backend/app/config.py` (`LLM_API_KEY`) and the frontend
+    (`VITE_API_BASE_URL`), and the architecture diagram above does not
+    describe the single-host transition topology. Treat
+    `docs/release/RUNBOOK.md` as authoritative.
+
+### Local verification result (2026-10-01)
+
+`npm run verify` passed end to end on Windows: frontend 200 tests in 28
+files passed, the production build succeeded, and the backend suite
+finished with 9475 passed, 4 skipped, 1 xfailed. `python
+tools/validate_docs.py` reports PASS with zero errors and zero warnings.

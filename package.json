@@ -4,7 +4,7 @@
   "description": "ASKTHEPEOPLE - Synthetic Scenario Explorer",
   "scripts": {
     "setup": "npm ci --no-audit --no-fund && npm --prefix frontend ci --no-audit --no-fund",
-    "setup:backend": "cd backend && uv sync --frozen --extra dev",
+    "setup:backend": "cd backend && uv sync --frozen --group dev",
     "setup:all": "npm run setup && npm run setup:backend",
     "dev": "concurrently --kill-others -n \"backend,frontend\" -c \"green,cyan\" \"npm run backend\" \"npm run frontend\"",
     "backend": "cd backend && uv run python run.py",
