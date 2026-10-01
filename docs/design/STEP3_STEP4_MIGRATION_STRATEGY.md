@@ -54,31 +54,28 @@ Both components are well-structured but display technical information without ca
 
 **Refactored:**
 ```vue
-<ProgressiveGuidance
-  id="step3-truth-boundary"
-  level="primary"
-  :capabilities="['first_use', 'learning']"
-  :phases="['exploring', 'validating']"
-  :autoExpand="true"
->
-  <template #preview>
-    Generated output · Not a forecast · 0 human respondents
-  </template>
-  <aside class="run-truth-boundary">
-    <span>Actions + answers: generated</span>
-    <span>Human respondents: 0</span>
-    <span>Not a forecast</span>
-    <span>Sources: starting conditions only</span>
-    <span>Human validation: outside this run</span>
-  </aside>
-</ProgressiveGuidance>
+<!-- NOT wrapped in ProgressiveGuidance. The truth boundary is a permanent,
+     always-visible fixture for every capability level (truth contract;
+     DIRECTION_C principle 1). Keep it exactly as the CURRENT markup. -->
+<aside class="run-truth-boundary">
+  <span>Actions + answers: generated</span>
+  <span>Human respondents: 0</span>
+  <span>Not a forecast</span>
+  <span>Sources: starting conditions only</span>
+  <span>Human validation: outside this run</span>
+</aside>
 ```
 
 **Impact:**
-- First-time users: Full truth boundary visible (critical context)
-- Learning users: Condensed to preview after first view
-- Practiced/Expert: Hidden by default (they understand the constraints)
-- Reduces visual noise by ~25% for experienced users
+- **Truth boundary MUST stay visible at every capability level.** The truth
+  contract and DIRECTION_C require the disclosure to be more prominent than
+  any visual treatment, for all users, always. Do NOT wrap the truth
+  boundary in capability-gated disclosure and do not collapse it to a
+  preview for any level. (This supersedes an earlier draft of this section
+  which suggested hiding it for practiced/expert users — that advice
+  violated DIRECTION_C principle 1 and is retracted.)
+- Progressive disclosure on this screen applies only to diagnostics,
+  metrics, and other secondary panels — never to the truth boundary.
 
 #### Phase 2: Adaptive Status Codes (Medium Risk)
 
