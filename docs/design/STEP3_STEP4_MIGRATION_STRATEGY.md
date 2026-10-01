@@ -1,15 +1,25 @@
 ---
 title: "Step3 & Step4 Migration Strategy"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Frontend Design"
-last_reviewed: "2026-09-03"
+last_reviewed: "2026-10-01"
 review_cycle: "Per migration"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "Step3Simulation.vue and Step4Report.vue refactoring"
 ---
 
 # Step3 & Step4 Migration Strategy
+
+> **These checkboxes are the live work items for this migration.** Verified
+> 2026-10-01: `Step3RunWayfinder.vue` and `Step4Report.vue` each have **zero**
+> `ProgressiveGuidance`, `ContextualHelp`, and adaptive-copy references. Do not
+> tick a box without changing the component.
+>
+> This is the feature-level backlog for `Step3RunWayfinder.vue` and
+> `Step4Report.vue`. Release gate status lives in
+> [`docs/architecture/index.md` § Status of record](../architecture/index.md#status-of-record),
+> which carries the per-component adoption table.
 
 ## Overview
 

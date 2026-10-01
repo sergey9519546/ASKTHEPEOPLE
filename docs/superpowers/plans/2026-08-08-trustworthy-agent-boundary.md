@@ -1,9 +1,9 @@
 ---
 title: "Trustworthy Agent Boundary Implementation Plan"
 status: "Operational"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Architecture + Security + Methodology + AI Evaluation"
-last_reviewed: "2026-08-08"
+last_reviewed: "2026-10-01"
 review_cycle: "Per implementation checkpoint"
 research_cutoff: "2026-08-08"
 design_spec: "docs/superpowers/specs/2026-08-08-trustworthy-agent-boundary-design.md"
@@ -11,6 +11,18 @@ design_spec: "docs/superpowers/specs/2026-08-08-trustworthy-agent-boundary-desig
 
 # Trustworthy Agent Boundary Implementation Plan
 
+> **Checkbox status is stale (2026-10-01).** The `- [ ]` boxes below were
+> never updated as work landed. Much of this plan is reflected in the shipped
+> code: the decision-lens domain and repository are live
+> (`backend/app/domain/decision_lens.py`,
+> `backend/app/services/decision_lens_repository.py`,
+> `backend/app/api/routes/decision_lens_routes.py`), and run states are defined
+> in `backend/app/domain/run_attempt.py`. Do not read the unchecked boxes as a
+> work queue without verifying each against the code.
+>
+> Release gate status lives in
+> [`docs/architecture/index.md` § Status of record](../../architecture/index.md#status-of-record).
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use

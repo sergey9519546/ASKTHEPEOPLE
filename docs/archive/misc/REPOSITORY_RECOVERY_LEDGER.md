@@ -51,6 +51,16 @@ git branch -d codex/decision-workspace-foundation
 git push origin --delete codex/decision-workspace-foundation
 ```
 
+**EXECUTED 2026-10-01.** The remote branch was deleted
+(`origin/codex/decision-workspace-foundation`, last commit `fed5107`, 252 files
+behind `main` at `b868477`). No local branch of that name existed, so
+`git branch -d` was a no-op and was not run. Also removed on the same date: the
+detached worktree `.kilo/worktrees/lively-bite` (was at `b868477`, clean, zero
+changes) and the `.zcode/` workspace, which held a single obsolete plan
+describing a repair to `frontend/src/views/Process.vue` — a file that no longer
+exists. The work it described is live in `frontend/src/views/MainView.vue:449`
+and `frontend/src/views/MainView.vue:477`.
+
 ---
 
 ### 1.2 freebuff/godmode-product-convergence-540712c8

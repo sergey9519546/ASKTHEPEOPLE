@@ -225,9 +225,13 @@ binding, server-side re-derivation) is gate 3 / gate 5.
 
 ## Validator
 
+Run the validator and quote what it prints. Do not hardcode these counts; they
+change whenever a document is added, moved, or archived. The block below is the
+historical gate-0 snapshot, retained for audit.
+
 ```text
 python tools/validate_docs.py
-Markdown files: 49
+Markdown files: 49          # as of the gate-0 baseline
 ADR files: 12
 Lines: 14647
 Words: 72493
@@ -235,6 +239,9 @@ Warnings: 0
 Errors: 0
 RESULT: PASS
 ```
+
+Current measurement at `b868477` (2026-10-01, `npm run verify`): 93 markdown
+files, 39,281 lines, 186,202 words, 12 ADRs, 0 errors, 0 warnings, RESULT: PASS.
 
 ## CI
 
@@ -285,8 +292,8 @@ Still open:
 ## Bridge to the broader program
 
 The 6-gate program is tracked in
-[`docs/architecture/index.md`](../architecture/index.md)
-§"Gaps to the target architecture". Each gate is owned by a
+[`docs/architecture/index.md` § Status of record](../architecture/index.md#status-of-record),
+which is the only place gate status is recorded. Each gate is owned by a
 Mavis specialist agent and tracked by the corresponding execution
 plan. Gate 0 (this document) is structurally closed. The remaining
 gates 1–5 land per the dependency order in

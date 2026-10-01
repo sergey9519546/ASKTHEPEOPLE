@@ -1,9 +1,9 @@
 ---
 title: "README"
 status: "Reference"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Release Operator"
-last_reviewed: "2026-09-03"
+last_reviewed: "2026-10-01"
 review_cycle: "Per deployment"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "deployment procedures"
@@ -177,6 +177,11 @@ Test-suite CI already exists; no additional workflow file was created.
 
 ### Deployment blockers
 
+Blockers 2 and 6 below were **closed on 2026-10-01** and are retained for the
+audit trail. Blockers 1, 3, 4, 5, and 7 remain open. Gate status is recorded in
+[`../architecture/index.md` § Status of record](../architecture/index.md#status-of-record);
+nothing here is a work queue.
+
 1. **Every Procfile process type fails closed by design.** `Procfile:1-3`
    runs `backend/scripts/block_legacy_railway_deploy.py:8-11`, which
    always exits 78. Railway, Render (`render.yaml:1-4` declares no
@@ -184,13 +189,13 @@ Test-suite CI already exists; no additional workflow file was created.
    canonical-persistence and revision-atomicity gates close
    (`docs/release/RUNBOOK.md:382-399`). There is no supported PaaS
    deploy of the current code.
-2. **`npm run setup:all` / `npm run setup:backend` is broken.**
-   `package.json:7` uses `uv sync --frozen --extra dev`, but the dev
+2. ~~**`npm run setup:all` / `npm run setup:backend` is broken.**~~
+   **RESOLVED 2026-10-01** (commit `47bff7b`). `package.json:7` now uses
+   `uv sync --frozen --group dev` rather than `--extra dev`, so the runbook
+   baseline command `npm run setup:all`
+   (`docs/release/RUNBOOK.md:121`) works. The original defect: the dev
    dependencies are a uv dependency group, not an extra
-   (`backend/pyproject.toml:112-117`); uv rejects the command with
-   "Extra `dev` is not defined". The runbook baseline command
-   `npm run setup:all` (`docs/release/RUNBOOK.md:121`) therefore fails.
-   Fix: use `--group dev`.
+   (`backend/pyproject.toml:112-117`), so `--extra dev` was rejected.
 3. **Exposed provider credentials must be revoked and rotated first.**
    The runbook requires revocation, rotation, usage review, and
    independent verification of the exposed ZEP, primary-LLM, boost-LLM,
@@ -214,11 +219,13 @@ Test-suite CI already exists; no additional workflow file was created.
    forbids running from OneDrive, Dropbox, NFS, or SMB
    (`docs/release/RUNBOOK.md:213-218`). The current checkout lives under
    OneDrive, so a deployer must clone to a local disk first.
-6. **The runbook's unified verification script does not exist.** The
-   required single entry point `./scripts/release/verify`
-   (`docs/release/RUNBOOK.md:129-131`) is absent (no root `scripts/`
-   directory). Per `docs/release/RUNBOOK.md:148` this is an
-   implementation gap to close before release, not a step to skip.
+6. ~~**The runbook's unified verification script does not exist.**~~
+   **RESOLVED 2026-10-01** (commit `661f330`, portability fixed the same
+   day). `./scripts/release/verify` exists and is the single entry point
+   required by `docs/release/RUNBOOK.md:129-131`; `package.json:16` wires
+   it as `npm run verify`. It runs the documentation validator, frontend
+   tests, the frontend production build, backend tests with evals
+   excluded, and a gitleaks working-tree scan when the binary is present.
 7. **Provider dashboards must have automatic deployments disabled.**
    Railway's GitHub integration can autodeploy independently of Actions;
    the runbook requires the operator to disable autodeploy for every
@@ -255,10 +262,21 @@ Test-suite CI already exists; no additional workflow file was created.
 
 ### Local verification result (2026-10-01)
 
-`npm run verify` passed end to end on Windows: frontend 200 tests in 28
-files passed, the production build succeeded, and the backend suite
-finished with 9475 passed, 4 skipped, 1 xfailed. `python
-tools/validate_docs.py` reports PASS with zero errors and zero warnings.
+`npm run verify` passed end to end on Windows: the documentation validator
+reported PASS with zero errors and zero warnings, frontend 200 tests in 28
+files passed, the production build succeeded, and the backend suite finished
+with **9477 passed, 1 skipped, 1 xfailed** (evals excluded). Gate 5, the
+gitleaks working-tree scan, is SKIPped because the binary is not installed
+locally; CI enforces it.
+
+This run only passed after two portability defects in `scripts/release/verify`
+were repaired: gate 1 assumed `python` was on the Git Bash PATH, and gate 4
+invoked the extensionless `.venv/Scripts/pytest`, whose CRLF shebang MSYS cannot
+execute. Gate 1 now resolves an interpreter across several names and the
+conventional Windows install roots; gate 4 prefers `pytest.exe`.
+
+An earlier entry in this section reported 9475 passed / 4 skipped. That figure
+came from a pre-fix run and was stale — re-measure rather than quoting it.
 
 ## Release verification gate
 
@@ -271,3 +289,10 @@ and a gitleaks working-tree scan when the `gitleaks` binary is installed
 (skipped with a warning otherwise; CI still enforces the scan). Root
 `npm run verify` invokes this same script; it exits non-zero when any gate
 fails.
+
+The script resolves a Python interpreter across several names and the
+conventional Windows install roots rather than assuming `python` is on the
+Git Bash PATH, and it prefers `.venv/Scripts/pytest.exe` over the
+extensionless launcher, whose CRLF shebang MSYS cannot execute. Both defects
+made the gate fail on Windows before 2026-10-01; see § Local verification
+result above.

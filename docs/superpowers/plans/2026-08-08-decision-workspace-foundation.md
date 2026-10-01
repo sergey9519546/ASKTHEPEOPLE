@@ -10,6 +10,16 @@ research_cutoff: "2026-08-08"
 
 # Decision Workspace Foundation Implementation Plan
 
+> **Checkbox status is stale (2026-10-01).** The `- [ ]` boxes below were
+> never updated as work landed, so they no longer describe reality. The
+> authoritative per-task record is
+> [`.superpowers/sdd/progress.md`](../../../.superpowers/sdd/progress.md),
+> which reports **tasks 1 through 4 complete** and task 5 partial. Do not read
+> the unchecked boxes as a work queue; read `progress.md`.
+>
+> Release gate status lives in
+> [`docs/architecture/index.md` § Status of record](../../architecture/index.md#status-of-record).
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use
 > superpowers:subagent-driven-development (recommended) or
 > superpowers:executing-plans to implement this plan task-by-task. Steps use

@@ -1,15 +1,39 @@
 ---
 title: "IMPLEMENTATION ROADMAP"
-status: "Reference"
+status: "Superseded"
 version: "1.0.0"
 owner: "Architecture"
 last_reviewed: "2026-08-18"
 review_cycle: "As needed"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "architecture planning"
+superseded_by: "docs/architecture/index.md#status-of-record"
+archived: "2026-10-01"
 ---
 
 # ASKTHEPEOPLE - Implementation Roadmap
+
+> **SUPERSEDED — retained for audit only. Do not use for planning.**
+>
+> The authoritative gate status is
+> [`docs/architecture/index.md` § Status of record](../../architecture/index.md#status-of-record).
+>
+> This document was archived on 2026-10-01 because its status content was
+> wrong or misleading in four ways, all verified against the code at that date:
+>
+> 1. Its "RELEASE GATES SUMMARY" table listed a **seventh gate** ("Gate 6 —
+>    Frontend and export compliance"). No other document, ADR, or the audit in
+>    `ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13 defines a seventh gate.
+> 2. The same table recorded gates 2, 3, 4, and 5 as **NOT STARTED** while the
+>    audit, `AGENTS.md`, and the code all show gates 2, 3, and 5 as PARTIAL with
+>    substantial landed work.
+> 3. It cited `frontend/src/views/Process.vue` as the file modified by the
+>    Phase 1 upload-flow fix. That file no longer exists; the work it describes
+>    is live in `frontend/src/views/MainView.vue`.
+> 4. Its per-gate day estimates (23-31 days total) had no stated basis and are
+>    not used anywhere in the program.
+>
+> Everything below this banner is historical and may itself be inaccurate.
 
 ## Status: 2026-08-18
 ## Baseline Commit: 8b616dc7fa02eeed5ada8c51998d8b197be28f8d

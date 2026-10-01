@@ -107,7 +107,7 @@ production observability are already implemented.
 
 ## Current state (baseline `8b616dc7`)
 
-All 48 modular documents under this directory carry a
+All modular documents under this directory carry a
 **"Project-specific implementation status"** section grounded in the actual
 code at the baseline. The 12 ADRs are accepted. The validator at
 [`tools/validate_docs.py`](../tools/validate_docs.py) reports
@@ -115,6 +115,10 @@ code at the baseline. The 12 ADRs are accepted. The validator at
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) runs the
 validator and the prohibited-language linter on every push and PR that
 touches `docs/`.
+
+**Do not hardcode a document count.** It goes stale on every edit, and an
+earlier revision of this file asserted "48 modular documents" when the
+validator reported 93. Run the validator and quote what it prints.
 
 The three P0 release-blocker findings in
 [`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md)
@@ -199,17 +203,20 @@ Every production release MUST produce a release-evidence bundle containing:
 ## How to verify
 
 ```bash
-# 1. The validator must pass.
+# 1. The validator must pass. Quote the counts it prints; do not
+#    hardcode them — they change whenever a document moves.
 python tools/validate_docs.py
-# Expected: "Markdown files: 49 / ADR files: 12 / Errors: 0 / RESULT: PASS"
+# Expected shape: "Markdown files: <N> / ADR files: 12 / Errors: 0 / RESULT: PASS"
+# As of 2026-10-01: Markdown files: 93, Errors: 0, Warnings: 0, RESULT: PASS.
 
 # 2. The CI workflow runs the validator and the linters on every
 #    push and PR that touches docs/ or the validator.
 #    .github/workflows/docs.yml
 
-# 3. The fast backend test suite must pass (gate-0 snapshot: 225 passed,
-#    1 skipped; see docs/release/GATE_0_RELEASE_NOTES.md for the test
-#    inventory).
+# 3. The backend test suite must pass. The current measured baseline at
+#    b868477 is 9477 passed / 1 skipped / 1 xfailed with evals excluded
+#    (`npm run verify`); the 225-test figure once recorded in
+#    GATE_0_RELEASE_NOTES.md is long obsolete. Re-measure, never quote.
 cd backend && .\.venv\Scripts\pytest -q
 
 # 4. The Mavis specialist team is the operational contract for any

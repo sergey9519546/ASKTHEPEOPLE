@@ -73,7 +73,9 @@ circularity does not validate the result against human behavior.
 - Profiling protected or sensitive traits, especially when the inferred profile
   could affect a real person.
 
-See the complete [appropriate-use policy](docs/APPROPRIATE_USE.md).
+See the [appropriate-use policy](docs/archive/legacy-2026-07-29/APPROPRIATE_USE.md)
+(archived; its normative restatement is in
+[ADR-0001](docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md)).
 
 ## Validation with people
 
@@ -93,8 +95,8 @@ to support a consequential decision:
 
 The application does not currently recruit people or collect a representative
 human sample. A button or stage named “Validate with people” is a handoff to a
-real research process, not an automated validation claim. Use the
-[validation handoff guide](docs/VALIDATE_WITH_PEOPLE.md).
+real research process, not an automated validation claim. See the
+[validation handoff guide](docs/archive/legacy-2026-07-29/VALIDATE_WITH_PEOPLE.md).
 
 ## Current methodological status
 
@@ -113,7 +115,7 @@ review:
   concurrency, dependency, and external-service changes.
 
 The detailed claim boundary and pipeline are in
-[Methodology](docs/METHODOLOGY.md).
+[ADR-0001](docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md).
 
 ## Minimum disclosure for shared output
 
@@ -251,16 +253,16 @@ process, see the [release runbook](docs/release/RUNBOOK.md).
 
 **Start here:** the production documentation system is at
 [`docs/README.md`](docs/README.md). It is the normative authority for the
-product, methodology, security, privacy, and architecture. 12 ADRs, 48
-modular docs, validated by [`tools/validate_docs.py`](tools/validate_docs.py).
+product, methodology, security, privacy, and architecture. 12 ADRs; validated by
+[`tools/validate_docs.py`](tools/validate_docs.py) — run it for the current
+document count rather than trusting a number quoted here.
 
 For agents and CI, the operational contract is at
 [`AGENTS.md`](AGENTS.md).
 
-- [Product Truth Contract](docs/product/PRODUCT_TRUTH_CONTRACT.md) — non-negotiable claim boundary
-- [Methodology](docs/product/METHODOLOGY.md) — canonical scenario method
-- [Use Policy](docs/product/USE_POLICY.md) — allowed, elevated, and prohibited uses
-- [Architecture overview](docs/architecture/index.md) — project-specific, with `file:line` references
+- [Product Truth Contract](docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md) — non-negotiable claim boundary, product category, and methodology
+- [Documentation system](docs/README.md) — authority hierarchy, change-control rule, and document status vocabulary
+- [Architecture overview](docs/architecture/index.md) — project-specific, with `file:line` references; its §[Status of record](docs/architecture/index.md#status-of-record) is the single record of gate status
 - [Data model](docs/architecture/data-model.md) and [state machines](docs/architecture/state-machines.md)
 - [ADRs](docs/architecture/adr/README.md) — 12 accepted architecture decisions
 - [Threat model](docs/security/THREAT_MODEL.md), [secure source ingestion](docs/security/SOURCE_INGESTION.md), [incident response](docs/security/INCIDENT_RESPONSE.md)
@@ -277,7 +279,7 @@ Project-specific lineage and license attributions live at the repo root:
 - [Third-party software and media notices](THIRD_PARTY_NOTICES.md)
 
 The full integration audit is at
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md).
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](docs/architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md).
 The integration procedure is at
 [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md). Pre-authority legacy
 documents are archived at
@@ -318,7 +320,7 @@ ASKTHEPEOPLE is an adaptation of
 shared Git history begins with upstream commit
 `38e3d05b1d33d13fcbadc83ec0c4bf84c878e828`; subsequent ASKTHEPEOPLE work
 modifies the application, runtime, interface, testing, operations, and product
-framing. See the auditable [provenance record](docs/PROVENANCE.md).
+framing. See the auditable [provenance record](PROVENANCE.md).
 
 The social-environment simulation is powered by
 [OASIS from CAMEL-AI](https://github.com/camel-ai/oasis); its design is described

@@ -20,6 +20,11 @@
 #
 # Runs under Git Bash on Windows and POSIX shells. Exits non-zero when any
 # gate FAILs; a SKIPped gate does not fail the run.
+#
+# Windows notes (Git Bash): the `python` alias is often absent from the POSIX
+# PATH, so gate 1 probes several interpreter names and the conventional Windows
+# install roots. Gate 4 prefers `.venv/Scripts/pytest.exe`, because the
+# extensionless launcher has a CRLF shebang that MSYS cannot execute.
 
 set -u
 
@@ -33,6 +38,40 @@ record() {
     # record <status> <number> <title>
     summary="${summary}  $1  $2. $3
 "
+}
+
+# Resolve a Python interpreter for the documentation validator. Under Git Bash
+# on Windows the `python` alias frequently is not on the POSIX PATH even though
+# a working interpreter exists for PowerShell/cmd, so probing several names and
+# common install locations is required. Resolved once and reused.
+PYTHON=""
+resolve_python() {
+    local candidate
+    for candidate in python3 python py; do
+        if command -v "$candidate" >/dev/null 2>&1; then
+            if "$candidate" --version >/dev/null 2>&1; then
+                PYTHON="$candidate"
+                return 0
+            fi
+        fi
+    done
+    # Windows interpreter reached from a POSIX shell: try the launcher and the
+    # conventional per-user and system install roots.
+    for candidate in py.exe \
+        "/c/Python314/python.exe" \
+        "/c/Python313/python.exe" \
+        "/c/Python312/python.exe" \
+        "$HOME/AppData/Local/Programs/Python/Python314/python.exe" \
+        "$HOME/AppData/Local/Programs/Python/Python313/python.exe" \
+        "$HOME/AppData/Local/Programs/Python/Python312/python.exe"; do
+        if [ -x "$candidate" ]; then
+            if "$candidate" --version >/dev/null 2>&1; then
+                PYTHON="$candidate"
+                return 0
+            fi
+        fi
+    done
+    return 1
 }
 
 run_gate() {
@@ -73,8 +112,14 @@ backend_pytest() {
     if command -v uv >/dev/null 2>&1; then
         echo "Backend runner: uv (mirrors .github/workflows/ci.yml:81)"
         uv run --frozen pytest -q --ignore=tests/evals
-    elif [ -x ".venv/Scripts/pytest.exe" ] || [ -x ".venv/Scripts/pytest" ]; then
-        echo "Backend runner: backend/.venv/Scripts/pytest (Windows venv)"
+    elif [ -x ".venv/Scripts/pytest.exe" ]; then
+        # Prefer the .exe: under Git Bash the extensionless ".venv/Scripts/pytest"
+        # carries a CRLF shebang that MSYS cannot execute, and invoking it fails
+        # with "No such file or directory" even though the file is present.
+        echo "Backend runner: backend/.venv/Scripts/pytest.exe (Windows venv)"
+        .venv/Scripts/pytest.exe -q --ignore=tests/evals
+    elif [ -x ".venv/Scripts/pytest" ]; then
+        echo "Backend runner: backend/.venv/Scripts/pytest (Windows venv, no .exe)"
         .venv/Scripts/pytest -q --ignore=tests/evals
     elif [ -x ".venv/bin/pytest" ]; then
         echo "Backend runner: backend/.venv/bin/pytest (POSIX venv)"
@@ -97,8 +142,22 @@ gitleaks_scan() {
 echo "Release verification gate (docs/release/RUNBOOK.md:127-131)"
 echo "Repository: $(pwd)"
 
+if resolve_python; then
+    echo "Python: $PYTHON"
+else
+    echo "Python: NOT FOUND — gate 1 will FAIL."
+    echo "  Install Python 3.12+ or make 'python3'/'python' available on PATH."
+fi
+
+docs_validator() {
+    if [ -z "$PYTHON" ]; then
+        return 127
+    fi
+    "$PYTHON" tools/validate_docs.py
+}
+
 run_gate 1 "Documentation validator (tools/validate_docs.py)" \
-    python tools/validate_docs.py
+    docs_validator
 
 run_gate 2 "Frontend tests" \
     npm --prefix frontend test --silent

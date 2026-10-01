@@ -1,15 +1,20 @@
 ---
 title: "NEXT STEPS ROADMAP"
 status: "Reference"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Architecture"
-last_reviewed: "2026-08-18"
+last_reviewed: "2026-10-01"
 review_cycle: "As needed"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "architecture planning"
 ---
 
 # ASKTHEPEOPLE: Next Tasks & Product Roadmap
+
+> **This document is a feature-level backlog, not a gate-status record.** Release
+> gate status lives in exactly one place:
+> [`docs/architecture/index.md` § Status of record](index.md#status-of-record).
+> Where the two could disagree, the canonical table wins.
 
 Following the successful implementation of the **Core AI Simulation Engine Upgrade** (Memory Stream & Reflection Engine, Dynamic Topologies & Homophily Rewiring, Multi-Model Complexity Tiering, and Counterfactual Scenario Branching), this document outlines the next logical priorities to achieve full production readiness and a best-in-class user experience.
 
@@ -121,11 +126,19 @@ Transitioning from local SQLite observation stores to production-grade scalable 
 > one request. The recent-runs list in `frontend/src/views/Home.vue` marks
 > branches with their parent and branch point.
 >
-> Still to build: the **fork action** (`forkSimulation()` is exported from
-> `frontend/src/api/simulation.js` and still has no caller) and the **tree /
-> comparison views**. The fork action needs a home —`Step5Interaction.vue` is
-> the execution view but is ~82KB, which cuts against the API decomposition
-> work.
+> The **fork action is built and wired.** `forkSimulation()`
+> (`frontend/src/api/simulation.js:266`) is called by
+> `frontend/src/components/ForkRunControl.vue:51` and
+> `frontend/src/components/ForkRunControl.vue:79`, which
+> `frontend/src/views/SimulationRunView.vue` mounts once a run has stopped.
+> Branching mid-run would copy a directory the runner is still writing to.
+> An earlier revision of this note claimed the function "still has no caller";
+> that was wrong.
+>
+> Still to build: the **branch tree view** and the **branch comparison view**.
+> The fork action needed a home and got one — it deliberately did *not* go in
+> `Step5Interaction.vue`, which is the execution view at ~3,400 lines and cuts
+> against the API decomposition work.
 >
 > Note for whoever builds the tree view: `frontend/src/components/HistoryDatabase.vue`
 > also lists runs and looks like the obvious place, but it is dead code. The

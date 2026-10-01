@@ -1,9 +1,9 @@
 ---
 title: "Execution Plans"
 status: "Operational"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Program Lead + Architecture Council"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-10-01"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -84,12 +84,28 @@ specialist agents per [`AGENTS.md`](../../AGENTS.md). This README is
 owned by `askthepeople-release-operator` and
 `askthepeople-architect`.
 
-**Current state at the baseline:** all 8 plans are **NOT STARTED**.
-The first deliverable is the
-[`00-repository-census-and-governance.md`](00-repository-census-and-governance.md)
-census, which must run against the current baseline and produce a
-per-aggregate divergence report from the doc-system baseline before
-any work in any plan begins.
+**Current state (2026-10-01):** release gate status is recorded in exactly one
+place — [`../architecture/index.md` § Status of record](../architecture/index.md#status-of-record).
+Do not read gate status from this directory. Each plan below carries its own
+`status:` front-matter field and a status-reconciliation block where one has
+been re-verified against the code; those are the authoritative per-plan claims.
+
+| Plan | `status:` | Note |
+|---|---|---|
+| [00](00-repository-census-and-governance.md) | Operational | Census run; see [`../archive/legacy-2026-07-29/README.md`](../archive/legacy-2026-07-29/README.md) for the baseline gap record |
+| [01](01-truth-layer-and-foundations.md) | Operational | Truth contract now lives in ADR-0001; this plan is the historical path to it |
+| [02](02-tenancy-data-and-secure-ingestion.md) | Operational | Partially landed; source ingestion is behind `SOURCE_INGESTION_V1_ENABLED` (`backend/app/config.py:232-233`) |
+| [03](03-method-inputs-and-review.md) | Operational | Partially landed; behavioural modules ship but three have no production importer |
+| [04](04-durable-orchestration-and-path-engine.md) | Operational | Partially landed; fenced leases and heartbeats are in `backend/app/models/task.py` |
+| [05](05-brief-handoff-exports-and-provenance.md) | Operational | Partially landed; export provenance derives from canonical attempt records |
+| [06](06-security-privacy-observability-and-operations.md) | Operational | Partially landed; gate 4 observability remains NOT STARTED |
+| [07](07-evals-accessibility-and-release.md) | Operational | Partially landed; eval suite runs in CI, release gate closed |
+| [08](08-harvest-framework-engineering-fixes.md) | Proposed | 4 of 5 fixes done — see its status-reconciliation block |
+| [09](09-source-material-workflow-improvements.md) | Proposed | Tiers 1 and 2 shipped; Tier 3 not started |
+
+Plans 00-07 are `status: "Operational"`, meaning "this is the procedure," not
+"this is finished." An earlier revision of this README claimed all eight plans
+were NOT STARTED; that was wrong and had been for some time.
 
 **Key file:line references:**
 

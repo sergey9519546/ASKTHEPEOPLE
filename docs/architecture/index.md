@@ -1,9 +1,9 @@
 ---
 title: "Architecture Overview — ASKTHEPEOPLE"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Architect + Security + Persistence + Orchestration"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-10-01"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -46,8 +46,8 @@ that no PR can claim the target without an acceptance-evidence bundle.
 ```text
                                   ┌────────────────────────────┐
    Vue 3 / Vite frontend  ───────►│  Flask app (single process)│
-   (frontend/dist served by        │  app/__init__.py:25-330   │
-    app/__init__.py:317-325)       │                            │
+   (frontend/dist served by        │  app/__init__.py:72-438   │
+    app/__init__.py:425-433)       │                            │
                                    │  Blueprints (api/__init__.py:13-17)│
                                    │   /api/auth       auth_bp           │
                                    │   /api/graph      graph_bp (29 KB)  │
@@ -81,12 +81,15 @@ that no PR can claim the target without an acceptance-evidence bundle.
 
 ## HTTP layer — CURRENT
 
-The Flask application is created by [`create_app()`](../../backend/app/__init__.py:25).
-The route responsibility contract is
-[`auth → parse → authorize → dispatch → present`](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#7-correct-target-architecture).
-Current implementation of that contract is **PARTIAL**: most routes handle all
-five steps inline and additionally start threads, open SQLite, scan report
-directories, and build exports.
+The Flask application is created by [`create_app()`](../../backend/app/__init__.py:72).
+The route responsibility contract — **auth → parse → authorize → dispatch →
+present** — is stated here and is this document's own terminology; it is not
+defined in the build plan or any ADR. The architectural decision to decompose
+`simulation_bp` into per-resource modules is
+[ADR-0011](adr/ADR-0011-incremental-modernization-over-rewrite.md). Current
+implementation of the contract is **PARTIAL**: most routes handle all five steps
+inline and additionally start threads, open SQLite, scan report directories, and
+build exports.
 
 ### Blueprints
 
@@ -101,23 +104,25 @@ directories, and build exports.
 
 `simulation_bp` was the 3,526-line controller identified by the integration
 audit. The decomposition (ADR-0011) is complete: all simulation route
-handlers now live in `api/routes/`, and `simulation.py` is a 510-line helper
-module only — no route decorators remain in it. The application currently
-registers 60 `/api/simulation` URL rules, including dynamically registered
-source-ingestion routes:
+handlers now live in `api/routes/`, and `simulation.py` is a 364-line helper
+module only — no route decorators remain in it. Line counts below were
+re-measured on 2026-10-01 at commit `b868477`; an earlier revision of this
+table carried stale counts, including a 510-line figure for `simulation.py`
+that no longer matched the file. Re-measure before re-quoting.
 
-| Module | Route fns | Lines | Holds |
+| Module | Route decorators | Lines | Holds |
 |---|---:|---:|---|
-| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 510 | shared helpers imported by `routes/` (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
-| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 17 | 978 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
-| [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 10 | 916 | start / stop / status / inject / env / durable runtime controls |
-| [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 610 | create / prepare / profiles / preflight |
-| [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 4 | 562 | generated-response routes |
-| [`api/routes/export_routes.py`](../../backend/app/api/routes/export_routes.py) | 3 | 176 | config / script / survey download |
-| [`api/routes/entity_routes.py`](../../backend/app/api/routes/entity_routes.py) | 3 | 179 | graph entity listing |
-| [`api/routes/decision_lens_routes.py`](../../backend/app/api/routes/decision_lens_routes.py) | dynamic | 222 | immutable decision-lens review |
-| [`api/routes/workspace_routes.py`](../../backend/app/api/routes/workspace_routes.py) | 1 | 43 | decision-workspace manifest |
-| [`api/routes/source_routes.py`](../../backend/app/api/routes/source_routes.py) | dynamic | 338 | feature-gated source-ingestion capability and commands |
+| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 364 | shared helpers imported by `routes/` (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
+| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 19 | 926 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
+| [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 10 | 891 | start / stop / status / inject / env / durable runtime controls |
+| [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 8 | 501 | generated-response routes |
+| [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 541 | create / prepare / profiles / preflight |
+| [`api/routes/source_routes.py`](../../backend/app/api/routes/source_routes.py) | 5 (+ dynamic) | 378 | feature-gated source-ingestion capability and commands; registered onto `simulation_bp` by `register_source_routes()` (`routes/__init__.py:29`) |
+| [`api/routes/decision_lens_routes.py`](../../backend/app/api/routes/decision_lens_routes.py) | 0 (+ dynamic) | 221 | immutable decision-lens review, registered dynamically |
+| [`api/routes/entity_routes.py`](../../backend/app/api/routes/entity_routes.py) | 3 | 159 | graph entity listing |
+| [`api/routes/export_routes.py`](../../backend/app/api/routes/export_routes.py) | 4 | 160 | config / script / survey download |
+| [`api/routes/workspace_routes.py`](../../backend/app/api/routes/workspace_routes.py) | 1 | 27 | decision-workspace manifest |
+| [`api/routes/__init__.py`](../../backend/app/api/routes/__init__.py) | 0 | 29 | registers every module in this package |
 
 Every module in `api/routes/` must be listed in that package's `__init__.py`.
 `entity_routes` once was not, and the decorators it replaced were commented
@@ -133,31 +138,41 @@ honors the auth → parse → authorize → dispatch → present contract.
 ### Authentication and security headers — CURRENT
 
 All implemented at the request/response seam in
-[`create_app()`](../../backend/app/__init__.py:25):
+[`create_app()`](../../backend/app/__init__.py:72). Line numbers below were
+re-measured against `backend/app/__init__.py` (438 lines) at `b868477` on
+2026-10-01; an earlier revision of this section cited a range that was 40-100
+lines short throughout, because it was measured against a much older version of
+the file. Verify before re-quoting.
 
 - Bearer-token auth on every `/api/*` route when `APP_TOKEN` is set
-  ([`require_auth` middleware](../../backend/app/__init__.py:125-141));
-  constant-time comparison via [`hmac.compare_digest`](../../backend/app/__init__.py:140).
+  ([`require_auth` before-request hook](../../backend/app/__init__.py:223-252));
+  constant-time comparison via [`hmac.compare_digest`](../../backend/app/__init__.py:248).
+  `/health` is exempt; unknown `/api` paths fail closed via
+  [`api_not_found`](../../backend/app/__init__.py:412-415) rather than falling
+  through to the SPA catch-all.
 - Production CORS lockdown: `CORS_ORIGINS='*'` is refused in production and
   replaced with `http://127.0.0.1`
-  ([`create_app` CORS branch](../../backend/app/__init__.py:74-82)).
+  ([`create_app` CORS branch](../../backend/app/__init__.py:126-146)).
 - Security response headers (production only):
   Content-Security-Policy, X-Content-Type-Options: nosniff, X-Frame-Options:
   DENY, Referrer-Policy: no-referrer, Permissions-Policy with all sensitive
   features disabled, Cross-Origin-Opener-Policy: same-origin,
   Cross-Origin-Resource-Policy: same-origin, and HSTS when forwarded-proto is
   https
-  ([`apply_security_headers` after-request hook](../../backend/app/__init__.py:246-293)).
+  ([`apply_security_headers` after-request hook](../../backend/app/__init__.py:266-313)).
 - `Cache-Control: no-store` for `/api/*`, `/health`, and every `/health/*`
-  ([`create_app` after-request](../../backend/app/__init__.py:290-293)).
+  (same hook, [`backend/app/__init__.py:266-313`](../../backend/app/__init__.py:266-313)).
 - Production stripping of `traceback` and 5xx `error` strings
-  ([`strip_traceback_in_production` after-request](../../backend/app/__init__.py:295-326)).
+  ([`strip_traceback_in_production` after-request](../../backend/app/__init__.py:315-346)).
 - No request body logging in any debug path
-  ([`log_request` before-request](../../backend/app/__init__.py:208-220)).
+  ([`log_request` before-request](../../backend/app/__init__.py:210-221)).
 - `SafePathError` → `400 {"success": false, "error": "invalid_id"}`
-  ([`create_app` error handler](../../backend/app/__init__.py:362-366)).
+  ([`handle_unsafe_path`](../../backend/app/__init__.py:384-386)).
 - `RateLimitExceeded` → `429 {"success": false, "error": "rate_limit_exceeded"}`
-  ([`create_app` error handler](../../backend/app/__init__.py:351-360)).
+  ([`handle_rate_limit`](../../backend/app/__init__.py:376-378), registered only
+  when `flask-limiter` imports). The catch-all
+  [`handle_exception`](../../backend/app/__init__.py:397-406) returns a scrubbed
+  `internal_server_error` outside DEBUG.
 
 `/health` is provider-independent liveness. `/health/readiness` additionally
 declares `scope: web` and requires the cached ZEP dependency status to be
@@ -394,7 +409,7 @@ The actual OASIS / CAMEL simulation is driven by
 (16 KB).
 
 This is process-local: the runner registers a cleanup hook at app startup
-([`create_app` → `SimulationRunner.register_cleanup`](../../backend/app/__init__.py:106-109))
+([`create_app` → `SimulationRunner.register_cleanup`](../../backend/app/__init__.py:203-205))
 that terminates spawned processes when the web process exits. The audit
 identifies this as a horizontal-scaling blocker: another web worker cannot see
 or control the process. **TARGET** is a dedicated simulation worker process
@@ -440,7 +455,7 @@ are **TARGET** — they are not yet centralized.
 ## Frontend — CURRENT
 
 Vue 3 + Vue Router + Vite + D3, built into `frontend/dist/` and served by
-[`create_app` static handler](../../backend/app/__init__.py:317-325). The
+[`create_app` static handler](../../backend/app/__init__.py:425-433). The
 Civic Wayfinding design direction
 ([`docs/design/DIRECTION_C.md`](../design/DIRECTION_C.md)) is implemented
 in CSS and SVG; the semantic route list required by
@@ -454,21 +469,178 @@ host the existing route views, and a taskbar. The shell owns the permanent
 five-fact Truth Rail, so every primary route carries the disclosure. Window
 state persists across refresh and deep links resolve through the router.
 
-## Gaps to the target architecture
+## Status of record
 
-The integration audit identifies six release gates
-([`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order)).
-The TRANSITION work for each is owned by the corresponding agent and tracked
-in [`docs/exec-plans/`](../exec-plans/README.md):
+> **This section is the single authoritative statement of gate status.** Six
+> other locations previously asserted gate status independently and had
+> drifted apart; they are now pointers to this section. Per
+> [`docs/README.md`](../README.md), every claim below cites `file:line` so it
+> can be checked rather than trusted. **Do not restate gate status in another
+> document.** If code changes, update this table.
+>
+> Verified 2026-10-01 against commit `b868477`. Line counts are from that
+> commit and go stale — re-measure before relying on them.
 
-| Gate | Theme | Owner | Status |
-|---|---|---|---|
-| 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL — secrets hardened, MIME/magic-byte upload validation wired onto the live route, path-traversal/SSRF defenses, source-as-data prompt guard in place. Open P0s: multi-tenant isolation (deferred; needs a user-identity model), privacy/retention architecture, source-rights attestation. |
-| 1 | Typed API boundary | `askthepeople-architect` | PARTIAL — `simulation.py` is a 510-line helper module; simulation routes live in `api/routes/`, with typed schemas and `app/application/` + `app/domain/` foundations now present. No route owns a preparation daemon thread or opens the activity SQLite directly. Remaining: complete schema enforcement across legacy handlers and finish the route responsibility contract. |
-| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL — cleanup runs in Celery beat; Celery tasks classify transient retries; idempotent task admission uses an atomic cross-process Redis reservation with payload-conflict and missing-record recovery semantics; task updates fail closed after CAS contention; report deliveries use a durable, renewable single-owner execution fence with monotonic fencing tokens, renew-before-validate heartbeat self-recovery, env-tunable lease horizon, expired-lease takeover with operator logging, legacy None-lease grace (updated_at fallback) for safe rolling deploys, and fencing-credential stripping in `to_public_dict` (`models/task.py`). Open: transactional (fenced) artifact writes, push-based event delivery, the four independent state machines, TARGET PostgreSQL job/event history, and process-local `SimulationRunner` ownership. |
-| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL — tenant/workspace-scoped PostgreSQL repositories now cover projects/sources/runs and first-class path aggregates (`project_repository.py`, `source_repository.py`, `run_repository.py`, `path_repository.py`), with migrations and run-artifact digests. Open: production object-storage cutover, outbox events, soft-delete/audit-log, and complete provenance-edge write-time validation. |
-| 4 | Scale and operations | `askthepeople-release-operator` | NOT STARTED — observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting. Runbook and incident-response docs are concrete but the procedures are unimplemented. |
-| 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL — CoT scrubbing is IMPLEMENTED (ADR-0010); a versioned prompt registry and a single OpenAI-compatible adapter exist; a narrow eval suite passes in CI. Open: most prompts still inlined, model-release gating, failure-mode catalogue, adversarial/sensitivity evals. |
+There are **six** release gates and no seventh. An earlier roadmap in this
+directory listed a seventh; it was archived as
+[`../archive/misc/IMPLEMENTATION_ROADMAP-2026-08-18.md`](../archive/misc/IMPLEMENTATION_ROADMAP-2026-08-18.md).
+
+**Where the six gates come from.** The gate *themes and owners* in the table
+below are stated here; this is their only definition. The *rollout order* and
+per-gate ownership were adopted in
+[ADR-0011](adr/ADR-0011-incremental-modernization-over-rewrite.md#gate-ownership),
+whose status column is frozen at that ADR's baseline. The build plan does **not**
+define the gates: it has no gate section, and its §7 is *P2 gaps* while its §13
+is *Permanent truth statements*. Two links here once pointed at
+`#7-correct-target-architecture` and `#13-highest-value-implementation-order`;
+both anchors were fabricated and have been removed.
+
+| Gate | Theme | Owner | Status | Remaining |
+|---|---|---|---|---|
+| 0 | Immediate correctness and security | `askthepeople-security-reviewer` | PARTIAL | Multi-tenant isolation (deferred; needs a user-identity model), privacy/retention architecture, source-rights attestation |
+| 1 | Typed API boundary | `askthepeople-architect` | PARTIAL | Complete schema enforcement across legacy handlers; finish the route responsibility contract |
+| 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL | Transactional (fenced) artifact writes; push-based event delivery; the four independent state machines; TARGET PostgreSQL job/event history; process-local `SimulationRunner` ownership |
+| 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL | Production object-storage cutover; outbox events; soft-delete/audit-log; complete provenance-edge write-time validation |
+| 4 | Scale and operations | `askthepeople-release-operator` | **NOT STARTED** | Observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting |
+| 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL | Most prompts still inlined; model-release gating; failure-mode catalogue; adversarial/sensitivity evals |
+
+### Gate evidence
+
+**Gate 0.** Path-escape defense (`backend/app/utils/safe_path.py`); SSRF
+defense on source ingestion (`backend/app/utils/safe_url.py`); bearer auth on
+`/api/*` and signed WebSocket tickets (`backend/app/__init__.py`,
+`backend/app/api/ws.py`); fail-closed `SECRET_KEY`/`APP_TOKEN` and production
+CORS refusal (`backend/app/config.py:117-121`, `backend/app/config.py:368-373`);
+5xx traceback scrubbing (`backend/app/__init__.py`). Remaining P0 coverage is
+specified in [`../security/THREAT_MODEL.md`](../security/THREAT_MODEL.md).
+
+**Gate 1.** `backend/app/api/simulation.py` is a **364-line** helper module
+that holds only shared helpers; it contains no request handler. Simulation
+handlers live in `backend/app/api/routes/` (10 route modules). Typed schemas and
+the `app/application/` + `app/domain/` foundations are present —
+`backend/app/application/decision_workspace_service.py` and nine modules under
+`backend/app/domain/` (`run_attempt.py` 469 lines, `source_ingestion.py` 831
+lines, `decision_lens.py` 379, `possible_path.py` 354, `decision_workspace.py`
+281, `authorization.py` 139, `identifiers.py` 138, `actor_context.py` 82). No
+route owns a preparation daemon thread or opens the activity SQLite directly.
+
+**Gate 2.** Routes enqueue to Celery and return 202 rather than spawning daemon
+threads (`backend/app/api/routes/prep_routes.py`,
+`backend/app/tasks/simulation_tasks.py`); cleanup runs in Celery beat; task state
+is shared through Redis with atomic compare-and-swap updates
+(`backend/app/models/task.py`). Report delivery uses a durable, renewable
+single-owner execution fence with monotonic fencing tokens, renew-before-validate
+heartbeat self-recovery, env-tunable lease horizon, expired-lease takeover, and
+fencing-credential stripping in `to_public_dict`
+(`backend/app/models/task.py:276`, `backend/app/models/task.py:321`,
+`backend/app/models/task.py:949`, `backend/app/models/task.py:1030`).
+
+**Gate 3.** Tenant/workspace-scoped PostgreSQL repositories cover projects,
+sources, runs, decision lenses, and first-class path aggregates
+(`backend/app/services/project_repository.py`,
+`backend/app/services/source_repository.py`,
+`backend/app/services/run_repository.py`,
+`backend/app/services/path_repository.py`,
+`backend/app/services/decision_lens_repository.py`), with three migrations
+(`backend/migrations/versions/384c98f88d53_initial_schema.py`,
+`backend/migrations/versions/a1b2c3d4e5f6_domain_aggregates.py`,
+`backend/migrations/versions/b2c3d4e5f6a7_path_aggregates.py`). Persistence is
+opt-in behind `USE_SUPABASE_PERSISTENCE`
+(`backend/app/config.py:321-322`).
+
+**Gate 4.** No metrics or tracing; Sentry is PARTIAL. `../release/RUNBOOK.md`
+and [`../security/INCIDENT_RESPONSE.md`](../security/INCIDENT_RESPONSE.md) are
+concrete, but the procedures they describe are unimplemented.
+
+**Gate 5.** CoT scrubbing is implemented per ADR-0010
+(`strip_reasoning_scaffold()` in `backend/app/services/report_agent.py`, covered
+by `backend/tests/test_reasoning_scrub.py`). A versioned prompt registry
+([`../ai/PROMPT_REGISTRY.md`](../ai/PROMPT_REGISTRY.md)) and a single
+OpenAI-compatible adapter exist, and a narrow eval suite
+(`backend/tests/evals/`) passes in CI. The behavioural modules `big_five`,
+`prospect_theory`, `diffusion_model`, `constraint_engine`, `game_theory`, and
+`calibration_metrics` are exported from `backend/app/services/__init__.py` and
+unit-tested, but the last three have **no production importer** and are blocked
+on inputs the product does not have — see the analysis in
+[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md). Wiring them would require
+inventing the quantities they consume.
+
+### Shipped work not previously reflected in any status table
+
+The following is complete at `b868477`. Earlier trackers still described it as
+open.
+
+- **Exec-plan 08** (harvest framework engineering fixes): fixes 2, 3, 4, and 5
+  are done. Fix 1 (dual SQLAlchemy bases / Alembic) is partial and belongs to
+  gate 3.
+- **Exec-plan 09 Tier 1** (decision-only mode): source material is no longer
+  required to submit — the `files.value.length > 0` guard was removed from
+  `canSubmit` (`frontend/src/views/Home.vue:599-603`, with the requirement list
+  updated at `frontend/src/views/Home.vue:605-615`).
+- **Exec-plan 09 Tier 2** (URL ingestion): `POST /api/sources/fetch` is live
+  (`backend/app/api/sources.py:20-22`), backed by
+  `backend/app/services/url_fetcher.py` and the SSRF guard in
+  `backend/app/utils/safe_url.py`. Tier 3 (auto-research) is not started.
+- **Decision Workspace SDD tasks 1-4** are complete: the domain kernel under
+  `backend/app/domain/`, the tenant persistence migration
+  `a1b2c3d4e5f6`, and the run/source repositories. See
+  `.superpowers/sdd/progress.md` for the per-task record.
+- **Fork action** (`NEXT_STEPS_ROADMAP.md` Phase 1.1) is built and wired:
+  `forkSimulation()` is called by `frontend/src/components/ForkRunControl.vue:51`
+  and `frontend/src/components/ForkRunControl.vue:79`, which is mounted by
+  `frontend/src/views/SimulationRunView.vue`. Branch lineage
+  (`forked_from`, `forked_at_turn`, `forked_at`) is served by
+  `/api/simulation/list` and `/history`. The branch **tree and comparison
+  views** are still unbuilt.
+- **Release verification gate**: `scripts/release/verify` is the single
+  verification entry point required by `../release/RUNBOOK.md:127-131`, invoked
+  by `npm run verify` (`package.json:16`). It runs the documentation validator,
+  frontend tests, the frontend production build, backend tests excluding evals,
+  and a gitleaks scan when the binary is present.
+- **Step 1 progressive guidance** is live: `ProgressiveGuidance` and
+  `ContextualHelp` are used in `frontend/src/components/Step1GraphBuild.vue`
+  (7 and 2 references) with adaptive title copy.
+
+### Feature-level backlog
+
+Adoption of the progressive-guidance system is partial. Measured by reference
+count in each component:
+
+| Component | `ProgressiveGuidance` | `ContextualHelp` | Adaptive copy | Strategy checklist |
+|---|---:|---:|---:|---|
+| `Step1GraphBuild.vue` | 5 | 2 | 4 | complete |
+| `Step2EnvSetup.vue` | **0** | 3 | 3 | [`STEP2_MIGRATION_STRATEGY.md`](../design/STEP2_MIGRATION_STRATEGY.md) lines 282-314 |
+| `Step3RunWayfinder.vue` | **0** | **0** | 0 | [`STEP3_STEP4_MIGRATION_STRATEGY.md`](../design/STEP3_STEP4_MIGRATION_STRATEGY.md) lines 206-209 |
+| `Step4Report.vue` | **0** | **0** | 0 | [`STEP3_STEP4_MIGRATION_STRATEGY.md`](../design/STEP3_STEP4_MIGRATION_STRATEGY.md) lines 419-427 |
+| `Step5Interaction.vue` | **0** | **0** | 2 | not planned |
+
+These checklists are the authoritative work items for the migration;
+[`../design/COMPONENT_MIGRATION_CHECKLIST.md`](../design/COMPONENT_MIGRATION_CHECKLIST.md)
+is the reusable per-component template and is intentionally blank.
+
+Three tracked Vue files are referenced nowhere and are dead weight:
+`frontend/src/components/Step1GraphBuildRefactored.vue` (426 lines),
+`frontend/src/components/EvidenceBadge.vue` (290 lines), and
+`frontend/src/components/HistoryDatabase.vue` (1013 lines — removed from
+`Home.vue` by the Direction C redesign `d57898f`; see
+[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md) for the note warning against
+reviving it). Delete them in a separate, revertible commit.
+
+### Blocked on operator actions, not on engineering
+
+`../deployment/README.md` lines 178-226 records seven deployment blockers.
+Blocker 6 (missing `scripts/release/verify`) is closed. The rest gate a
+**deploy**, not the documentation or feature work, and must not be scheduled as
+engineering tasks:
+
+- Blockers 1, 3, 4, 7 — credential revocation and rotation, operator-supplied
+  secrets, and disabling provider-dashboard autodeploy. No code change closes
+  these.
+- Blocker 2 — `npm run setup:backend` is repaired in `package.json:7`
+  (`uv sync --frozen --group dev`).
+- Blocker 5 — the runbook forbids the only runnable topology from OneDrive,
+  Dropbox, NFS, or SMB (`../release/RUNBOOK.md:214-218`). This checkout is
+  under OneDrive, so a deployer must clone to a local disk first.
 
 The Product Truth Contract
 and the Product Truth Claim Block

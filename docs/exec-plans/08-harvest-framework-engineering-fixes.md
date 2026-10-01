@@ -1,10 +1,10 @@
 ---
 title: "Harvest Framework Engineering Fixes"
-status: "Proposed"
-version: "1.0.0"
+status: "Partially Delivered"
+version: "1.1.0"
 owner: "askthepeople-architect + askthepeople-persistence-engineer"
 created: "2026-08-02"
-last_reviewed: "2026-08-03"
+last_reviewed: "2026-10-01"
 gate: "Gate 1-3 accelerators"
 baseline_commit: "67cd5484cb7b2dab22b6d134622cf9793b9c4e5d"
 research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
@@ -12,6 +12,10 @@ research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
 
 # Harvest Framework Engineering Fixes
 
+> **Gate status is not recorded here.** See
+> [`../architecture/index.md` § Status of record](../architecture/index.md#status-of-record).
+> The reconciliation below is per-fix, not per-gate.
+>
 > **Status reconciliation (2026-08-05, verified against current `main`).**
 > Five of these fixes were proposed against baseline `67cd5484`. Re-checked
 > against the current code:

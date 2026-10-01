@@ -1,5 +1,14 @@
 # Decision Workspace SDD Progress
 
+> **Reconciliation note (2026-10-01).** This file previously listed "Task 5:
+> not started" twice and then, 6 lines later, described Task 5 as PARTIAL with
+> shipped work. The duplicate lines are removed; the PARTIAL entry below is the
+> accurate one.
+>
+> This is the per-task record for the Decision Workspace SDD briefs in this
+> directory. It is **not** a gate-status record. Release gate status lives in
+> [`docs/architecture/index.md` § Status of record`](../../docs/architecture/index.md#status-of-record).
+
 - Task 1: complete (commit dcc59e7, review clean).
 - Task 2: complete (commits 27254e9..edd24b5, review clean; 1379 focused/API tests pass).
 - Task 3: complete (commits 9800e68..0eae7bd, review clean; 21 focused and
@@ -11,19 +20,18 @@
   refuses the flag when DEBUG=false). Remaining: §5 production blockers
   (PostgreSQL source aggregate, object storage, isolated scanner/parser
   worker, transactional outbox, deletion ledger/worker, tenant auth).
-- Task 5: not started.
-- Task 5: not started.
-- Task 6: not started.
-- Task 7: not started.
-- Task 8: not started.
-- Task 9: not started.
 - Task 5: PARTIAL. Bounded fixes landed: /api/jobs get_instance crash fixed
   (used TaskManager() singleton); report generation now requires a terminal
   run (rejects RUNNING/PREPARING/etc with 409 report_run_not_terminal, with
   getattr defense for legacy/mock states without a status attribute). 7
   regression tests. The full 20-state durable run control plane, PostgreSQL
   run/stage/event/lease tables, fencing tokens, heartbeats, and stalled-lease
-  recovery remain TARGET (require PostgreSQL infra).
+  recovery remain TARGET (require PostgreSQL infra). The 20-state run and
+  9-state attempt enums now exist in `backend/app/domain/run_attempt.py`.
+- Task 6: not started.
+- Task 7: not started.
+- Task 8: not started.
+- Task 9: not started.
 
 ## Infrastructure checkpoint — migration + repository adapters (2026-08-11)
 

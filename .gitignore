@@ -54,6 +54,12 @@ gui-test-screenshots/
 # Agent / IDE tooling state
 .agents/
 .freebuff/
+.zcode/
+
+# Note: .superpowers/ IS tracked on purpose. sdd/progress.md is the
+# authoritative per-task record for the Decision Workspace SDD briefs and is
+# cited from docs/architecture/index.md. Its unchecked boxes are historical
+# task plans, not live status.
 
 # Playwright CLI run artifacts
 .playwright-cli/

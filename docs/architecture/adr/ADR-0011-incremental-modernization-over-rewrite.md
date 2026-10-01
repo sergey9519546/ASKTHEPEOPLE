@@ -71,13 +71,19 @@ evidence, compatibility impact, migration sequence, rollback, and ownership.
 ## Project-specific implication (baseline `8b616dc7`)
 
 This ADR is the rollout order for the 6-gate refactor defined in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order)
-and recorded in
-[`docs/architecture/index.md` §"Gaps to the target architecture"](../index.md).
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order).
+
+> **Current gate status is not recorded here.** It lives in exactly one place:
+> [`docs/architecture/index.md` § Status of record](../index.md#status-of-record).
+> The table below is the **rollout order and gate ownership** adopted when this
+> ADR was accepted, with the status column frozen at the baseline commit
+> `8b616dc7`. It is retained as the decision record and is superseded for
+> status purposes. Several of those rows were PARTIAL or further along long
+> before this ADR was written; read the canonical table, not this one.
 
 ### Gate ownership
 
-| Gate | Theme | Owner agent | Status (baseline `8b616dc7`) |
+| Gate | Theme | Owner agent | Status as of baseline `8b616dc7` |
 |---|---|---|---|
 | 0 | Immediate correctness and security | `askthepeople-security-reviewer` | NOT STARTED |
 | 1 | Typed API boundary | `askthepeople-architect` | NOT STARTED |

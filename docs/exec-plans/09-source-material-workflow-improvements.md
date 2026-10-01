@@ -1,33 +1,58 @@
 ---
 title: "Source Material Workflow Improvements"
-status: "Proposed"
-version: "1.0.0"
+status: "Partially Delivered"
+version: "1.1.0"
 owner: "askthepeople-architect"
 created: "2026-08-03"
-last_reviewed: "2026-08-03"
+last_reviewed: "2026-10-01"
 ---
 
 # Source Material Workflow Improvements
+
+> **Status reconciliation (2026-10-01, verified against `main` at `b868477`).**
+> Tiers 1 and 2 are **shipped**. This document previously carried
+> `status: "Proposed"` with all three tiers written as future work.
+>
+> - **Tier 1 (decision-only mode): DONE.** The `files.value.length > 0` guard
+>   was removed from `canSubmit`
+>   ([`frontend/src/views/Home.vue:599-603`](../../frontend/src/views/Home.vue)),
+>   and `submissionRequirements` no longer lists source material
+>   ([`frontend/src/views/Home.vue:605-615`](../../frontend/src/views/Home.vue)).
+> - **Tier 2 (URL ingestion): DONE.** `POST /api/sources/fetch` is registered at
+>   [`backend/app/api/sources.py:20-22`](../../backend/app/api/sources.py),
+>   backed by [`backend/app/services/url_fetcher.py`](../../backend/app/services/url_fetcher.py)
+>   and the SSRF guard [`backend/app/utils/safe_url.py`](../../backend/app/utils/safe_url.py).
+>   The frontend accepts pasted URLs (`frontend/src/views/Home.vue:585`,
+>   `frontend/src/views/Home.vue:723-724`).
+> - **Tier 3 (auto-research): NOT STARTED.** No source-discovery endpoint exists.
+>
+> Gate status is not recorded here; see
+> [`../architecture/index.md` § Status of record](../architecture/index.md#status-of-record).
 
 ## Problem Statement
 
 Current workflow requires users to manually gather and upload files before running any simulation. This creates friction:
 
 1. **Manual download-upload cycle** — users find URLs, download files, then upload them
-2. **Source material is required** — can't run exploration with just a decision/scenario (frontend/src/views/Home.vue:404 blocks submission if `files.value.length === 0`)
-3. **No URL ingestion** — no way to directly provide article/doc links
-4. **"Just ask the question" not possible** — even for quick exploratory runs
+2. **~~Source material is required~~** — **RESOLVED.** `frontend/src/views/Home.vue:404` no longer blocks submission on `files.value.length === 0`; the guard was removed from `canSubmit`
+3. **~~No URL ingestion~~** — **RESOLVED.** `POST /api/sources/fetch` exists
+   (`backend/app/api/sources.py:20-22`)
+4. **~~"Just ask the question" not possible~~** — **RESOLVED** by items 2 and 3
+
+Items 2-4 are struck through because they were resolved by Tiers 1 and 2; see
+the status-reconciliation block above. The original friction that motivated this
+plan is gone. What remains is Tier 3 only.
 
 User request: *"all they have to do is ask the questions or scenario, and if they have any research files or data they can upload"*
 
 ## Proposed Three-Tier Solution
 
-### Tier 1: Decision-Only Mode (Quickest Win)
+### Tier 1: Decision-Only Mode (Quickest Win) — SHIPPED
 
 **Goal:** Make source files optional so users can run simulations with just a decision/scenario.
 
 **Changes:**
-- `frontend/src/views/Home.vue:404` — remove `files.value.length > 0` from `canSubmit` guard
+- ~~`frontend/src/views/Home.vue:404` — remove `files.value.length > 0` from `canSubmit` guard~~ — **DONE** (`frontend/src/views/Home.vue:599-603`)
 - Update help text: "Source material optional — upload files or paste URLs to ground personas in specific context"
 - Backend already handles zero-file case (generates personas from decision text via OASIS)
 - Add note in results: "This exploration used only the decision text. Upload sources for context-grounded personas."

@@ -11,9 +11,20 @@ applies_to: "Step2EnvSetup.vue refactoring"
 
 # Step2EnvSetup Migration Strategy
 
+> **These checkboxes are the live work items for this migration.** Unlike the
+> SDD plans under `docs/superpowers/`, they were never mass-completed by later
+> work — `Step2EnvSetup.vue` still has **zero** `ProgressiveGuidance`
+> references (verified 2026-10-01). Do not tick a box without changing the
+> component.
+>
+> This is the feature-level backlog for `Step2EnvSetup.vue`. Release gate status
+> lives in
+> [`docs/architecture/index.md` § Status of record](../architecture/index.md#status-of-record),
+> which carries the per-component adoption table.
+
 ## Component Overview
 
-**Current state:** 2,889 lines, shows everything at once
+**Current state at 2026-10-01:** 2,954 lines, shows everything at once
 - Profile generation status (profiles appear incrementally)
 - Simulation configuration (platforms, timing, advanced settings)
 - 50+ configuration parameters visible simultaneously
