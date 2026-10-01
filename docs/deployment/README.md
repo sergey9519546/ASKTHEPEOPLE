@@ -259,3 +259,15 @@ Test-suite CI already exists; no additional workflow file was created.
 files passed, the production build succeeded, and the backend suite
 finished with 9475 passed, 4 skipped, 1 xfailed. `python
 tools/validate_docs.py` reports PASS with zero errors and zero warnings.
+
+## Release verification gate
+
+`./scripts/release/verify` (bash; runs under Git Bash on Windows) is now the
+single verification entry point required by `docs/release/RUNBOOK.md:127-131`
+and closes deployment blocker 6 above. It runs, in order: the documentation
+validator (`tools/validate_docs.py`), frontend tests, the frontend production
+build, backend tests with evals excluded (mirroring `.github/workflows/ci.yml:81`),
+and a gitleaks working-tree scan when the `gitleaks` binary is installed
+(skipped with a warning otherwise; CI still enforces the scan). Root
+`npm run verify` invokes this same script; it exits non-zero when any gate
+fails.

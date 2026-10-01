@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+#
+# scripts/release/verify — single release-verification entry point.
+#
+# Required by docs/release/RUNBOOK.md:127-131 ("The production repository
+# MUST provide a single clean-environment command: ./scripts/release/verify").
+# This script implements the minimum enforceable subset of the runbook's
+# checklist (RUNBOOK.md:133-146) that can run from a clean checkout today:
+#
+#   1. Documentation validator          tools/validate_docs.py (0 errors required)
+#   2. Frontend tests                   mirrors .github/workflows/ci.yml:133-134
+#   3. Frontend production build        mirrors .github/workflows/ci.yml:136-137
+#   4. Backend tests, evals excluded    mirrors ci.yml:75-81
+#                                       (pytest -q --ignore=tests/evals, run via
+#                                       uv when available, else the local venv)
+#   5. Secret scan (gitleaks)           mirrors the CI working-tree scan
+#                                       (ci.yml:408-415); SKIPped with a
+#                                       warning when gitleaks is not installed
+#                                       (CI still enforces it, ci.yml:364-443)
+#
+# Runs under Git Bash on Windows and POSIX shells. Exits non-zero when any
+# gate FAILs; a SKIPped gate does not fail the run.
+
+set -u
+
+cd "$(dirname "$0")/../.." || exit 1
+
+failures=0
+skips=0
+summary=""
+
+record() {
+    # record <status> <number> <title>
+    summary="${summary}  $1  $2. $3
+"
+}
+
+run_gate() {
+    # run_gate <number> <title> <command...>
+    gate_no="$1"
+    gate_title="$2"
+    shift 2
+    printf '\n=== Gate %s: %s ===\n' "$gate_no" "$gate_title"
+    # Subshell: a gate that changes directory (backend_pytest) must not
+    # affect the working directory of the gates after it.
+    if ( "$@" ); then
+        printf 'Gate %s: PASS - %s\n' "$gate_no" "$gate_title"
+        record "PASS" "$gate_no" "$gate_title"
+    else
+        rc=$?
+        printf 'Gate %s: FAIL - %s (exit %s)\n' "$gate_no" "$gate_title" "$rc"
+        record "FAIL" "$gate_no" "$gate_title"
+        failures=$((failures + 1))
+    fi
+}
+
+backend_pytest() {
+    # Mirror the CI test environment (ci.yml:76-80). dotenv loads with
+    # override=False (backend/app/config.py:17), so real operator exports win.
+    # DEVIATION from ci.yml: the CI value "ci-secret-key-for-testing-only" is
+    # 29 characters, below the 32-character production minimum that
+    # tests/test_actor_context_installer.py::test_installer_noop_in_production
+    # exercises (CI has not reached its "Run tests" step since that test
+    # landed, so the latent failure is unproven there). This gate uses a
+    # 34-character test-only key so a healthy tree passes locally.
+    : "${SECRET_KEY:=ci-secret-key-for-testing-only-0000}"
+    : "${LLM_API_KEY:=ci-test-key}"
+    : "${ZEP_API_KEY:=ci-test-key}"
+    FLASK_DEBUG=true
+    export SECRET_KEY LLM_API_KEY ZEP_API_KEY FLASK_DEBUG
+
+    cd backend || return 1
+    if command -v uv >/dev/null 2>&1; then
+        echo "Backend runner: uv (mirrors .github/workflows/ci.yml:81)"
+        uv run --frozen pytest -q --ignore=tests/evals
+    elif [ -x ".venv/Scripts/pytest.exe" ] || [ -x ".venv/Scripts/pytest" ]; then
+        echo "Backend runner: backend/.venv/Scripts/pytest (Windows venv)"
+        .venv/Scripts/pytest -q --ignore=tests/evals
+    elif [ -x ".venv/bin/pytest" ]; then
+        echo "Backend runner: backend/.venv/bin/pytest (POSIX venv)"
+        .venv/bin/pytest -q --ignore=tests/evals
+    else
+        echo "FAIL: no backend test runner found."
+        echo "Install uv (https://docs.astral.sh/uv/) or create backend/.venv"
+        echo "with pytest installed, then re-run."
+        return 1
+    fi
+}
+
+gitleaks_scan() {
+    # Mirrors the CI working-tree scan (ci.yml:408-415). The commit-range and
+    # full-history scans in CI (ci.yml:417-432) are out of scope for a local
+    # clean-environment gate.
+    gitleaks dir . --config .gitleaks.toml --redact --no-banner
+}
+
+echo "Release verification gate (docs/release/RUNBOOK.md:127-131)"
+echo "Repository: $(pwd)"
+
+run_gate 1 "Documentation validator (tools/validate_docs.py)" \
+    python tools/validate_docs.py
+
+run_gate 2 "Frontend tests" \
+    npm --prefix frontend test --silent
+
+run_gate 3 "Frontend production build" \
+    npm --prefix frontend run build
+
+run_gate 4 "Backend tests (evals excluded, mirrors ci.yml:81)" \
+    backend_pytest
+
+if command -v gitleaks >/dev/null 2>&1; then
+    run_gate 5 "Secret scan (gitleaks working tree)" gitleaks_scan
+else
+    skips=$((skips + 1))
+    record "SKIP" 5 "Secret scan (gitleaks binary not installed; CI enforces it)"
+    printf '\n=== Gate 5: Secret scan (gitleaks working tree) ===\n'
+    printf 'Gate 5: SKIP - gitleaks is not installed locally.\n'
+    printf 'CI still enforces the secret scan (.github/workflows/ci.yml:364-443).\n'
+fi
+
+printf '\n================ RELEASE VERIFICATION SUMMARY ================\n'
+printf '%s' "$summary"
+printf '==============================================================\n'
+if [ "$failures" -gt 0 ]; then
+    printf 'Result: FAILED (%s gate(s) failed, %s skipped)\n' "$failures" "$skips"
+    exit 1
+fi
+printf 'Result: PASSED (%s skipped)\n' "$skips"
+exit 0
