@@ -9,6 +9,7 @@ from flask import request, jsonify
 from .. import simulation_bp
 from ..simulation import optimize_interview_prompt
 from .. import limiter
+from ..presentation import error_response, present
 from ...config import Config
 from ...services.simulation_runner import SimulationRunner
 from ...services.claim_boundary import synthetic_output_disclosure
@@ -28,11 +29,10 @@ logger = get_logger('askthepeople.api.simulation')
 
 # P0 path-escape fix (audit §5 P0). The platform identifier is a request-
 # controlled value; it MUST be parsed as a strict enum and resolved to a
-# fixed filename. Do NOT interpolate request text into a filename.
-ALLOWED_PLATFORMS = {
-    "reddit": "reddit_simulation.db",
-    "twitter": "twitter_simulation.db",
-}
+# fixed filename. Do NOT interpolate request text into a filename. The
+# platform-to-filename map lives in SimulationPaths.activity_db_file
+# (services/simulation_paths.py); this module keeps only platform-membership
+# validation and never derives a filename from request text.
 
 
 
@@ -110,37 +110,27 @@ def interview_agent():
                 maximum=300,
             )
         except InputPolicyError as exc:
-            return jsonify({
-                "success": False,
-                "error": exc.code,
-                "message": exc.message,
-            }), 400
+            return error_response(exc.code, status=400, message=exc.message)
         
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
         
         if agent_id is None:
-            return jsonify({
-                "success": False,
-                "error": "Please provide agent_id"
-            }), 400
+            return error_response("Please provide agent_id", status=400)
         
         # Validate platform parameter
         if platform and platform not in ("twitter", "reddit"):
-            return jsonify({
-                "success": False,
-                "error": "The platform parameter can only be 'twitter' or 'reddit'"
-            }), 400
+            return error_response(
+                "The platform parameter can only be 'twitter' or 'reddit'",
+                status=400,
+            )
         
         # Check environment status
         if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": "Simulation environment not running or closed. Please ensure simulation is Completed and in waiting command mode."
-            }), 400
+            return error_response(
+                "Simulation environment not running or closed. Please ensure simulation is Completed and in waiting command mode.",
+                status=400,
+            )
         
         # Optimize prompt, add prefix to avoid Agent calling tools
         raw = Config.DEBUG and (
@@ -164,24 +154,17 @@ def interview_agent():
         })
         
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
+        return error_response(str(e), status=400)
         
     except TimeoutError as e:
-        return jsonify({
-            "success": False,
-            "error": f"Timeout waiting for generated profile response: {str(e)}"
-        }), 504
+        return error_response(
+            f"Timeout waiting for generated profile response: {str(e)}",
+            status=504,
+        )
         
     except Exception as e:
         logger.error(f"Generated profile follow-up failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())
 
 @simulation_bp.route('/generated-response/batch', methods=['POST'])
 @simulation_bp.route('/interview/batch', methods=['POST'])
@@ -247,43 +230,27 @@ def interview_agents_batch():
                 maximum=300,
             )
         except InputPolicyError as exc:
-            return jsonify({
-                "success": False,
-                "error": exc.code,
-                "message": exc.message,
-            }), 400
+            return error_response(exc.code, status=400, message=exc.message)
 
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
 
         if not questions or not isinstance(questions, list):
-            return jsonify({
-                "success": False,
-                "error": "Please provide questions for generated profiles"
-            }), 400
+            return error_response("Please provide questions for generated profiles", status=400)
 
         # Validate platform parameter
         if platform and platform not in ("twitter", "reddit"):
-            return jsonify({
-                "success": False,
-                "error": "platform parameter can only be 'twitter' or 'reddit'"
-            }), 400
+            return error_response(
+                "platform parameter can only be 'twitter' or 'reddit'",
+                status=400,
+            )
 
         # Validate each generated-profile question.
         for i, question in enumerate(questions):
             if 'agent_id' not in question:
-                return jsonify({
-                    "success": False,
-                    "error": f"Question item {i+1} missing agent_id"
-                }), 400
+                return error_response(f"Question item {i+1} missing agent_id", status=400)
             if 'prompt' not in question:
-                return jsonify({
-                    "success": False,
-                    "error": f"Question item {i+1} missing prompt"
-                }), 400
+                return error_response(f"Question item {i+1} missing prompt", status=400)
             try:
                 question["prompt"] = bounded_text(
                     question.get("prompt"),
@@ -292,25 +259,21 @@ def interview_agents_batch():
                     required=True,
                 )
             except InputPolicyError as exc:
-                return jsonify({
-                    "success": False,
-                    "error": exc.code,
-                    "message": exc.message,
-                }), 400
+                return error_response(exc.code, status=400, message=exc.message)
             # Validate platform for each item (if any)
             item_platform = question.get('platform')
             if item_platform and item_platform not in ("twitter", "reddit"):
-                return jsonify({
-                    "success": False,
-                    "error": f"Platform for question item {i+1} can only be 'twitter' or 'reddit'"
-                }), 400
+                return error_response(
+                    f"Platform for question item {i+1} can only be 'twitter' or 'reddit'",
+                    status=400,
+                )
 
         # Check environment status
         if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": "Simulation environment not running or closed. Please ensure simulation is Completed and in waiting command mode."
-            }), 400
+            return error_response(
+                "Simulation environment not running or closed. Please ensure simulation is Completed and in waiting command mode.",
+                status=400,
+            )
 
         # Add the disclosure prefix and prevent generated profiles from calling tools.
         raw = Config.DEBUG and (
@@ -348,24 +311,17 @@ def interview_agents_batch():
         })
 
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
+        return error_response(str(e), status=400)
 
     except TimeoutError as e:
-        return jsonify({
-            "success": False,
-            "error": f"Timeout waiting for generated profile responses: {str(e)}"
-        }), 504
+        return error_response(
+            f"Timeout waiting for generated profile responses: {str(e)}",
+            status=504,
+        )
 
     except Exception as e:
         logger.error(f"Generated profile batch follow-up failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())
 
 @simulation_bp.route('/generated-response/all', methods=['POST'])
 @simulation_bp.route('/interview/all', methods=['POST'])
@@ -422,31 +378,24 @@ def interview_all_agents():
                 maximum=300,
             )
         except InputPolicyError as exc:
-            return jsonify({
-                "success": False,
-                "error": exc.code,
-                "message": exc.message,
-            }), 400
+            return error_response(exc.code, status=400, message=exc.message)
 
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
 
         # Validate platform parameter
         if platform and platform not in ("twitter", "reddit"):
-            return jsonify({
-                "success": False,
-                "error": "platform parameter can only be 'twitter' or 'reddit'"
-            }), 400
+            return error_response(
+                "platform parameter can only be 'twitter' or 'reddit'",
+                status=400,
+            )
 
         # Check environment status
         if not SimulationRunner.check_env_alive(simulation_id):
-            return jsonify({
-                "success": False,
-                "error": "Simulation environment not running or closed. Please ensure simulation is Completed and in waiting command mode."
-            }), 400
+            return error_response(
+                "Simulation environment not running or closed. Please ensure simulation is Completed and in waiting command mode.",
+                status=400,
+            )
 
         # Optimize prompt, add prefix to prevent Agent from calling tools
         raw = Config.DEBUG and (
@@ -469,24 +418,17 @@ def interview_all_agents():
         })
 
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
+        return error_response(str(e), status=400)
 
     except TimeoutError as e:
-        return jsonify({
-            "success": False,
-            "error": f"Timeout waiting for generated profile responses: {str(e)}"
-        }), 504
+        return error_response(
+            f"Timeout waiting for generated profile responses: {str(e)}",
+            status=504,
+        )
 
     except Exception as e:
         logger.error(f"Generated profile all-follow-up failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())
 
 @simulation_bp.route('/generated-response/history', methods=['POST'])
 @simulation_bp.route('/interview/history', methods=['POST'])
@@ -532,10 +474,7 @@ def get_interview_history():
         limit = data.get('limit', 100)
         
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
 
         history = SimulationRunner.get_interview_history(
             simulation_id=simulation_id,
@@ -544,19 +483,14 @@ def get_interview_history():
             limit=limit
         )
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "count": len(history),
                 "history": history
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except Exception as e:
         logger.error(f"Failed to get generated profile response history: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())

@@ -6,7 +6,7 @@ Step 2: Zep Entity Reading & Filtering, OASIS Simulation Preparation & Running (
 import traceback
 import uuid
 
-from flask import jsonify, request
+from flask import request
 
 from app.api.schemas import (
     CreateSimulationRequest,
@@ -30,6 +30,7 @@ from ...services.zep_entity_reader import ZepEntityReader
 from ...utils.input_policy import PREPARE_ENTITY_MAX, InputPolicyError
 from ...utils.logger import get_logger
 from .. import limiter, simulation_bp
+from ..presentation import error_response, present
 from ..simulation import (
     _check_simulation_prepared,
     _validate_prepare_controls,
@@ -42,11 +43,10 @@ logger = get_logger('askthepeople.api.simulation')
 
 # P0 path-escape fix (audit §5 P0). The platform identifier is a request-
 # controlled value; it MUST be parsed as a strict enum and resolved to a
-# fixed filename. Do NOT interpolate request text into a filename.
-ALLOWED_PLATFORMS = {
-    "reddit": "reddit_simulation.db",
-    "twitter": "twitter_simulation.db",
-}
+# fixed filename. Do NOT interpolate request text into a filename. The
+# platform-to-filename map lives in SimulationPaths.activity_db_file
+# (services/simulation_paths.py); this module does not duplicate it and
+# never derives a filename from request text.
 
 
 
@@ -86,10 +86,7 @@ def create_simulation():
 
         project_id = data.get('project_id')
         if not project_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide project_id"
-            }), 400
+            return error_response("Please provide project_id", status=400)
         
         association = resolve_project_graph(project_id, data.get('graph_id'))
         graph_id = association.graph_id
@@ -102,22 +99,16 @@ def create_simulation():
             enable_reddit=data.get('enable_reddit', True),
         )
         
-        return jsonify({
-            "success": True,
-            "data": state.to_dict()
-        })
+        return present(state.to_dict())
         
     except GraphAssociationError as exc:
-        return jsonify({"success": False, "error": exc.code}), exc.status_code
+        return error_response(exc.code, status=exc.status_code)
     except Exception as exc:
         logger.error(
             "simulation creation unavailable exception_type=%s",
             type(exc).__name__,
         )
-        return jsonify({
-            "success": False,
-            "error": "simulation_create_unavailable",
-        }), 503
+        return error_response("simulation_create_unavailable", status=503)
 
 @simulation_bp.route('/prepare', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
@@ -169,42 +160,32 @@ def prepare_simulation():
         data = request.get_json() or {}
 
         if not Config.DECISION_LENS_V1_ENABLED:
-            return jsonify({
-                "success": False,
-                "error": "decision_lens_preparation_unavailable",
-                "message": "Reviewed decision-lens preparation is unavailable.",
-            }), 503
+            return error_response(
+                "decision_lens_preparation_unavailable",
+                status=503,
+                message="Reviewed decision-lens preparation is unavailable.",
+            )
         
         simulation_id = data.get('simulation_id')
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
 
         try:
             prepare_controls = _validate_prepare_controls(data)
         except InputPolicyError as exc:
-            return jsonify({
-                "success": False,
-                "error": exc.code,
-                "message": exc.message,
-            }), 400
+            return error_response(exc.code, status=400, message=exc.message)
         if prepare_controls["use_archetypes"]:
-            return jsonify({
-                "success": False,
-                "error": "deprecated_control_not_supported",
-                "message": "Archetype controls are not supported for reviewed preparation.",
-            }), 422
+            return error_response(
+                "deprecated_control_not_supported",
+                status=422,
+                message="Archetype controls are not supported for reviewed preparation.",
+            )
         
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
         
         if not state:
-            return jsonify({
-                "success": False,
-                "error": f"Simulation does not exist: {simulation_id}"
-            }), 404
+            return error_response(f"Simulation does not exist: {simulation_id}", status=404)
         
         # Check if force regenerate
         force_regenerate = prepare_controls["force_regenerate"]
@@ -214,16 +195,13 @@ def prepare_simulation():
             state.status == SimulationStatus.NEEDS_REVIEW
             and not force_regenerate
         ):
-            return jsonify({
-                "success": True,
-                "data": {
-                    "simulation_id": simulation_id,
-                    "status": "needs_review",
-                    "message": "Decision lenses are ready for human review.",
-                    "already_prepared": False,
-                    "review_required": True,
-                    "decision_lenses_count": state.decision_lenses_count,
-                },
+            return present({
+                "simulation_id": simulation_id,
+                "status": "needs_review",
+                "message": "Decision lenses are ready for human review.",
+                "already_prepared": False,
+                "review_required": True,
+                "decision_lenses_count": state.decision_lenses_count,
             })
         
         # Check if already prepared (avoid duplicate generation)
@@ -233,15 +211,12 @@ def prepare_simulation():
             logger.debug(f"Check result: is_prepared={is_prepared}, prepare_info={prepare_info}")
             if is_prepared:
                 logger.info(f"Simulation {simulation_id} Preparation complete, skipping duplicate generation")
-                return jsonify({
-                    "success": True,
-                    "data": {
-                        "simulation_id": simulation_id,
-                        "status": "ready",
-                        "message": "Existing preparation work found, no need to regenerate",
-                        "already_prepared": True,
-                        "prepare_info": prepare_info
-                    }
+                return present({
+                    "simulation_id": simulation_id,
+                    "status": "ready",
+                    "message": "Existing preparation work found, no need to regenerate",
+                    "already_prepared": True,
+                    "prepare_info": prepare_info
                 })
             else:
                 logger.info(f"Simulation {simulation_id} Preparation not complete, starting preparation task")
@@ -254,10 +229,10 @@ def prepare_simulation():
         # Get simulation requirements
         simulation_requirement = project.simulation_requirement or ""
         if not simulation_requirement:
-            return jsonify({
-                "success": False,
-                "error": "Project missing simulation requirement description (simulation_requirement)"
-            }), 400
+            return error_response(
+                "Project missing simulation requirement description (simulation_requirement)",
+                status=400,
+            )
         
         # Get document text
         document_text = ProjectManager.get_extracted_text(state.project_id) or ""
@@ -281,15 +256,15 @@ def prepare_simulation():
                 enrich_with_edges=False  # Speed up by not retrieving edge info
             )
             if filtered_preview.filtered_count > PREPARE_ENTITY_MAX:
-                return jsonify({
-                    "success": False,
-                    "error": "entity_count_out_of_range",
-                    "message": (
+                return error_response(
+                    "entity_count_out_of_range",
+                    status=400,
+                    message=(
                         "The selected graph contains "
                         f"{filtered_preview.filtered_count} profile entities; "
                         f"the maximum is {PREPARE_ENTITY_MAX}."
                     ),
-                }), 400
+                )
             # Save entity count to state (for immediate frontend retrieval)
             state.entities_count = filtered_preview.filtered_count
             state.entity_types = list(filtered_preview.entity_types)
@@ -353,9 +328,8 @@ def prepare_simulation():
                 task_id=task_id,
             )
 
-        response = jsonify({
-            "success": True,
-            "data": {
+        response = present(
+            {
                 "simulation_id": simulation_id,
                 "task_id": task_id,
                 "status": "preparing",
@@ -363,21 +337,20 @@ def prepare_simulation():
                 "already_prepared": False,
                 "expected_entities_count": state.entities_count,  # Expected total Agents
                 "entity_types": state.entity_types  # Entity types list
-            }
-        })
-        return response, 202, {"Location": f"/api/jobs/{task_id}"}
+            },
+            status=202,
+        )
+        response.headers["Location"] = f"/api/jobs/{task_id}"
+        return response
         
     except GraphAssociationError as exc:
-        return jsonify({"success": False, "error": exc.code}), exc.status_code
+        return error_response(exc.code, status=exc.status_code)
     except Exception as exc:
         logger.error(
             "simulation preparation unavailable exception_type=%s",
             type(exc).__name__,
         )
-        return jsonify({
-            "success": False,
-            "error": "simulation_prepare_unavailable",
-        }), 503
+        return error_response("simulation_prepare_unavailable", status=503)
 
 @simulation_bp.route('/prepare/status', methods=['POST'])
 def get_prepare_status():
@@ -419,36 +392,27 @@ def get_prepare_status():
         if simulation_id:
             is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
             if is_prepared:
-                return jsonify({
-                    "success": True,
-                    "data": {
-                        "simulation_id": simulation_id,
-                        "status": "ready",
-                        "progress": 100,
-                        "message": "Existing preparation work found",
-                        "already_prepared": True,
-                        "prepare_info": prepare_info
-                    }
+                return present({
+                    "simulation_id": simulation_id,
+                    "status": "ready",
+                    "progress": 100,
+                    "message": "Existing preparation work found",
+                    "already_prepared": True,
+                    "prepare_info": prepare_info
                 })
-        
+
         # If no task_id, return error
         if not task_id:
             if simulation_id:
                 # With simulation_id but not prepared yet
-                return jsonify({
-                    "success": True,
-                    "data": {
-                        "simulation_id": simulation_id,
-                        "status": "not_started",
-                        "progress": 0,
-                        "message": "Preparation not started, please call /api/simulation/prepare to start",
-                        "already_prepared": False
-                    }
+                return present({
+                    "simulation_id": simulation_id,
+                    "status": "not_started",
+                    "progress": 0,
+                    "message": "Preparation not started, please call /api/simulation/prepare to start",
+                    "already_prepared": False
                 })
-            return jsonify({
-                "success": False,
-                "error": "Please provide task_id or simulation_id"
-            }), 400
+            return error_response("Please provide task_id or simulation_id", status=400)
         
         task_manager = TaskManager()
         task = task_manager.get_task(task_id)
@@ -458,38 +422,26 @@ def get_prepare_status():
             if simulation_id:
                 is_prepared, prepare_info = _check_simulation_prepared(simulation_id)
                 if is_prepared:
-                    return jsonify({
-                        "success": True,
-                        "data": {
-                            "simulation_id": simulation_id,
-                            "task_id": task_id,
-                            "status": "ready",
-                            "progress": 100,
-                            "message": "Task completed (preparation work already exists)",
-                            "already_prepared": True,
-                            "prepare_info": prepare_info
-                        }
+                    return present({
+                        "simulation_id": simulation_id,
+                        "task_id": task_id,
+                        "status": "ready",
+                        "progress": 100,
+                        "message": "Task completed (preparation work already exists)",
+                        "already_prepared": True,
+                        "prepare_info": prepare_info
                     })
-            
-            return jsonify({
-                "success": False,
-                "error": f"Task does not exist: {task_id}"
-            }), 404
-        
+
+            return error_response(f"Task does not exist: {task_id}", status=404)
+
         task_dict = task.to_public_dict()
         task_dict["already_prepared"] = False
-        
-        return jsonify({
-            "success": True,
-            "data": task_dict
-        })
+
+        return present(task_dict)
         
     except Exception as e:
         logger.error(f"Failed to query task status: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return error_response(str(e), status=500)
 
 @simulation_bp.route('/generate-profiles', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
@@ -527,10 +479,7 @@ def generate_profiles():
         )
         
         if filtered.filtered_count == 0:
-            return jsonify({
-                "success": False,
-                "error": "No matching entities found"
-            }), 400
+            return error_response("No matching entities found", status=400)
         
         generator = OasisProfileGenerator()
         profiles = generator.generate_profiles_from_entities(
@@ -546,29 +495,25 @@ def generate_profiles():
             profiles_data = [p.to_dict() for p in profiles]
         profiles_data = _with_profile_truth(profiles_data)
         
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "platform": platform,
                 "entity_types": list(filtered.entity_types),
                 "count": len(profiles_data),
                 "profiles": profiles_data,
                 **fictional_profile_disclosure(),
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
         
     except GraphAssociationError as exc:
-        return jsonify({"success": False, "error": exc.code}), exc.status_code
+        return error_response(exc.code, status=exc.status_code)
     except Exception as exc:
         logger.error(
             "profile generation unavailable exception_type=%s",
             type(exc).__name__,
         )
-        return jsonify({
-            "success": False,
-            "error": "profile_generation_unavailable",
-        }), 503
+        return error_response("profile_generation_unavailable", status=503)
 
 @simulation_bp.route('/<simulation_id>/preflight', methods=['GET'])
 def get_simulation_preflight(simulation_id: str):
@@ -576,35 +521,21 @@ def get_simulation_preflight(simulation_id: str):
         manager = SimulationManager()
         preflight = manager.get_preflight(simulation_id)
         if not preflight:
-            return jsonify({
-                "success": False,
-                "error": "preflight.json does not exist, please complete /prepare first"
-            }), 404
-        return jsonify({
-            "success": True,
-            "data": preflight
-        })
+            return error_response(
+                "preflight.json does not exist, please complete /prepare first",
+                status=404,
+            )
+        return present(preflight)
     except Exception as e:
         logger.error(f"Failed to get preflight: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())
 
 @simulation_bp.route('/<simulation_id>/diagnostics', methods=['GET'])
 def get_simulation_diagnostics(simulation_id: str):
     try:
         manager = SimulationManager()
         diagnostics = manager.get_diagnostics(simulation_id)
-        return jsonify({
-            "success": True,
-            "data": diagnostics
-        })
+        return present(diagnostics)
     except Exception as e:
         logger.error(f"Failed to get diagnostics: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())

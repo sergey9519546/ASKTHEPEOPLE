@@ -2,7 +2,7 @@
 Entity Query API Routes (Decomposed from simulation.py)
 """
 
-from flask import jsonify, request
+from flask import request
 
 from ...config import Config
 from ...services.claim_boundary import (
@@ -17,6 +17,7 @@ from ...services.zep_entity_reader import ZepEntityReader
 from ...utils.logger import get_logger
 from ...utils.response import truth_metadata
 from .. import simulation_bp
+from ..presentation import error_response, present
 
 logger = get_logger('askthepeople.api.routes.entity')
 
@@ -28,10 +29,7 @@ def _resolve_requested_graph(graph_id: str):
             graph_id,
         )
     except GraphAssociationError as exc:
-        return None, (
-            jsonify({"success": False, "error": exc.code}),
-            exc.status_code,
-        )
+        return None, error_response(exc.code, status=exc.status_code)
     return association.graph_id, None
 
 
@@ -47,10 +45,7 @@ def get_graph_entities(graph_id: str):
         return association_error
 
     if not Config.ZEP_API_KEY:
-        return jsonify({
-            "success": False,
-            "error": "graph_dependency_unavailable",
-        }), 503
+        return error_response("graph_dependency_unavailable", status=503)
 
     try:
         
@@ -70,27 +65,25 @@ def get_graph_entities(graph_id: str):
         
         entities = result.entities
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "graph_id": canonical_graph_id,
                 "entities": entities,
                 "count": len(entities)
             },
-            "disclosure": synthetic_output_disclosure(),
-            "record_provenance": graph_record_disclosure(),
-            **truth_metadata(),
-        })
+            extra={
+                "disclosure": synthetic_output_disclosure(),
+                "record_provenance": graph_record_disclosure(),
+                **truth_metadata(),
+            },
+        )
 
     except Exception as exc:
         logger.warning(
             "graph entity read unavailable exception_type=%s",
             type(exc).__name__,
         )
-        return jsonify({
-            "success": False,
-            "error": "graph_entity_read_unavailable",
-        }), 503
+        return error_response("graph_entity_read_unavailable", status=503)
 
 
 @simulation_bp.route('/entities/<graph_id>/<entity_uuid>', methods=['GET'])
@@ -101,38 +94,30 @@ def get_entity_detail(graph_id: str, entity_uuid: str):
         return association_error
 
     if not Config.ZEP_API_KEY:
-        return jsonify({
-            "success": False,
-            "error": "graph_dependency_unavailable",
-        }), 503
+        return error_response("graph_dependency_unavailable", status=503)
 
     try:
         reader = ZepEntityReader()
         entity = reader.get_entity_with_context(canonical_graph_id, entity_uuid)
 
         if not entity:
-            return jsonify({
-                "success": False,
-                "error": "entity_not_found",
-            }), 404
+            return error_response("entity_not_found", status=404)
 
-        return jsonify({
-            "success": True,
-            "data": entity,
-            "disclosure": synthetic_output_disclosure(),
-            "record_provenance": graph_record_disclosure(),
-            **truth_metadata(),
-        })
+        return present(
+            entity,
+            extra={
+                "disclosure": synthetic_output_disclosure(),
+                "record_provenance": graph_record_disclosure(),
+                **truth_metadata(),
+            },
+        )
 
     except Exception as exc:
         logger.warning(
             "graph entity detail unavailable exception_type=%s",
             type(exc).__name__,
         )
-        return jsonify({
-            "success": False,
-            "error": "graph_entity_read_unavailable",
-        }), 503
+        return error_response("graph_entity_read_unavailable", status=503)
 
 
 @simulation_bp.route('/entities/<graph_id>/by-type/<entity_type>', methods=['GET'])
@@ -143,37 +128,32 @@ def get_entities_by_type(graph_id: str, entity_type: str):
         return association_error
 
     if not Config.ZEP_API_KEY:
-        return jsonify({
-            "success": False,
-            "error": "graph_dependency_unavailable",
-        }), 503
+        return error_response("graph_dependency_unavailable", status=503)
 
     try:
         reader = ZepEntityReader()
         entities = reader.get_entities_by_type(canonical_graph_id, entity_type)
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "graph_id": canonical_graph_id,
                 "entity_type": entity_type,
                 "entities": entities,
                 "count": len(entities)
             },
-            "disclosure": synthetic_output_disclosure(),
-            "record_provenance": graph_record_disclosure(),
-            # This sibling never carried truth_metadata, even before the
-            # decomposition. It returns the same class of graph records as the
-            # two routes above, so it carries the same contract.
-            **truth_metadata(),
-        })
+            extra={
+                "disclosure": synthetic_output_disclosure(),
+                "record_provenance": graph_record_disclosure(),
+                # This sibling never carried truth_metadata, even before the
+                # decomposition. It returns the same class of graph records as
+                # the two routes above, so it carries the same contract.
+                **truth_metadata(),
+            },
+        )
 
     except Exception as exc:
         logger.warning(
             "graph entities-by-type unavailable exception_type=%s",
             type(exc).__name__,
         )
-        return jsonify({
-            "success": False,
-            "error": "graph_entity_read_unavailable",
-        }), 503
+        return error_response("graph_entity_read_unavailable", status=503)

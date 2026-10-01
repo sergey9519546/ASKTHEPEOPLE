@@ -8,6 +8,7 @@ import traceback
 from flask import request, jsonify
 
 from .. import simulation_bp
+from ..presentation import error_response, present
 from ..simulation import (
     _resolve_graph_memory_request,
     _check_simulation_prepared,
@@ -185,14 +186,15 @@ def _enqueue_runtime_control(
 
 def _queued_control_response(simulation_id, control):
     control_status = control.get("status", "queued")
-    response = jsonify({
-        "success": True,
-        "simulation_id": simulation_id,
-        "status": control_status,
-        "data": control,
-        "disclosure": synthetic_output_disclosure(),
-    })
-    response.status_code = 202
+    response = present(
+        control,
+        status=202,
+        extra={
+            "simulation_id": simulation_id,
+            "status": control_status,
+            "disclosure": synthetic_output_disclosure(),
+        },
+    )
     response.headers["Location"] = (
         f"/api/simulation/{simulation_id}/control/{control['control_id']}"
     )
@@ -253,10 +255,7 @@ def start_simulation():
 
         simulation_id = data.get('simulation_id')
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
 
         platform = data.get('platform', 'parallel')
         force = data.get('force', False)  # Optional: force restart
@@ -295,27 +294,23 @@ def start_simulation():
                     "enable_followers must be a JSON boolean.",
                 )
         except InputPolicyError as exc:
-            return jsonify({
-                "success": False,
-                "error": exc.code,
-                "message": exc.message,
-            }), 400
+            return error_response(exc.code, status=400, message=exc.message)
 
         if platform not in ['twitter', 'reddit', 'parallel']:
-            return jsonify({
-                "success": False,
-                "error": f"Invalid platform type: {platform}, options: twitter/reddit/parallel"
-            }), 400
+            return error_response(
+                f"Invalid platform type: {platform}, options: twitter/reddit/parallel",
+                status=400,
+            )
 
         # Check if the simulation is ready
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
 
         if not state:
-            return jsonify({
-                "success": False,
-                "error": f"Simulation does not exist: {simulation_id}"
-            }), 404
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
 
         # Admission precedes force-stop, cleanup, task creation, dispatch, and
         # all simulation state mutation. READY alone is never authorization.
@@ -323,17 +318,17 @@ def start_simulation():
         try:
             assert_decision_lens_execution_admission(sim_dir)
         except DecisionLensAdmissionError as exc:
-            return jsonify({
-                "success": False,
-                "code": exc.code,
-                "error": exc.code,
-                "message": (
+            return error_response(
+                exc.code,
+                status=409,
+                code=exc.code,
+                message=(
                     "This run requires a current, approved decision-lens "
                     "boundary and matching runtime artifacts."
                 ),
-                "remediation": exc.remediation,
-                "simulation_id": simulation_id,
-            }), 409
+                remediation=exc.remediation,
+                simulation_id=simulation_id,
+            )
 
         # Validate the write target before force-restart can stop a process or
         # remove run logs. Invalid provenance settings must have no side effects.
@@ -359,17 +354,17 @@ def start_simulation():
                         run_state is None
                         or _runner_status_value(run_state) in _RESTART_BLOCKED_STATUSES
                     ):
-                        return jsonify({
-                            "success": False,
-                            "code": "active_run_stop_required",
-                            "error": "active_run_stop_required",
-                            "message": (
+                        return error_response(
+                            "active_run_stop_required",
+                            status=409,
+                            code="active_run_stop_required",
+                            message=(
                                 "Queue a durable stop request and wait for the "
                                 "persisted run state to become stopped before restarting."
                             ),
-                            "simulation_id": simulation_id,
-                            "force_requested": bool(force),
-                        }), 409
+                            simulation_id=simulation_id,
+                            force_requested=bool(force),
+                        )
 
                 # If force mode, clean up run logs
                 if force:
@@ -385,10 +380,10 @@ def start_simulation():
                 manager._save_simulation_state(state)
             else:
                 # Preparation not complete
-                return jsonify({
-                    "success": False,
-                    "error": f"Simulation not ready, current status: {state.status.value}, please call /prepare API first"
-                }), 400
+                return error_response(
+                    f"Simulation not ready, current status: {state.status.value}, please call /prepare API first",
+                    status=400,
+                )
 
         # Create Task in TaskManager for background tracking
         from ...models.task import TaskManager
@@ -468,31 +463,28 @@ def start_simulation():
         if max_rounds:
             data_payload['max_rounds_applied'] = max_rounds
 
-        resp = jsonify({
-            "success": True,
-            "task_id": task_id,
-            "simulation_id": simulation_id,
-            "status": "queued",
-            "message": "Simulation execution queued.",
-            "data": data_payload,
-            "disclosure": synthetic_output_disclosure(),
-        })
-        resp.status_code = 202
-        return resp
+        return present(
+            data_payload,
+            status=202,
+            extra={
+                "task_id": task_id,
+                "simulation_id": simulation_id,
+                "status": "queued",
+                "message": "Simulation execution queued.",
+                "disclosure": synthetic_output_disclosure(),
+            },
+        )
 
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
-        
+        return error_response(str(e), status=400)
+
     except Exception as e:
         logger.error(f"Start simulation failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 @simulation_bp.route('/stop', methods=['POST'])
 @validate_schema(StopSimulationRequest)
@@ -512,18 +504,14 @@ def stop_simulation():
         return _queued_control_response(simulation_id, control)
     except ValueError as exc:
         status = 409 if str(exc) == "idempotency_key_conflict" else 400
-        return jsonify({
-            "success": False,
-            "code": str(exc),
-            "error": str(exc),
-        }), status
+        return error_response(str(exc), status=status, code=str(exc))
     except Exception as exc:
         logger.error(f"Stop simulation enqueue failed: {str(exc)}")
-        return jsonify({
-            "success": False,
-            "error": str(exc),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(exc),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/control', methods=['POST'])
@@ -545,11 +533,7 @@ def create_runtime_control(simulation_id: str):
         return _queued_control_response(simulation_id, control)
     except ValueError as exc:
         status = 409 if str(exc) == "idempotency_key_conflict" else 400
-        return jsonify({
-            "success": False,
-            "code": str(exc),
-            "error": str(exc),
-        }), status
+        return error_response(str(exc), status=status, code=str(exc))
 
 
 @simulation_bp.route('/<simulation_id>/control/<control_id>', methods=['GET'])
@@ -557,24 +541,25 @@ def get_runtime_control(simulation_id: str, control_id: str):
     """Return aggregate status across the control's complete target set."""
     manager = SimulationManager()
     if manager.get_simulation(simulation_id) is None:
-        return jsonify({
-            "success": False,
-            "code": "simulation_not_found",
-            "error": f"Simulation does not exist: {simulation_id}",
-        }), 404
+        return error_response(
+            f"Simulation does not exist: {simulation_id}",
+            status=404,
+            code="simulation_not_found",
+        )
     status = RuntimeControlStore(_safe_sim_dir(simulation_id)).get_status(control_id)
     if status is None:
-        return jsonify({
-            "success": False,
-            "code": "runtime_control_not_found",
-            "error": "runtime_control_not_found",
-        }), 404
-    return jsonify({
-        "success": True,
-        "simulation_id": simulation_id,
-        "data": status,
-        "disclosure": synthetic_output_disclosure(),
-    })
+        return error_response(
+            "runtime_control_not_found",
+            status=404,
+            code="runtime_control_not_found",
+        )
+    return present(
+        status,
+        extra={
+            "simulation_id": simulation_id,
+            "disclosure": synthetic_output_disclosure(),
+        },
+    )
 
 
 @simulation_bp.route('/<simulation_id>/inject', methods=['POST'])
@@ -621,19 +606,19 @@ def inject_simulation_event(simulation_id: str):
             return jsonify(error_payload), status
         return _queued_control_response(simulation_id, control)
     except ValueError as exc:
-        return jsonify({
-            "success": False,
-            "code": "invalid_runtime_control",
-            "error": "invalid_runtime_control",
-            "message": str(exc),
-        }), 422
+        return error_response(
+            "invalid_runtime_control",
+            status=422,
+            code="invalid_runtime_control",
+            message=str(exc),
+        )
     except Exception as exc:
         logger.error(f"Failed to enqueue simulation event for {simulation_id}: {str(exc)}")
-        return jsonify({
-            "success": False,
-            "error": str(exc),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(exc),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 @simulation_bp.route('/<simulation_id>/run-status', methods=['GET'])
 def get_run_status(simulation_id: str):
@@ -665,9 +650,8 @@ def get_run_status(simulation_id: str):
         run_state = SimulationRunner.get_run_state(simulation_id)
         
         if not run_state:
-            return jsonify({
-                "success": True,
-                "data": {
+            return present(
+                {
                     "simulation_id": simulation_id,
                     "runner_status": "idle",
                     "current_round": 0,
@@ -677,22 +661,21 @@ def get_run_status(simulation_id: str):
                     "reddit_actions_count": 0,
                     "total_actions_count": 0,
                 },
-                "disclosure": synthetic_output_disclosure(),
-            })
-        
-        return jsonify({
-            "success": True,
-            "data": run_state.to_dict(),
-            "disclosure": synthetic_output_disclosure(),
-        })
-        
+                extra={"disclosure": synthetic_output_disclosure()},
+            )
+
+        return present(
+            run_state.to_dict(),
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
+
     except Exception as e:
         logger.error(f"Get run status failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 @simulation_bp.route('/<simulation_id>/status', methods=['GET'])
 def get_simulation_status(simulation_id: str):
@@ -728,23 +711,24 @@ def get_simulation_status(simulation_id: str):
                 progress = int((run_state.current_round / run_state.total_rounds) * 100)
             message = f"Simulation round {run_state.current_round}/{run_state.total_rounds}"
 
-        return jsonify({
-            "success": True,
-            "simulation_id": simulation_id,
-            "task_id": task_id,
-            "status": status,
-            "progress": progress,
-            "message": message,
-            "data": run_state.to_dict() if run_state else (matched_task or {}),
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(
+            run_state.to_dict() if run_state else (matched_task or {}),
+            extra={
+                "simulation_id": simulation_id,
+                "task_id": task_id,
+                "status": status,
+                "progress": progress,
+                "message": message,
+                "disclosure": synthetic_output_disclosure(),
+            },
+        )
     except Exception as e:
         logger.error(f"Get simulation status failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 @simulation_bp.route('/task/<task_id>/status', methods=['GET'])
 def get_task_status(task_id: str):
@@ -756,22 +740,18 @@ def get_task_status(task_id: str):
         task_manager = TaskManager()
         task = task_manager.get_task(task_id)
         if not task:
-            return jsonify({
-                "success": False,
-                "error": f"Task not found: {task_id}"
-            }), 404
-        return jsonify({
-            "success": True,
-            "data": task.to_public_dict(),
-            "disclosure": synthetic_output_disclosure(),
-        })
+            return error_response(f"Task not found: {task_id}", status=404)
+        return present(
+            task.to_public_dict(),
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
     except Exception as e:
         logger.error(f"Get task status failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 @simulation_bp.route('/env-status', methods=['POST'])
 def get_env_status():
@@ -801,15 +781,12 @@ def get_env_status():
         data = request.get_json() or {}
         
         simulation_id = data.get('simulation_id')
-        
+
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
 
         env_alive = SimulationRunner.check_env_alive(simulation_id)
-        
+
         # Get more detailed status information
         env_status = SimulationRunner.get_env_status_detail(simulation_id)
 
@@ -821,24 +798,21 @@ def get_env_status():
         else:
             message = "Environment is not running or has been closed"
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "simulation_id": simulation_id,
-                "env_alive": env_alive,
-                "twitter_available": env_status.get("twitter_available", False),
-                "reddit_available": env_status.get("reddit_available", False),
-                "message": message
-            }
+        return present({
+            "simulation_id": simulation_id,
+            "env_alive": env_alive,
+            "twitter_available": env_status.get("twitter_available", False),
+            "reddit_available": env_status.get("reddit_available", False),
+            "message": message
         })
 
     except Exception as e:
         logger.error(f"Failed to get environment status: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 @simulation_bp.route('/close-env', methods=['POST'])
 def close_simulation_env():
@@ -871,12 +845,9 @@ def close_simulation_env():
         
         simulation_id = data.get('simulation_id')
         timeout = data.get('timeout', 30)
-        
+
         if not simulation_id:
-            return jsonify({
-                "success": False,
-                "error": "Please provide simulation_id"
-            }), 400
+            return error_response("Please provide simulation_id", status=400)
         
         result = SimulationRunner.close_simulation_env(
             simulation_id=simulation_id,
@@ -902,15 +873,12 @@ def close_simulation_env():
         })
         
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
-        
+        return error_response(str(e), status=400)
+
     except Exception as e:
         logger.error(f"Failed to close environment: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )

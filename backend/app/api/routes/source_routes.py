@@ -18,7 +18,7 @@ change ``source_review=UNAVAILABLE``, expose a production route, or support
 a security claim."
 """
 
-from flask import g, jsonify, request
+from flask import g, request
 
 from ...config import Config
 from ...domain.source_ingestion import (
@@ -27,6 +27,7 @@ from ...domain.source_ingestion import (
     SourceCommandKind,
 )
 from ...utils.logger import get_logger
+from ..presentation import error_response, present
 
 logger = get_logger('askthepeople.api.routes.source')
 
@@ -50,16 +51,16 @@ def _persistence_configured() -> bool:
 
 def _unavailable():
     """Standard 503 returned by every mutating route while the flag is off."""
-    return jsonify({
-        "success": False,
-        "error": "source_ingestion_unavailable",
-        "message": (
+    return error_response(
+        "source_ingestion_unavailable",
+        status=503,
+        message=(
             "Source ingestion V1 is not enabled. The ingestion boundary "
             "(quarantine, scanning, isolated parsing, review) is not yet "
             "production-ready."
         ),
-        "source_review": "UNAVAILABLE",
-    }), 503
+        source_review="UNAVAILABLE",
+    )
 
 
 def _actor_context():
@@ -71,11 +72,11 @@ def _actor_context():
 
 
 def _tenant_context_unavailable():
-    return jsonify({
-        "success": False,
-        "error": "tenant_context_unavailable",
-        "message": "Canonical source operations require a server-derived tenant and actor context.",
-    }), 503
+    return error_response(
+        "tenant_context_unavailable",
+        status=503,
+        message="Canonical source operations require a server-derived tenant and actor context.",
+    )
 
 
 def _actor_context_ready(context) -> bool:
@@ -112,15 +113,12 @@ def register_source_routes(simulation_bp):
         ``source_review=UNAVAILABLE`` when disabled.
         """
         enabled = _source_ingestion_enabled()
-        return jsonify({
-            "success": True,
-            "data": {
-                "source_review": "AVAILABLE" if enabled else "UNAVAILABLE",
-                "enabled": enabled,
-                "formats": Config.SOURCE_INGESTION_V1_FORMATS if enabled else [],
-                "max_file_size_bytes": 10 * 1024 * 1024 if enabled else 0,
-                "review_required": True,
-            },
+        return present({
+            "source_review": "AVAILABLE" if enabled else "UNAVAILABLE",
+            "enabled": enabled,
+            "formats": Config.SOURCE_INGESTION_V1_FORMATS if enabled else [],
+            "max_file_size_bytes": 10 * 1024 * 1024 if enabled else 0,
+            "review_required": True,
         })
 
     @simulation_bp.route('/sources/v1/upload-intent', methods=['POST'])
@@ -139,20 +137,20 @@ def register_source_routes(simulation_bp):
         byte_length = data.get("byte_length")
 
         if not filename:
-            return jsonify({"success": False, "error": "filename_required"}), 400
+            return error_response("filename_required", status=400)
 
         # Format gate: only enabled formats are accepted.
         import os
         ext = os.path.splitext(filename)[1].lower().lstrip(".")
         if ext not in Config.SOURCE_INGESTION_V1_FORMATS:
-            return jsonify({
-                "success": False,
-                "error": "format_not_enabled",
-                "allowed_formats": Config.SOURCE_INGESTION_V1_FORMATS,
-            }), 422
+            return error_response(
+                "format_not_enabled",
+                status=422,
+                allowed_formats=Config.SOURCE_INGESTION_V1_FORMATS,
+            )
 
         if not isinstance(byte_length, int) or byte_length <= 0:
-            return jsonify({"success": False, "error": "invalid_byte_length"}), 400
+            return error_response("invalid_byte_length", status=400)
 
         # When persistence is configured, create a real source + version
         # record. Otherwise return the structured intent shape for test mode.
@@ -180,40 +178,31 @@ def register_source_routes(simulation_bp):
                     declared_media_type=content_type or "text/plain",
                     created_by_actor_id=source["created_by_actor_id"],
                 )
-                return jsonify({
-                    "success": True,
-                    "data": {
-                        "source_id": source["public_id"],
-                        "source_version_id": version["public_id"],
-                        "state": version["state"],
-                        "format": ext,
-                        "byte_length": byte_length,
-                        "content_type": content_type,
-                        "upload_url": None,  # signed URL from object storage (§5 blocker)
-                        "object_key": None,  # server-generated key (§5 blocker)
-                        "expires_in_seconds": 300,
-                    },
+                return present({
+                    "source_id": source["public_id"],
+                    "source_version_id": version["public_id"],
+                    "state": version["state"],
+                    "format": ext,
+                    "byte_length": byte_length,
+                    "content_type": content_type,
+                    "upload_url": None,  # signed URL from object storage (§5 blocker)
+                    "object_key": None,  # server-generated key (§5 blocker)
+                    "expires_in_seconds": 300,
                 })
             except Exception as exc:
                 logger.error("Source creation failed: %s", exc, exc_info=True)
-                return jsonify({
-                    "success": False,
-                    "error": "source_creation_failed",
-                }), 500
+                return error_response("source_creation_failed", status=500)
 
         # Test/dev mode without persistence: return the structured intent shape.
-        return jsonify({
-            "success": True,
-            "data": {
-                "source_id": None,
-                "state": SourceIngestionState.UPLOADING.value,
-                "format": ext,
-                "byte_length": byte_length,
-                "content_type": content_type,
-                "upload_url": None,
-                "object_key": None,
-                "expires_in_seconds": 300,
-            },
+        return present({
+            "source_id": None,
+            "state": SourceIngestionState.UPLOADING.value,
+            "format": ext,
+            "byte_length": byte_length,
+            "content_type": content_type,
+            "upload_url": None,
+            "object_key": None,
+            "expires_in_seconds": 300,
         })
 
     @simulation_bp.route('/sources/v1/<source_id>/status', methods=['GET'])
@@ -227,14 +216,14 @@ def register_source_routes(simulation_bp):
             return _unavailable()
 
         if not _persistence_configured():
-            return jsonify({
-                "success": False,
-                "error": "source_persistence_not_configured",
-                "message": (
+            return error_response(
+                "source_persistence_not_configured",
+                status=501,
+                message=(
                     "Set USE_SUPABASE_PERSISTENCE=true and DATABASE_URL to "
                     "enable source status lookup."
                 ),
-            }), 501
+            )
 
         actor_context = _actor_context()
         if not _actor_context_ready(actor_context):
@@ -248,10 +237,7 @@ def register_source_routes(simulation_bp):
             project_id=actor_context.project_id,
         )
         if not source or not _record_in_actor_scope(source, actor_context):
-            return jsonify({
-                "success": False,
-                "error": "source_not_found",
-            }), 404
+            return error_response("source_not_found", status=404)
 
         # Load the current version for its state.
         version_id = source.get("current_version_id")
@@ -268,21 +254,15 @@ def register_source_routes(simulation_bp):
                 or version.get("source_id") != source.get("id")
                 or not _record_in_actor_scope(version, actor_context)
             ):
-                return jsonify({
-                    "success": False,
-                    "error": "source_version_not_found",
-                }), 404
+                return error_response("source_version_not_found", status=404)
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "source_id": source["public_id"],
-                "display_name": source.get("display_name"),
-                "version": source.get("version"),
-                "current_state": version["state"] if version else "UPLOADING",
-                "current_version_number": version.get("version_number") if version else None,
-                "source_review": "AVAILABLE",
-            },
+        return present({
+            "source_id": source["public_id"],
+            "display_name": source.get("display_name"),
+            "version": source.get("version"),
+            "current_state": version["state"] if version else "UPLOADING",
+            "current_version_number": version.get("version_number") if version else None,
+            "source_review": "AVAILABLE",
         })
 
     @simulation_bp.route('/sources/v1/<source_id>/review', methods=['POST'])
@@ -301,21 +281,21 @@ def register_source_routes(simulation_bp):
         try:
             CandidateDisposition(disposition)
         except ValueError:
-            return jsonify({
-                "success": False,
-                "error": "invalid_disposition",
-                "allowed": [d.value for d in CandidateDisposition],
-            }), 422
+            return error_response(
+                "invalid_disposition",
+                status=422,
+                allowed=[d.value for d in CandidateDisposition],
+            )
 
         if not _persistence_configured():
-            return jsonify({
-                "success": False,
-                "error": "source_persistence_not_configured",
-                "message": (
+            return error_response(
+                "source_persistence_not_configured",
+                status=501,
+                message=(
                     "Set USE_SUPABASE_PERSISTENCE=true and DATABASE_URL to "
                     "enable source review."
                 ),
-            }), 501
+            )
 
         actor_context = _actor_context()
         if not _actor_context_ready(actor_context):
@@ -333,17 +313,11 @@ def register_source_routes(simulation_bp):
             project_id=actor_context.project_id,
         )
         if not source or not _record_in_actor_scope(source, actor_context):
-            return jsonify({
-                "success": False,
-                "error": "source_not_found",
-            }), 404
+            return error_response("source_not_found", status=404)
 
         version_id = source.get("current_version_id")
         if not version_id:
-            return jsonify({
-                "success": False,
-                "error": "source_version_not_found",
-            }), 404
+            return error_response("source_version_not_found", status=404)
 
         version = SourceRepository.get_source_version(
             version_id,
@@ -356,10 +330,7 @@ def register_source_routes(simulation_bp):
             or version.get("source_id") != source.get("id")
             or not _record_in_actor_scope(version, actor_context)
         ):
-            return jsonify({
-                "success": False,
-                "error": "source_version_not_found",
-            }), 404
+            return error_response("source_version_not_found", status=404)
 
         # Map the disposition to the next source-version state.
         # ACCEPTED_SOURCE_CONDITION → READY; REVISED → READY; EXCLUDED → REJECTED.
@@ -379,14 +350,11 @@ def register_source_routes(simulation_bp):
             new_state=new_state,
             expected_version=version["version"],
         )
-        return jsonify({
-            "success": True,
-            "data": {
-                "source_id": source_id,
-                "version_id": version["public_id"],
-                "new_state": updated["state"],
-                "disposition": disposition,
-            },
+        return present({
+            "source_id": source_id,
+            "version_id": version["public_id"],
+            "new_state": updated["state"],
+            "disposition": disposition,
         })
 
     @simulation_bp.route('/sources/v1/<source_id>/deletion', methods=['POST'])
@@ -399,12 +367,12 @@ def register_source_routes(simulation_bp):
             return _unavailable()
 
         # Deletion requires the deletion ledger and worker (§5 blocker).
-        return jsonify({
-            "success": False,
-            "error": "deletion_ledger_not_wired",
-            "message": (
+        return error_response(
+            "deletion_ledger_not_wired",
+            status=501,
+            message=(
                 "Source deletion requires the durable deletion ledger and "
                 "worker (ADR-0012, Task 4 §5). The domain fencing logic is "
                 "implemented; the persistence + worker layer is not."
             ),
-        }), 501
+        )

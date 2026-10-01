@@ -8,11 +8,13 @@ import io
 import json
 import traceback
 from datetime import datetime
-from flask import request, jsonify, send_file
+from flask import request, send_file
 
 from .. import simulation_bp
+from ..presentation import error_response
 from ..simulation import _with_config_truth
 from ...services.simulation_manager import SimulationManager
+from ...services.simulation_paths import SimulationPaths
 from ...services.export_service import CSVExporter
 from ...services.zep_tools import ZepToolsService
 from ...utils.logger import get_logger
@@ -24,11 +26,10 @@ from ...utils.safe_path import SafePathError
 
 # P0 path-escape fix (audit §5 P0). The platform identifier is a request-
 # controlled value; it MUST be parsed as a strict enum and resolved to a
-# fixed filename. Do NOT interpolate request text into a filename.
-ALLOWED_PLATFORMS = {
-    "reddit": "reddit_simulation.db",
-    "twitter": "twitter_simulation.db",
-}
+# fixed filename. Do NOT interpolate request text into a filename. The
+# platform-to-filename map lives in SimulationPaths.activity_db_file
+# (services/simulation_paths.py); this module does not duplicate it and
+# never derives a filename from request text.
 
 
 
@@ -37,14 +38,14 @@ def download_simulation_config(simulation_id: str):
     """Download simulation configuration file"""
     try:
         manager = SimulationManager()
-        sim_dir = manager._get_simulation_dir(simulation_id)
+        sim_dir = SimulationPaths.simulation_dir(simulation_id)
         config_path = os.path.join(sim_dir, "simulation_config.json")
-        
+
         if not os.path.exists(config_path):
-            return jsonify({
-                "success": False,
-                "error": "Configuration file does not exist, please call /prepare interface first"
-            }), 404
+            return error_response(
+                "Configuration file does not exist, please call /prepare interface first",
+                status=404,
+            )
         
         with open(config_path, 'r', encoding='utf-8') as handle:
             config = _with_config_truth(json.load(handle))
@@ -61,14 +62,10 @@ def download_simulation_config(simulation_id: str):
         )
 
     except SafePathError:
-        return jsonify({"success": False, "error": "invalid_id"}), 400
+        return error_response("invalid_id", status=400)
     except Exception as e:
         logger.error(f"Failed to download configuration: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())
 
 @simulation_bp.route('/script/<script_name>/download', methods=['GET'])
 def download_simulation_script(script_name: str):
@@ -94,18 +91,15 @@ def download_simulation_script(script_name: str):
         ]
         
         if script_name not in allowed_scripts:
-            return jsonify({
-                "success": False,
-                "error": f"Unknown script: {script_name}, available options: {allowed_scripts}"
-            }), 400
+            return error_response(
+                f"Unknown script: {script_name}, available options: {allowed_scripts}",
+                status=400,
+            )
         
         script_path = os.path.join(scripts_dir, script_name)
         
         if not os.path.exists(script_path):
-            return jsonify({
-                "success": False,
-                "error": f"Script file does not exist: {script_name}"
-            }), 404
+            return error_response(f"Script file does not exist: {script_name}", status=404)
         
         return send_file(
             script_path,
@@ -115,11 +109,7 @@ def download_simulation_script(script_name: str):
         
     except Exception as e:
         logger.error(f"Failed to download script: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(str(e), status=500, traceback=traceback.format_exc())
 
 @simulation_bp.route('/<simulation_id>/export/generated-responses', methods=['POST'])
 @simulation_bp.route('/<simulation_id>/export/survey', methods=['POST'])
@@ -143,10 +133,7 @@ def export_survey_csv(simulation_id: str):
         results = data.get('results', [])
         
         if not results:
-            return jsonify({
-                "success": False,
-                "error": "No results to export"
-            }), 400
+            return error_response("No results to export", status=400)
             
         exporter = CSVExporter(ZepToolsService())
         csv_content = exporter.export_survey_results(results)
@@ -170,7 +157,4 @@ def export_survey_csv(simulation_id: str):
         
     except Exception as e:
         logger.error(f"Failed to export generated-response CSV: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return error_response(str(e), status=500)

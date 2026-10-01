@@ -1,7 +1,5 @@
 """Decision Workspace manifest HTTP routes."""
 
-from flask import jsonify
-
 from app.application.decision_workspace_service import (
     DecisionWorkspaceService,
     WorkspaceManifestConflict,
@@ -9,6 +7,7 @@ from app.application.decision_workspace_service import (
 )
 
 from .. import simulation_bp
+from ..presentation import error_response, present
 
 
 workspace_service = DecisionWorkspaceService()
@@ -19,25 +18,10 @@ def get_workspace_by_project(project_id: str):
     """Resolve the server-owned workspace manifest for one project."""
     try:
         manifest = workspace_service.resolve_by_project(project_id)
-        return (
-            jsonify(
-                {"success": True, "data": manifest.model_dump(mode="json")}
-            ),
-            200,
-        )
+        return present(manifest.model_dump(mode="json"))
     except WorkspaceProjectNotFound:
-        return jsonify({"success": False, "error": "project_not_found"}), 404
+        return error_response("project_not_found", status=404)
     except WorkspaceManifestConflict:
-        return (
-            jsonify(
-                {"success": False, "error": "workspace_manifest_conflict"}
-            ),
-            409,
-        )
+        return error_response("workspace_manifest_conflict", status=409)
     except Exception:
-        return (
-            jsonify(
-                {"success": False, "error": "workspace_manifest_unavailable"}
-            ),
-            500,
-        )
+        return error_response("workspace_manifest_unavailable", status=500)

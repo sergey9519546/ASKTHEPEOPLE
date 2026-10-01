@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from http import HTTPStatus
 
-from flask import current_app, jsonify, request
+from flask import current_app, request
 from kombu.exceptions import OperationalError
 from pydantic import ValidationError
 
@@ -26,6 +26,7 @@ from ..decision_lens_schemas import (
     DecisionLensEditRequest,
     DecisionLensReviewRequest,
 )
+from ..presentation import error_response, present
 
 
 def _context(simulation_id: str):
@@ -45,10 +46,9 @@ def _context(simulation_id: str):
 
 
 def _error(code: str, status: int, *, task_id: str | None = None):
-    payload = {"success": False, "error": code}
-    if task_id is not None:
-        payload["task_id"] = task_id
-    return jsonify(payload), status
+    """Delegate to the shared error envelope; ``task_id`` only when set."""
+    extras = {"task_id": task_id} if task_id is not None else {}
+    return error_response(code, status=status, **extras)
 
 
 @simulation_bp.get("/<simulation_id>/decision-lenses")
@@ -62,7 +62,7 @@ def get_decision_lenses(simulation_id: str):
         return _error(exc.code, HTTPStatus.CONFLICT)
     if snapshot["artifact"] is None:
         return _error("decision_lens_review_required", HTTPStatus.CONFLICT)
-    return jsonify({"success": True, "data": snapshot})
+    return present(snapshot)
 
 
 @simulation_bp.patch("/<simulation_id>/decision-lenses/<lens_id>")
@@ -109,7 +109,7 @@ def patch_decision_lens(simulation_id: str, lens_id: str):
         state.config_generated = False
         state.error = None
         manager._save_simulation_state(state)
-        return jsonify({"success": True, "data": service.snapshot()})
+        return present(service.snapshot())
     except ValidationError:
         return _error("decision_lens_invalid", HTTPStatus.UNPROCESSABLE_ENTITY)
     except DecisionLensReviewServiceError as exc:
@@ -157,7 +157,7 @@ def put_decision_lens_review(simulation_id: str):
     manager._save_simulation_state(state)
     snapshot = service.snapshot()
     if not status.approved:
-        return jsonify({"success": True, "data": snapshot})
+        return present(snapshot)
 
     task_manager = TaskManager()
     idempotency_key = (
@@ -211,8 +211,7 @@ def put_decision_lens_review(simulation_id: str):
             return _error(public_code, HTTPStatus.SERVICE_UNAVAILABLE, task_id=task_id)
 
     snapshot["task_id"] = task_id
-    response = jsonify({"success": True, "data": snapshot})
-    return response, HTTPStatus.ACCEPTED, {"Location": f"/api/jobs/{task_id}"}
+    return present(snapshot), HTTPStatus.ACCEPTED, {"Location": f"/api/jobs/{task_id}"}
 
 
 __all__ = [

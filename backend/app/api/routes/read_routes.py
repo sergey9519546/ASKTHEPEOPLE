@@ -23,6 +23,7 @@ from flask import jsonify, request
 from werkzeug.utils import secure_filename
 
 from .. import simulation_bp
+from ..presentation import error_response, present
 from ..simulation import (
     _enrich_simulation_summary,
     _get_report_summary_for_simulation,
@@ -58,10 +59,10 @@ def get_simulation(simulation_id: str):
         state = manager.get_simulation(simulation_id)
 
         if not state:
-            return jsonify({
-                "success": False,
-                "error": f"Simulation does not exist: {simulation_id}"
-            }), 404
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
 
         result = state.to_dict()
 
@@ -69,18 +70,15 @@ def get_simulation(simulation_id: str):
         if state.status == SimulationStatus.READY:
             result["run_instructions"] = manager.get_run_instructions(simulation_id)
 
-        return jsonify({
-            "success": True,
-            "data": result
-        })
+        return present(result)
 
     except Exception as e:
         logger.error(f"Get simulation status failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/list', methods=['GET'])
@@ -105,19 +103,15 @@ def list_simulations():
             for simulation in simulations
         ]
 
-        return jsonify({
-            "success": True,
-            "data": summaries,
-            "count": len(summaries)
-        })
+        return present(summaries, extra={"count": len(summaries)})
 
     except Exception as e:
         logger.error(f"Failed to list simulations: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/history', methods=['GET'])
@@ -144,19 +138,15 @@ def get_simulation_history():
             for simulation in simulations
         ]
 
-        return jsonify({
-            "success": True,
-            "data": enriched_simulations,
-            "count": len(enriched_simulations)
-        })
+        return present(enriched_simulations, extra={"count": len(enriched_simulations)})
 
     except Exception as e:
         logger.error(f"Failed to get simulation history: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 # ============== Profiles and config ==============
@@ -177,30 +167,26 @@ def get_simulation_profiles(simulation_id: str):
         profiles = manager.get_profiles(simulation_id, platform=platform)
         profiles = _with_profile_truth(profiles)
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "platform": platform,
                 "count": len(profiles),
                 "profiles": profiles,
                 **fictional_profile_disclosure(),
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except ValueError as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 404
+        return error_response(str(e), status=404)
 
     except Exception as e:
         logger.error(f"Failed to get profile: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/profiles/realtime', methods=['GET'])
@@ -225,10 +211,10 @@ def get_simulation_profiles_realtime(simulation_id: str):
         sim_dir = _safe_sim_dir(simulation_id)
 
         if not os.path.exists(sim_dir):
-            return jsonify({
-                "success": False,
-                "error": f"Simulation does not exist: {simulation_id}"
-            }), 404
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
 
         # Determine file path
         if platform == "reddit":
@@ -274,9 +260,8 @@ def get_simulation_profiles_realtime(simulation_id: str):
             except Exception:
                 pass
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "simulation_id": simulation_id,
                 "platform": platform,
                 "count": len(profiles),
@@ -287,16 +272,16 @@ def get_simulation_profiles_realtime(simulation_id: str):
                 "profiles": profiles,
                 **fictional_profile_disclosure(),
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except Exception as e:
         logger.error(f"Failed to get profile real-time: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/config/realtime', methods=['GET'])
@@ -315,10 +300,10 @@ def get_simulation_config_realtime(simulation_id: str):
         sim_dir = _safe_sim_dir(simulation_id)
 
         if not os.path.exists(sim_dir):
-            return jsonify({
-                "success": False,
-                "error": f"Simulation does not exist: {simulation_id}"
-            }), 404
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
 
         # Config file path
         config_file = os.path.join(sim_dir, "simulation_config.json")
@@ -390,19 +375,15 @@ def get_simulation_config_realtime(simulation_id: str):
                 "llm_model": config.get("llm_model")
             }
 
-        return jsonify({
-            "success": True,
-            "data": response_data,
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(response_data, extra={"disclosure": synthetic_output_disclosure()})
 
     except Exception as e:
         logger.error(f"Failed to get Config real-time: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/config', methods=['GET'])
@@ -422,24 +403,23 @@ def get_simulation_config(simulation_id: str):
         config = manager.get_simulation_config(simulation_id)
 
         if not config:
-            return jsonify({
-                "success": False,
-                "error": f"Simulation configuration does not exist, please call /prepare interface first"
-            }), 404
+            return error_response(
+                "Simulation configuration does not exist, please call /prepare interface first",
+                status=404,
+            )
 
-        return jsonify({
-            "success": True,
-            "data": _with_config_truth(config),
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(
+            _with_config_truth(config),
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except Exception as e:
         logger.error(f"Failed to get configuration: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/observations/search', methods=['GET'])
@@ -447,10 +427,10 @@ def search_simulation_observations(simulation_id: str):
     try:
         sim_dir = _safe_sim_dir(simulation_id)
         if not os.path.exists(sim_dir):
-            return jsonify({
-                "success": False,
-                "error": f"Simulation does not exist: {simulation_id}"
-            }), 404
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
         result = search_observations(
             simulation_dir=sim_dir,
             query=request.args.get('q', ''),
@@ -460,18 +440,14 @@ def search_simulation_observations(simulation_id: str):
         )
         result = dict(result)
         result["results"] = _with_activity_truth(result.get("results", []))
-        return jsonify({
-            "success": True,
-            "data": result,
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(result, extra={"disclosure": synthetic_output_disclosure()})
     except Exception as e:
         logger.error(f"Failed to search observations: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 # ============== Simulation metrics and comparison ==============
@@ -490,10 +466,16 @@ def get_simulation_metrics(simulation_id: str):
         manager = SimulationManager()
         state = manager.get_simulation(simulation_id)
         if not state:
-            return jsonify({"success": False, "error": f"Simulation does not exist: {simulation_id}"}), 404
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
 
         run_state = SimulationRunner.get_run_state(simulation_id)
         if run_state and run_state.runner_status in (RunnerStatus.RUNNING, RunnerStatus.STARTING):
+            # Left as a literal envelope: an error-shaped payload answered at
+            # HTTP 200, and its extra key is "status", which collides with
+            # error_response's own `status` keyword.
             return jsonify({
                 "success": False,
                 "error": "simulation_not_complete",
@@ -505,21 +487,21 @@ def get_simulation_metrics(simulation_id: str):
         from ...services.validation_engine import ValidationEngine
         engine = ValidationEngine()
         metrics = engine.compute_metrics(simulation_id, force=force)
-        return jsonify({
-            "success": True,
-            "data": metrics.to_dict(),
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(
+            metrics.to_dict(),
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)})
+        # Preserved oddity: this error envelope is answered at HTTP 200.
+        return error_response(str(e), status=200)
     except Exception as e:
         logger.error(f"Failed to compute simulation metrics: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/compare', methods=['GET'])
@@ -535,7 +517,7 @@ def compare_simulations_route():
         sim_a = request.args.get('sim_a')
         sim_b = request.args.get('sim_b')
         if not sim_a or not sim_b:
-            return jsonify({"success": False, "error": "Please provide both sim_a and sim_b query parameters"}), 400
+            return error_response("Please provide both sim_a and sim_b query parameters", status=400)
 
         sim_a_clean = secure_filename(sim_a)
         sim_b_clean = secure_filename(sim_b)
@@ -546,20 +528,13 @@ def compare_simulations_route():
         engine = ValidationEngine()
         result = engine.compare_simulations(sim_a_clean, sim_b_clean, force=force)
 
-        return jsonify({
-            "success": True,
-            "data": result,
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(result, extra={"disclosure": synthetic_output_disclosure()})
 
     except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
+        return error_response(str(e), status=400)
     except Exception as e:
         logger.error(f"Failed to compare simulations {sim_a} vs {sim_b}: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return error_response(str(e), status=500)
 
 
 # ============== Real-time status and activity ==============
@@ -580,17 +555,16 @@ def get_run_status_detail(simulation_id: str):
         platform_filter = request.args.get('platform')
 
         if not run_state:
-            return jsonify({
-                "success": True,
-                "data": {
+            return present(
+                {
                     "simulation_id": simulation_id,
                     "runner_status": "idle",
                     "all_actions": [],
                     "twitter_actions": [],
                     "reddit_actions": []
                 },
-                "disclosure": synthetic_output_disclosure(),
-            })
+                extra={"disclosure": synthetic_output_disclosure()},
+            )
 
         # Get complete action list
         all_actions = SimulationRunner.get_all_actions(
@@ -634,19 +608,15 @@ def get_run_status_detail(simulation_id: str):
             [a.to_dict() for a in recent_actions]
         )
 
-        return jsonify({
-            "success": True,
-            "data": result,
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(result, extra={"disclosure": synthetic_output_disclosure()})
 
     except Exception as e:
         logger.error(f"Get detailed status failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/actions', methods=['GET'])
@@ -679,24 +649,23 @@ def get_simulation_actions(simulation_id: str):
         )
         actions = actions[offset:offset + limit]
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "count": len(actions),
                 "actions": _with_activity_truth(
                     [a.to_dict() for a in actions]
                 )
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except Exception as e:
         logger.error(f"Get action history failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/timeline', methods=['GET'])
@@ -720,22 +689,21 @@ def get_simulation_timeline(simulation_id: str):
             end_round=end_round
         )
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "rounds_count": len(timeline),
                 "timeline": _with_activity_truth(timeline)
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except Exception as e:
         logger.error(f"Get timeline failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/agent-stats', methods=['GET'])
@@ -748,22 +716,21 @@ def get_agent_stats(simulation_id: str):
     try:
         stats = SimulationRunner.get_agent_stats(simulation_id)
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "agents_count": len(stats),
                 "stats": _with_activity_truth(stats)
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except Exception as e:
         logger.error(f"Failed to get Agent statistics: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 # ============== Database Query Interface ==============
@@ -795,11 +762,11 @@ def get_simulation_posts(simulation_id: str):
         # text into a path.
         platform_param = request.args.get('platform', 'reddit')
         if platform_param not in ALLOWED_PLATFORMS:
-            return jsonify({
-                "success": False,
-                "error": "invalid_platform",
-                "allowed": sorted(ALLOWED_PLATFORMS.keys()),
-            }), 422
+            return error_response(
+                "invalid_platform",
+                status=422,
+                allowed=sorted(ALLOWED_PLATFORMS.keys()),
+            )
         platform = platform_param
 
         # P1 input bounding (audit §5 P1). Bounded int parsing via the
@@ -808,57 +775,48 @@ def get_simulation_posts(simulation_id: str):
             limit = int(request.args.get('limit', 50))
             offset = int(request.args.get('offset', 0))
         except (TypeError, ValueError):
-            return jsonify({
-                "success": False,
-                "error": "invalid_limit_or_offset",
-            }), 422
+            return error_response("invalid_limit_or_offset", status=422)
         if limit < 0 or offset < 0 or limit > 500:
-            return jsonify({
-                "success": False,
-                "error": "limit_out_of_range",
-                "limit_max": 500,
-            }), 422
+            return error_response("limit_out_of_range", status=422, limit_max=500)
 
         sim_dir = _safe_sim_dir(simulation_id)
 
         try:
             posts, total = read_posts(sim_dir, platform, limit, offset)
         except DatabaseUnavailable:
-            return jsonify({
-                "success": True,
-                "data": {
+            return present(
+                {
                     "platform": platform,
                     "count": 0,
                     "posts": [],
                     "message": "Database does not exist, simulation may not have run yet"
                 },
-                "disclosure": synthetic_output_disclosure(),
-            })
+                extra={"disclosure": synthetic_output_disclosure()},
+            )
         except DatabaseLocked:
-            return jsonify({"success": False, "error": "database_locked"}), 423
+            return error_response("database_locked", status=423)
         except DatabaseCorrupt:
-            return jsonify({"success": False, "error": "database_corrupt"}), 500
+            return error_response("database_corrupt", status=500)
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "platform": platform,
                 "total": total,
                 "count": len(posts),
                 "posts": _with_activity_truth(posts)
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except SafePathError:
-        return jsonify({"success": False, "error": "invalid_id"}), 400
+        return error_response("invalid_id", status=400)
     except Exception as e:
         logger.error(f"Get posts failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 @simulation_bp.route('/<simulation_id>/comments', methods=['GET'])
@@ -889,16 +847,9 @@ def get_simulation_comments(simulation_id: str):
             limit = int(request.args.get('limit', 50))
             offset = int(request.args.get('offset', 0))
         except (TypeError, ValueError):
-            return jsonify({
-                "success": False,
-                "error": "invalid_limit_or_offset",
-            }), 422
+            return error_response("invalid_limit_or_offset", status=422)
         if limit < 0 or offset < 0 or limit > 500:
-            return jsonify({
-                "success": False,
-                "error": "limit_out_of_range",
-                "limit_max": 500,
-            }), 422
+            return error_response("limit_out_of_range", status=422, limit_max=500)
 
         sim_dir = _safe_sim_dir(simulation_id)
 
@@ -907,28 +858,27 @@ def get_simulation_comments(simulation_id: str):
         except DatabaseUnavailable:
             comments = []
         except DatabaseLocked:
-            return jsonify({"success": False, "error": "database_locked"}), 423
+            return error_response("database_locked", status=423)
         except DatabaseCorrupt:
-            return jsonify({"success": False, "error": "database_corrupt"}), 500
+            return error_response("database_corrupt", status=500)
 
-        return jsonify({
-            "success": True,
-            "data": {
+        return present(
+            {
                 "count": len(comments),
                 "comments": _with_activity_truth(comments)
             },
-            "disclosure": synthetic_output_disclosure(),
-        })
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except SafePathError:
-        return jsonify({"success": False, "error": "invalid_id"}), 400
+        return error_response("invalid_id", status=400)
     except Exception as e:
         logger.error(f"Get comments failed: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }), 500
+        return error_response(
+            str(e),
+            status=500,
+            traceback=traceback.format_exc(),
+        )
 
 
 # ============== Generated Profile Follow-up Interface ==============
@@ -962,17 +912,11 @@ def get_simulation_opinions(simulation_id: str):
         if len(opinions) > limit:
             opinions = opinions[-limit:]
 
-        return jsonify({
-            "success": True,
-            "data": {
-                "opinions": opinions
-            },
-            "disclosure": synthetic_output_disclosure(),
-        })
+        return present(
+            {"opinions": opinions},
+            extra={"disclosure": synthetic_output_disclosure()},
+        )
 
     except Exception as e:
         logger.error(f"Failed to get opinions for {simulation_id}: {str(e)}")
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 500
+        return error_response(str(e), status=500)
