@@ -83,3 +83,7 @@ data/
 
 # SQLite databases
 *.db
+
+# Local debug scratch
+test_debug.py
+test_output.txt

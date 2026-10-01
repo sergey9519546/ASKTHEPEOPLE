@@ -185,7 +185,7 @@ import {
   getTaskStatus,
 } from "../api/graph";
 import GraphPanel from "../components/GraphPanel.vue";
-import Step1GraphBuild from "../components/Step1GraphBuildRefactored.vue";
+import Step1GraphBuild from "../components/Step1GraphBuild.vue";
 import Step2EnvSetup from "../components/Step2EnvSetup.vue";
 import Step3Simulation from "../components/Step3Simulation.vue";
 import Step4Report from "../components/Step4Report.vue";

@@ -33,23 +33,31 @@ DEPLOYMENT_GUIDE_PATTERNS = (
     "CELERY_WORKER_SETUP.md",
 )
 LEGACY_RELEASE_EVIDENCE = {
-    "FIXES_COMPLETED.md",
-    "SECURITY_GATE0.md",
+    "docs/archive/sessions/2026-09-03-intelligent-guidance/FIXES_COMPLETED.md",
+    "docs/security/SECURITY_GATE0.md",
 }
 ALWAYS_DEPRECATED_GUIDES = {
-    "FRONTEND_UPLOAD_FIX.md",
-    "FRONTEND_UPLOAD_FIX_V2.md",
-    "PRODUCTION_READY_SUMMARY.md",
+    "docs/archive/misc/FRONTEND_UPLOAD_FIX.md",
+    "docs/archive/misc/FRONTEND_UPLOAD_FIX_V2.md",
+    "docs/archive/sessions/2026-09-03-intelligent-guidance/PRODUCTION_READY_SUMMARY.md",
 }
+# The consolidated guides moved under docs/deployment/ in the 2026-09-03
+# repository reorganization; the deprecation-banner contract follows them.
+# Session artifacts that are not deployment procedures live in docs/archive/sessions
+# and are not part of this gate.
+RUNBOOK_REFERENCE = "RUNBOOK.md"
+DEPLOYMENT_GUIDE_ROOTS = (".", "docs/deployment")
 
 
 def _deployment_guides() -> set[str]:
-    discovered = {
-        path.name
-        for pattern in DEPLOYMENT_GUIDE_PATTERNS
-        for path in REPO_ROOT.glob(pattern)
-        if path.is_file()
-    }
+    discovered: set[str] = set()
+    for root in DEPLOYMENT_GUIDE_ROOTS:
+        for pattern in DEPLOYMENT_GUIDE_PATTERNS:
+            for path in (REPO_ROOT / root).glob(pattern):
+                if path.is_file():
+                    discovered.add(
+                        path.relative_to(REPO_ROOT).as_posix()
+                    )
     return discovered | ALWAYS_DEPRECATED_GUIDES
 
 
@@ -127,14 +135,14 @@ def test_legacy_root_deployment_guides_are_explicitly_deprecated() -> None:
     for relative in _deployment_guides():
         opening = (REPO_ROOT / relative).read_text(encoding="utf-8")[:800]
         assert "STATUS: DEPRECATED / DO NOT USE" in opening
-        assert "docs/release/RUNBOOK.md" in opening
+        assert RUNBOOK_REFERENCE in opening
 
 
 def test_legacy_release_evidence_is_explicitly_non_authoritative() -> None:
     for relative in LEGACY_RELEASE_EVIDENCE:
         opening = (REPO_ROOT / relative).read_text(encoding="utf-8")[:800]
         assert "STATUS: HISTORICAL / NOT RELEASE EVIDENCE" in opening
-        assert "docs/release/RUNBOOK.md" in opening
+        assert RUNBOOK_REFERENCE in opening
 
 
 def test_unsupported_split_platform_manifests_fail_closed() -> None:

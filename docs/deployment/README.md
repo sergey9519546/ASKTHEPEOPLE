@@ -17,7 +17,7 @@ applies_to: "deployment procedures"
 
 **New to deployment?** Start with [FREE_DEPLOYMENT_GUIDE.md](FREE_DEPLOYMENT_GUIDE.md)
 
-**Ready to deploy?** Use [READY_TO_DEPLOY.md](READY_TO_DEPLOY.md)
+**Ready to deploy?** Use [../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md](../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md)
 
 **Need a checklist?** See [DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md)
 
@@ -28,7 +28,7 @@ applies_to: "deployment procedures"
 ### General Deployment
 
 - **[DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md)** — Overview of all deployment options
-- **[READY_TO_DEPLOY.md](READY_TO_DEPLOY.md)** — Complete deployment procedure
+- **[../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md](../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md)** — Complete deployment procedure
 - **[DEPLOY_CHECKLIST.md](DEPLOY_CHECKLIST.md)** — Pre-deployment checklist
 - **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** — One-page quick reference
 

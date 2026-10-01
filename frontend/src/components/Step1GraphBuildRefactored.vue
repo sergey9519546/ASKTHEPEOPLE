@@ -11,6 +11,17 @@
  */
 
 <script setup>
+/**
+ * REFERENCE EXAMPLE ONLY — NOT WIRED INTO THE APP.
+ *
+ * This file demonstrates the intelligent-guidance patterns on the Step 1
+ * surface, but it is a simplified sketch: it does NOT call `createSimulation`,
+ * does not gate on `canContinue`/`creatingSimulation`, and emits `next-step`
+ * without the `simulationId` payload MainView expects. Mounting it would break
+ * the Step 1 → Step 2 workflow. `Step1GraphBuild.vue` is the live component;
+ * port the patterns from this file into it incrementally (see
+ * docs/design/COMPONENT_MIGRATION_CHECKLIST.md) before swapping.
+ */
 import { computed, ref } from 'vue';
 import { useAdaptiveUI } from '../composables/useAdaptiveUI';
 import ProgressiveGuidance from './ProgressiveGuidance.vue';

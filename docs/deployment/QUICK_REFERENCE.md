@@ -34,7 +34,7 @@ git add frontend/src/composables/useGuidedContext.js \
         frontend/src/assets/adaptive-utilities.css \
         ../design/*.md \
         ../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md \
-        READY_TO_DEPLOY.md
+        ../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md
 
 # Commit with descriptive message
 git commit -m "feat: intelligent guidance system - adaptive interface
@@ -110,7 +110,7 @@ git push staging main
 
 | Document | Purpose | Lines |
 |----------|---------|-------|
-| [READY_TO_DEPLOY.md](READY_TO_DEPLOY.md) | Complete deployment guide | 350 |
+| [../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md](../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md) | Complete deployment guide | 350 |
 | [../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md](../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md) | Todo completion summary | 420 |
 | [DEPLOYMENT_READINESS.md](../design/DEPLOYMENT_READINESS.md) | Full deployment procedures | 650 |
 | [QUICK_START_INTEGRATION.md](../design/QUICK_START_INTEGRATION.md) | 5-minute test integration | 280 |
@@ -149,7 +149,7 @@ git push staging main
 **Documentation (10):**
 - All in `../design/` (9 files)
 - `../archive/sessions/2026-09-03-intelligent-guidance/TODOS_COMPLETE.md`
-- `READY_TO_DEPLOY.md`
+- `../archive/sessions/2026-09-03-intelligent-guidance/READY_TO_DEPLOY.md`
 
 ---
 

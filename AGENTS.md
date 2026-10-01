@@ -17,7 +17,7 @@
   AI implementation guides, Design and content system, Execution plans, this
   file, code comments, generated documentation.
 - **Build synthesis (supporting, not authoritative):**
-  [`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md).
+  [`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](docs/architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md).
 - **Integration procedure:** [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md).
 - **Baseline commit:** `8b616dc7fa02eeed5ada8c51998d8b197be28f8d` on `main`.
   Divergences from the doc-system baseline `c33a6a9127fa0705cfff426053f54815f58b4755`
@@ -31,7 +31,7 @@
 
 The Mavis orchestrator plus eight local specialist agents coordinate the
 six-gate refactor defined in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](../../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order).
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](docs/architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order).
 Each specialist owns a domain of `docs/` and a gate of implementation work.
 
 | Agent | Owns | Source of truth |
