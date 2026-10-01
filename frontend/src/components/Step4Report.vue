@@ -297,6 +297,17 @@
           <p>
             Export the brief, inspect the generated records, or ask a follow-up.
           </p>
+          <ContextualHelp
+            helpId="step4-exports"
+            concept="report_records"
+            variant="inline"
+            :content="{
+              first_use: 'The report you export is generated from the records saved during this run. It is a decision brief, not human evidence — material decisions still need direct validation with people.',
+              learning: 'Exports are generated briefs built from this run.',
+              practiced: 'Export from the saved run records.',
+              expert: null,
+            }"
+          />
           <div class="primary-actions">
             <button
               type="button"
@@ -462,6 +473,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import ContextualHelp from "./ContextualHelp.vue";
 import {
   exportReportPDF,
   getAgentLog,
