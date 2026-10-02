@@ -278,18 +278,49 @@ class ArchetypeEngine:
         """
         Generate `count` variant profiles derived from base_profile.
 
-        Each variant is a shallow copy with stochastic numeric variation.
-        Textual fields (persona, bio, mbti, etc.) are copied verbatim;
-        Big Five scores are jittered so clones differ in personality.
+        Textual identity comes from the compositional persona matrix
+        (persona_composition.py) — deterministic, seeded by (archetype_id,
+        variant_index), and distinct per variant. The centroid's paragraph
+        anchors the archetype's scenario context rather than being repeated
+        verbatim, so a large population is distinct characters, not clones.
+
+        Numeric variation is stochastic and seeded: age is jittered, platform
+        counts jitter only when the base value is source-derived (never
+        fabricated from None), and Big Five scores are jittered so variants
+        differ in personality.
         """
+        from .persona_composition import (
+            compose_display_name,
+            compose_username,
+            compose_variant_bio,
+            compose_variant_persona,
+        )
+        from .role_normalizer import normalize_entity_type
+        from .trait_behavior_projection import constraint_framing_text
+
+        # The centroid's role: archetype variants inherit it (they are
+        # variations of the same character family). "entity" for an absent
+        # role keeps the neutral structural framing.
+        role_info = normalize_entity_type(
+            base_profile.source_entity_type or "entity"
+        ) if base_profile.source_entity_type else normalize_entity_type("entity")
+
         variants: List[OasisAgentProfile] = []
         for n in range(count):
             random.seed(archetype.archetype_id * 1000 + n)
 
             user_id = base_agent_id + n
-            label = archetype.label
-            username = f"{label}_{n:02d}"
-            display_name = f"{label.replace('_', ' ').title()} {n + 1}"
+            username = compose_username(
+                archetype_id=archetype.archetype_id,
+                variant_index=n,
+                role_info=role_info,
+            )
+            display_name = compose_display_name(
+                archetype_id=archetype.archetype_id,
+                variant_index=n,
+                role_info=role_info,
+                concern_topics=base_profile.interested_topics,
+            )
 
             age: Optional[int]
             if base_profile.age:
@@ -320,7 +351,7 @@ class ArchetypeEngine:
                 else None
             )
 
-            # Jitter personality so clones are similar individuals rather than
+            # Jitter personality so variants are similar individuals rather than
             # identical copies. Preserves None when the archetype has no traits;
             # never fabricate a personality that was not derived from source.
             base_traits = base_profile.traits
@@ -330,13 +361,31 @@ class ArchetypeEngine:
                 else None
             )
 
+            # Compositional textual identity: distinct persona and bio per
+            # variant, anchored to the centroid's scenario context.
+            persona = compose_variant_persona(
+                archetype_id=archetype.archetype_id,
+                variant_index=n,
+                role_info=role_info,
+                concern_topics=base_profile.interested_topics,
+                disposition_traits=big_five,
+                constraint_text=constraint_framing_text(role_info),
+                entity_context=base_profile.persona or base_profile.bio,
+            )
+            bio = compose_variant_bio(
+                archetype_id=archetype.archetype_id,
+                variant_index=n,
+                role_info=role_info,
+                concern_topics=base_profile.interested_topics,
+            )
+
             variants.append(
                 OasisAgentProfile(
                     user_id=user_id,
                     user_name=username,
                     name=display_name,
-                    bio=base_profile.bio,
-                    persona=base_profile.persona,
+                    bio=bio,
+                    persona=persona,
                     karma=karma,
                     friend_count=friend_count,
                     follower_count=follower_count,
