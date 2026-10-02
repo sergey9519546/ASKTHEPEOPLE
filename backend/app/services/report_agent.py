@@ -83,7 +83,7 @@ def _atomic_write_text(path: str, content: str) -> None:
         try:
             os.unlink(staging)
         except OSError:
-            pass
+            pass  # best-effort cleanup of an orphaned staging file; raise re-raises the real failure
         raise
 
 GENERATED_REPORT_DISCLOSURE = (
@@ -1176,7 +1176,7 @@ class ReportAgent:
             from .validation_engine import ValidationEngine
             self._simulation_metrics = ValidationEngine.load_metrics(simulation_id)
         except Exception:
-            pass
+            pass  # metrics are optional; _simulation_metrics was initialised to None for exactly this path
 
         logger.info(f"ReportAgent initialized: graph_id={graph_id}, simulation_id={simulation_id}")
 
@@ -1465,7 +1465,7 @@ class ReportAgent:
                 call_data = json.loads(match.group(1))
                 tool_calls.append(call_data)
             except json.JSONDecodeError:
-                pass
+                pass  # unparseable XML fragment; the bare-JSON strategies below are the fallback
 
         if tool_calls:
             return tool_calls
@@ -1480,7 +1480,7 @@ class ReportAgent:
                     tool_calls.append(call_data)
                     return tool_calls
             except json.JSONDecodeError:
-                pass
+                pass  # whole-body JSON was malformed; the trailing-object extraction below is the fallback
 
         # Response might contain thoughts + bare JSON, try to extract last JSON object
         json_pattern = r'(\{"(?:name|tool)"\s*:.*?\})\s*$'
@@ -1491,7 +1491,7 @@ class ReportAgent:
                 if self._is_valid_tool_call(call_data):
                     tool_calls.append(call_data)
             except json.JSONDecodeError:
-                pass
+                pass  # trailing object was malformed; an empty parse result is the honest outcome
 
         return tool_calls
 

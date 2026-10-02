@@ -95,9 +95,11 @@ SOURCES: STARTING CONDITIONS ONLY
 HUMAN VALIDATION: OUTSIDE THIS RUN
 ```
 
-**The exact first line is `ACTIONS + ANSWERS: GENERATED`.** The build plan
-(§13) still writes `SYNTHETIC` there in three places — search it before
-trusting a build-plan quote. The code and its linter are authoritative:
+**The exact first line is `ACTIONS + ANSWERS: GENERATED`.** The build plan now
+agrees: `docs/architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` writes
+`GENERATED` at its lines 341, 1209, and 3626, and its line 17 records the
+earlier `SYNTHETIC` wording as corrected. Search it before trusting a
+build-plan quote anyway. The code and its linter are authoritative:
 `tools/lint_frontend_truth.mjs` requires `GENERATED` in its
 `REQUIRED_TRUTH_RAIL_FACTS`, and
 `frontend/src/__tests__/product-truth-guard.spec.js` asserts it. Do not "fix"
@@ -124,10 +126,10 @@ field of `entity_type_registry.json`.
 | Surface | Enforcement | Status |
 |---|---|---|
 | `frontend/src/**` accessible labels (`aria-label`, `title`, `placeholder`, `alt`, `content`) | `tools/lint_frontend_truth.mjs`, imported by `product-truth-guard.spec.js` | **live** — runs on every `npm test` |
-| `frontend/src/**` **visible text nodes** | nothing | **unenforced** — the linter's `VISIBLE_ATTRIBUTE_PATTERN` matches attributes only, so body text is invisible to it |
+| `frontend/src/**` **visible text nodes** | `extractTemplateCandidates()` in `tools/lint_frontend_truth.mjs` | **live** — `VISIBLE_ATTRIBUTE_PATTERN` (`tools/lint_frontend_truth.mjs:7-8`) does match attributes only, but a second scan at `tools/lint_frontend_truth.mjs:189` reads the template text between `>` and `<` and reports it as surface `text`, and a third (`tools/lint_frontend_truth.mjs:208-217`) scans `<script>` string literals as `script-string`. Both surfaces fail today: the linter reports 6 violations, 3 of them on visible text nodes. |
 | `docs/**`, root `README.md` | the two grep steps in `.github/workflows/docs.yml`, plus `scripts/release/check-docs-gates.sh` as gate 2 of `npm run verify` | **live** since 2026-10-01 |
-| `backend/app/**` string literals | `backend/tests/test_backend_truth_terms.py`, applied by `backend/tests/test_truth_term_sync.py`'s pattern source | **live** since 2026-10-01 — 100 of 135 modules gated; 35 on a reviewed allowlist with written reasons |
-| `backend/app/**` and `backend/scripts/**` imports | `backend/tests/test_no_phantom_imports.py` — static AST scan, every `app.*` import must resolve on disk | **live** since 2026-10-01; 2 known-broken files on a recorded allowance |
+| `backend/app/**` string literals | `backend/tests/test_backend_truth_terms.py`, applied by `backend/tests/test_truth_term_sync.py`'s pattern source | **live** since 2026-10-01 — **114 of 139 `backend/app` modules gated; 25 on a reviewed allowlist with written reasons** (re-measured 2026-10-02, after ADR-0014 pruned nine dead-island rows from that allowlist) |
+| `backend/app/**` and `backend/scripts/**` imports | `backend/tests/test_no_phantom_imports.py` — static AST scan, every `app.*` import must resolve on disk | **live** since 2026-10-01; **allowlist empty** since ADR-0014 deleted the two import-broken files it existed to tolerate |
 | `frontend/dist/**`, `static/dist/**` | nothing | build output; never edit, never cite as source |
 
 Three structural facts about that CI job, all corrected on 2026-10-01:
@@ -176,12 +178,12 @@ before quoting any of them.
 | `backend/app/__init__.py` | App factory, the global auth hook, CORS, security headers, error scrubbing |
 | `backend/app/utils/` | `safe_path.py`, `safe_url.py`, `llm_client.py`, `input_policy.py` — the security primitives |
 | `backend/app/celery_app.py` | Celery instance and the beat schedule |
-| `backend/tests/` | 118 test modules. **No custom pytest markers** — nothing is excluded from a default run |
+| `backend/tests/` | **129** `test_*.py` modules (re-measured 2026-10-02; count with `Get-ChildItem backend/tests -Filter *.py | Measure-Object`). **No custom pytest markers** — nothing is excluded from a default run |
 | `backend/migrations/versions/` | 3 revisions, linear, head `b2c3d4e5f6a7` |
 | `frontend/src/` | Vue 3 + Vite 7 + vue-router 4, **no Pinia** (module-level `reactive()` singletons), D3 |
 | `frontend/src/assets/design-tokens.css` | Brutal-Editorial token set. Contains a large deprecated-alias block kept for backward compatibility — see §5 rule 18 |
 | `frontend/src/components/` | Includes three dead files; see §9.2 |
-| `docs/` | The normative authority: the accepted ADR set under `docs/architecture/adr/`, a validated validator, ~93 markdown files |
+| `docs/` | The normative authority: the accepted ADR set under `docs/architecture/adr/`, a validated validator. Take the file count from `python tools/validate_docs.py` (95 markdown / 14 ADR as of 2026-10-02) rather than from this table — it drifts silently |
 | `tools/validate_docs.py` | The doc validator. **This is the real linter for this repo** |
 | `tools/lint_frontend_truth.mjs` | The frontend truth-contract linter |
 | `scripts/release/verify` | The single release verification entry point |
@@ -194,10 +196,13 @@ Get-ChildItem backend/app -Recurse -Filter *.py |
   Select-Object -First 10 Name, @{n='Lines';e={(Get-Content $_.FullName).Count}}
 ```
 
-The heaviest files are in `services/` (the report agent and the simulation
-runner dominate), then `models/task.py` and `api/report.py`. Do not quote a
-list from memory — the previous version of this file did, and got two entries
-wrong.
+The heaviest files are in `services/` — `report_agent.py` (3,226 lines) and
+`simulation_runner.py` (2,346) dominate as of 2026-10-02, followed by
+`zep_tools.py` (2,038); the first file outside `services/` is
+`models/task.py` (1,473). Do not quote a list from memory — the previous
+version of this file did, and got two entries wrong. It also named
+`api/report.py` as a heavy file; that module is 24 lines now (see rule 9-era
+notes in `index.md`).
 
 ---
 
@@ -293,8 +298,9 @@ in it as history.
     revisions, 16 tables, head `b2c3d4e5f6a7`. `backend/app/db/schema.py`
     declares **no tables at all**; it retains only `Base`, imported by
     `backend/app/db/__init__.py` for `drop_db` (test cleanup, not on any runtime
-    path) and by `backend/migrations/env.py` as autogenerate's
-    `target_metadata`. This is
+    path). `backend/migrations/env.py` imports it too, but **lazily and only
+    for autogenerate**, which it then refuses — because empty metadata makes
+    autogenerate destructive. This is
     [ADR-0013](docs/architecture/adr/ADR-0013-schema-source-convergence.md),
     implementing ADR-0012's rule that schema changes are Alembic-only.
 
@@ -313,17 +319,42 @@ in it as history.
       being deleted, so a surviving caller fails loudly. Removing `create_all`
       was safe precisely because it was harmful: it built a `projects` table
       with no `project_id`, the column
-      `backend/app/services/project_repository.py:252` queries.
+      `backend/app/services/project_repository.py:241` queries
+      (`WHERE project_id = :project_id`).
     - A flag enabled against a reachable but never-migrated database now fails
       with a named `CanonicalSchemaMissing` naming each missing table and the
       remedy, not a driver-level `UndefinedTable`.
 
-    **Still true, still your problem:**
+    **Updated 2026-10-02 — the schema-creation gap is closed, and it was worse
+    than "unwired":**
 
-    - **Alembic is invoked by no Dockerfile, compose service, or CI job** —
-      `grep -rn alembic Dockerfile* docker-compose.yml .github/workflows/`
-      returns nothing. Schema creation is an explicit deploy step that no
-      automation performs yet. Gate 3 work.
+    - **`alembic upgrade head` could not run at all.** `migrations/env.py`
+      imported `app.db.schema` at module scope; importing any `app.*` submodule
+      executes `app/__init__.py`, whose `Config` class body raises
+      `SECRET_KEY must be set in production`. The migration tool aborted before
+      touching the database — even against a throwaway SQLite file. `env.py` now
+      loads the ORM metadata lazily and only for autogenerate, so
+      `upgrade`/`downgrade` need no credentials.
+    - **`alembic revision --autogenerate` generated a schema wipe.** ADR-0013
+      left `Base.metadata` empty, so autogenerate diffed an empty target against
+      a live database and read all 16 canonical tables as removed. Measured on a
+      database at head, it wrote a revision whose `upgrade()` was 16
+      `op.drop_table` + 43 `op.drop_index` calls, exited 0, and reported success.
+      This is the standard tool for the documented workflow, so it was a live
+      landmine. **`env.py` now refuses autogenerate by name.** Do not remove that
+      guard without first restoring real ORM table declarations.
+    - A required `migrations` job in `.github/workflows/ci.yml` asserts one
+      linear head, applies every revision to an empty database with **no
+      credentials in the environment**, checks the canonical tables and the
+      recorded head, round-trips downgrade/upgrade, and asserts autogenerate
+      still refuses. Operator entry points: `npm run backend:migrate`,
+      `npm run backend:migrate:status`. Pinned by
+      `backend/tests/test_migrations_are_runnable.py`.
+    - **Not yet done:** no Dockerfile or compose service runs migrations on
+      container start. The database must still be migrated by an operator or by
+      the CI job before the app is useful. That is the remaining Gate 3 half.
+
+    **Still true, still your problem:**
     - `dw_*` aggregates carry `organization_id`/`workspace_id` with **no
       `organizations` table in any migration**, so those columns have no
       foreign-key target. The tenant entity is undeclared. Inert while
@@ -355,16 +386,20 @@ in it as history.
     aliases, prohibited-language rules, truth disclosures, or retention are
     **forbidden** (`docs/README.md` change-control rule).
 
-14. **`backend/requirements.txt` is a stale subset, and nothing uses it.** It
-    declares a fraction of what `backend/pyproject.toml` does and is missing
-    `flask-limiter`, `flask-sock`, `celery`, `redis`, `sqlalchemy`, `alembic`,
-    `psycopg`, `supabase`, `gotrue`, `minio`, `torch`, `sentence-transformers`,
-    `transformers`, `mcp`, `fpdf2`, `pandas`, `networkx`, `gunicorn`, and
-    `sentry-sdk`. **CI and the Docker builds use `uv.lock` via
+14. **`backend/requirements.txt` is a do-not-install pointer, and nothing uses
+    it.** It used to declare a fraction of what `backend/pyproject.toml` does
+    and was missing `flask-limiter`, `flask-sock`, `celery`, `redis`,
+    `sqlalchemy`, `alembic`, `psycopg`, `supabase`, `gotrue`, `minio`, `torch`,
+    `sentence-transformers`, `transformers`, `mcp`, `fpdf2`, `pandas`,
+    `networkx`, `gunicorn`, and `sentry-sdk` — installing it produced a
+    backend that could not boot. **As of commit `507b0c7` every one of those
+    lines is replaced by a comment** pointing at `uv sync --frozen --group
+    dev`; the file survives only so `pip install -r requirements.txt` is
+    answered by the pointer rather than silently installing a broken
+    environment. **CI and both Docker builds use `uv.lock` via
     `uv sync --frozen`**, which fails on a lock that does not match. Adding a
     dependency means editing `pyproject.toml` and relocking — never
-    hand-editing `requirements.txt` and expecting CI to see it. Treat
-    `requirements.txt` as documentation of the *original* dependency set.
+    hand-editing `requirements.txt` and expecting CI to see it.
 
 15. **Do not enable a feature flag to make a test pass.** The flags are
     fail-closed by design, and `Config.validate()` refuses several outright when
@@ -378,20 +413,27 @@ in it as history.
     persistence is opt-in).
 
 16. **Never add a FastAPI router to this app.** `backend/app/api/capability.py`
-    is one: an `APIRouter(prefix="/api/capability")` that is never included and
-    never imported, inside a Flask app. It is dead code. Its two collaborators
-    (`services/capability_registry.py`, `schemas/capability.py`) exist only to
-    serve it — though note that `capability_registry.py` itself imports
-    `app.schemas.capability`, so "only imported by it" is one-directional, not a
-    clean island. Do not mount it. Delete it in a separate, revertible commit.
+    was one: an `APIRouter(prefix="/api/capability")` that was never included
+    and never imported, inside a Flask app. **It and its two collaborators
+    (`services/capability_registry.py`, `schemas/capability.py`) were all
+    deleted on 2026-10-02** — the capability registry was the only reader of
+    the last surviving `capability_registry` table definition, and
+    [ADR-0014](docs/architecture/adr/ADR-0014-removal-of-optimization-backtest-island.md)
+    removed the superseded SQL with them. Confirm absence with
+    `Get-ChildItem backend -Recurse -Filter '*capabilit*'` before planning
+    around any of them; the rule is now a prohibition on reintroducing the
+    pattern, not a deletion TODO.
 
-17. **Do not run the spent one-shot scripts.** Root `patch.py` is regex surgery
-    that already rewrote `backend/app/api/graph.py` to enqueue Celery tasks; it
-    is not idempotent and re-running it would corrupt the file. There is a
-    second copy under `backend/`. Same class: `verify_check.py`,
-    `setup-local.sh` (obsolete pyenv flow, superseded by `uv`), and
-    `run-evaluation-pipeline.sh` (references a `views/Process.vue` that was
-    renamed to `views/MainView.vue`).
+17. **The spent one-shot scripts are gone; do not recreate them.** Root
+    `patch.py` was regex surgery that already rewrote
+    `backend/app/api/graph.py` to enqueue Celery tasks; it was never
+    idempotent, and re-running it would corrupt the file. **All four are now
+    absent from both the root and `backend/`** (verified 2026-10-02):
+    `patch.py`, `verify_check.py`, `setup-local.sh` (the obsolete pyenv flow,
+    superseded by `uv`), and `run-evaluation-pipeline.sh` (which referenced a
+    `views/Process.vue` that is now `views/MainView.vue`). Confirm with
+    `Get-ChildItem -Recurse -Include patch.py,verify_check.py,setup-local.sh,run-evaluation-pipeline.sh`
+    before assuming one is back.
 
 18. **Do not add new aliases to the deprecated token block.** `design-tokens.css`
     keeps ~70 legacy aliases in a clearly marked block so old components keep
@@ -413,9 +455,14 @@ in it as history.
 npm run verify          # -> bash scripts/release/verify
 ```
 
-Five gates, in order: doc validator → frontend tests → frontend production build
-→ backend tests with evals excluded → gitleaks (skipped with a warning when the
-binary is absent; CI still enforces it). Exits non-zero on any failure.
+**Six** gates, in order: doc validator → doc truth-gate self-test → frontend
+tests → frontend production build → backend tests with evals excluded → gitleaks
+(skipped with a warning when the binary is absent; CI still enforces it). Exits
+non-zero on any failure. The numbering is in `scripts/release/verify:10-29` and
+the gate bodies at `scripts/release/verify:167-191`; re-read them rather than
+trusting this list. An earlier revision of this section said "five gates" and
+omitted the doc truth-gate self-test, which is why
+`docs/architecture/index.md` § *Status of record* is the gate-status authority.
 **Requires bash** — under PowerShell use Git Bash, or run the steps below
 directly.
 
@@ -519,8 +566,8 @@ Every deploy path fails closed on purpose, pending canonical shared persistence
 - `railway.toml` — carries an explicit `RELEASE NO-GO` comment, and
   `preDeployCommand` also runs the blocker.
 - `render.yaml` — `services: []`.
-- `vercel.json` — static frontend only, and there are two conflicting ones (§5
-  rule 19).
+- `vercel.json` — static frontend only. Exactly one exists; the duplicate
+  `frontend/vercel.json` was deleted on 2026-10-01 (§5 rule 19).
 - The only runnable topology is single-host transition Compose, and it requires
   `BUILD_REVISION` and a mode-0600 `.env.transition`. **The runbook forbids
   running it from OneDrive, Dropbox, NFS, or SMB** — SQLite locking and atomic
@@ -575,12 +622,13 @@ not assume a document that says otherwise is right.
   `backend/migrations/versions/384c98f88d53_initial_schema.py:25` versus
   `Column(Uuid, ...)` in the ORM) and the four ORM-only tables had foreign keys
   onto a column the migration does not have, so mirroring was never an option.
-  `create_app` no longer issues DDL. Four tests now pin all of it:
-  `backend/tests/test_schema_parity.py` (9), `test_startup_no_schema_creation.py`
-  (3), `test_canonical_store_schema_guard.py` (5), `test_no_phantom_imports.py`
-  (6). **Still open:** Alembic is invoked by no Dockerfile, compose service, or
-  CI job, so schema creation remains an explicit manual deploy step — Gate 3.
-  See §5 rule 9.
+  `create_app` no longer issues DDL. Five test modules now pin all of it:
+    `backend/tests/test_schema_parity.py` (9), `test_startup_no_schema_creation.py`
+    (3), `test_canonical_store_schema_guard.py` (5), `test_no_phantom_imports.py`
+    (5), and `test_migrations_are_runnable.py` (6), which pins that the
+    migrations apply to an empty database, round-trip, need no credentials, and
+    that autogenerate stays refused. **Still open:** no Dockerfile or compose
+    service runs migrations on container start. See §5 rule 9.
 - **A substantial, well-tested module may still be unreachable in production.
   Verify reachability before you plan against any module.** A large file with
   its own passing test suite and a clean export from an `__init__.py` can have
@@ -594,18 +642,18 @@ not assume a document that says otherwise is right.
   repositories were unreachable. Before treating a module as load-bearing,
   grep its importers and note the runtime condition that gates them — several
   live only behind a feature flag that defaults off
-  (`USE_SUPABASE_PERSISTENCE`, `config.py:321-322`).
+  (`USE_SUPABASE_PERSISTENCE`, `config.py:354-356`).
 - ~~**`index.md` has ~12 stale citations into `backend/app/__init__.py`.**~~
-  **Corrected on 2026-10-01.** At `b868477` the file was citing a version
-  roughly 50-200 lines out of date: `create_app` at `:25` (real `:72`),
-  `require_auth` at `:125-141` (real `:223-252`), `compare_digest` at `:140`
-  (real `:248`), the CORS branch at `:74-82` (real `:126-146`), security
-  headers at `:246-293` (real `:266-313`), traceback stripping at `:295-326`
-  (real `:315-346`), the static handler at `:317-325` (real `:425-433`), and
-  `register_cleanup` at `:106-109` (real `:203-205`). Two error-handler
-  citations (`362-366`, `351-360`) pointed at the blueprint-registration block
-  rather than at `handle_unsafe_path` (`:384-386`) and `handle_rate_limit`
-  (`:376-378`). All re-measured against the 438-line file.
+  **Corrected 2026-10-01, drifted again, re-corrected 2026-10-02.** At
+  `b868477` the file was citing a version roughly 50-200 lines out of date:
+  `create_app` at `:25`, `require_auth` at `:125-141`, `compare_digest` at
+  `:140`, the CORS branch at `:74-82`, security headers at `:246-293`, traceback
+  stripping at `:295-326`, the static handler at `:317-325`, and
+  `register_cleanup` at `:106-109`. All were re-measured on 2026-10-01 against
+  a 438-line file — **and the file has since grown to 496 lines**, so every one
+  of those numbers moved a second time. The 2026-10-02 anchors are the ones
+  currently in `index.md`. This is the canonical demonstration of §0: a
+  re-measured citation is still stale after one unrelated commit.
 - ~~**Both dead buildplan anchors.**~~ **Corrected on 2026-10-01** by
   repointing, as this file always instructed. Both anchors were not merely
   stale but **fabricated**: `#13-highest-value-implementation-order` and
@@ -615,9 +663,11 @@ not assume a document that says otherwise is right.
   the six gates at all — its §7 is *P2 gaps* and its §13 is *Permanent truth
   statements*. `index.md` now states that its gate table is the only definition
   of the gate themes and points to ADR-0011 for rollout order.
-- **The build plan contradicts the code on the Truth Rail's first line.**
-  It writes `ACTIONS + ANSWERS: SYNTHETIC` in three places; the enforced string
-  is `GENERATED`. §2 gives the resolution.
+- ~~**The build plan contradicts the code on the Truth Rail's first line.**~~
+  **Resolved.** It used to write `ACTIONS + ANSWERS: SYNTHETIC`; it now writes
+  `GENERATED` at `docs/architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md:341`,
+  `:1209`, and `:3626`, with `:17` recording the correction. Do not "fix" those
+  three `GENERATED` lines back to `SYNTHETIC`.
 - ~~**`docs/product/**` is gone but the CI job still references it.**~~ **The
   root `README.md`'s seven dead links into that directory were repaired on
   2026-10-01 (the truth contract now points at ADR-0001, and the
@@ -644,33 +694,36 @@ not assume a document that says otherwise is right.
   ten numbered plans are now in that table with a per-plan status, and root
   `README.md` no longer says "8 plans". Plans 08 and 09 still lack a dependency
   narrative — that half remains open.
-- **2,652 lines across 6 files of the backtest/optimization island have no
-  production importer** (re-measured 2026-10-01; an earlier figure of "~2,900"
-  was wrong): `app/simulation/hybrid_simulator.py` (563),
-  `app/optimization/learning_loop.py` (474), `multi_objective_loss.py` (406),
-  `theta_optimizer.py` (456), `app/data/outcome_fetcher.py` (430),
-  `app/models/baseline_library.py` (323) — driven only by
-  `app/evals/first_backtest.py`, which is itself unimported.
-  `hybrid_simulator.py` still carries 5 `TODO`s, and `baseline_library.py`
-  raises `NotImplementedError` by design (abstract base). **All five artifacts
-  plus `backend/db/migrations/20260819_add_capability_registry.sql` carried an
-  "Authority: PREDICTIVE_SIMULATION_ROADMAP.md" line citing a document that was
-  archived as superseded on 2026-10-01.** That roadmap's objective is to fit
-  simulated output to observed real-world behaviour, which ADR-0001 forbids.
-  Each now carries a DO-NOT-WIRE warning. Do not wire them without a new
-  accepted ADR superseding ADR-0001.
-- **`constraint_engine`, `game_theory`, and `calibration_metrics` have no
-  production importer** and are blocked on inputs the product does not have.
-  Analysis in `docs/architecture/NEXT_STEPS_ROADMAP.md`, Phase 2.
-  `calibration_metrics` is the sharpest case: publishing a Brier score would
-  assert a calibration the product explicitly disclaims, so wiring it is a
-  truth-contract violation, not a task. **Note `diffusion_model` *is* wired** —
-  `simulation_config_generator.py` imports it in production. Do not list it as
-  dead; an earlier draft of this file did, and it would have justified deleting
-  a live module.
+- ~~**2,652 lines across 6 files of the backtest/optimization island have no
+  production importer.**~~ **RESOLVED 2026-10-02** by
+  [ADR-0014](docs/architecture/adr/ADR-0014-removal-of-optimization-backtest-island.md)
+  (commit `8739d10`) — **deleted, not wired.** The island was
+  `app/simulation/hybrid_simulator.py`, `app/optimization/learning_loop.py`,
+  `multi_objective_loss.py`, `theta_optimizer.py`, `app/data/outcome_fetcher.py`,
+  `app/models/baseline_library.py`, and the unimported driver
+  `app/evals/first_backtest.py`; the one-shot
+  `backend/scripts/migrate_json_to_postgres.py` and the superseded
+  `backend/db/migrations/20260819_add_capability_registry.sql` went with it.
+  `app/optimization/`, `app/data/`, and `app/evals/` no longer exist. All 13
+  TODO markers left `backend/app` with the island. **Do not resurrect it**; a
+  future predictive-fit capability requires a new accepted ADR superseding
+  ADR-0001, not this code.
+- ~~**`constraint_engine`, `game_theory`, and `calibration_metrics` have no
+  production importer.**~~ **RESOLVED 2026-10-02** by
+  [ADR-0014](docs/architecture/adr/ADR-0014-removal-of-optimization-backtest-island.md)
+  — the three modules and their five tests were deleted on the same lineage as
+  the optimization island, so nothing imports or references them any more. The
+  Phase 2 analysis in `docs/architecture/NEXT_STEPS_ROADMAP.md` and §B2 of
+  `docs/architecture/ULTRAPLAN.md` still describe them as quarantined-but-
+  present; **both now need a correction pass** (they name files that no longer
+  exist). **Note `diffusion_model` *is* wired** and was NOT deleted —
+  `simulation_config_generator.py` imports it in production, and
+  `backend/app/services/__init__.py` still re-exports it at
+  `services/__init__.py:41`. Do not list it as dead; an earlier draft of this
+  file did, and it would have justified deleting a live module.
 - **`supabase/` is an abandoned CLI-default scaffold**: a generated `config.toml`
   with no migrations, no referencing code, and a stray `.start.log`.
-- **~41 stray `.pytest_*` directories** sit untracked-but-ignored under
+- **~45 stray `.pytest_*` directories** sit untracked-but-ignored under
   `backend/` (and more at the repo root). `.gitignore` has a broad `.pytest*/`
   rule. Local debris. Do not add a blanket exception, and do not cite their
   contents as evidence.

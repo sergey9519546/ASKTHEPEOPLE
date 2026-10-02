@@ -3,64 +3,67 @@
     <a class="skip-link" href="#decision">Skip to the decision</a>
 
     <header class="signal-masthead">
-<button class="brand-block" type="button" aria-label="ASKTHEPEOPLE home" @click="scrollToSection('decision')">
-        <span>ASKTHEPEOPLE</span>
+      <button
+        class="brand-block"
+        type="button"
+        aria-label="ASKTHEPEOPLE, synthetic decision explorer. Go to the decision composer."
+        @click="scrollToSection('decision')"
+      >
+        <span class="brand-wordmark">ASKTHEPEOPLE</span>
+        <span class="brand-descriptor">Synthetic Decision Explorer</span>
       </button>
 
-      <div class="masthead-copy">
-        <p class="masthead-kicker">Generated scenario explorer</p>
-        <h1>See the paths before you choose.</h1>
-        <p class="masthead-summary">
-          Stress-test a decision with source-informed generated scenarios.
+      <h1 class="masthead-title">
+        Write one decision. Inspect the paths it could take.
+      </h1>
+
+      <div class="masthead-tools">
+        <p class="masthead-disclosure" aria-label="Important methodology disclosure">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M12 10v6M12 7.4v.2"></path>
+          </svg>
+          <span><strong>0 human respondents</strong> · Not a forecast</span>
         </p>
-      </div>
-
-      <div class="masthead-disclosure" aria-label="Important methodology disclosure">
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="9"></circle>
-          <path d="M12 10v6M12 7.4v.2"></path>
-        </svg>
-        <span><strong>0 human respondents</strong> · Not a forecast</span>
-      </div>
-
-      <nav class="signal-nav" aria-label="Page sections">
-        <a class="nav-tab active" href="#decision" @click.prevent="scrollToSection('decision')">The decision</a>
-        <a class="nav-tab" href="#method" @click.prevent="scrollToSection('method')">Map the scenarios</a>
-        <a class="nav-tab" href="#validate" @click.prevent="scrollToSection('validate')">Validate with people</a>
-        <button class="settings-button" type="button" aria-label="Open model settings" @click="openSettings()">
+        <button
+          class="settings-button"
+          type="button"
+          aria-label="Open model settings"
+          @click="openSettings()"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 7h10M18 7h2M4 17h2M10 17h10M14 4v6M6 14v6"></path>
           </svg>
           <span>Settings</span>
         </button>
-      </nav>
+      </div>
     </header>
 
     <main id="main-content">
       <section id="decision" class="decision-section" aria-labelledby="decision-heading">
+        <h2 id="decision-heading" class="section-title">The decision</h2>
+
         <div class="decision-composer">
           <div class="question-field">
             <div class="composer-header-row">
               <label for="decision-question">The decision</label>
               <div class="readiness-badge" :class="sourceReadiness.levelClass">
-                <span class="readiness-dot"></span>
+                <span class="readiness-dot" aria-hidden="true"></span>
                 <span class="readiness-text">{{ sourceReadiness.label }}</span>
               </div>
             </div>
 
-            <!-- Quick-Start Archetype Chips -->
-            <div class="archetype-chips-row" aria-label="Decision starter templates">
-              <span class="chips-label">Quick Starts:</span>
+            <div class="preset-row" role="group" aria-labelledby="preset-label">
+              <span id="preset-label" class="preset-label">Quick starts</span>
               <button
                 v-for="preset in decisionPresets"
                 :key="preset.id"
                 type="button"
-                class="archetype-chip"
+                class="preset-button"
                 :title="preset.description"
                 @click="applyPreset(preset)"
               >
-                <span class="chip-icon">{{ preset.icon }}</span>
-                <span>{{ preset.label }}</span>
+                {{ preset.label }}
               </button>
             </div>
 
@@ -75,409 +78,343 @@
             <p id="decision-helper" class="field-helper">
               Write one concrete choice and the outcome you want to examine.
             </p>
-            <aside class="route-grammar-legend" aria-label="Route grammar — node codes used in this decision workspace">
-              <strong class="grammar-label">Route grammar</strong>
-              <span class="grammar-items">
-                <span class="grammar-item" title="Decision">D-01</span>
-                <span class="grammar-item" title="Source material">SM-01</span>
-                <span class="grammar-item" title="Starting condition">SC-01</span>
-                <span class="grammar-item" title="Assumption">A-01</span>
-                <span class="grammar-item" title="Critical uncertainty">U-01</span>
-                <span class="grammar-item" title="Generated profile / decision lens">GP-01</span>
-                <span class="grammar-item" title="Possible path">P-01</span>
-                <span class="grammar-item" title="generated action">SA-01</span>
-                <span class="grammar-item" title="Decision consideration">DC-01</span>
-                <span class="grammar-item" title="Validation question">VQ-01</span>
-                <span class="grammar-item" title="Related run record">RR-01</span>
-              </span>
-              <span class="grammar-note">Sequence only. No probability or time.</span>
-            </aside>
-            <details class="decision-details">
-              <summary>Add a workspace name or extra context</summary>
-              <div class="decision-details-grid">
-                <label for="project-name">
-                  <span>Workspace name <small>Optional</small></span>
-                  <input
-                    id="project-name"
-                    v-model="formData.projectName"
-                    type="text"
-                    maxlength="120"
-                    placeholder="A short name for this run"
-                  />
-                </label>
-                <label for="decision-context">
-                  <span>Extra context <small>Optional</small></span>
-                  <textarea
-                    id="decision-context"
-                    v-model="formData.additionalContext"
-                    maxlength="8000"
-                    rows="2"
-                    placeholder="Constraints, audience, location, or timeframe"
-                  ></textarea>
-                </label>
-              </div>
-            </details>
             <p v-if="questionError" id="decision-error" class="field-error" role="alert">
               {{ questionError }}
             </p>
           </div>
+        </div>
 
-          <div
-            class="source-material"
-            :class="{ dragging: isDragOver, populated: files.length > 0 }"
-            @dragover.prevent="isDragOver = true"
-            @dragleave.prevent="isDragOver = false"
-            @drop.prevent="handleDrop"
-          >
-            <input
-              ref="fileInput"
-              type="file"
-              multiple
-              accept=".pdf,.md,.txt,.docx,.xlsx"
-              hidden
-              @change="handleFileSelect"
-            />
-
-            <button
-              class="source-dropzone"
-              type="button"
-              :aria-label="files.length ? 'Add more source material' : 'Add source material'"
-              @click="triggerFileInput"
-            >
-              <svg class="source-icon" viewBox="0 0 32 32" aria-hidden="true">
-                <path d="M8 3h11l6 6v20H8zM19 3v7h6M12 16h9M12 21h9"></path>
-              </svg>
-              <div>
-                <strong>{{ files.length ? "Add more source material" : "Add source material (optional)" }}</strong>
-                <span>PDF, Markdown, TXT, DOCX, or XLSX · 10 files / 50 MB maximum</span>
-              </div>
-            </button>
-
-            <div v-if="files.length" class="source-files">
-              <div class="source-files-heading">
-                <span>{{ files.length }} {{ files.length === 1 ? "source" : "sources" }} ready</span>
-                <span class="add-more">Add more</span>
-              </div>
-              <ul>
-                <li v-for="(file, index) in files" :key="`${file.name}-${index}`">
-                  <span class="file-name">{{ file.name }}</span>
-                  <button
-                    type="button"
-                    :aria-label="`Remove ${file.name}`"
-                    @click.stop="removeFile(index)"
-                  >
-                    Remove
-                  </button>
-                </li>
-              </ul>
-            </div>
-
-            <!-- URL ingestion -->
-            <div class="url-ingestion">
-              <label for="source-urls">Or paste URLs (one per line)</label>
-              <textarea
-                id="source-urls"
-                v-model="urlInput"
-                placeholder="https://example.com/article&#10;https://example.com/research.pdf"
-                rows="3"
-                :disabled="fetchingUrls"
-              ></textarea>
-              <button
-                type="button"
-                class="fetch-urls-button"
-                :disabled="!urlInput.trim() || fetchingUrls || files.length >= 10"
-                @click="fetchUrls"
-              >
-                {{ fetchingUrls ? "Fetching..." : "Fetch URLs" }}
-              </button>
-              <p v-if="urlFetchError" class="url-error" role="alert">{{ urlFetchError }}</p>
-            </div>
-          </div>
-
-          <div class="composer-action">
-            <button
-              class="primary-action"
-              type="button"
-              :disabled="!canSubmit || loading"
-              :aria-describedby="!canSubmit ? 'decision-prerequisites' : undefined"
-              @click="startSimulation"
-            >
-              <span>{{ loading ? "Opening workspace" : "Map the scenarios" }}</span>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 12h13M14 7l5 5-5 5"></path>
-              </svg>
-            </button>
-            <label class="use-policy-ack">
-              <input v-model="usePolicyAcknowledged" type="checkbox" required />
-              <span>
-                I understand this is generated exploration, not human evidence
-                or a consequential-decision tool.
+        <details class="disclosure context-disclosure">
+          <summary class="disclosure-summary">
+            <span class="disclosure-head">
+              <span class="disclosure-title">Optional context</span>
+              <span class="disclosure-hint">
+                A workspace name and anything you already know about the setting.
               </span>
-            </label>
-            <p
-              v-if="!canSubmit"
-              id="decision-prerequisites"
-              class="submission-requirements"
-              aria-live="polite"
-            >
-              Before you can continue: {{ submissionRequirements.join(" · ") }}.
-            </p>
-            <p>
-              Sources give the scenario its starting material; they do not
-              validate an outcome.
-            </p>
+            </span>
+          </summary>
+          <div class="disclosure-body">
+            <div class="decision-details-grid">
+              <label for="project-name">
+                <span>Workspace name <small>Optional</small></span>
+                <input
+                  id="project-name"
+                  v-model="formData.projectName"
+                  type="text"
+                  maxlength="120"
+                  placeholder="A short name for this run"
+                />
+              </label>
+              <label for="decision-context">
+                <span>Extra context <small>Optional</small></span>
+                <textarea
+                  id="decision-context"
+                  v-model="formData.additionalContext"
+                  maxlength="8000"
+                  rows="2"
+                  placeholder="Constraints, audience, location, or timeframe"
+                ></textarea>
+              </label>
+            </div>
           </div>
+        </details>
+
+        <details
+          class="disclosure source-disclosure"
+          :open="files.length > 0 || urlInput.trim().length > 0"
+        >
+          <summary class="disclosure-summary">
+            <span class="disclosure-head">
+              <span class="disclosure-title">Add starting material (optional)</span>
+              <span class="disclosure-hint">
+                Sources ground the scenarios; they do not validate an outcome.
+              </span>
+              <span v-if="files.length" class="disclosure-count">
+                {{ files.length }} {{ files.length === 1 ? "source" : "sources" }} added
+              </span>
+            </span>
+          </summary>
+          <div class="disclosure-body">
+            <div
+              class="source-material"
+              :class="{ dragging: isDragOver, populated: files.length > 0 }"
+              @dragover.prevent="isDragOver = true"
+              @dragleave.prevent="isDragOver = false"
+              @drop.prevent="handleDrop"
+            >
+              <input
+                ref="fileInput"
+                type="file"
+                multiple
+                accept=".pdf,.md,.txt,.docx,.xlsx"
+                hidden
+                @change="handleFileSelect"
+              />
+
+              <button
+                class="source-dropzone"
+                type="button"
+                :aria-label="files.length ? 'Add more source material' : 'Add source material'"
+                @click="triggerFileInput"
+              >
+                <svg class="source-icon" viewBox="0 0 32 32" aria-hidden="true">
+                  <path d="M8 3h11l6 6v20H8zM19 3v7h6M12 16h9M12 21h9"></path>
+                </svg>
+                <div>
+                  <strong>{{ files.length ? "Add more source material" : "Source material (optional)" }}</strong>
+                  <span>PDF, Markdown, TXT, DOCX, or XLSX · 10 files / 50 MB maximum</span>
+                </div>
+              </button>
+
+              <div v-if="files.length" class="source-files">
+                <div class="source-files-heading">
+                  <span>{{ files.length }} {{ files.length === 1 ? "source" : "sources" }} ready</span>
+                  <span class="add-more">Add more</span>
+                </div>
+                <ul>
+                  <li v-for="(file, index) in files" :key="`${file.name}-${index}`">
+                    <span class="file-name">{{ file.name }}</span>
+                    <button
+                      class="file-remove u-target"
+                      type="button"
+                      :aria-label="`Remove ${file.name}`"
+                      @click.stop="removeFile(index)"
+                    >
+                      Remove
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="url-ingestion">
+                <label for="source-urls">Or paste URLs (one per line)</label>
+                <textarea
+                  id="source-urls"
+                  v-model="urlInput"
+                  placeholder="https://example.com/article&#10;https://example.com/research.pdf"
+                  rows="3"
+                  :disabled="fetchingUrls"
+                ></textarea>
+                <button
+                  type="button"
+                  class="fetch-urls-button"
+                  :disabled="!urlInput.trim() || fetchingUrls || files.length >= 10"
+                  @click="fetchUrls"
+                >
+                  {{ fetchingUrls ? "Fetching..." : "Fetch URLs" }}
+                </button>
+                <p v-if="urlFetchError" class="url-error" role="alert">{{ urlFetchError }}</p>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <div class="composer-action">
+          <button
+            class="primary-action"
+            type="button"
+            :disabled="!canSubmit || loading"
+            :aria-describedby="!canSubmit ? 'decision-prerequisites' : undefined"
+            @click="startSimulation"
+          >
+            <span>{{ loading ? "Opening workspace" : "Map the scenarios" }}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 12h13M14 7l5 5-5 5"></path>
+            </svg>
+          </button>
+          <label class="use-policy-ack">
+            <input v-model="usePolicyAcknowledged" type="checkbox" required />
+            <span>
+              I understand this is generated exploration, not human evidence
+              or a consequential-decision tool.
+            </span>
+          </label>
+          <p
+            v-if="!canSubmit"
+            id="decision-prerequisites"
+            class="submission-requirements"
+            aria-live="polite"
+          >
+            Before you can continue: {{ submissionRequirements.join(" · ") }}.
+          </p>
         </div>
 
         <p v-if="fileError" class="source-error" role="alert">{{ fileError }}</p>
       </section>
 
       <section id="method" class="method-section" aria-labelledby="method-heading">
-        <header class="section-heading">
-          <p>How the workspace works</p>
-          <h2 id="method-heading">One decision. Several plausible paths.</h2>
-          <span>Each branch is a generated possibility to inspect, challenge, and validate.</span>
-        </header>
+        <h2 id="method-heading" class="section-title">How a run flows</h2>
 
-        <div
-          ref="routeMap"
-          class="route-map"
-          aria-label="How a run flows: optional source material informs reviewed assumptions; the assumptions branch into three equal-weight possible paths of generated actions; the generated run ends at a hard break, and validation with people happens outside the system."
-        >
-          <article class="route-stage stage-source">
-            <header class="stage-head">
-              <span class="stage-index">01</span>
-              <span class="stage-name">Source</span>
-            </header>
-            <div class="source-tile">
-              <svg viewBox="0 0 32 32" aria-hidden="true">
-                <path d="M8 3h11l6 6v20H8zM19 3v7h6M12 16h9M12 21h9"></path>
-              </svg>
-              <strong>Source material (optional)</strong>
-              <span>Upload files to ground the scenarios in context, or explore with the decision alone.</span>
-            </div>
-          </article>
-
-          <div class="route-link" aria-hidden="true"><span class="link-line"></span></div>
-
-          <article class="route-stage stage-gate">
-            <header class="stage-head">
-              <span class="stage-index">02</span>
-              <span class="stage-name">Assumptions</span>
-            </header>
-            <div class="gate-tile">
-              <span class="gate-diamond" aria-hidden="true">A</span>
-              <ol>
-                <li><span>01</span> Who is affected?</li>
-                <li><span>02</span> What may change?</li>
-                <li><span>03</span> What stays uncertain?</li>
-              </ol>
-            </div>
-          </article>
-
-          <div class="route-fan" aria-hidden="true">
-            <svg viewBox="0 0 24 120" preserveAspectRatio="none">
-              <path pathLength="100" d="M0 60 H9 V20 H24"></path>
-              <path pathLength="100" d="M0 60 H24"></path>
-              <path pathLength="100" d="M0 60 H9 V100 H24"></path>
-            </svg>
-          </div>
-
-          <article class="route-stage stage-paths">
-            <header class="stage-head">
-              <span class="stage-index">03</span>
-              <span class="stage-name">Possible paths</span>
-            </header>
-            <div class="lane">
-              <span class="lane-id">P-01</span>
-              <div class="lane-track">
-                <span class="lane-rule" aria-hidden="true"></span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Early response</span>
-                </span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Second-order effect</span>
-                </span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Longer-term outcome</span>
-                </span>
-              </div>
-            </div>
-            <div class="lane">
-              <span class="lane-id">P-02</span>
-              <div class="lane-track">
-                <span class="lane-rule" aria-hidden="true"></span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Different response</span>
-                </span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">New pressure</span>
-                </span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Alternative outcome</span>
-                </span>
-              </div>
-            </div>
-            <div class="lane">
-              <span class="lane-id">P-03</span>
-              <div class="lane-track">
-                <span class="lane-rule" aria-hidden="true"></span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Edge case</span>
-                </span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Unintended effect</span>
-                </span>
-                <span class="lane-node">
-                  <span class="node-mark" aria-hidden="true"></span>
-                  <span class="node-label">Risk to examine</span>
-                </span>
-              </div>
-            </div>
-          </article>
-
-          <div class="route-break">
-            <span class="break-rule" aria-hidden="true"></span>
-            <span class="break-label">generated run ends</span>
-          </div>
-
-          <article id="validate" class="route-stage stage-validate">
-            <header class="stage-head">
-              <span class="stage-index">04</span>
-              <span class="stage-name">Validate with people</span>
-            </header>
-            <div class="validate-tile">
-              <span class="validate-eyebrow">Outside the generated run</span>
-              <svg viewBox="0 0 40 32" aria-hidden="true">
-                <circle cx="20" cy="8" r="5"></circle>
-                <circle cx="8" cy="13" r="4"></circle>
-                <circle cx="32" cy="13" r="4"></circle>
-                <path d="M11 28c0-6 4-10 9-10s9 4 9 10M1 28c0-5 3-8 7-8 2 0 4 1 5 3M39 28c0-5-3-8-7-8-2 0-4 1-5 3"></path>
-              </svg>
-              <strong>Take the paths outside</strong>
-              <span>Use them to structure research and real conversations.</span>
-            </div>
-          </article>
-
-          <p class="route-legend">
-            All paths carry equal weight — spacing shows sequence only, not time or likelihood. Branches form only at reviewed assumptions.
-          </p>
-        </div>
-      </section>
-
-      <section id="scenarios" class="runs-section" aria-labelledby="runs-heading">
-        <header class="section-heading light">
-          <p>Your work</p>
-          <h2 id="runs-heading">Recent scenario runs</h2>
-          <span>Continue from the latest saved workspace.</span>
-        </header>
-
-        <div v-if="historyLoading" class="run-skeletons" role="status">
-          <span class="visually-hidden">Loading recent scenario runs</span>
-          <div v-for="index in 2" :key="index" class="run-skeleton"></div>
-        </div>
-
-        <div v-else-if="historyError" class="inline-state error-state" role="alert">
-          <span class="state-index" aria-hidden="true">!</span>
-          <div>
-            <strong>Recent runs could not be loaded.</strong>
-            <span>{{ historyError }}</span>
-          </div>
-          <button type="button" @click="fetchHistory">Try again</button>
-        </div>
-
-        <div v-else-if="simulationHistory.length === 0" class="inline-state empty-state">
-          <span class="state-index">01</span>
-          <div>
-            <strong>No scenario runs yet</strong>
-            <span>Add a decision and source material above to begin.</span>
-          </div>
-          <button type="button" @click="scrollToSection('decision')">Start with a decision</button>
-        </div>
-
-        <ol v-else class="run-list">
-          <li v-for="(run, index) in simulationHistory" :key="run.simulation_id">
-            <button
-              type="button"
-              @click="openSavedRun(run)"
-            >
-              <span class="run-index">{{ String(index + 1).padStart(2, "0") }}</span>
-              <span class="run-main">
-                <strong>{{ run.simulation_requirement || "Untitled decision" }}</strong>
-                <span>
-                  {{ formatDate(run.created_at) }}
-                  <template v-if="run.forked_from">
-                    <span class="run-branch">{{ branchLabel(run) }}</span>
-                  </template>
-                </span>
-              </span>
-              <span class="run-status">{{
-                formatStatus(run.runner_status || run.status)
-              }}</span>
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 12h13M14 7l5 5-5 5"></path>
-              </svg>
-            </button>
+        <ol class="flow-strip">
+          <li class="flow-stage">
+            <span class="flow-index">01</span>
+            <span class="flow-name">Source</span>
+            <span class="flow-detail">Optional starting material grounds the scenarios.</span>
+          </li>
+          <li class="flow-stage">
+            <span class="flow-index">02</span>
+            <span class="flow-name">Assumptions</span>
+            <span class="flow-detail">Reviewed assumptions are the only place branches form.</span>
+          </li>
+          <li class="flow-stage">
+            <span class="flow-index">03</span>
+            <span class="flow-name">Possible paths</span>
+            <span class="flow-detail">Equal-weight paths carry generated actions in sequence.</span>
+          </li>
+          <li id="validate" class="flow-stage">
+            <span class="flow-index">04</span>
+            <span class="flow-name">Validate with people</span>
+            <span class="flow-detail">Validation with people happens outside the generated run.</span>
           </li>
         </ol>
+
+        <p class="flow-note">
+          All paths carry equal weight — spacing shows sequence only, not time or likelihood.
+        </p>
       </section>
 
-      <section id="templates" class="templates-section" aria-labelledby="templates-heading">
-        <header class="section-heading">
-          <p>Starting points</p>
-          <h2 id="templates-heading">Frame a sharper question</h2>
-          <span>Use a prompt structure, then rewrite it for your real decision.</span>
-        </header>
+      <div class="work-lists">
+        <section id="scenarios" class="runs-section" aria-labelledby="runs-heading">
+          <h2 id="runs-heading" class="section-title">Recent scenario runs</h2>
+          <p class="section-note">Continue from the latest saved workspace.</p>
 
-        <div v-if="templatesLoading" class="template-skeletons" role="status">
-          <span class="visually-hidden">Loading question starters</span>
-          <div v-for="index in 2" :key="index" class="template-skeleton"></div>
-        </div>
+          <p class="visually-hidden" role="status">
+            <template v-if="historyLoading">Loading recent scenario runs.</template>
+            <template v-else-if="!historyError">
+              Loaded {{ simulationHistory.length }} recent scenario runs.
+            </template>
+          </p>
 
-        <div v-else-if="templatesError" class="inline-state error-state dark-state" role="alert">
-          <span class="state-index" aria-hidden="true">!</span>
-          <div>
-            <strong>Question starters could not be loaded.</strong>
-            <span>You can still write your own decision above.</span>
+          <div class="list-region" :aria-busy="historyLoading ? 'true' : 'false'">
+            <div v-if="historyLoading" class="run-skeletons" aria-hidden="true">
+              <div v-for="index in 2" :key="index" class="run-skeleton"></div>
+            </div>
+
+            <div v-else-if="historyError" class="inline-state error-state" role="alert">
+              <span class="state-index" aria-hidden="true">!</span>
+              <div>
+                <strong>Recent runs could not be loaded.</strong>
+                <span>{{ historyError }}</span>
+              </div>
+              <button type="button" @click="fetchHistory">Try again</button>
+            </div>
+
+            <div v-else-if="simulationHistory.length === 0" class="inline-state empty-state">
+              <span class="state-index">01</span>
+              <div>
+                <strong>No scenario runs yet</strong>
+                <span>Add a decision and starting material above to begin.</span>
+              </div>
+              <button type="button" @click="scrollToSection('decision')">Start with a decision</button>
+            </div>
+
+            <ol v-else class="run-list">
+              <li v-for="(run, index) in simulationHistory" :key="run.simulation_id">
+                <button
+                  type="button"
+                  @click="openSavedRun(run)"
+                >
+                  <span class="run-index">{{ String(index + 1).padStart(2, "0") }}</span>
+                  <span class="run-main">
+                    <strong>{{ run.simulation_requirement || "Untitled decision" }}</strong>
+                    <span>
+                      {{ formatDate(run.created_at) }}
+                      <template v-if="run.forked_from">
+                        <span class="run-branch">{{ branchLabel(run) }}</span>
+                      </template>
+                    </span>
+                  </span>
+                  <span class="run-status">{{
+                    formatStatus(run.runner_status || run.status)
+                  }}</span>
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12h13M14 7l5 5-5 5"></path>
+                  </svg>
+                </button>
+              </li>
+            </ol>
           </div>
-          <button type="button" @click="fetchTemplates">Try again</button>
-        </div>
+        </section>
 
-        <div v-else-if="templates.length === 0" class="inline-state dark-state">
-          <strong>No question starters are available.</strong>
-          <span>You can still write your own decision above.</span>
-        </div>
+        <section id="templates" class="templates-section" aria-labelledby="templates-heading">
+          <h2 id="templates-heading" class="section-title">Question starters</h2>
+          <p class="section-note">
+            Use a prompt structure, then rewrite it for your own decision.
+          </p>
 
-        <div v-else class="template-list">
-          <button
-            v-for="(template, index) in templates"
-            :key="template.id"
-            type="button"
-            @click="selectTemplate(template)"
-          >
-            <span class="template-number">{{ String(index + 1).padStart(2, "0") }}</span>
-            <span class="template-copy">
-              <strong>{{ template.name }}</strong>
-              <span>{{ template.description }}</span>
-            </span>
-            <span class="template-use">Use this frame</span>
-          </button>
-        </div>
-      </section>
+          <p class="visually-hidden" role="status">
+            <template v-if="templatesLoading">Loading question starters.</template>
+            <template v-else-if="!templatesError">
+              Loaded {{ templates.length }} question starters.
+            </template>
+          </p>
+
+          <div class="list-region" :aria-busy="templatesLoading ? 'true' : 'false'">
+            <div v-if="templatesLoading" class="template-skeletons" aria-hidden="true">
+              <div v-for="index in 2" :key="index" class="template-skeleton"></div>
+            </div>
+
+            <div v-else-if="templatesError" class="inline-state error-state dark-state" role="alert">
+              <span class="state-index" aria-hidden="true">!</span>
+              <div>
+                <strong>Question starters could not be loaded.</strong>
+                <span>You can still write your own decision above.</span>
+              </div>
+              <button type="button" @click="fetchTemplates">Try again</button>
+            </div>
+
+            <div v-else-if="templates.length === 0" class="inline-state empty-state dark-state">
+              <strong>No question starters are available.</strong>
+              <span>You can still write your own decision above.</span>
+            </div>
+
+            <div v-else class="template-list">
+              <button
+                v-for="(template, index) in templates"
+                :key="template.id"
+                type="button"
+                @click="selectTemplate(template)"
+              >
+                <span class="template-number">{{ String(index + 1).padStart(2, "0") }}</span>
+                <span class="template-copy u-prose">
+                  <strong>{{ template.name }}</strong>
+                  <span>{{ template.description }}</span>
+                </span>
+                <span class="template-use">Use this frame</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="reference-band" aria-labelledby="grammar-heading">
+        <h2 id="grammar-heading" class="section-title">Route grammar</h2>
+        <p class="section-note">Reference codes for the records this workspace writes.</p>
+
+        <aside class="route-grammar-legend" aria-label="Route grammar — node codes used in this decision workspace">
+          <strong class="grammar-label">Node codes</strong>
+          <span class="grammar-items">
+            <span class="grammar-item" title="Decision">D-01</span>
+            <span class="grammar-item" title="Source material">SM-01</span>
+            <span class="grammar-item" title="Starting condition">SC-01</span>
+            <span class="grammar-item" title="Assumption">A-01</span>
+            <span class="grammar-item" title="Critical uncertainty">U-01</span>
+            <span class="grammar-item" title="Generated profile / decision lens">GP-01</span>
+            <span class="grammar-item" title="Possible path">P-01</span>
+            <span class="grammar-item" title="generated action">SA-01</span>
+            <span class="grammar-item" title="Decision consideration">DC-01</span>
+            <span class="grammar-item" title="Validation question">VQ-01</span>
+            <span class="grammar-item" title="Related run record">RR-01</span>
+          </span>
+          <span class="grammar-note">Sequence only. No probability or time.</span>
+        </aside>
+      </aside>
     </main>
 
     <footer class="signal-footer">
       <div class="footer-statement">
-        <strong>ASK THE PEOPLE</strong>
-        <span>A tool for exploring generated scenarios before real-world research.</span>
+        <strong>ASKTHEPEOPLE</strong>
+        <span>Synthetic Decision Explorer — generated scenario exploration before real-world research.</span>
       </div>
       <div class="footer-disclosure">
         <span>Outputs are generated, not observed.</span>
@@ -488,9 +425,8 @@
     <SettingsModal v-if="settingsOpen" @close="closeSettings()" />
   </div>
 </template>
-
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { getTemplates } from "../api/graph";
 import { getSimulationHistory } from "../api/simulation";
@@ -819,48 +755,6 @@ const scrollToSection = (id) => {
     ?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
 };
 
-/* The method-section route map is a one-shot scroll reveal, not a mount
-   autoplay. The diagram's CSS choreography (route-draw-x/y, route-draw-stroke,
-   node-in) still drives the draw-in, but its play-state is paused until the
-   diagram enters the viewport (see the `.route-map` play-state gate in
-   <style>); revealing flips play-state to running so the designed delay
-   ladder runs once and settles on `forwards`. The diagram's narrative is
-   top→bottom (source 01 → validate 04) but it enters the viewport bottom-up,
-   so a -25% bottom root anchor triggers once the top source tile reaches the
-   lower 75% of screen: the narrative's start is on screen before play begins,
-   instead of firing off-screen at mount and settling invisible. */
-const routeMap = ref(null);
-let routeRevealObserver = null;
-
-onMounted(() => {
-  const el = routeMap.value;
-  if (!el) return;
-  const revealImmediately =
-    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ||
-    typeof IntersectionObserver === "undefined";
-  if (revealImmediately) {
-    el.classList.add("is-revealed");
-    return;
-  }
-  routeRevealObserver = new IntersectionObserver(
-    (entries, observer) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-revealed");
-          observer.unobserve(entry.target);
-        }
-      }
-    },
-    { rootMargin: "0px 0px -25% 0px", threshold: 0 },
-  );
-  routeRevealObserver.observe(el);
-});
-
-onBeforeUnmount(() => {
-  routeRevealObserver?.disconnect();
-  routeRevealObserver = null;
-});
-
 const formatDate = (value) => {
   if (!value) return "Date unavailable";
   const date = new Date(value);
@@ -906,10 +800,22 @@ fetchHistory();
 </script>
 
 <style scoped>
+/* Decision-first Home.
+   The view renders inside one panel of the desktop shell and that panel is
+   roughly viewport-height, so the composer sits above the fold and everything
+   secondary is either folded behind a native disclosure or below the fold.
+
+   Palette discipline held throughout: signal red is a wayfinding edge, the
+   primary action fill, and an active state - never body text on cream, and
+   never a fill behind attention yellow. Attention yellow is the focus ring and
+   small marks only. The display face is a single-weight condensed all-caps
+   poster face, so it is used for nouns only (wordmark, section headings,
+   stage numerals and names) and never below 1.25rem, and never for a label a
+   user has to read in order to decide something. */
+
 .public-signal-home {
   position: relative;
-  overflow: hidden;
-  min-height: 100dvh;
+  min-height: 100%;
   background: var(--ink);
   color: var(--paper);
 }
@@ -931,287 +837,374 @@ fetchHistory();
   transform: translateY(0);
 }
 
+/* ---------------------------------------------------------------- header -- */
+
 .signal-masthead {
-  position: relative;
-  z-index: 2;
   display: grid;
-  grid-template-columns: minmax(13rem, 18vw) minmax(0, 1fr) auto;
-  grid-template-areas:
-    "brand copy disclosure"
-    "brand nav nav";
-  min-height: 10.5rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-5);
   border-bottom: 1px solid var(--line-dark);
   background: var(--ink-deep);
 }
 
 .brand-block {
-  grid-area: brand;
-  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  min-width: 0;
-  padding: 1.5rem clamp(1.25rem, 2.8vw, 3rem);
-  overflow: hidden;
+  gap: 0.1rem;
+  min-height: var(--control-h-md);
+  padding: 0.3rem 0.75rem;
   border: 0;
-  background: var(--ink-deep);
+  border-left: var(--edge-wayfinding) solid var(--signal);
+  border-radius: 0;
+  background: transparent;
   color: var(--paper);
-  font-family: var(--font-display);
-  font-size: clamp(2.1rem, 2.5vw, 3.2rem);
-  font-weight: 900;
-  line-height: 0.78;
-  letter-spacing: -0.025em;
   text-align: left;
-  text-transform: uppercase;
-  transform: none;
-}
-
-.brand-block::after {
-  content: "";
-  position: absolute;
-  top: -15%;
-  right: -2.75rem;
-  width: 4.75rem;
-  height: 130%;
-  background: linear-gradient(105deg, transparent 40%, rgba(242, 235, 221, 0.08) 60%, transparent 80%);
-  transform: rotate(4deg);
-  transform-origin: center;
-  pointer-events: none;
 }
 
 .brand-block:hover {
-  background: var(--ink);
-  color: var(--paper-strong);
+  border-color: var(--signal);
+  background: var(--ink-raised);
+  color: var(--paper);
 }
 
-.masthead-copy {
-  grid-area: copy;
-  align-self: end;
-  padding: 1.5rem clamp(2rem, 4vw, 4.5rem) 1.1rem;
-}
-
-.masthead-kicker,
-.section-heading > p {
+/* The wordmark is a noun, so it keeps the display face - at poster size, where
+   a single-weight condensed face still has the stroke contrast to be read. */
+.brand-wordmark {
   font-family: var(--font-display);
-  font-size: 1rem;
-  letter-spacing: 0.045em;
+  font-size: 1.5rem;
+  line-height: var(--leading-display);
+  letter-spacing: 0.02em;
+}
+
+.brand-descriptor {
+  color: var(--paper-muted);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-.masthead-kicker {
-  margin-bottom: 0.55rem;
-  color: var(--attention);
-}
-
-.masthead-copy h1 {
-  max-width: 18ch;
+/* Orientation, not a hero. This is a line a person reads in order to act, so it
+   is set in the text face at body size; the view has no hero headline. */
+.masthead-title {
   margin: 0;
   color: var(--paper);
-  font-family: var(--font-display);
-  font-size: clamp(2.65rem, 4vw, 4.5rem);
-  font-weight: 900;
-  line-height: 0.9;
-  letter-spacing: -0.02em;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 600;
+  line-height: var(--leading-snug);
   text-wrap: balance;
 }
 
-.masthead-summary {
-  max-width: 42rem;
-  margin-top: 0.85rem;
-  color: var(--paper-muted);
-  font-size: clamp(1rem, 1.2vw, 1.25rem);
-  line-height: 1.5;
+.masthead-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
 }
 
 .masthead-disclosure {
-  grid-area: disclosure;
-  align-self: end;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 1rem;
-  margin: 0 2.4rem 1.6rem 0;
-  color: var(--attention);
-  font-size: 0.84rem;
-  white-space: nowrap;
-  background: transparent;
-  border: 1px solid var(--attention-rule);
-  border-radius: 0;
-  box-shadow: none;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line-dark);
+  color: var(--paper-muted);
+  font-size: 0.72rem;
+  line-height: var(--leading-snug);
 }
 
 .masthead-disclosure strong {
-  color: var(--paper);
+  color: var(--attention);
   font-weight: 700;
 }
 
 .masthead-disclosure svg {
-  width: 1.3rem;
+  width: 1rem;
+  flex: none;
   fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-}
-
-.signal-nav {
-  grid-area: nav;
-  display: flex;
-  align-items: stretch;
-  min-height: 3.2rem;
-  padding-left: clamp(2rem, 4vw, 4.5rem);
-}
-
-.nav-tab,
-.settings-button {
-  min-height: 2.6rem;
-  border: 0;
-  border-left: 1px solid var(--line-dark);
-  background: transparent;
-  color: var(--paper-muted);
-  text-decoration: none;
-  font-size: 0.92rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.nav-tab {
-  padding: 0.55rem clamp(1rem, 2.3vw, 2.5rem);
-}
-
-.nav-tab.active {
-  align-self: center;
-  min-height: 2.6rem;
-  margin-right: 0.8rem;
-  border-left: 0;
-  background: var(--signal);
-  color: var(--ink);
-}
-
-.nav-tab:hover,
-.settings-button:hover {
-  background: var(--ink-soft);
-  color: var(--paper);
-}
-
-.settings-button {
-  display: inline-flex;
-  gap: 0.55rem;
-  align-items: center;
-  margin-left: auto;
-  padding: 0.8rem 2.2rem;
-}
-
-.settings-button svg {
-  width: 1.15rem;
-  fill: none;
-  stroke: currentColor;
+  stroke: var(--paper-dim);
+  stroke-linecap: round;
   stroke-width: 1.8;
 }
 
+.settings-button {
+  min-height: var(--control-h-md);
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line-dark);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.76rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settings-button svg {
+  width: 1rem;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
+}
+
+/* --------------------------------------------------------- section titles -- */
+
+.section-title {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  line-height: var(--leading-display);
+  letter-spacing: 0.01em;
+}
+
+.section-note {
+  max-width: var(--measure-prose);
+  margin: var(--space-1) 0 0;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: var(--leading-snug);
+}
+
+/* -------------------------------------------------------------- composer -- */
+
 .decision-section {
-  padding: clamp(1rem, 2vw, 2rem);
-  background: var(--ink);
+  padding: var(--space-5);
+  background: var(--paper);
+  color: var(--ink);
   scroll-margin-top: 1rem;
 }
 
+.decision-section .section-title {
+  margin-bottom: var(--space-3);
+}
+
 .decision-composer {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(18rem, 0.65fr) minmax(18rem, 0.55fr);
-  align-items: stretch;
-  max-width: 104rem;
-  min-height: 12rem;
-  margin: 0 auto;
-  background: var(--paper);
-  color: var(--ink);
+  border: 1px solid var(--line-light);
+  border-top: var(--edge-wayfinding) solid var(--ink);
+  background: var(--paper-strong);
 }
 
 .question-field {
   display: flex;
   flex-direction: column;
-  padding: 1.7rem 1.8rem 1.45rem;
-  border-right: 1px solid var(--line-light);
+  padding: var(--space-4);
 }
 
+.composer-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+/* A form label is read in order to decide something, so it is text face. */
 .question-field label {
-  margin-bottom: 0.5rem;
-  font-family: var(--font-display);
-  font-size: 1rem;
-  letter-spacing: 0.04em;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* The badge states what the workspace holds, never how good it is. Prompt
+   length and file count cannot imply a quality or precision claim, so the
+   levels differ by rule weight and text colour only - no score, no escalation. */
+.readiness-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--line-light);
+  background: var(--paper-transfer);
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.readiness-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  background: var(--ink-muted);
+}
+
+.readiness-badge.level-medium,
+.readiness-badge.level-high {
+  border-color: var(--ink-muted);
+  color: var(--ink);
+}
+
+.readiness-badge.level-medium .readiness-dot,
+.readiness-badge.level-high .readiness-dot {
+  background: var(--ink);
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.preset-label {
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.preset-button {
+  min-height: var(--control-h-sm);
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--line-light);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: var(--leading-tight);
+  text-align: left;
+}
+
+.preset-button:hover {
+  border-color: var(--ink);
+  background: var(--paper-transfer);
+  color: var(--ink);
 }
 
 .question-field textarea {
   width: 100%;
-  min-height: 5.2rem;
-  padding: 0 0 0.5rem 0 !important;
+  min-height: 7.5rem;
+  padding: var(--space-3) 0 var(--space-2) !important;
   border: 0 !important;
   border-bottom: 2px solid var(--line-light) !important;
   background: transparent !important;
   color: var(--ink) !important;
-  font-family: var(--font-display) !important;
-  font-size: clamp(2rem, 3.1vw, 3.7rem) !important;
-  font-weight: 900;
-  line-height: 0.98;
-  letter-spacing: -0.015em;
+  font-family: var(--font-sans) !important;
+  font-size: clamp(1.05rem, 1.4vw, 1.3rem) !important;
+  line-height: var(--leading-snug) !important;
   resize: vertical;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .question-field textarea::placeholder {
-  color: #a3a098;
+  color: var(--ink-muted);
   opacity: 1;
 }
 
 .question-field textarea:focus {
-  border-color: var(--signal) !important;
-  box-shadow: none;
-  outline: none;
+  border-bottom-color: var(--ink) !important;
 }
 
-.field-helper,
-.composer-action p {
-  margin-top: 0.65rem;
+.field-helper {
+  margin: var(--space-2) 0 0;
   color: var(--ink-muted);
   font-size: 0.78rem;
-  line-height: 1.4;
+  line-height: var(--leading-snug);
 }
 
 .field-error,
 .source-error {
-  margin-top: 0.55rem;
+  margin: var(--space-2) 0 0;
   color: var(--error-text);
   font-size: 0.78rem;
   font-weight: 600;
+  line-height: var(--leading-snug);
 }
 
-.decision-details {
-  margin-top: 0.65rem;
+/* ------------------------------------------------------------ disclosures -- */
+
+.disclosure {
+  margin-top: var(--space-3);
+  border: 1px solid var(--line-light);
+  background: var(--paper-strong);
 }
 
-.decision-details summary {
-  width: fit-content;
-  color: var(--ink-muted);
-  font-size: 0.74rem;
-  font-weight: 600;
+/* The summary stays a list-item so the native disclosure marker survives; the
+   flex row lives on an inner span. Native <details> is what makes both
+   disclosures operable with Enter and Space with no extra key handling. */
+.disclosure-summary {
+  min-height: var(--control-h-md);
+  padding: var(--space-2) var(--space-3);
+  color: var(--ink);
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 0.18rem;
+  list-style-position: inside;
+}
+
+.disclosure-summary::marker {
+  color: var(--ink-muted);
+}
+
+.disclosure-summary:hover {
+  background: var(--paper-transfer);
+}
+
+.disclosure[open] > .disclosure-summary {
+  border-bottom: 1px solid var(--line-light);
+}
+
+.disclosure-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem var(--space-3);
+}
+
+.disclosure-title {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.disclosure-hint {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  font-weight: 500;
+  line-height: var(--leading-snug);
+}
+
+/* Added files stay countable with the disclosure closed, so a user never has
+   to reopen it to find out whether material is already attached. */
+.disclosure-count {
+  margin-left: auto;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--ink-muted);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.disclosure-body {
+  padding: var(--space-3);
 }
 
 .decision-details-grid {
   display: grid;
   grid-template-columns: minmax(10rem, 0.45fr) minmax(0, 1fr);
-  gap: 0.7rem;
-  margin-top: 0.7rem;
+  gap: var(--space-3);
 }
 
 .decision-details-grid label {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.3rem;
   margin: 0;
   color: var(--ink);
   font-family: var(--font-sans);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.035em;
 }
@@ -1224,66 +1217,62 @@ fetchHistory();
 
 .decision-details-grid input,
 .decision-details-grid textarea {
-  min-height: 2.5rem;
-  padding: 0.6rem 0.65rem !important;
+  min-height: var(--control-h-lg);
+  padding: 0.5rem 0.6rem !important;
   border: 1px solid var(--line-light) !important;
-  background: var(--paper-strong) !important;
+  border-radius: 0;
+  background: var(--paper) !important;
   color: var(--ink) !important;
   font-family: var(--font-sans) !important;
   font-size: 0.78rem !important;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: var(--leading-snug);
 }
 
 .decision-details-grid textarea {
-  min-height: 3.5rem;
+  min-height: 4rem;
 }
+
+/* ---------------------------------------------------------- source upload -- */
 
 .source-material {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 1.5rem;
+  gap: var(--space-3);
 }
 
 .source-dropzone {
   width: 100%;
   min-width: 0;
-  min-height: 7rem;
+  min-height: 5.5rem;
   align-items: center;
   justify-content: flex-start;
-  gap: 1rem;
-  padding: 1.1rem;
+  gap: var(--space-4);
+  padding: var(--space-3);
   border: 2px dashed var(--ink-muted);
-  background: var(--paper-strong);
+  border-radius: 0;
+  background: var(--paper);
   color: var(--ink);
   text-align: left;
   box-shadow: none;
-  transition:
-    transform 220ms var(--ease-out),
-    background-color 220ms var(--ease-out),
-    border-color 220ms var(--ease-out),
-    box-shadow 220ms var(--ease-out);
 }
 
 .source-dropzone:hover,
 .source-dropzone:focus-visible {
-  border-color: var(--signal);
-  background: var(--signal-soft);
-  transform: translateY(-2px);
+  border-color: var(--ink);
+  background: var(--paper-transfer);
+  color: var(--ink);
 }
 
 .source-material.dragging .source-dropzone {
-  border-color: var(--signal);
-  background: var(--signal-soft);
-  transform: translateY(-2px);
-  box-shadow: 0.45rem 0.45rem 0 var(--signal-deep);
+  border-color: var(--ink);
+  background: var(--paper-transfer);
+  box-shadow: inset var(--edge-wayfinding) 0 0 0 var(--ink);
 }
 
 .source-icon {
-  width: 2.4rem;
+  width: 2rem;
   flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
@@ -1296,28 +1285,29 @@ fetchHistory();
 }
 
 .source-dropzone strong {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .source-dropzone > div > span {
-  margin-top: 0.25rem;
+  margin-top: 0.15rem;
   color: var(--ink-muted);
   font-size: 0.74rem;
+  line-height: var(--leading-snug);
 }
 
 .source-files {
   min-width: 0;
   width: 100%;
-  padding: 0.7rem 0.8rem;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--line-light);
-  background: var(--paper-strong);
+  background: var(--paper);
 }
 
 .source-files-heading {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.55rem;
-  font-size: 0.78rem;
+  margin-bottom: var(--space-1);
+  font-size: 0.76rem;
   font-weight: 700;
 }
 
@@ -1328,7 +1318,7 @@ fetchHistory();
 
 .source-files ul {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.2rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -1337,30 +1327,34 @@ fetchHistory();
 .source-files li {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
   justify-content: space-between;
-  padding-top: 0.35rem;
+  gap: var(--space-2);
+  padding-top: 0.2rem;
   border-top: 1px solid var(--line-light);
 }
 
 .source-files .file-name {
   overflow: hidden;
   color: var(--ink);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.source-files button {
-  padding: 0.25rem;
-  border: 0;
+.file-remove {
+  min-height: var(--control-h-sm);
+  flex: none;
+  padding: 0 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--ink-muted);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   text-decoration: underline;
 }
 
-.source-files button:hover {
+.file-remove:hover {
+  border-color: var(--ink-muted);
   background: transparent;
   color: var(--ink);
 }
@@ -1368,11 +1362,10 @@ fetchHistory();
 .url-ingestion {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  padding: 1rem 0.8rem;
-  margin-top: 0.8rem;
+  gap: 0.5rem;
+  padding: var(--space-3);
   border: 1px solid var(--line-light);
-  background: var(--paper-strong);
+  background: var(--paper);
 }
 
 .url-ingestion label {
@@ -1383,19 +1376,15 @@ fetchHistory();
 
 .url-ingestion textarea {
   min-height: 4rem;
-  padding: 0.5rem;
-  border: 1px solid var(--line-dark);
-  background: var(--paper);
+  padding: var(--space-2);
+  border: 1px solid var(--line-light);
+  border-radius: 0;
+  background: var(--paper-strong);
   color: var(--ink);
-  font-family: var(--font-mono, monospace);
-  font-size: 0.72rem;
-  line-height: 1.4;
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  line-height: var(--leading-snug);
   resize: vertical;
-}
-
-.url-ingestion textarea:focus {
-  outline: 2px solid var(--signal);
-  outline-offset: 2px;
 }
 
 .url-ingestion textarea:disabled {
@@ -1405,82 +1394,53 @@ fetchHistory();
 
 .fetch-urls-button {
   align-self: flex-start;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--line-dark);
+  min-height: var(--control-h-md);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--ink-muted);
+  border-radius: 0;
   background: var(--paper-strong);
   color: var(--ink);
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   font-weight: 600;
-  cursor: pointer;
-  transition: all 120ms var(--ease-quick);
 }
 
 .fetch-urls-button:hover:not(:disabled) {
-  background: var(--signal-soft);
   border-color: var(--ink);
-}
-
-.fetch-urls-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  background: var(--paper-transfer);
+  color: var(--ink);
 }
 
 .url-error {
   margin: 0;
-  padding: 0.4rem 0.6rem;
-  background: var(--error-soft);
+  padding: var(--space-1) var(--space-2);
+  border-left: var(--edge-wayfinding) solid var(--error);
   color: var(--error-text);
-  font-size: 0.7rem;
-  line-height: 1.3;
+  font-size: 0.72rem;
+  line-height: var(--leading-snug);
 }
+
+/* ------------------------------------------------------- the one action -- */
 
 .composer-action {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 0.85rem;
-  padding: 1.5rem;
-  border-left: 1px solid var(--line-light);
-}
-
-.use-policy-ack {
-  display: grid;
-  grid-template-columns: 1rem minmax(0, 1fr);
-  gap: 0.55rem;
-  align-items: start;
-  color: var(--ink);
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.35;
-  cursor: pointer;
-}
-
-.use-policy-ack input {
-  width: 1rem;
-  height: 1rem;
-  margin: 0.05rem 0 0;
-  border: 1px solid var(--ink);
-  border-radius: 0;
-  accent-color: var(--signal-deep);
-}
-
-.submission-requirements {
-  padding-top: 0.7rem;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--line-light);
-  color: var(--error-text) !important;
-  font-weight: 650;
 }
 
 .primary-action {
-  display: flex;
-  min-height: 4.2rem;
-  padding: 0.9rem 1.15rem;
+  align-self: flex-start;
+  min-height: var(--control-h-lg);
+  padding: 0 var(--space-5);
   border: 1px solid var(--signal-deep);
+  border-radius: 0;
   background: var(--signal);
   color: var(--ink);
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  letter-spacing: 0.025em;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -1488,27 +1448,63 @@ fetchHistory();
   border-color: var(--ink);
   background: var(--signal-strong);
   color: var(--ink);
-  transform: translateY(-2px);
 }
 
 .primary-action svg,
 .run-list svg {
-  width: 1.35rem;
+  width: 1.15rem;
   fill: none;
   stroke: currentColor;
   stroke-linecap: square;
   stroke-width: 2;
 }
 
-.source-error {
-  max-width: 104rem;
-  margin-right: auto;
-  margin-left: auto;
+/* The consent checkbox is an explicit act. Nothing else in the view can set it:
+   a quick-start preset fills the form and leaves this untouched. */
+.use-policy-ack {
+  display: grid;
+  grid-template-columns: var(--target-min) minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  min-height: var(--control-h-md);
+  max-width: var(--measure-tight);
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  cursor: pointer;
 }
 
-.method-section,
-.templates-section {
-  padding: clamp(3.5rem, 7vw, 7.5rem) clamp(1rem, 3.4vw, 4rem);
+.use-policy-ack input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0.15rem 0 0;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  accent-color: var(--ink);
+}
+
+.submission-requirements {
+  max-width: var(--measure-prose);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: var(--edge-wayfinding) solid var(--ink);
+  background: var(--paper-transfer);
+  color: var(--error-text);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: var(--leading-snug);
+}
+
+/* ----------------------------------------------------------- flow strip -- */
+
+/* Replaces the animated route diagram. The four stages are the same four
+   statements it carried, stated once, statically: the fan is a fact about
+   weight, not a thing to animate, and a scroll-triggered draw-in cost roughly a
+   thousand lines of CSS to say nothing a list cannot. */
+.method-section {
+  padding: var(--space-5);
+  border-top: 1px solid var(--line-dark);
   background:
     linear-gradient(rgba(242, 235, 221, 0.025) 1px, transparent 1px),
     linear-gradient(90deg, rgba(242, 235, 221, 0.025) 1px, transparent 1px),
@@ -1517,504 +1513,96 @@ fetchHistory();
   scroll-margin-top: 1rem;
 }
 
-.section-heading {
-  display: grid;
-  grid-template-columns: minmax(10rem, 0.5fr) minmax(0, 1.15fr) minmax(16rem, 0.75fr);
-  align-items: end;
-  gap: 2rem;
-  max-width: 104rem;
-  margin: 0 auto 3rem;
-}
-
-.section-heading > p {
-  color: var(--attention);
-}
-
-.section-heading h2 {
-  margin: 0;
+.method-section .section-title {
   color: var(--paper);
-  font-family: var(--font-display);
-  font-size: clamp(2.6rem, 4vw, 5rem);
-  line-height: 0.92;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
 }
 
-.section-heading > span {
-  max-width: 31rem;
-  color: var(--paper-muted);
-  font-size: 0.95rem;
-  line-height: 1.55;
-  text-wrap: pretty;
-}
-
-/* Route Ledger — the route grammar drawn as one continuous route:
-   source informs the assumption gate (the only object allowed to branch),
-three equal-weight possible paths carry generated actions in sequence,
-    and a hard break ends the generated run before validation with people. */
-.route-map {
+.flow-strip {
   display: grid;
-  grid-template-columns:
-    minmax(10rem, 0.72fr)
-    clamp(1.5rem, 2.5vw, 3rem)
-    minmax(11rem, 0.85fr)
-    clamp(1.75rem, 3vw, 3.5rem)
-    minmax(24rem, 2.5fr)
-    clamp(2rem, 3vw, 3.25rem)
-    minmax(10rem, 0.72fr);
-  max-width: 104rem;
-  margin: 0 auto;
-  border-top: 1px solid var(--line-dark);
-  border-bottom: 1px solid var(--line-dark);
-}
-
-.route-stage {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  padding: 1.6rem 1.3rem 1.8rem;
-}
-
-.stage-head {
-  display: flex;
-  gap: 0.55rem;
-  align-items: baseline;
-  margin-bottom: 1.4rem;
-}
-
-.stage-index {
-  color: var(--paper-dim);
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  letter-spacing: 0.06em;
-}
-
-.stage-name {
-  color: var(--paper);
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.stage-paths .stage-name {
-  color: var(--signal);
-}
-
-.source-tile {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 1.3rem;
-  background: var(--paper);
-  color: var(--ink);
-  text-align: center;
-}
-
-.source-tile svg {
-  width: 2.6rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-}
-
-.source-tile strong {
-  margin-top: 1rem;
-  font-size: 0.96rem;
-  line-height: 1.25;
-}
-
-.source-tile span {
-  margin-top: 0.45rem;
-  color: var(--ink-muted);
-  font-size: 0.76rem;
-  line-height: 1.45;
-}
-
-/* Trunk connector: source → assumption gate. */
-.route-link {
-  position: relative;
-}
-
-.link-line {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 2px;
-  background: var(--paper-muted);
-  transform: scaleX(0);
-  transform-origin: left;
-  animation: route-draw-x var(--duration-base) var(--ease-out) 120ms forwards;
-}
-
-/* Assumption gate: paper review surface; the red diamond is the only
-   object in the diagram allowed to create a branch. */
-.gate-tile {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  padding: 1.1rem 0.9rem;
-  background: var(--paper);
-  color: var(--ink);
-}
-
-.gate-diamond {
-  position: relative;
-  display: grid;
-  width: 2.6rem;
-  height: 2.6rem;
-  place-items: center;
-  margin: 0.4rem auto 1.1rem;
-  color: var(--signal-deep);
-  font-family: var(--font-display);
-  font-size: 1rem;
-}
-
-.gate-diamond::before {
-  content: "";
-  position: absolute;
-  inset: 0.34rem;
-  border: 2px solid var(--signal);
-  transform: rotate(45deg);
-}
-
-.gate-tile ol {
-  display: grid;
-  margin: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: var(--space-3) 0 0;
   padding: 0;
+  border: 1px solid var(--line-dark);
+  background: var(--line-dark);
   list-style: none;
 }
 
-.gate-tile li {
-  display: grid;
-  grid-template-columns: 1.7rem 1fr;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.7rem 0.1rem;
-  font-size: 0.78rem;
-  line-height: 1.3;
-}
-
-.gate-tile li + li {
-  border-top: 1px solid var(--line-light);
-}
-
-.gate-tile li span {
-  color: var(--ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-}
-
-/* Branch fan: the gate emits three equal-weight lanes. */
-.route-fan {
-  min-width: 0;
-}
-
-.route-fan svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.route-fan path {
-  fill: none;
-  stroke: var(--paper-muted);
-  stroke-width: 2;
-  vector-effect: non-scaling-stroke;
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  animation: route-draw-stroke var(--duration-base) var(--ease-out) 220ms forwards;
-}
-
-.route-fan path:nth-of-type(2) {
-  animation-delay: 280ms;
-}
-
-.route-fan path:nth-of-type(3) {
-  animation-delay: 340ms;
-}
-
-/* Lanes: equal weight, equal color, visible P-## identifiers. */
-.lane {
-  --lane-delay: 420ms;
-  display: grid;
-  flex: 1;
-  grid-template-columns: 3.6rem minmax(0, 1fr);
-  align-items: center;
-  min-height: 4.8rem;
-}
-
-.stage-paths .lane:nth-child(3) {
-  --lane-delay: 480ms;
-}
-
-.stage-paths .lane:nth-child(4) {
-  --lane-delay: 540ms;
-}
-
-.lane-id {
-  color: var(--paper);
-  font-family: var(--font-display);
-  font-size: 1.02rem;
-  letter-spacing: 0.05em;
-}
-
-.lane-track {
-  position: relative;
-  height: 4.6rem;
-  min-width: 0;
-}
-
-.lane-rule {
-  position: absolute;
-  top: 50%;
-  right: 0;
-  left: 0;
-  height: 2px;
-  background: var(--paper);
-  transform: scaleX(0);
-  transform-origin: left;
-  animation: route-draw-x var(--duration-base) var(--ease-out) var(--lane-delay) forwards;
-}
-
-.lane-node {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 30%;
-  transform: translateX(-50%);
-}
-
-.lane-node:nth-of-type(2) {
-  left: 18%;
-}
-
-.lane-node:nth-of-type(3) {
-  left: 50%;
-}
-
-.lane-node:nth-of-type(4) {
-  left: 82%;
-}
-
-.node-mark {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0.85rem;
-  height: 0.85rem;
-  border: 2px solid var(--paper);
-  background: var(--ink);
-  transform: translate(-50%, -50%);
-  opacity: 0;
-  animation: node-in var(--duration-quick) var(--ease-out) forwards;
-}
-
-.lane-node:nth-of-type(2) .node-mark,
-.lane-node:nth-of-type(2) .node-label {
-  animation-delay: calc(var(--lane-delay) + 40ms);
-}
-
-.lane-node:nth-of-type(3) .node-mark,
-.lane-node:nth-of-type(3) .node-label {
-  animation-delay: calc(var(--lane-delay) + 110ms);
-}
-
-.lane-node:nth-of-type(4) .node-mark,
-.lane-node:nth-of-type(4) .node-label {
-  animation-delay: calc(var(--lane-delay) + 180ms);
-}
-
-.node-label {
-  position: absolute;
-  top: calc(50% + 0.8rem);
-  left: 50%;
-  width: max-content;
-  max-width: 7.5rem;
-  color: var(--paper);
-  font-size: 0.7rem;
-  line-height: 1.25;
-  text-align: center;
-  transform: translateX(-50%);
-  opacity: 0;
-  animation: node-in var(--duration-quick) var(--ease-out) forwards;
-}
-
-/* The break: the generated run terminates here. Lanes stop dead at the
-   dashed rule; validation lives on the other side of it. */
-.route-break {
-  position: relative;
+.flow-stage {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.6rem 0 1.8rem;
-}
-
-.break-rule {
-  position: absolute;
-  top: 1.6rem;
-  bottom: 1.8rem;
-  left: 50%;
-  width: 0;
-  border-left: 2px dashed var(--paper-dim);
-  transform: translateX(-50%);
-}
-
-.break-label {
-  position: relative;
-  padding: 0.9rem 0.35rem;
-  background: var(--ink);
-  color: var(--paper-dim);
-  font-family: var(--font-display);
-  font-size: 0.66rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  writing-mode: vertical-rl;
-}
-
-/* Validation tile: the white transfer surface — outside the generated run. */
-.validate-tile {
-  display: flex;
-  flex: 1;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 1.3rem 1.1rem;
-  border: 1px solid var(--ink);
-  background: var(--paper-transfer);
-  color: var(--ink);
-  text-align: center;
+  gap: 0.1rem;
+  padding: var(--space-3);
+  background: var(--ink);
 }
 
-.validate-eyebrow {
-  margin-bottom: 0.9rem;
-  color: var(--ink-muted);
+/* Position and stage name are nouns: display face, at or above 1.25rem, which is
+   where a single-weight condensed all-caps face is still legible. */
+.flow-index {
+  color: var(--attention);
   font-family: var(--font-display);
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 1.25rem;
+  line-height: var(--leading-display);
 }
 
-.validate-tile svg {
-  width: 3.2rem;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
+.flow-name {
+  color: var(--paper);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  line-height: var(--leading-display);
 }
 
-.validate-tile strong {
-  margin-top: 0.9rem;
-  font-size: 0.95rem;
-  line-height: 1.25;
+.flow-detail {
+  margin-top: 0.15rem;
+  color: var(--paper-muted);
+  font-size: 0.78rem;
+  line-height: var(--leading-snug);
+  text-wrap: pretty;
 }
 
-.validate-tile span {
-  margin-top: 0.45rem;
-  color: var(--ink-muted);
+.flow-note {
+  max-width: var(--measure-prose);
+  margin: var(--space-3) 0 0;
+  color: var(--paper-muted);
   font-size: 0.76rem;
-  line-height: 1.45;
+  line-height: var(--leading-snug);
 }
 
-/* Grammar-required legend (route rules 1 and 9). */
-.route-legend {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding: 0.85rem 1.3rem;
+/* ------------------------------------------------------------ the lists -- */
+
+.work-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr));
+  align-items: start;
   border-top: 1px solid var(--line-dark);
-  color: var(--paper-dim);
-  font-family: var(--font-display);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-@keyframes route-draw-x {
-  to {
-    transform: scaleX(1);
-  }
-}
-
-@keyframes route-draw-y {
-  to {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes route-draw-stroke {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes node-in {
-  to {
-    opacity: 1;
-  }
-}
-
-/* The method section's route-map draw-in is a scroll-triggered one-shot, not a
-   mount autoplay. Pausing the signature animations here holds each child at its
-   base (pre-) state (opacity:0, transform:scaleX/Y(0), stroke-dashoffset:100)
-   while hidden; when the IntersectionObserver bound to `routeMap` in <script
-   setup> adds `.is-revealed`, the `--route-play` custom property flips to
-   `running` and the designed delay ladder plays once, settling on `forwards`.
-   One selector list drives both states so they cannot drift. The superset
-   matches the prefers-reduced-motion reset set (minus the independent loading
-   skeletons) so both layouts (desktop horizontal, mobile vertical) are gated;
-   play-state is a no-op on elements that have no animation in a given layout.
-   `:where()` keeps specificity 0 so this can't fight the animation declarations
-   above or the reduced-motion block below. */
-.route-map
-  :where(
-    .link-line,
-    .lane-rule,
-    .lane-track::before,
-    .route-fan path,
-    .route-fan::after,
-    .node-mark,
-    .node-label
-  ) {
-  animation-play-state: var(--route-play, paused);
-}
-.route-map.is-revealed {
-  --route-play: running;
 }
 
 .runs-section {
-  padding: clamp(3.5rem, 7vw, 7.5rem) clamp(1rem, 3.4vw, 4rem);
+  padding: var(--space-5);
   background: var(--paper);
   color: var(--ink);
 }
 
-.section-heading.light > p {
-  color: var(--signal-text);
+.templates-section {
+  padding: var(--space-5);
+  border-left: 1px solid var(--line-dark);
+  background: var(--ink);
+  color: var(--paper);
 }
 
-.section-heading.light h2 {
-  color: var(--ink);
+.templates-section .section-note {
+  color: var(--paper-muted);
 }
 
-.section-heading.light > span {
-  color: var(--ink-muted);
-}
-
-.run-list,
-.run-skeletons,
-.inline-state,
-.template-list,
-.template-skeletons {
-  max-width: 104rem;
-  margin-right: auto;
-  margin-left: auto;
+/* The region carries the busy state; the skeleton inside it is decorative and
+   aria-hidden, and completion is announced by the visually-hidden live region.
+   No focusable control lives inside a skeleton. */
+.list-region {
+  margin-top: var(--space-3);
 }
 
 .run-list {
-  margin-top: 0;
+  margin: 0;
   padding: 0;
   border-top: 2px solid var(--ink);
   list-style: none;
@@ -2026,34 +1614,41 @@ three equal-weight possible paths carry generated actions in sequence,
 
 .run-list button {
   display: grid;
-  grid-template-columns: 4rem minmax(0, 1fr) minmax(8rem, auto) 2rem;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto 1.25rem;
   align-items: center;
-  gap: 1.2rem;
+  gap: var(--space-3);
   width: 100%;
-  min-height: 7.5rem;
-  padding: 1.2rem 1rem;
-  margin: 0.5rem 0;
+  min-height: var(--control-h-lg);
+  padding: var(--space-3) var(--space-2);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: var(--ink);
   text-align: left;
-  transition: all 200ms ease;
 }
 
 .run-list button:hover {
-  background: var(--paper-strong);
   border-color: var(--line-light);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.05);
+  background: var(--paper-strong);
+  color: var(--ink);
 }
 
 .run-index,
 .template-number,
 .state-index {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.run-index,
+.state-index {
   color: var(--ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+}
+
+.template-number {
+  color: var(--paper-dim);
 }
 
 .run-main {
@@ -2065,25 +1660,33 @@ three equal-weight possible paths carry generated actions in sequence,
   display: block;
 }
 
+/* A run title is long-form generated copy: text face at a readable measure and
+   clamped to two lines, never a poster-sized display line. */
 .run-main strong {
+  display: -webkit-box;
   overflow: hidden;
-  font-family: var(--font-display);
-  font-size: clamp(1.4rem, 2.3vw, 2.7rem);
-  line-height: 1;
+  max-width: var(--measure-prose);
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: var(--leading-snug);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .run-main span {
-  margin-top: 0.45rem;
+  margin-top: 0.2rem;
   color: var(--ink-muted);
   font-size: 0.74rem;
+  line-height: var(--leading-snug);
 }
 
 .run-status {
   color: var(--ink-muted);
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 /* `.run-main span` is display:block, so the branch marker is nested inside the
@@ -2091,13 +1694,13 @@ three equal-weight possible paths carry generated actions in sequence,
    taller. */
 .run-branch {
   display: inline !important;
-  margin-left: 0.5rem;
-  padding: 0.1rem 0.4rem;
+  margin-left: var(--space-2);
+  padding: 0.05rem 0.35rem;
   border: 1px solid var(--line-light);
-  border-radius: 3px;
-  font-family: var(--font-mono);
+  color: var(--ink-muted);
+  font-family: var(--font-sans);
   font-size: 0.66rem;
-  letter-spacing: 0.04em;
+  font-weight: 700;
   white-space: nowrap;
 }
 
@@ -2108,25 +1711,52 @@ three equal-weight possible paths carry generated actions in sequence,
   background: var(--line-light);
 }
 
+.template-skeletons {
+  background: var(--line-dark);
+}
+
 .run-skeleton,
 .template-skeleton {
-  min-height: 7rem;
+  min-height: 3.75rem;
   background:
-    linear-gradient(90deg, transparent, rgba(242, 235, 221, 0.62), transparent),
+    linear-gradient(90deg, transparent, rgba(242, 235, 221, 0.55), transparent),
     var(--paper-strong);
   background-size: 50% 100%;
   animation: skeleton-pass 1.4s ease-in-out infinite;
 }
 
+.template-skeleton {
+  background:
+    linear-gradient(90deg, transparent, rgba(242, 235, 221, 0.14), transparent),
+    var(--ink-soft);
+  background-size: 50% 100%;
+}
+
+@keyframes skeleton-pass {
+  from {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
 .inline-state {
   display: grid;
-  grid-template-columns: 4rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 1.2rem;
-  min-height: 9rem;
-  padding: 1.5rem;
+  gap: var(--space-3);
+  min-height: 5.5rem;
+  padding: var(--space-3);
   border-top: 2px solid var(--ink);
   border-bottom: 1px solid var(--line-light);
+}
+
+/* The bare variant carries no index cell, so its own lines take the full row
+   instead of landing in a column reserved for one. */
+.inline-state > strong,
+.inline-state > span:not(.state-index) {
+  grid-column: 1 / -1;
 }
 
 .inline-state > div strong,
@@ -2137,18 +1767,21 @@ three equal-weight possible paths carry generated actions in sequence,
 }
 
 .inline-state span {
-  margin-top: 0.3rem;
+  margin-top: 0.2rem;
   color: var(--ink-muted);
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  line-height: var(--leading-snug);
 }
 
 .inline-state button {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--paper);
+  font-size: 0.76rem;
 }
 
 .inline-state button:hover {
+  border-color: var(--signal);
   background: var(--signal);
   color: var(--ink);
 }
@@ -2159,39 +1792,34 @@ three equal-weight possible paths carry generated actions in sequence,
 
 .template-list {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.65fr);
+  grid-template-columns: minmax(0, 1fr);
   border-top: 1px solid var(--line-dark);
 }
 
 .template-list button {
   display: grid;
-  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
   align-items: center;
-  gap: 1rem;
-  min-height: 8rem;
-  padding: 1.35rem;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--control-h-lg);
+  padding: var(--space-3) var(--space-2);
   border: 0;
-  border-right: 1px solid var(--line-dark);
   border-bottom: 1px solid var(--line-dark);
+  border-radius: 0;
   background: transparent;
   color: var(--paper);
   text-align: left;
 }
 
-.template-list button:nth-child(4n + 2),
-.template-list button:nth-child(4n + 3) {
-  grid-column: auto;
-}
-
 .template-list button:hover {
-  border-color: var(--signal);
+  border-bottom-color: var(--signal);
   background: var(--signal-faint);
   color: var(--paper);
 }
 
-.template-list button:hover .template-number,
-.template-list button:hover .template-copy span {
-  color: var(--ink-muted);
+.template-copy {
+  min-width: 0;
 }
 
 .template-copy strong,
@@ -2200,28 +1828,29 @@ three equal-weight possible paths carry generated actions in sequence,
 }
 
 .template-copy strong {
-  font-family: var(--font-display);
-  font-size: clamp(1.3rem, 2vw, 2rem);
-  line-height: 1;
+  font-family: var(--font-sans);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: var(--leading-snug);
 }
 
+/* Starter descriptions are long-form copy: text face, relaxed leading, and a
+   readable measure. `.u-prose` carries the measure. */
 .template-copy span {
-  max-width: 48ch;
-  margin-top: 0.45rem;
+  margin-top: 0.1rem;
   color: var(--paper-muted);
-  font-size: 0.75rem;
-  line-height: 1.45;
-}
-
-.template-number {
-  color: var(--paper-dim);
+  font-size: 0.76rem;
+  line-height: var(--leading-relaxed);
+  text-wrap: pretty;
 }
 
 .template-use {
   color: var(--signal);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .dark-state {
@@ -2239,65 +1868,45 @@ three equal-weight possible paths carry generated actions in sequence,
   color: var(--ink);
 }
 
-.signal-footer {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-  padding: 2.5rem clamp(1rem, 3.4vw, 4rem);
+/* ---------------------------------------------------------- reference -- */
+
+.reference-band {
+  padding: var(--space-5);
   border-top: 1px solid var(--line-dark);
-  background: var(--ink);
+  background: var(--ink-deep);
 }
 
-.footer-statement,
-.footer-disclosure {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  color: var(--paper-muted);
-  font-size: 0.76rem;
-  line-height: 1.5;
+.reference-band .section-title {
+  color: var(--paper);
 }
 
-.footer-statement strong {
-  color: var(--signal);
-  font-family: var(--font-display);
-  font-size: 1.3rem;
-  letter-spacing: 0.035em;
+.reference-band .section-note {
+  color: var(--paper-dim);
 }
 
-.footer-disclosure {
-  align-items: flex-end;
-  text-align: right;
-}
-
-@keyframes skeleton-pass {
-  from {
-    background-position: -100% 0;
-  }
-  to {
-    background-position: 200% 0;
-  }
-}
-
+/* Route grammar is reference material, so it is quiet, last, and off the flow
+   path. The codes stay legible as tokens on a light chip. */
 .route-grammar-legend {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.55rem 0.85rem;
-  margin-top: 0.75rem;
-  padding: 0.55rem 0.7rem;
-  border: 1px solid var(--line-light);
-  background: var(--paper-transfer);
-  color: var(--ink);
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line-dark);
+  background: var(--ink-soft);
+  color: var(--paper-muted);
   font-family: var(--font-sans);
   font-size: 0.72rem;
-  line-height: 1.35;
+  line-height: var(--leading-snug);
 }
 
+/* A legend label is read to look something up, so it is text face. */
 .grammar-label {
-  font-family: var(--font-display);
-  font-size: 0.72rem;
-  letter-spacing: 0.035em;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -2305,538 +1914,140 @@ three equal-weight possible paths carry generated actions in sequence,
 .grammar-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.15rem 0.35rem;
+  gap: 0.15rem 0.3rem;
 }
 
 .grammar-item {
   display: inline-flex;
   align-items: center;
   gap: 0.15rem;
-  padding: 0.08rem 0.35rem;
+  padding: 0.1rem 0.35rem;
   border: 1px solid var(--line-dark);
   background: var(--paper);
   color: var(--ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
-.grammar-item:hover {
-  border-color: var(--signal);
-  color: var(--signal-deep);
-}
-
 .grammar-note {
   margin-left: auto;
-  color: var(--ink-muted);
-  font-size: 0.62rem;
+  color: var(--paper-muted);
+  font-size: 0.7rem;
   font-style: italic;
   white-space: nowrap;
 }
 
-@media (max-width: 767px) {
-  .route-grammar-legend {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.35rem;
+/* ------------------------------------------------------------- footer -- */
+
+.signal-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  border-top: 1px solid var(--line-dark);
+  background: var(--ink-deep);
+}
+
+.footer-statement,
+.footer-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: var(--measure-prose);
+  color: var(--paper-muted);
+  font-size: 0.74rem;
+  line-height: var(--leading-snug);
+}
+
+.footer-statement strong {
+  color: var(--signal);
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  letter-spacing: 0.03em;
+}
+
+.footer-disclosure {
+  text-align: right;
+}
+
+/* ------------------------------------------------------------ narrow -- */
+
+@media (max-width: 900px) {
+  .signal-masthead {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
   }
+
+  .masthead-tools {
+    justify-content: space-between;
+  }
+
+  .flow-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .templates-section {
+    border-top: 1px solid var(--line-dark);
+    border-left: 0;
+  }
+
+  .decision-details-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .reference-band,
+  .decision-section,
+  .runs-section,
+  .templates-section,
+  .method-section,
+  .signal-footer {
+    padding: var(--space-4);
+  }
+}
+
+@media (max-width: 560px) {
+  .masthead-disclosure {
+    white-space: normal;
+  }
+
+  .composer-action .primary-action {
+    width: 100%;
+  }
+
+  .run-list button,
+  .template-list button {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .run-list button > .run-status,
+  .run-list button > svg {
+    display: none;
+  }
+
+  .template-list button > .template-use {
+    grid-column: 2;
+  }
+
   .grammar-note {
     margin-left: 0;
   }
 }
 
-@media (max-width: 1050px) {
-  .signal-masthead {
-    grid-template-columns: minmax(12rem, 16rem) 1fr;
-    grid-template-areas:
-      "brand copy"
-      "brand disclosure"
-      "nav nav";
+@media (prefers-contrast: more) {
+  .grammar-item,
+  .disclosure-count,
+  .readiness-badge,
+  .preset-button,
+  .source-files,
+  .url-ingestion {
+    border-color: var(--line-strong);
   }
-
-  .masthead-disclosure {
-    align-self: center;
-    padding: 0 2rem 1rem;
-  }
-
-  .decision-composer {
-    grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.6fr);
-  }
-
-  .composer-action {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: minmax(14rem, 0.4fr) 1fr;
-    align-items: center;
-    gap: 1.2rem;
-    border-top: 1px solid var(--line-light);
-    border-left: 0;
-  }
-
-  .composer-action .primary-action {
-    grid-row: 1 / span 2;
-  }
-
-  .composer-action .use-policy-ack,
-  .composer-action p {
-    grid-column: 2;
-    margin: 0;
-  }
-
-  /* The route reflows vertically: source ↓ gate ↓ lanes ↓ break ↓ validate. */
-  .route-map {
-    display: block;
-  }
-
-  .route-stage {
-    padding: 1.4rem 0;
-  }
-
-  .stage-head {
-    margin-bottom: 1rem;
-  }
-
-  .route-link {
-    height: 2.2rem;
-  }
-
-  .link-line {
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    right: auto;
-    width: 2px;
-    height: auto;
-    transform: scaleY(0);
-    transform-origin: top;
-    animation-name: route-draw-y;
-  }
-
-  .route-fan {
-    height: 2.2rem;
-  }
-
-  .route-fan svg {
-    display: none;
-  }
-
-  .route-fan::after {
-    content: "";
-    display: block;
-    width: 2px;
-    height: 100%;
-    margin: 0 auto;
-    background: var(--paper-muted);
-    transform: scaleY(0);
-    transform-origin: top;
-    animation: route-draw-y var(--duration-base) var(--ease-out) 180ms forwards;
-  }
-
-  .lane {
-    grid-template-columns: 3.2rem minmax(0, 1fr);
-    min-height: 0;
-    padding: 0.3rem 0;
-  }
-
-  .lane-track {
-    height: auto;
-  }
-
-  .lane-rule {
-    display: none;
-  }
-
-  .lane-track::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: calc(0.375rem - 1px);
-    width: 2px;
-    background: var(--paper);
-    transform: scaleY(0);
-    transform-origin: top;
-    animation: route-draw-y var(--duration-base) var(--ease-out) var(--lane-delay) forwards;
-  }
-
-  .lane-node,
-  .lane-node:nth-of-type(2),
-  .lane-node:nth-of-type(3),
-  .lane-node:nth-of-type(4) {
-    position: relative;
-    top: auto;
-    bottom: auto;
-    left: auto;
-    width: auto;
-    padding: 0.42rem 0 0.42rem 1.5rem;
-    transform: none;
-  }
-
-  .node-mark {
-    top: 0.55rem;
-    left: 0;
-    width: 0.75rem;
-    height: 0.75rem;
-    transform: none;
-  }
-
-  .node-label {
-    position: static;
-    max-width: none;
-    text-align: left;
-    transform: none;
-  }
-
-  .route-break {
-    padding: 1.2rem 0 1.4rem;
-  }
-
-  .break-rule {
-    top: 0.6rem;
-    bottom: auto;
-    left: 0;
-    width: auto;
-    height: 0;
-    border-left: 0;
-    border-top: 2px dashed var(--paper-dim);
-    transform: none;
-  }
-
-  .break-label {
-    padding: 0.8rem 0 0;
-    background: none;
-    writing-mode: horizontal-tb;
-  }
-
-  .validate-tile {
-    flex-direction: row;
-    gap: 1.1rem;
-    padding: 1.1rem 1.2rem;
-    text-align: left;
-  }
-
-  .validate-tile svg {
-    width: 2.6rem;
-    flex: 0 0 auto;
-  }
-
-  .validate-eyebrow {
-    display: none;
-  }
-
-  .validate-tile strong,
-  .validate-tile span {
-    display: block;
-    margin: 0;
-  }
-}
-
-@media (max-width: 767px) {
-  .signal-masthead {
-    display: block;
-    min-height: 0;
-  }
-
-  .brand-block {
-    width: 100%;
-    min-height: 5.75rem;
-    padding: 0.8rem 1rem;
-    font-size: 3.15rem;
-  }
-
-  .brand-block::after {
-    right: -2rem;
-  }
-
-  .masthead-copy {
-    padding: 1rem 1rem 0.65rem;
-  }
-
-  .masthead-kicker {
-    margin-bottom: 0.3rem;
-    font-size: 0.75rem;
-  }
-
-  .masthead-copy h1 {
-    font-size: clamp(2.75rem, 13vw, 3.65rem);
-  }
-
-  .masthead-summary {
-    margin-top: 0.5rem;
-    font-size: 0.84rem;
-    line-height: 1.35;
-  }
-
-  .masthead-disclosure {
-    padding: 0 1rem 0.8rem;
-    font-size: 0.72rem;
-    white-space: normal;
-  }
-
-  .signal-nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    padding: 0;
-    border-top: 1px solid var(--line-dark);
-    min-height: 0;
-  }
-
-  .nav-tab {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0;
-    min-height: 2.55rem;
-    padding: 0.55rem 0.3rem;
-    font-size: 0.72rem;
-    line-height: 1.1;
-    text-align: center;
-  }
-
-  .nav-tab.active {
-    display: inline-flex;
-    margin: 0;
-    min-height: 2.55rem;
-    padding: 0.55rem 0.3rem;
-  }
-
-  .settings-button {
-    grid-column: 1 / -1;
-    justify-content: center;
-    margin: 0;
-    min-height: 2.35rem;
-    padding: 0.45rem 1rem;
-    border-top: 1px solid var(--line-dark);
-  }
-
-  .decision-section {
-    padding: 0;
-  }
-
-  .decision-composer {
-    display: block;
-  }
-
-  .question-field {
-    padding: 1rem;
-    border-right: 0;
-  }
-
-  .question-field textarea {
-    min-height: 4rem;
-    font-size: 2.05rem !important;
-  }
-
-  .decision-details-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .decision-details-grid textarea {
-    font-size: 0.78rem !important;
-  }
-
-  .source-material {
-    padding: 0.75rem 1rem;
-    border-right: 0;
-    border-left: 0;
-  }
-
-  .source-dropzone {
-    min-height: 5.4rem;
-    padding: 0.8rem;
-  }
-
-  .composer-action {
-    display: block;
-    padding: 0.75rem 1rem 1rem;
-  }
-
-  .composer-action .use-policy-ack,
-  .composer-action p {
-    margin-top: 0.8rem;
-  }
-
-  .primary-action {
-    width: 100%;
-    min-height: 3.5rem;
-  }
-
-  .section-heading {
-    display: block;
-    margin-bottom: 2rem;
-  }
-
-  .section-heading h2 {
-    margin-top: 0.75rem;
-    font-size: 3rem;
-  }
-
-  .section-heading > span {
-    display: block;
-    margin-top: 1rem;
-  }
-
-  .route-stage {
-    padding: 1.2rem 0;
-  }
-
-  .source-tile,
-  .validate-tile {
-    min-height: 8.5rem;
-  }
-
-  .lane {
-    grid-template-columns: 2.9rem minmax(0, 1fr);
-  }
-
-  .node-label {
-    font-size: 0.72rem;
-  }
-
-  .route-legend {
-    padding: 0.8rem 0.4rem;
-    letter-spacing: 0.05em;
-  }
-
-  .run-list button {
-    grid-template-columns: 2.5rem minmax(0, 1fr) 1.5rem;
-    min-height: 6.3rem;
-    gap: 0.65rem;
-  }
-
-  .run-status {
-    display: none;
-  }
-
-  .run-main strong {
-    white-space: normal;
-  }
-
-  .inline-state {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .template-list {
-    display: block;
-  }
-
-  .template-list button {
-    grid-template-columns: 2rem minmax(0, 1fr);
-    width: 100%;
-    min-height: 7rem;
-    border-right: 0;
-  }
-
-  .template-use {
-    display: none;
-  }
-
-  .signal-footer {
-    grid-template-columns: 1fr;
-  }
-
-  .footer-disclosure {
-    align-items: flex-start;
-    text-align: left;
-  }
-}
-
-/* Quick Starts & Readiness Badge Styles */
-.composer-header-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 0.6rem;
-}
-
-.readiness-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.25rem 0.65rem;
-  border: 1px solid var(--line-dark);
-  background: var(--ink-deep);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  transition: all var(--duration-quick) var(--ease-quick);
-}
-
-.readiness-dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--paper-dim);
-}
-
-.readiness-badge.level-high {
-  border-color: var(--success);
-  color: var(--paper-strong);
-}
-.readiness-badge.level-high .readiness-dot {
-  background: var(--success);
-}
-
-.readiness-badge.level-medium {
-  border-color: var(--signal);
-  color: var(--paper-strong);
-}
-.readiness-badge.level-medium .readiness-dot {
-  background: var(--signal);
-}
-
-.readiness-badge.level-low {
-  border-color: var(--line-dark);
-  color: var(--paper-muted);
-}
-
-.archetype-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.9rem;
-}
-
-.chips-label {
-  color: var(--ink-muted);
-  font-family: var(--font-display);
-  font-size: 0.76rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.archetype-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--line-dark);
-  background: var(--ink-soft);
-  color: var(--paper);
-  font-family: var(--font-sans);
-  font-size: 0.78rem;
-  font-weight: 550;
-  cursor: pointer;
-  transition: all var(--duration-quick) var(--ease-quick);
-}
-
-.archetype-chip:hover {
-  border-color: var(--signal);
-  background: var(--signal-tint);
-  color: var(--paper-strong);
-  transform: translateY(-1px);
-}
-
-.chip-icon {
-  color: var(--attention);
-  font-family: var(--font-display);
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2844,28 +2055,9 @@ three equal-weight possible paths carry generated actions in sequence,
     scroll-behavior: auto;
   }
 
-  .link-line,
-  .lane-rule,
-  .lane-track::before,
-  .route-fan::after,
   .run-skeleton,
   .template-skeleton {
     animation: none;
-    transform: none;
-  }
-
-  .route-fan path {
-    animation: none;
-    stroke-dashoffset: 0;
-  }
-
-  .node-mark,
-  .node-label {
-    animation: none;
-    opacity: 1;
   }
 }
 </style>
-
-
-

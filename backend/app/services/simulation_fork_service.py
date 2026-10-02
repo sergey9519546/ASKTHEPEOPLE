@@ -146,16 +146,17 @@ def _truncate_observations(new_dir: str, target_turn: int) -> None:
                 try:
                     cursor.execute(f"DELETE FROM {table} WHERE round_num > ?", (target_turn,))
                 except sqlite3.OperationalError:
-                    pass
+                    pass  # this platform DB has no such table; per-table tolerance is deliberate, the other tables are still truncated
             conn.commit()
 
     # 4. Truncate OASIS trace databases (if they store round info or if we just want to keep them as is and OASIS will append)
     # The OASIS trace DB doesn't have round_num natively, so we might need to rely on the fact that
     # run_parallel_simulation tracks rowid in run_state.json. If we rolled back run_state,
     # the runner might re-process some trace elements, but to actually prevent future actions from leaking:
-    for platform in ["twitter", "reddit"]:
-        plat_db = os.path.join(new_dir, f"{platform}_simulation.db")
-        if os.path.exists(plat_db):
-            # We cannot easily truncate OASIS traces by round_num since it only has created_at
-            # We will rely on OASIS being re-initialized from the new state.
-            pass
+    # ACCEPTED GAP (recorded, not hidden): OASIS per-round traces cannot be
+    # truncated, because that table only carries created_at. They are left in
+    # place and relied upon to be re-initialized from the new state. This was
+    # previously an `if os.path.exists(plat_db): pass` loop over both platform
+    # databases -- a branch whose body did nothing, so the condition had no
+    # effect and the gap was documented only in a comment no code path reached.
+    # Removing the dead branch is behaviour-neutral.

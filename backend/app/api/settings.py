@@ -219,7 +219,7 @@ def _persist_settings(settings: dict[str, str]) -> None:
         try:
             os.chmod(temp_path, 0o600)
         except OSError:
-            pass
+            pass  # best-effort 0600 tightening; os.replace is still atomic, so a filesystem that refuses chmod only leaves wider permissions
         os.replace(temp_path, env_path)
     finally:
         if os.path.exists(temp_path):

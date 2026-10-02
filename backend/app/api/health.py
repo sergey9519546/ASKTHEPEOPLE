@@ -219,7 +219,7 @@ def health():
     try:
         os.makedirs(upload_folder, exist_ok=True)
     except (OSError, PermissionError):
-        pass
+        pass  # mkdir failed; fall through - an unwritable or uncreatable folder is reported by the os.access check below
 
     storage_writable = os.path.isdir(upload_folder) and os.access(
         upload_folder,
@@ -262,7 +262,7 @@ def readiness():
     try:
         os.makedirs(upload_folder, exist_ok=True)
     except (OSError, PermissionError):
-        pass
+        pass  # mkdir failed; fall through - an unwritable or uncreatable folder is reported by the os.access check below
 
     storage_writable = os.path.isdir(upload_folder) and os.access(
         upload_folder,

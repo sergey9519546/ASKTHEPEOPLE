@@ -14,6 +14,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+import sqlite3
+
 from ..utils.logger import get_logger
 
 logger = get_logger("askthepeople.follower_engine")
@@ -295,30 +297,41 @@ def apply_follower_round_in_proc(
         followers, round_actions, round_num, platform, max_actions=max_actions
     )
     
-    written = 0
+    # The tolerant scope covers ONLY the per-table inserts, for the documented
+    # reason: platform variants carry slightly different schemas, so a missing
+    # or mismatched column is expected and must not abort the run.
+    #
+    # Commit sits deliberately outside it, and the counter is only published
+    # after commit succeeds. The previous version incremented `written` inside
+    # the loop and then swallowed `except Exception` across the `commit()` as
+    # well, so a commit-time failure, a constraint violation, or a lock timeout
+    # all returned a non-zero row count for rows that never reached disk. That
+    # is the one failure a caller cannot detect: it looks like success.
+    applied = 0
     try:
         cursor = db_conn.cursor()
         for act in follower_actions:
             atype = act.get("action_type")
             aargs = act.get("action_args") or {}
-            
+
             if atype == "LIKE_POST" and ("tweet_id" in aargs or "post_id" in aargs):
                 pid = aargs.get("tweet_id") or aargs.get("post_id")
                 cursor.execute(
                     "INSERT OR IGNORE INTO likes (user_id, post_id, created_at) VALUES (?, ?, ?)",
                     (act["agent_id"], pid, act["timestamp"])
                 )
-                written += 1
+                applied += 1
             elif atype == "REPOST" and "tweet_id" in aargs:
                 cursor.execute(
                     "INSERT OR IGNORE INTO reposts (user_id, tweet_id, created_at) VALUES (?, ?, ?)",
                     (act["agent_id"], aargs["tweet_id"], act["timestamp"])
                 )
-                written += 1
-        db_conn.commit()
-    except Exception:
-        # Ignore if tables differ slightly between platforms
-        pass
+                applied += 1
+    except sqlite3.OperationalError:
+        # Schema mismatch between platform variants. Nothing is committed, so
+        # report zero rather than a count for a write that did not land.
+        return 0
 
-    return written
+    db_conn.commit()
+    return applied
 

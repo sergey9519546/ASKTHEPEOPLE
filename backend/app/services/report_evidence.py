@@ -74,7 +74,7 @@ def _connect(path: str) -> sqlite3.Connection:
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
     except sqlite3.Error:
-        pass
+        pass  # WAL is an optimisation; a filesystem that refuses it still reads correctly
     return conn
 
 

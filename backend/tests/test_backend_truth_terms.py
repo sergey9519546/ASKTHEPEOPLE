@@ -52,14 +52,6 @@ FRONTEND_LINTER = REPO_ROOT / "tools" / "lint_frontend_truth.mjs"
 
 # Files whose every match was reviewed on 2026-10-02. Value = the reason.
 ALLOWED_FILES: dict[str, str] = {
-    # 1. Dead theta-optimization island, already DO-NOT-WIRE'd — the island
-    # was deleted in its entirety by ADR-0014 on 2026-10-02 (learning_loop,
-    # multi_objective_loss, theta_optimizer, baseline_library,
-    # outcome_fetcher, first_backtest, hybrid_simulator). The 61 hits it
-    # produced no longer exist, so the allowance has nothing to allow.
-    "app/services/calibration_metrics.py": "dead island: Brier/ECE scoring; publishing these would assert calibration",
-    "app/services/constraint_engine.py": "dead island: no production importer",
-    "app/services/game_theory.py": "dead island: Nash-equilibrium maths; no production importer",
     # 2. Disclosure schema: the field names ARE the truth contract.
     "app/services/claim_boundary.py": "disclosure constant; 'calibration' is the 'NOT CALIBRATED' value",
     "app/services/export_service.py": "CSV column names carrying the disclosure",

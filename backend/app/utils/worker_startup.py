@@ -133,7 +133,7 @@ def publish_worker_ready_marker(
         try:
             temporary_path.unlink()
         except FileNotFoundError:
-            pass
+            pass  # temp file already consumed by os.replace or never created
 
 
 def clear_worker_ready_marker(environment: Mapping[str, object]) -> bool:

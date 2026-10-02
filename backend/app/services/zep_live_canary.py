@@ -482,7 +482,7 @@ def _release_lock(redis_client, token: str) -> None:
     try:
         redis_client.eval(script, 1, LOCK_KEY, token)
     except Exception:
-        pass
+        pass  # the lock has a TTL; a failed release must not mask the call that requested it
 
 
 def _safe_read(
@@ -617,7 +617,7 @@ def _cleanup_graph(
     except Exception:
         # Delete acknowledgement is ambiguous. Never replay the mutation; only
         # confirm absence until the bounded cleanup deadline.
-        pass
+        pass  # the bounded confirmation loop below decides the outcome, never the delete call itself
 
     while monotonic() <= deadline:
         try:

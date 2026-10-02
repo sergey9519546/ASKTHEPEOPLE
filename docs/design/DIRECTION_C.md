@@ -1,9 +1,9 @@
 ---
 title: "Design Direction C — Civic Wayfinding"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Product Design + Content Design + Accessibility"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-10-02"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -627,6 +627,7 @@ Motion communicates sequence only. It must never imply probability, urgency, int
 
 
 ---
+
 ## Component design contract
 
 Every component family MUST define:
@@ -703,7 +704,7 @@ Status legend: **CURRENT** = implemented and verified in the tree.
   covered by the same disclosure with no duplication or drift.
 - Emphasis: the rail's fact labels use the attention accent —
   `.truth-rail-text strong { color: var(--attention) }`
-  (`frontend/src/components/TruthRail.vue:64-65`).
+  (`frontend/src/components/TruthRail.vue:64`).
 
 ### D2 — Masthead: a two-level system
 
@@ -715,18 +716,20 @@ Status legend: **CURRENT** = implemented and verified in the tree.
     brand + descriptor, workspace label, commands, and the standing
     `GENERATED · NOT A FORECAST` marker. This is the only masthead above
     the desktop chrome.
-  - **In-window masthead** (State the decision) — the compact three-column
-    grid: `grid-template-areas: "brand copy disclosure" / "brand nav nav"`,
-    `min-height: 10.5rem` (`frontend/src/views/Home.vue:944-952`), with a
-    3.2rem nav rail and 2.6rem nav tabs
-    (`frontend/src/views/Home.vue:1070,1076,1093`).
+  - **In-window masthead** (State the decision) — a compact two-band grid in
+    `frontend/src/views/Home.vue`, `.signal-masthead`. The previous
+    three-column `grid-template-areas: "brand copy disclosure" / "brand nav nav"`
+    layout with a `min-height: 10.5rem` and a 3.2rem nav rail was superseded
+    when the entry view was rebuilt decision-first in October 2026; the cited
+    line numbers no longer resolve and are deliberately not restated here. See
+    [`UX_REDESIGN_2026.md`](UX_REDESIGN_2026.md).
   - The 16rem stacked masthead is discontinued.
 
 ### D3 — Badges: neutral field, semantic tint, red only on active
 
 - Divergence: the original badges were solid signal-red fields; the restyle
   made badges status marks, not CTAs.
-- Resolution (`frontend/src/components/Step1GraphBuild.vue:523-544`):
+- Resolution (`frontend/src/components/Step1GraphBuild.vue:627-646`):
   - `success` → attention tint;
   - `processing` → signal tint (the **only** red badge state);
   - `accent` → violet tint;
@@ -742,38 +745,151 @@ Status legend: **CURRENT** = implemented and verified in the tree.
   full brand field:
   - Brand fields are ink: `.app-process-root > .app-header > .header-left`
     uses `background: var(--ink-deep)` with a 4px red left edge
-    (`frontend/src/assets/design-tokens.css:474-480`); `.wb-label` is paper
-    (`frontend/src/assets/design-tokens.css:656`); `run-brand` is ink-deep
-    with a 4px red edge (`frontend/src/views/SimulationRunView.vue:407-416`);
-    `brand-monogram` is ink-deep with a red outline
-    (`frontend/src/views/InteractionView.vue:405-406`); `settings-index` is
-    ink-deep with a 4px red right edge
+    (`frontend/src/assets/design-tokens.css:547-560`, the edge at `:557`);
+    `.wb-label` is paper (`frontend/src/assets/design-tokens.css:741-748`);
+    `settings-index` is ink-deep with a 4px red right edge
     (`frontend/src/components/SettingsModal.vue:640`).
+  - **The per-view `run-brand` and `brand-monogram` blocks are gone.** Those
+    classes no longer exist anywhere under `frontend/src/`. The design rule they
+    expressed is now stated once, in the shared header:
+    `.header-left` carries `border-left: var(--edge-wayfinding) solid
+    var(--signal)` over an ink field
+    (`frontend/src/components/ViewHeader.vue`, `.view-header .header-left`),
+    and the shell lockup does the same
+    (`frontend/src/components/DesktopMasthead.vue`, `.masthead-lockup`).
   - Hover fills are neutral: `button:hover` uses `--line-strong` /
     `--bg-hover` with paper text, not red
-    (`frontend/src/assets/design-tokens.css:271-276`); template hover uses
-    `--signal-faint` (`frontend/src/views/Home.vue`).
+    (`frontend/src/assets/design-tokens.css:342-347`).
   - Status overlays are paper with a red outline and a hard offset shadow:
     `.status-overlay-hint` / `.completion-hint`
-    (`frontend/src/components/GraphPanel.vue:678,693`).
+    (`frontend/src/components/GraphPanel.vue:681,696`).
   - Surfaces keep ink borders and a black hard-offset shadow:
     `.modal-container` / `.modal-content` / `.crash-banner` /
-    `.access-gate-card` (`frontend/src/assets/design-tokens.css:863-870`).
-  - Attention boundaries keep red as a top edge on ink or the
-    paper-transfer field: `.meaning-boundary`
-    (`frontend/src/components/Step3RunWayfinder.vue:999`);
-    `.question-composer` (`frontend/src/components/Step5Interaction.vue:2423-2426`);
+    `.access-gate-card` (`frontend/src/assets/design-tokens.css:953-962`).
+  - Attention boundaries keep red as a boundary edge on ink: `.meaning-boundary`
+    (`frontend/src/components/Step3RunWayfinder.vue:1052`);
+    `.question-composer` (`frontend/src/components/Step5Interaction.vue:2424-2429`);
     NotFound aside (`frontend/src/views/NotFoundView.vue:49-58`).
 
 ### D5 — The desktop shell is the canonical workspace surface
 
 The persistent desktop shell (`frontend/src/components/DesktopShell.vue`)
-hosts the masthead, the journey step-spine launcher, draggable/tileable
-step windows, the taskbar, and a session that restores open windows and
-preserves deep links on refresh. Step views render **inside** windows; the
-shell chrome (masthead, dock, taskbar) is the only chrome above them. See
-the "Project-specific design status" section below for the full
-CURRENT / PARTIAL / TARGET state.
+hosts the masthead, the journey spine, the step windows, the panel switcher,
+and a session that restores open windows and preserves deep links on refresh.
+Step views render **inside** windows; the shell chrome (masthead, spine,
+switcher) is the only chrome above them. The window layout vocabulary is
+resolved by D7. See the "Project-specific design status" section below for
+the full CURRENT / PARTIAL / TARGET state.
+
+### D6 — The journey spine is the only journey navigation, and it opens expanded
+
+- Divergence: the shell shipped with the spine collapsed, so a first-time user
+  saw a narrow column of two-letter codes with no labels and no explanation;
+  and the spine carried `role="tablist"` semantics, which misdescribe journey
+  positions.
+- Resolution: the spine is a `<nav>` labelled `Journey`, each entry is a
+  `<button>` carrying `:aria-current="entry.status === 'current' ? 'step' :
+  undefined` and `:aria-disabled` while locked, in an `<ol>`
+  (`frontend/src/components/DesktopDock.vue`). `role="tablist"` was removed:
+  these are positions in a sequence, not tabs over one canvas, and
+  `aria-current="step"` is the pattern intended for that.
+- `frontend/src/components/DesktopShell.vue` declares `dockCollapsed` defaulting
+  to `false` and only collapses it below the `min-width: 1080px` media query,
+  via `updateDockRoom`. Orientation is a precondition, not a preference; the
+  collapsed state is the exception the user opts into. The collapsed width is
+  `--band-spine-collapsed` (`frontend/src/assets/design-tokens.css:107`).
+- A locked step names the step that unlocks it, in `hint()`, so the reason for
+  a disabled control is in text rather than only in a tooltip.
+- One derivation of journey state, `journeyState()` in
+  `frontend/src/composables/useDesktop.js`, feeds the spine, the masthead
+  position, and the switcher. Three surfaces therefore cannot tell three
+  different stories about the same workspace.
+- Covers WCAG 2.2 SC 4.1.2 Name, Role, Value.
+
+### D7 — Deterministic panel layouts replace cascade-by-default
+
+- Divergence: the shell's default panel layout was a draggable cascade, so the
+  first thing a user met was window management. The journey is sequential —
+  each step consumes what the previous step produced — and a pile of floating
+  windows asked the user to manage windows while trying to think about a
+  decision.
+- Resolution: `LAYOUT_MODES = ["focus", "split", "free"]` with
+  `DEFAULT_LAYOUT_MODE = "focus"`
+  (`frontend/src/composables/useDesktop.js:113-114`). In `focus` the panel is
+  the whole workspace with no inline geometry
+  (`frontend/src/components/DesktopWindow.vue`, `.layout-focus`, and its
+  `windowStyle` computed); in `split` two panels share the width (`.layout-split`);
+  in `free` the panels float (`.layout-free`) and only then does
+  `windowStyle` produce `left`/`top`/`width`/`height`/`zIndex`.
+  `frontend/src/components/DesktopShell.vue`'s `renderedPanels` returns exactly
+  one panel in the focus layout and `visiblePair()` in the split layout.
+- The cascade constants `CASCADE_STEP` and `CASCADE_ORIGIN`
+  (`frontend/src/composables/useDesktop.js:25-26`) survive only to place free
+  panels.
+- Vocabulary change: `tiled` is now `split`. `restoreSession()` maps a persisted
+  `tiled` value onto `split`, so a session saved before the change still
+  restores to something sensible.
+- The switcher names the layout in plain language rather than offering a bare
+  toggle — "One at a time", "Side by side", "Floating"
+  (`frontend/src/components/DesktopTaskbar.vue`, `LAYOUT_LABEL`).
+- Because most panels are no longer positioned by pointer at all, the dragging
+  accessibility problem largely disappears rather than being patched. Where
+  free positioning remains, the resize grip is a focusable `role="separator"`
+  with arrow-key resizing and a single-pointer `Placement` menu offering fill,
+  centre, left half, and right half — WCAG 2.2 SC 2.5.7 Dragging Movements, AA.
+
+### D8 — The panel switcher is a real tablist, and the spine is not
+
+- Divergence: the switcher declared `role="tablist"` and `role="tab"` but
+  implemented none of the pattern — no `aria-controls`, no matching
+  `tabpanel`, no roving `tabindex`, and no arrow-key movement.
+- Resolution: `frontend/src/components/DesktopTaskbar.vue` now wires
+  `:id="panel-tab-{key}"`, `:aria-controls="panel-body-{key}"`, `aria-selected`,
+  and a roving `:tabindex` on each tab, and `onTablistKeydown` handles
+  `ArrowRight`, `ArrowLeft`, `Home`, `End`, `Delete`, and `Backspace`.
+  `frontend/src/components/DesktopWindow.vue` renders the matching
+  `role="tabpanel"` with `:id="panel-body-{key}"` and
+  `:aria-labelledby="panel-tab-{key}"`. Deleting a tab closes exactly that
+  panel and moves focus to its neighbour; it never closes the workspace.
+- Activation is **manual**, not automatic. A panel can be running a polling
+  loop or a heavy render, and auto-switching on focus would make arrowing past
+  it expensive. This is the one deliberate departure from the tab pattern and it
+  is recorded in the component's own doc comment.
+- The contrast between D6 and D8 is the point of keeping both entries: the
+  spine is a sequence and must not claim to be a tablist, and the switcher is a
+  set of views over one canvas and must implement the pattern it claims.
+- Covers WCAG 2.2 SC 4.1.2 and SC 2.1.1 Keyboard.
+
+### D9 — One shared `ViewHeader`, and no per-view restatement of what the shell says
+
+- Divergence: each of the five route views hand-wrote its header row, and the
+  five copies had drifted into three different status vocabularies, seven
+  naked-wordmark truth-contract violations, five `STEP 0X/05` counters that
+  contradicted the shell's own six-step numbering, four duplicated truth-rail
+  restatements in view footers, and five duplicate skip links.
+- Resolution: `frontend/src/components/ViewHeader.vue` is the single header.
+  `MainView.vue`, `SimulationView.vue`, `SimulationRunView.vue`,
+  `ReportView.vue`, and `InteractionView.vue` each mount it and each bind
+  `:step` to an `appById(...)` entry rather than to a locally typed number, so
+  the header, the spine, and the switcher read one source.
+- It owns the view's **single** `<h1>`. The panel title bar is no longer a
+  heading: `frontend/src/components/DesktopWindow.vue` renders the title as a
+  `<span class="window-title">` carrying the id the panel is
+  `aria-labelledby` by, which removes the h2-before-h1 inversion that every
+  window previously presented.
+- It replaces the per-view brand block with step identity. The wordmark is not
+  restated per view; the shell lockup and the shared header are the two places
+  it appears, and both carry the descriptor.
+- Journey identity, brand, and the permanent disclosure are the shell's job. The
+  views carry step content only.
+- `MainView.vue` deliberately keeps an in-window step rail and scopes it
+  explicitly — `aria-label="Steps inside this workspace"` with a matching
+  visible caption — because that panel is a genuine five-step workflow nested
+  inside the six-step shell journey. Two levels, two jobs, no duplicated
+  numbering.
+- The full rationale, the computed contrast table against the palette, and the
+  accepted-unresolved list are in
+  [`UX_REDESIGN_2026.md`](UX_REDESIGN_2026.md).
 
 ---
 
@@ -785,28 +901,39 @@ by
 [`adr/ADR-0006-route-map-list-parity.md`](../architecture/adr/ADR-0006-route-map-list-parity.md)
 is **TARGET**. Owned by `askthepeople-frontend-steward`.
 
+Gate status is not stated here. The single authoritative statement of
+gate status is
+[architecture/index.md § Status of record](../architecture/index.md#status-of-record).
+
 ### Current state — PARTIAL
 
-- Frontend is Vue 3 + Vite + vue-router. Built into
-  `frontend/dist/` and served by
-  [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
+- Frontend is Vue 3 + Vite + vue-router. Built into `frontend/dist/` and served
+  by the `serve_frontend` catch-all in `create_app`
+  ([`backend/app/__init__.py`](../../backend/app/__init__.py)). The
+  previously cited `:317-325` no longer resolves and was corrected here on
+  2026-10-02.
 - The workspace renders as a persistent desktop shell
-  (`frontend/src/components/DesktopShell.vue`): a masthead, a
-  journey step-spine launcher, draggable/tileable windows for each
-  step, a taskbar, and a session that restores open windows and
-  preserves deep links on refresh. The shell is the sole host of
-  the five-fact Truth Rail, so every primary route is covered.
-- Route visualization in the home view uses CSS-driven animations;
-  D3 is used in `GraphPanel.vue` for graph rendering. The route
+  (`frontend/src/components/DesktopShell.vue`): a masthead, the journey spine,
+  step panels, the panel switcher, and a session that restores open panels and
+  preserves deep links on refresh. The shell is the sole host of the five-fact
+  Truth Rail, so every primary route is covered.
+- Panel layout is deterministic and `focus` is the default; `split` and `free`
+  remain available and are named in plain language. See ledger entry D7.
+- The journey spine is a `<nav>` with `aria-current="step"` and opens expanded.
+  The panel switcher implements the tab pattern it declares. See D6 and D8.
+- One shared `ViewHeader.vue` supplies the single `<h1>` for all five route
+  views. See D9.
+- The shell band geometry, the control-height scale, the single focus-ring
+  definition, and the `prefers-contrast: more` and `forced-colors: active`
+  blocks are in the token layer. The rationale and the computed contrast table
+  are in [`UX_REDESIGN_2026.md`](UX_REDESIGN_2026.md).
+- Route visualization uses D3 in `GraphPanel.vue` for graph rendering. The route
   grammar is documented in [`docs/design/ROUTE_GRAMMAR.md`](ROUTE_GRAMMAR.md).
-- The Truth Rail is rendered once in the desktop shell. The
-  per-screen contextual statements and the full disclosure block
-  remain **not yet rendered** in the frontend. The text
-  disclosures live in
-  [`README.md:9-12`](../../README.md) and
-- The route-list / map parity test required by ADR-0006 is
-  missing. There is no automated check that every node, edge,
-  and action in the visual map has a corresponding list entry.
+- **The route-list / map parity test required by ADR-0006 is still missing.**
+  There is no canonical semantic route list at the API or JSON-LD level that the
+  visual map and the list view both consume, and no automated check that every
+  node, edge, and action in the visual map has a corresponding list entry. The
+  October 2026 shell redesign does not advance this requirement.
 - The qualitative-only constraint ("line width, color, position,
   spacing, order, count and placement never communicate
   probability, support, prevalence, confidence, or rank") has
@@ -814,6 +941,13 @@ is **TARGET**. Owned by `askthepeople-frontend-steward`.
 - The disclosure block required by the contract is not
   automatically attached to social cards, share previews, or
   exported report files.
+- WCAG 2.2 conformance is unverified. Non-text contrast is measured and
+  recorded rather than asserted: `--line-dark` sits at 1.46 to 1.86:1 on the
+  four ink fields, which is below the 3:1 floor of SC 1.4.11, and
+  `--paper-dim` falls below the 4.5:1 text floor of SC 1.4.3 on `--ink-soft`
+  and `--ink-raised`. Both have a compliant variant under
+  `prefers-contrast: more`; the default values do not clear the floor. See
+  [`UX_REDESIGN_2026.md`](UX_REDESIGN_2026.md) for the full table.
 
 ### Required correction (per this doc and ADR-0006)
 
@@ -846,3 +980,34 @@ route, every report, every social card, and every share preview.
 The naked wordmark is prohibited. The CI linter in
 [`.github/workflows/docs.yml`](../../.github/workflows/docs.yml)
 enforces the wordmark rule in the doc tree.
+
+**The frontend now complies.** The wordmark appears in two places, and the
+descriptor is inseparable from it in both:
+
+- the shell lockup, `frontend/src/components/DesktopMasthead.vue`
+  (`.masthead-lockup`, with `.masthead-descriptor` and an `aria-label` that
+  also carries the descriptor);
+- the shared view header, `frontend/src/components/ViewHeader.vue`
+  (`.header-left`, whose `aria-label` carries the descriptor). This replaced
+  the five per-view brand blocks that previously rendered the wordmark alone.
+
+`frontend/src/views/Home.vue` also carries the wordmark, twice, and both
+occurrences are accompanied by a descriptor — the brand block and the footer
+statement.
+
+**Five files still carry violations**, recorded as `acceptedDebt` in
+`frontend/src/__tests__/product-truth-guard.spec.js`:
+
+| File | Term | Surface |
+|---|---|---|
+| `frontend/index.html` | `respondents` | `content`, two occurrences |
+| `frontend/src/components/Step4Report.vue` | `respondents` | `text` |
+| `frontend/public/mark.svg` | `product-name` | `text` |
+| `frontend/public/social-card.svg` | `product-name` | `text` |
+| `frontend/src/views/NotFoundView.vue` | `product-name` | `text` |
+
+None of the five is a file the shell redesign touched. The last three are the
+`product-name` rule and are therefore naked-wordmark violations on surfaces the
+user sees — the share mark, the social card, and the route-recovery page. The
+first two are the `respondents` term rather than the wordmark rule. Delete each
+ratchet entry in the same change that fixes its source.

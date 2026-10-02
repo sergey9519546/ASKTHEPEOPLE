@@ -1,6 +1,5 @@
 <template>
   <section class="interaction-record" aria-labelledby="interaction-record-title">
-    <a class="skip-link" href="#main-content">Skip to main content</a>
     <header class="record-header">
       <div class="record-lockup">
         <span class="record-index" aria-hidden="true">04</span>

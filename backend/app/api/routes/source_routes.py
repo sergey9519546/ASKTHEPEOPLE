@@ -125,8 +125,24 @@ def register_source_routes(simulation_bp):
     def create_upload_intent():
         """Request a short-lived upload intent for a source file.
 
-        Returns the intended object key, expiry, and the source's initial
-        state (UPLOADING). 503 UNAVAILABLE while the flag is off.
+        Two distinct refusals, both deliberate:
+
+        - 503 UNAVAILABLE while `SOURCE_INGESTION_V1_ENABLED` is off. The
+          feature is switched off, which is a different fact from "the feature
+          is on and unfinished".
+        - 501 NOT IMPLEMENTED when the flag is on but persistence is not
+          configured. The previous behaviour returned 200 with every field
+          null, which is the most misleading shape available: it reported that
+          an upload had been prepared and handed back nothing usable. No
+          frontend code calls this route in that mode.
+
+        With persistence configured the handler creates a real source and
+        version record and reaches the server-derived tenant gate, which is
+        genuine behaviour covered by `tests/test_actor_context_installer.py`.
+        The `upload_url` and `object_key` fields remain null because object
+        storage is the unfinished part of the boundary (ADR-0012); they are not
+        removed, because a client that already handles direct upload will want
+        them once storage exists.
         """
         if not _source_ingestion_enabled():
             return _unavailable()
@@ -152,8 +168,7 @@ def register_source_routes(simulation_bp):
         if not isinstance(byte_length, int) or byte_length <= 0:
             return error_response("invalid_byte_length", status=400)
 
-        # When persistence is configured, create a real source + version
-        # record. Otherwise return the structured intent shape for test mode.
+        # When persistence is configured, create a real source + version record.
         if _persistence_configured():
             actor_context = _actor_context()
             if not _actor_context_ready(actor_context):
@@ -193,17 +208,15 @@ def register_source_routes(simulation_bp):
                 logger.error("Source creation failed: %s", exc, exc_info=True)
                 return error_response("source_creation_failed", status=500)
 
-        # Test/dev mode without persistence: return the structured intent shape.
-        return present({
-            "source_id": None,
-            "state": SourceIngestionState.UPLOADING.value,
-            "format": ext,
-            "byte_length": byte_length,
-            "content_type": content_type,
-            "upload_url": None,
-            "object_key": None,
-            "expires_in_seconds": 300,
-        })
+        # Flag on, no persistence: this used to return 200 with every field null.
+        return error_response(
+            "upload_intent_not_implemented",
+            status=501,
+            detail=(
+                "Direct upload needs canonical persistence and object storage. "
+                "Neither is available here, so no upload intent can be prepared."
+            ),
+        )
 
     @simulation_bp.route('/sources/v1/<source_id>/status', methods=['GET'])
     def get_source_status(source_id: str):

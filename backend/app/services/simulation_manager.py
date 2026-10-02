@@ -207,12 +207,17 @@ class SimulationManager:
         """Save simulation state to the filesystem lifecycle store.
 
         The legacy filesystem lifecycle is the current store for simulation
-        run-state. Canonical ``dw_runs`` rows are owned exclusively by
-        ``RunRepository`` (which writes UUIDv7 physical ids and independent
+        run-state. Canonical ``dw_runs`` rows are owned exclusively by the
+        canonical writer (which writes UUIDv7 physical ids and independent
         ``run_...`` aliases); this method must not mirror rows into it, or the
         two writers would populate the canonical table with incompatible
         identities (``uuid5``/``run_{simulation_id}``/fabricated tenants) that
         fail the domain's UUIDv7 invariant when read back.
+
+        The named class behind that contract was ``RunRepository``, deleted
+        2026-10-02 as unreachable (no production importer). The invariant it
+        describes is unchanged and still applies to whatever writer adopts the
+        table; ``dw_runs`` remains owned by exactly one writer.
         """
         sim_dir = self._get_simulation_dir(state.simulation_id)
         from .simulation_paths import SimulationPaths

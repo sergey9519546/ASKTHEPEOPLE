@@ -72,7 +72,6 @@ import { computed } from "vue";
 import { useRouter } from "vue-router";
 import {
   DESKTOP_APPS,
-  JOURNEY_TOTAL,
   focusWindow,
   journeyState,
   launchRouteFor,
@@ -143,7 +142,6 @@ function startOver() {
   toast.info("Workspace reset. State a new decision.", "Start over");
 }
 
-void JOURNEY_TOTAL;
 </script>
 
 <style scoped>
@@ -153,7 +151,7 @@ void JOURNEY_TOTAL;
   width: var(--band-spine);
   min-width: var(--band-spine);
   overflow-y: auto;
-  border-right: 1px solid var(--line-dark);
+  border-right: 1px solid var(--line-structural);
   background: var(--ink-deep);
 }
 

@@ -110,7 +110,7 @@ export const DESKTOP_APPS = [
  * `tiled` is retained as a persisted value so a session saved before this
  * change still restores to something sensible; it now means `split`.
  */
-export const LAYOUT_MODES = ["focus", "split", "free"];
+const LAYOUT_MODES = ["focus", "split", "free"];
 export const DEFAULT_LAYOUT_MODE = "focus";
 
 export const appById = (id) => DESKTOP_APPS.find((app) => app.id === id);
@@ -129,12 +129,6 @@ export const activeWindow = computed(
   () => windows.value.find((window) => window.key === activeKey.value) || null,
 );
 
-export const activeRoute = computed(() => {
-  const win = activeWindow.value;
-  if (!win) return null;
-  if (win.routeName === "Home") return { name: "Home" };
-  return { name: win.routeName, params: win.params || {}, query: win.query || {} };
-});
 
 function keyFor(app, route) {
   const paramValue = app.param ? route.params?.[app.param] : null;
@@ -265,13 +259,47 @@ export function openRoute(route = {}) {
   return openApp(app.id, route);
 }
 
+/**
+ * Every panel switch animates, not just the keyboard one.
+ *
+ * The transition lives here rather than in the shell because the shell is only
+ * one of the callers: the switcher, the journey spine, and the URL watcher all
+ * change the active panel, and routing the transition through a single function
+ * is the only way to guarantee they agree. Leaving it in the shell meant tab
+ * clicks cut instantly while the Alt+` shortcut cross-faded.
+ *
+ * The cross-fade is scoped by `view-transition-name` on the workspace canvas in
+ * DesktopShell.vue. Without that name the browser transitions the whole
+ * document root, which would cross-fade the truth rail, masthead, spine, and
+ * switcher on every switch - re-animating the orientation surfaces at the exact
+ * moment the user is trying to read a different one.
+ *
+ * Feature-detected and no-op when the API is absent or the user has asked for
+ * reduced motion. Same-document view transitions are Baseline since October
+ * 2025; Vue has no first-party support, so this is the hand-rolled glue.
+ */
+function runPanelTransition(update) {
+  const canTransition =
+    typeof document !== "undefined" &&
+    typeof document.startViewTransition === "function" &&
+    !(typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+  if (!canTransition) {
+    update();
+    return;
+  }
+  document.startViewTransition(update);
+}
+
 export function focusWindow(key) {
   const win = windows.value.find((window) => window.key === key);
   if (!win) return win;
-  win.minimized = false;
-  win.z = ++zCounter;
-  activeKey.value = win.key;
-  schedulePersist();
+  runPanelTransition(() => {
+    win.minimized = false;
+    win.z = ++zCounter;
+    activeKey.value = win.key;
+    schedulePersist();
+  });
   return win;
 }
 
@@ -338,10 +366,6 @@ export function setLayoutMode(mode) {
   return layoutMode.value;
 }
 
-export function untileWindows() {
-  layoutMode.value = "free";
-  schedulePersist();
-}
 
 /**
  * The panels a two-panel layout should show: the active one first, then the
@@ -469,36 +493,3 @@ export function currentJourneyStep() {
   return state.filter((entry) => entry.reached).length || 1;
 }
 
-export function useDesktop() {
-  return {
-    DESKTOP_APPS,
-    windows,
-    activeKey,
-    activeWindow,
-    activeRoute,
-    layoutMode,
-    LAYOUT_MODES,
-    DEFAULT_LAYOUT_MODE,
-    openApp,
-    openRoute,
-    focusWindow,
-    closeWindow,
-    minimizeWindow,
-    toggleMaximize,
-    tileWindows,
-    cycleLayoutMode,
-    setLayoutMode,
-    untileWindows,
-    visiblePair,
-    closeAllWindows,
-    cycleWindow,
-    updateGeometry,
-    launchRouteFor,
-    windowForApp,
-    journeyState,
-    currentJourneyStep,
-    JOURNEY_TOTAL,
-    restoreSession,
-    persistSession,
-  };
-}

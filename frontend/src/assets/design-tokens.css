@@ -18,7 +18,12 @@
   --paper-strong: #fbf4e5;
   --paper-transfer: #f7f0e2;
   --paper-muted: #c7c0b3;
-  --paper-dim: #817e76;
+  /* Raised from #817e76. As secondary text the old value measured 3.70:1 on
+     --ink-raised and 4.12:1 on --ink-soft, below the 4.5:1 that WCAG 2.2
+     SC 1.4.3 requires for body text. This value clears 4.5:1 on every ink
+     field (4.52:1 worst case) while staying clearly below --paper-muted, so
+     the three-step text hierarchy is intact. */
+  --paper-dim: #908d85;
   --signal: #f04b3d;
   --signal-strong: #ff5d4f;
   --signal-soft: #f7b6ab;
@@ -43,12 +48,46 @@
   --warning: #c8872f;
   --success: #768d5f;
   --success-text: #596e47;
+  /* Default structural boundary.
+
+     KNOWN AA GAP, deliberately not papered over: --line-dark measures
+     1.46:1 to 1.86:1 against the four ink fields, which is below the 3:1 that
+     WCAG 2.2 SC 1.4.11 requires for the boundaries of user interface
+     components. It draws every panel edge, input border, and band separator in
+     the workspace, so the gap applies widely rather than to one decoration.
+
+     --line-structural below is the compliant value at the same hue. Raising
+     every separator to it is a visible change to how the theme reads - the ink
+     fields would stop merging into one dark mass - so it is NOT the default.
+     It is wired into `prefers-contrast: more`, where the user has asked for
+     exactly this, and it is available to adopt as the default on request. */
   --line-dark: #3c423f;
+  /* Structural boundaries. ADOPTED 2026-10-02 for the four band separators and
+     the panel edges, and deliberately not adopted for interior detail.
+
+     `--line-dark` measures 1.46:1 to 1.86:1 on the four ink fields, which is
+     below the 3:1 that WCAG 2.2 SC 1.4.11 requires for the boundaries of user
+     interface components. At 24px and up, in a dense workspace where the whole
+     task is telling panels apart, those edges are load-bearing structure rather
+     than decoration, so they take the compliant value.
+
+     Interior detail keeps `--line-dark`. Input borders, table rules and inner
+     dividers are not boundaries the user must read to know where they are, and
+     lightening all of them is what would have cost the theme its restraint.
+     This is the middle option: most of the measured benefit, a quarter of the
+     visual change. */
+  --line-structural: #6b716e;
   --line-light: #c8c1b3;
   --ink-muted: #646761;
 
   --font-display: "Staatliches", "Arial Narrow", "Roboto Condensed", Impact, sans-serif;
   --font-sans: "Barlow", "Avenir Next", Avenir, "Helvetica Neue", Arial, sans-serif;
+  /* Body copy alias. Four rules in ProgressiveGuidance, Step1GraphBuild, and
+     MainView set `font-family: var(--font-body)`, and the token was never
+     declared - so each of those declarations was invalid at computed-value
+     time and silently inherited instead. It aliases the text face, which is
+     the same thing --font-mono already does. */
+  --font-body: var(--font-sans);
   /* Legacy screens used monospace nearly everywhere, which made ordinary
      workflow copy read like a developer console. Keep the token for backward
      compatibility while rendering it in the civic sans family. */
@@ -398,10 +437,6 @@ select:focus-visible {
   background: var(--signal);
 }
 
-.serif,
-.font-serif {
-  font-family: var(--font-display) !important;
-}
 
 .mono,
 .font-mono,
@@ -410,30 +445,25 @@ select:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+/* Small caps labels are set in the text face, not the display face.
+   Staatliches is a single-weight condensed all-caps poster face: it has no
+   weight range, and condensed + small + all-caps is the exact combination that
+   costs stroke contrast. The tracking and weight carry the label quality that
+   the face used to. Display type stays for nouns - the wordmark, section
+   titles, and numerals at or above 1.25rem. */
 .eyebrow,
 .label,
 .data-label {
   color: var(--paper-muted);
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: 0.78rem;
-  letter-spacing: 0.05em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: var(--leading-snug);
   text-transform: uppercase;
 }
 
-.data-value {
-  color: var(--paper);
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-}
 
-.cmd-noise-overlay::before {
-  display: none;
-}
-
-.cmd-grid-pattern,
-.cmd-scanlines {
-  background-image: none;
-}
 
 /* Legacy lime remains the small attention accent; it is no longer the
    product's primary action color. */
@@ -532,28 +562,6 @@ select:focus-visible {
   color: var(--paper) !important;
 }
 
-.brand,
-.brand-monogram,
-.brand-full {
-  color: var(--paper) !important;
-  font-family: var(--font-display) !important;
-  letter-spacing: 0.035em !important;
-}
-
-.brand {
-  padding: 0 !important;
-  border: 0 !important;
-  background: transparent !important;
-  font-size: 1.55rem !important;
-}
-
-.brand-monogram {
-  font-size: 2rem !important;
-}
-
-.brand-full {
-  font-size: 1.15rem !important;
-}
 
 .main-view .header-center,
 .bauhaus-header > .header-center,
@@ -614,14 +622,6 @@ select:focus-visible {
   border-left: 1px solid var(--line-dark);
 }
 
-.workflow-step,
-.step-indicator,
-.phase-indicator {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start !important;
-  gap: 0.1rem !important;
-}
 
 .step-num,
 .step-val,
@@ -636,9 +636,11 @@ select:focus-visible {
 .step-label,
 .phase-name {
   color: var(--paper) !important;
-  font-family: var(--font-display) !important;
-  font-size: 0.88rem !important;
-  letter-spacing: 0.04em !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+  line-height: var(--leading-snug) !important;
   text-transform: uppercase;
 }
 
@@ -711,9 +713,11 @@ select:focus-visible {
 
 .wb-label {
   color: var(--paper) !important;
-  font-family: var(--font-display) !important;
-  font-size: 0.9rem !important;
-  letter-spacing: 0.04em !important;
+  font-family: var(--font-sans) !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  line-height: var(--leading-snug) !important;
 }
 
 .wb-content {
@@ -753,10 +757,6 @@ select:focus-visible {
   letter-spacing: 0.04em !important;
 }
 
-.workbench-title {
-  font-size: clamp(1.7rem, 2.8vw, 2.8rem) !important;
-  line-height: 0.95 !important;
-}
 
 .workbench-subtitle,
 .step-desc,
@@ -811,35 +811,21 @@ select:focus-visible {
 }
 
 .action-btn,
+/* Action buttons are read, not scanned. Condensed poster caps on the one
+   control a person must parse under time pressure is the wrong trade. */
 .final-action-btn,
 .ask-group-btn,
 .send-btn,
 .app-cta-btn {
   border-radius: 0 !important;
   box-shadow: none !important;
-  font-family: var(--font-display) !important;
+  font-family: var(--font-sans) !important;
+  font-weight: 700 !important;
   letter-spacing: 0.04em !important;
+  line-height: var(--leading-tight) !important;
   text-transform: uppercase;
 }
 
-.final-action-btn,
-.ask-group-btn,
-.send-btn,
-.app-cta-btn {
-  border-color: var(--signal) !important;
-  background: var(--signal) !important;
-  color: var(--ink) !important;
-}
-
-.final-action-btn:hover,
-.ask-group-btn:hover,
-.send-btn:hover,
-.app-cta-btn:hover {
-  border-color: var(--signal-strong) !important;
-  background: var(--signal-strong) !important;
-  color: var(--ink) !important;
-  transform: translateY(-1px);
-}
 
 .tab-btn.active,
 .subtab-btn.active,
@@ -868,10 +854,6 @@ select:focus-visible {
   font-family: var(--font-mono) !important;
 }
 
-.log-msg {
-  color: var(--paper-muted) !important;
-  font-family: var(--font-sans) !important;
-}
 
 .progress-track,
 .signal-bar {
@@ -880,33 +862,8 @@ select:focus-visible {
   background: #343a37 !important;
 }
 
-.progress-fill,
-.progress-thumb,
-.signal-bar-fill {
-  background: var(--signal) !important;
-  transition: transform 280ms var(--ease-out);
-}
 
-.bauhaus-loader,
-.empty-pulse,
-.loading-dots span {
-  border-color: var(--signal) !important;
-  background-color: var(--signal) !important;
-  box-shadow: none !important;
-}
 
-.content-text,
-.markdown-body,
-.md-content,
-.message-content,
-.result-body {
-  color: var(--text-primary) !important;
-  font-family: var(--font-sans) !important;
-  font-size: 0.88rem !important;
-  line-height: 1.65 !important;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 
 .modal-overlay,
 .crash-overlay,
@@ -926,10 +883,6 @@ select:focus-visible {
   box-shadow: 0.55rem 0.55rem 0 rgba(0, 0, 0, 0.7) !important;
 }
 
-.modal-container :is(h1, h2, h3, label, p, span),
-.modal-content :is(h1, h2, h3, label, p, span) {
-  color: inherit;
-}
 
 @keyframes signal-pulse {
   0%,
@@ -1019,10 +972,6 @@ select:focus-visible {
     width: 100%;
   }
 
-  .brand-full,
-  .step-divider {
-    display: none !important;
-  }
 
   .content-area,
   .workbench-viewport,
@@ -1069,20 +1018,6 @@ select:focus-visible {
   line-height: var(--leading-relaxed);
 }
 
-/* A stack of sibling controls with one consistent gap. */
-.u-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
-
-/* Rows of siblings on one line that wrap instead of overflowing. */
-.u-cluster {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
 
 @media (prefers-contrast: more) {
   /* The palette is built from four ink steps and a muted paper. At increased
@@ -1092,7 +1027,10 @@ select:focus-visible {
   :root {
     --paper-muted: #ded7ca;
     --paper-dim: #b5b0a4;
-    --line-dark: #7b817d;
+    /* Raised to the compliant boundary for the interior hairlines too, which the
+       default deliberately leaves restrained. When a user asks for raised
+       contrast, boundaries should be unambiguous rather than minimally present. */
+    --line-dark: var(--line-structural);
     --ink-muted: #2b302d;
   }
 
@@ -1168,8 +1106,9 @@ select:focus-visible {
   color: var(--ink);
   z-index: 10000;
   text-decoration: none;
-  font-family: var(--font-display);
+  font-family: var(--font-sans);
   font-size: 0.85rem;
+  font-weight: 700;
   letter-spacing: 0.05em;
 }
 .skip-link:focus {

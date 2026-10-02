@@ -308,7 +308,7 @@ const showSimulationFinishedHint = ref(false);
 const wasSimulating = ref(false);
 const searchQuery = ref("");
 let currentSimulation = null;
-let gSelection = null;
+
 let lastGraphTrigger = null;
 let lastGraphTriggerId = null;
 let graphResizeObserver = null;

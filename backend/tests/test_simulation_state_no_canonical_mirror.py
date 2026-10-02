@@ -3,7 +3,7 @@
 ``SimulationManager`` previously dual-wrote each simulation state save into
 the canonical ``dw_runs`` table with a ``uuid5`` physical id, a
 ``run_{simulation_id}`` public id, and fabricated ``default-org`` /
-``default-workspace`` tenant ids. The canonical writer (``RunRepository``)
+``default-workspace`` tenant ids. The canonical writer (``RunRepository`` (deleted 2026-10-02))
 emits UUIDv7 physical ids and independent ``run_…`` aliases, and the domain
 kernel (``ActorContext`` / ``RunSnapshot``) requires UUIDv7 — so mirror rows
 were incompatible with every canonical read. This pins the fix: saving state

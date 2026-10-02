@@ -358,9 +358,19 @@ describe("global recovery and focus contracts", () => {
     );
     expect(graphPanel).toContain("new ResizeObserver");
     expect(graphPanel).toContain("graphResizeObserver.observe(graphContainer.value)");
-    expect(reportView).toMatch(
-      /\.mode-btn\.is-active\s*\{\s*background:\s*var\(--signal\)\s*!important/,
+    // The mode switcher and its active state moved into the shared ViewHeader
+    // when the five hand-written route headers were consolidated. The contract
+    // is now asserted where the rule actually lives, and ReportView is asserted
+    // to delegate rather than to carry a competing copy.
+    const viewHeader = readFileSync(
+      resolve("src/components/ViewHeader.vue"),
+      "utf8",
     );
+    expect(viewHeader).toMatch(
+      /\.mode-btn\.is-active\s*\{[\s\S]*?background:\s*var\(--signal\)/,
+    );
+    expect(viewHeader).not.toContain("border-radius: 6px !important");
+    expect(reportView).not.toMatch(/\.mode-btn\.is-active\s*\{/);
     expect(reportView).not.toContain("border-radius: 6px !important");
   });
 });

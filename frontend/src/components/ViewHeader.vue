@@ -64,7 +64,7 @@
  */
 import { JOURNEY_TOTAL } from "../composables/useDesktop.js";
 
-const props = defineProps({
+defineProps({
   step: { type: Object, required: true },
   status: { type: String, default: "" },
   statusLabel: { type: String, default: "" },
@@ -75,8 +75,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["update:activeMode"]);
-
-void props;
 </script>
 
 <style scoped>

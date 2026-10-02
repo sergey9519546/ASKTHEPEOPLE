@@ -1,9 +1,9 @@
 ---
 title: "Release Runbook"
 status: "Operational"
-version: "1.2.0"
+version: "1.3.0"
 owner: "Release Manager + SRE"
-last_reviewed: "2026-08-11"
+last_reviewed: "2026-10-02"
 review_cycle: "Per release; at minimum quarterly"
 research_cutoff: "2026-08-11"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -23,6 +23,10 @@ baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 > do not automatically make the product compliant, valid, accurate, or fit for a
 > particular legal jurisdiction. Legal and human-subject review remain separate
 > launch responsibilities.
+> **Gate status is not recorded here.** Where this runbook names a gate, it is
+> naming the evidence bundle an operator must produce, not asserting whether that
+> gate is closed. The single authoritative statement of gate status is
+> [`docs/architecture/index.md` § *Status of record*](../architecture/index.md#status-of-record).
 
 ## Purpose
 
@@ -382,7 +386,7 @@ domain and is outside the no-account path.
 MUST NOT use this topology across multiple hosts or independent platform
 volumes. Railway-style split services remain blocked until project,
 simulation, report, task, and artifact records are canonical across processes,
-the Alembic/runtime schema conflict is resolved, and web/worker/beat are
+the Alembic/runtime schema conflict is resolved (ADR-0013, closed 2026-10-02), and web/worker/beat are
 deployed and verified at one immutable revision. The CI caller therefore keeps
 the legacy Railway production job dark unless the repository variable
 `RAILWAY_PRODUCTION_DEPLOYMENT_ENABLED` is explicitly set to `true`. Do not set
@@ -437,7 +441,8 @@ An external provider outage MUST NOT restart the application or erase access to
 canonical recovery records. Promotion separately requires the web-scoped
 `/health/readiness` response to report that the ZEP-backed web capability is
 available. The probe performs only the bounded project-metadata read in
-[`services/zep_dependency_status.py:178-192`](../../backend/app/services/zep_dependency_status.py:178);
+[`services/zep_dependency_status.py:178-192`](../../backend/app/services/zep_dependency_status.py:178) (the
+  transport-log suppression window around `client.project.get()`);
 it discards the response and never reads, creates, changes, or deletes a graph.
 
 The production workflow performs thirty attempts, ten seconds apart, with a
@@ -474,8 +479,8 @@ The supported container worker performs a no-network fail-closed configuration
 check in both the wrapper and the Celery worker bootstep before broker
 connection. Procfile process types are intentionally deployment blockers and
 are not supported worker entry points
-([`utils/worker_startup.py:56-88`](../../backend/app/utils/worker_startup.py:56),
-[`celery_app.py:84-145`](../../backend/app/celery_app.py:84),
+([`utils/worker_startup.py:58`](../../backend/app/utils/worker_startup.py:58) (`validate_worker_configuration`),
+[`celery_app.py:146`](../../backend/app/celery_app.py:146) (the worker configuration step),
 [`scripts/worker_wrapper.sh:6-57`](../../backend/scripts/worker_wrapper.sh:6)).
 The check requires the ZEP and primary LLM keys, explicit non-memory Redis
 coordination and broker/result URLs, and an immutable runtime revision. It
@@ -491,7 +496,7 @@ starts Celery, binds the health process to that Celery PID, and cleans up on
 exit. Celery writes the first marker on `worker_ready`, refreshes it on worker
 heartbeats, and removes it during shutdown
 ([`scripts/worker_wrapper.sh:6-57`](../../backend/scripts/worker_wrapper.sh:6),
-[`celery_app.py:84-130`](../../backend/app/celery_app.py:84)).
+[`celery_app.py:146`](../../backend/app/celery_app.py:146)).
 
 Treat HTTP 200 as valid only when the body has this closed, privacy-safe shape:
 
@@ -508,7 +513,7 @@ The endpoint returns 503 with the same three fields and `status` set to
 gone, when the marker is over ten seconds old, or when process/revision
 identity does not match. It sends `Cache-Control: no-store` and suppresses the
 default Python HTTP server fingerprint headers
-([`scripts/worker_health.py:61-151`](../../backend/scripts/worker_health.py:61)).
+([`scripts/worker_health.py:60-163`](../../backend/scripts/worker_health.py:60)).
 It never returns key presence, URL, PID, marker age, exception text, or provider
 metadata. Do not weaken this endpoint to an unconditional process-only 200.
 
@@ -611,7 +616,23 @@ contract, region, retention, subprocessor, and deletion review.
 - Announce start in release channel.
 - Confirm current backup and restore evidence.
 - Put affected writes in maintenance/read-only mode if required.
-- Apply exact migration head.
+- Apply exact migration head. The operator entry points, added 2026-10-02, are:
+
+  ```bash
+  npm run backend:migrate:status   # records the current revision and the head
+  npm run backend:migrate          # upgrade head
+  ```
+
+  The expected head is `b2c3d4e5f6a7` across three linear revisions. These
+  commands need no application credentials — `backend/migrations/env.py` loads
+  the ORM metadata lazily and only for autogenerate — so they must NOT be run
+  with a web `SECRET_KEY` exported. Use the migrator database role, never the
+  application role. Application startup never upgrades the schema.
+- **Never run `alembic revision --autogenerate`.** ADR-0013 left the ORM
+  metadata empty, so autogenerate diffs an empty target against a live database
+  and writes a revision that drops every table. `env.py` refuses it by name;
+  that refusal is intentional. Add a table by hand-writing a revision in
+  `backend/migrations/versions/`.
 - Run reconciliation and invariant queries.
 - Confirm RLS policies and roles.
 - Confirm no unexpected long locks.
@@ -937,19 +958,39 @@ TARGET in full and must be implemented as gates 2 and 4 land.
 **Key file:line references:**
 
 - Flask application factory and process registration:
-  [`backend/app/__init__.py:25-330`](../../backend/app/__init__.py:25).
+  [`backend/app/__init__.py`](../../backend/app/__init__.py) (`create_app`).
+  (Re-measured 2026-10-02 against the 496-line file; the previously cited
+  `:25-330` predated a ~170-line growth of the module.)
 - Web request/response middleware (auth, security headers,
   traceback stripping, no body logging):
-  [`backend/app/__init__.py:111-267`](../../backend/app/__init__.py:111).
+  `require_auth` at
+  [`backend/app/__init__.py`](../../backend/app/__init__.py),
+  `apply_security_headers` at
+  [`backend/app/__init__.py`](../../backend/app/__init__.py),
+  `strip_traceback_in_production` at
+  [`backend/app/__init__.py`](../../backend/app/__init__.py),
+  `log_request` at
+  [`backend/app/__init__.py`](../../backend/app/__init__.py).
 - Health check with storage writability and revision id:
-  [`backend/app/__init__.py:290-307`](../../backend/app/__init__.py:290).
-- In-process cleanup worker (audit pattern; to be removed):
-  [`backend/app/__init__.py:229-239`](../../backend/app/__init__.py:229).
-- Simulation process cleanup hook (to be replaced with worker drain):
-  [`backend/app/__init__.py:106-109`](../../backend/app/__init__.py:106).
+  [`backend/app/api/health.py`](../../backend/app/api/health.py) — the route
+  lives in the health blueprint, not `app/__init__.py`, which only registers it
+  at [`backend/app/__init__.py`](../../backend/app/__init__.py).
+- In-process cleanup worker: **REMOVED, not merely to be removed.** This entry
+  was stale. `create_app` no longer starts a cleanup daemon thread; the comment
+  at [`backend/app/__init__.py`](../../backend/app/__init__.py)
+  records that stale-task cleanup is a periodic Celery beat job
+  (`tasks.cleanup_old_tasks`, registered at
+  [`backend/app/celery_app.py:55`](../../backend/app/celery_app.py:55)). The audit
+  pattern it warned about is closed; see the gate 2 note in
+  [`docs/architecture/index.md`](../architecture/index.md#status-of-record).
+- Simulation process cleanup hook (`SimulationRunner.register_cleanup`), still
+  to be replaced with a worker drain:
+  [`backend/app/__init__.py`](../../backend/app/__init__.py).
 - Celery app and the single registered task:
-  [`backend/app/celery_app.py:21`](../../backend/app/celery_app.py:21),
-  [`backend/app/tasks/simulation_tasks.py:16`](../../backend/app/tasks/simulation_tasks.py:16).
+  [`backend/app/celery_app.py:27`](../../backend/app/celery_app.py:27) (the Celery
+  instance) and its beat schedule at
+  [`backend/app/celery_app.py:55`](../../backend/app/celery_app.py:55),
+  [`backend/app/tasks/simulation_tasks.py:40`](../../backend/app/tasks/simulation_tasks.py:40).
 
 **Required additions to the runbook (gate 2 + gate 4):**
 

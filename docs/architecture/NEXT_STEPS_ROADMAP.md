@@ -3,7 +3,7 @@ title: "NEXT STEPS ROADMAP"
 status: "Reference"
 version: "1.1.0"
 owner: "Architecture"
-last_reviewed: "2026-10-01"
+last_reviewed: "2026-10-02"
 review_cycle: "As needed"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "architecture planning"
@@ -71,11 +71,23 @@ To validate the synthetic simulation against real-world opinion distributions wh
 
 ---
 
-### 3. Behavioural modules awaiting a data seam
+### 3. Behavioural modules awaiting a data seam — SUPERSEDED 2026-10-02
 
-Three modules under `backend/app/services/` are implemented and tested but have
-no production importer. Each is blocked on **inputs the product does not have**,
-not on plumbing — wiring them today would mean inventing the quantities they
+> **Correction.** The three modules analysed below **no longer exist**.
+> `constraint_engine.py`, `game_theory.py`, and `calibration_metrics.py` were
+> deleted, along with their five tests, by
+> [ADR-0014](adr/ADR-0014-removal-of-optimization-backtest-island.md) (commit
+> `8739d10`) on 2026-10-02 — on the same lineage as the optimization island. The
+> reasoning recorded in this section (why wiring them would fabricate data) is
+> what justified deleting rather than quarantining them, and it still governs
+> any future attempt to reintroduce equivalent capability: that requires a new
+> accepted ADR, not this code. The table is retained as the record of that
+> reasoning; **do not read the module column as present code.** Note
+> `diffusion_model` **was** wired in production and was not deleted.
+
+Three modules under `backend/app/services/` were implemented and tested but had
+no production importer. Each was blocked on **inputs the product does not have**,
+not on plumbing — wiring them would have meant inventing the quantities they
 consume and then letting those invented numbers drive agent behaviour.
 
 | Module | Consumes | Why it is not wired |
@@ -84,10 +96,10 @@ consume and then letting those invented numbers drive agent behaviour.
 | `game_theory.py` | `NormalFormGame` — explicit players, strategy sets and **payoff matrices** | No payoffs exist anywhere in the simulation. They would have to be authored per scenario, which is a methodology decision (ADR territory), not an integration. |
 | `calibration_metrics.py` | `brier_score`, `expected_calibration_error`, `auc_roc` — (probability, **realised outcome**) pairs | The product has no ground truth and says so: `claim_boundary.py` discloses `"forecast_status": "not a forecast"` and `"calibration": "not_calibrated"`. Publishing a Brier score would contradict the Product Truth Contract, which AGENTS.md rule 2 calls non-negotiable. Its seam is **Phase 2's benchmark work** below — real survey data (ANES, Pew) gives outcomes to score against, and only then is calibration a truthful claim. |
 
-Until then they are a staging area, not dead weight to delete: each has passing
-tests and a documented purpose. Deleting them loses that work; wiring them
-fabricates data. Both are product decisions, so this records the state rather
-than forcing one.
+The choice recorded at the time was to quarantine rather than delete. ADR-0014
+later reversed it: the modules were deleted, because an allowlist entry or a
+DO-NOT-WIRE header is a weaker control than absence. The underlying judgement —
+that wiring them fabricates data — is unchanged and still binds any successor.
 
 ---
 

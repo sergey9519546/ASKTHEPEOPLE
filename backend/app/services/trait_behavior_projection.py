@@ -326,8 +326,12 @@ def persona_with_framing(internal_persona: str, agent: Optional[Dict[str, Any]])
 # ---------------------------------------------------------------------------
 # Constraint-based influence weight + persona framing
 # ---------------------------------------------------------------------------
-# The constraint_engine models what actors CAN do, not just what they want.
-# Here it drives two things:
+# ---------------------------------------------------------------------------
+# Constraint-based influence weight + persona framing
+# ---------------------------------------------------------------------------
+# A lightweight constraint model determines what actors CAN do, not just what
+# they want. Both outputs are derived deterministically from the entity role
+# (no model call):
 #
 #   1. influence_weight in AgentActivityConfig — institutional actors have
 #      more amplification capacity than isolated individuals.
@@ -335,8 +339,9 @@ def persona_with_framing(internal_persona: str, agent: Optional[Dict[str, Any]])
 #   2. A persona text fragment — describes what structural limits apply, so
 #      the OASIS system prompt captures resource and authority constraints.
 #
-# Both are derived deterministically from the entity role (no model call)
-# and fail open if the role is unknown or the constraint module is absent.
+# The standalone constraint_engine module that originally carried this logic was
+# unreachable and was removed by ADR-0014. If the role is unknown this fragment
+# fails open to an empty string.
 #
 # ASSUMPTION: the influence_weight values by role are design choices. The
 # DIRECTION is defensible (institutions have more reach); the specific

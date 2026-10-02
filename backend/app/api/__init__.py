@@ -34,7 +34,7 @@ def _rate_limit_key() -> str:
         try:
             return str(ipaddress.ip_address(candidate))
         except ValueError:
-            pass
+            pass  # header absent or unparseable; fall through to the untrusted-value fallback get_remote_address()
     return get_remote_address()
 
 

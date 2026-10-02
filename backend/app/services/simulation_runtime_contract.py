@@ -275,7 +275,7 @@ async def _apply_persona_context_action(
             try:
                 clearer(prompt)
             except Exception:
-                pass
+                pass  # a clearer callback must not mask the runtime error already captured above
 
     if applied_ids:
         status = "applied"
@@ -1180,7 +1180,7 @@ async def apply_injected_events(
                     action_logger=action_logger,
                 )
         elif event_type in PERSONA_EVENT_TYPES:
-            pass
+            pass  # persona events were already applied above via _apply_persona_context_action; this branch exists only to stop them falling through to the CREATE_POST path below
 
         consumed_count += 1
 

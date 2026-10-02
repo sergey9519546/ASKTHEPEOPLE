@@ -138,6 +138,29 @@ def create_app(config_class=Config):
         )
         if secret_error:
             raise RuntimeError(secret_error)
+
+        # Production gateways. Refuse to boot rather than accept traffic under a
+        # configuration the app has already documented as unsafe.
+        #
+        # `Config.validate()` existed but was only ever called from run
+        # preflight, so these refusals never stopped a process from starting.
+        # The consequence was concrete: `SOURCE_INGESTION_V1_ENABLED=true` in
+        # production switched the mutating source routes live, and nothing
+        # objected until a run was already underway. `DEV_ACTOR_CONTEXT_ENABLED`
+        # was doubly safe (its installer requires DEBUG as a conjunct) but its
+        # docstring claimed "a misconfigured deployment fails startup", which
+        # was false until this call.
+        #
+        # Scoped to the production gateway subset rather than all of
+        # `validate()`, which also requires LLM_API_KEY and ZEP_API_KEY. Those
+        # are capability checks, not safety gates, and making them boot
+        # requirements would break deployments that run without them.
+        gate_failures = config_class.validate_production_gates()
+        if gate_failures:
+            raise RuntimeError(
+                "Refusing to start in production with an unsafe configuration:"
+                + "".join(f"\n  - {problem}" for problem in gate_failures)
+            )
     
     # Set JSON encoding: ensure characters are displayed directly (instead of \uXXXX format)
     # Flask >= 2.3 uses app.json.ensure_ascii, older versions use JSON_AS_ASCII configuration
@@ -214,7 +237,7 @@ def create_app(config_class=Config):
         # Touch the connection so an unreachable DATABASE_URL fails here rather
         # than at first query. This probes; it does not create schema.
         with engine.connect():
-            pass
+            pass  # reachability probe: __enter__ opens the connection, the body has no work to do
         if should_log_startup:
             logger.info(f"Database reachable: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local SQLite'}")
     except Exception as db_error:
@@ -400,7 +423,7 @@ def create_app(config_class=Config):
                     if mutated:
                         response.set_data(json.dumps(data, ensure_ascii=False))
             except Exception:
-                pass
+                pass  # a scrub failure must never turn a handled response into a 500; the unsanitised body is returned unchanged
         return response
     
     # Stale-task cleanup now runs as a periodic Celery beat job

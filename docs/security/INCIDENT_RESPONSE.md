@@ -380,10 +380,10 @@ notification-capability layer is **TARGET** and is part of gate 4.
 
 The `log_request` middleware logs the request line and content
 length, never the body
-([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
+([`strip_traceback_in_production after-request hook`](../../backend/app/__init__.py)).
 The production stripping of tracebacks and 5xx error strings is
 in place
-([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+([`strip_traceback_in_production after-request hook`](../../backend/app/__init__.py)).
 These are appropriate for production but limit forensic value
 during an incident. The doc's "preserve investigation evidence"
 capability needs an incident-specific capture path that is

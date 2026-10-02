@@ -57,7 +57,7 @@ def _atomic_write_json(path: Path, payload: Dict[str, Any]) -> None:
         try:
             temp_path.unlink()
         except FileNotFoundError:
-            pass
+            pass  # best-effort cleanup of an orphaned temp file; raise re-raises the real failure
         raise
 
 
@@ -88,7 +88,7 @@ def _atomic_create_json(path: Path, payload: Dict[str, Any]) -> bool:
         try:
             temp_path.unlink()
         except FileNotFoundError:
-            pass
+            pass  # temp file already consumed by os.replace or never created
 
 
 @contextmanager
@@ -356,7 +356,7 @@ class RuntimeControlStore:
             try:
                 source.unlink()
             except FileNotFoundError:
-                pass
+                pass  # claimant won the race and already unlinked the source
             command = _read_json(destination)
             if (
                 command.get("platform") != target

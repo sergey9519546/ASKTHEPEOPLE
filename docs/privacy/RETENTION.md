@@ -3,7 +3,7 @@ title: "Retention and Deletion"
 status: "Normative"
 version: "1.2.0"
 owner: "Privacy + Data Governance + SRE"
-last_reviewed: "2026-08-08"
+last_reviewed: "2026-10-02"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -80,7 +80,7 @@ Implement configurable workspace policy. Recommended baseline:
 - backups: documented rolling window with eventual deletion guarantees;
 - provider request retention: minimize using available controls and document actual provider behavior.
 
-OpenAI states that API/business data is not used to train models by default and offers retention controls for eligible uses, but the build must verify current provider terms and endpoint behavior before launch.([OpenAI business data privacy](https://openai.com/business-data/))
+OpenAI states that API/business data is not used to train models by default and offers retention controls for eligible uses, but the build must verify current provider terms and endpoint behavior before launch ([`OpenAI business data privacy`](https://openai.com/business-data/))
 
 Deletion must cover:
 
@@ -359,8 +359,8 @@ Increasing retention is a material privacy change. It requires:
 
 ## References
 
-- [NIST Privacy Framework](https://www.nist.gov/privacy-framework) - Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
-- [EDPB - Data breaches and risk assessment](https://www.edpb.europa.eu/sme/assess-the-risks/data-breaches_en) - Privacy/accountability reference for handling personal-data incidents.
+- [`NIST Privacy Framework`](https://www.nist.gov/privacy-framework) - Privacy risk-management framework; version 1.1 remained a draft/coming-soon work item at the research cutoff.
+- [`EDPB - Data breaches and risk assessment`](https://www.edpb.europa.eu/sme/assess-the-risks/data-breaches_en) - Privacy/accountability reference for handling personal-data incidents.
 
 ---
 
@@ -376,19 +376,21 @@ or **TARGET**.
 
 `TaskManager` retains completed and failed task records for 24 hours
 in memory and in Redis
-([`models/task.py:365-387`](../../backend/app/models/task.py:365)).
-The hourly cleanup worker at
-[`app/__init__.py:229`](../../backend/app/__init__.py:229) calls
-`TaskManager().cleanup_old_tasks(max_age_hours=24)`. The 24h
-window is hard-coded; it is not configurable per task type, per
-workspace, or per jurisdiction. Configurable per-class retention
-is **TARGET**.
+([`models/task.py`](../../backend/app/models/task.py),
+`cleanup_old_tasks`). The hourly Celery beat job `cleanup-old-stale-tasks`
+— scheduled in the `beat_schedule` of
+[`celery_app.py`](../../backend/app/celery_app.py) — calls
+`TaskManager().cleanup_old_tasks(max_age_hours=24)`.
 
-### Project / simulation / report storage — PARTIAL
+**Corrected 2026-10-02.** An earlier revision of this paragraph located that
+call in `app/__init__.py`, through a markdown link that was malformed (missing
+its opening bracket) and so invisible to the link checker. It has not been
+there since the in-process cleanup daemon thread was removed; the call is
+scheduled from Celery beat now, and the `create_app` comment in
+[`backend/app/__init__.py`](../../backend/app/__init__.py) records the move.
 
-- `backend/uploads/projects/{project_id}/` retains project
-  metadata, source files, and extracted text. No retention class
-  is recorded.
+The 24h window is hard-coded; it is not configurable per task type, per
+workspace, or per jurisdiction. Configurable per-class retention is **TARGET**.
 - `backend/uploads/simulations/{simulation_id}/` retains state.json
   and the per-platform SQLite DBs. No retention class is recorded.
 - `backend/uploads/reports/{report_id}/` retains the generated
@@ -396,16 +398,16 @@ is **TARGET**.
 
 Reaching the contract requires a `retention_class` column on every
 aggregate and a daily job that purges expired records. Tracked in
-[`docs/exec-plans/02-tenancy-data-and-secure-ingestion.md`](../exec-plans/02-tenancy-data-and-secure-ingestion.md).
+`[`docs/exec-plans/02-tenancy-data-and-secure-ingestion.md`](../exec-plans/02-tenancy-data-and-secure-ingestion.md).
 
 ### Deletion — PARTIAL
 
 `ProjectManager.delete_project`
-([`models/project.py:227-244`](../../backend/app/models/project.py:227))
+(`[`models/project.py`](../../backend/app/models/project.py))
 calls `shutil.rmtree` synchronously. There is no LEGAL_HOLD state,
 no provider-deletion step, no backup aging record. The
 deletion state machine in
-[`docs/architecture/state-machines.md`](../architecture/state-machines.md)
+`[`docs/architecture/state-machines.md`](../architecture/state-machines.md)
 ("Deletion state machine") is **TARGET**.
 
 ### No backup or region tracking — TARGET

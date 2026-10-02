@@ -84,11 +84,19 @@ def test_installer_noop_by_default(client, monkeypatch):
     assert resp.get_json()["error"] == "tenant_context_unavailable"
 
 
-def test_installer_noop_in_production(monkeypatch):
-    """DEBUG=false must never install a synthetic scope, flag or not.
+def test_production_boot_refuses_the_dev_installer(monkeypatch):
+    """DEBUG=false plus the dev installer flag must stop the process starting.
 
-    Production scrubs 5xx error strings, so assert the fail-closed status and
-    that the installer hook left ``g.actor_context`` unset.
+    This test previously asserted the weaker property: that boot *succeeded*
+    and the installer hook left `g.actor_context` unset. That is the defect the
+    installer's own docstring describes as impossible — it claimed "a
+    misconfigured deployment fails startup rather than silently bypassing tenant
+    derivation", and boot did not do that.
+
+    `create_app` now enforces `Config.validate_production_gates()`, so the
+    refusal happens at startup. The installer's inertness below is still worth
+    asserting on its own, because the gate and the conjunct in
+    `actor_context_installer` are independent defences and either could regress.
     """
     monkeypatch.setattr(Config, "DEBUG", False)
     monkeypatch.setattr(Config, "DEV_ACTOR_CONTEXT_ENABLED", True)
@@ -96,7 +104,39 @@ def test_installer_noop_in_production(monkeypatch):
     monkeypatch.setattr(Config, "SOURCE_INGESTION_V1_FORMATS", ["txt"])
     monkeypatch.setattr(Config, "REQUIRE_APP_AUTH", False)
     _enable_persistence(monkeypatch)
-    app = create_app()
+
+    with pytest.raises(RuntimeError) as caught:
+        create_app()
+    message = str(caught.value)
+    assert "DEV_ACTOR_CONTEXT_ENABLED" in message
+    assert "SOURCE_INGESTION_V1_ENABLED" in message
+
+
+def test_installer_is_inert_in_production_when_boot_is_forced(monkeypatch):
+    """The installer's own defence, independent of the startup gate.
+
+    Belt and braces: `create_app` refuses this configuration, but
+    `actor_context_installer` also requires `Config.DEBUG` as a conjunct. If
+    either defence were removed the other should still hold.
+    """
+    monkeypatch.setattr(Config, "DEBUG", False)
+    monkeypatch.setattr(Config, "DEV_ACTOR_CONTEXT_ENABLED", True)
+    monkeypatch.setattr(Config, "SOURCE_INGESTION_V1_ENABLED", True)
+    monkeypatch.setattr(Config, "SOURCE_INGESTION_V1_FORMATS", ["txt"])
+    monkeypatch.setattr(Config, "REQUIRE_APP_AUTH", False)
+    _enable_persistence(monkeypatch)
+
+    from app.config import Config as _Config
+
+    # Bypass the startup gate deliberately: we are testing the installer hook
+    # in a context where a process would never actually have started.
+    original_gates = _Config.validate_production_gates
+    _Config.validate_production_gates = classmethod(lambda cls: [])
+    try:
+        app = create_app()
+    finally:
+        _Config.validate_production_gates = original_gates
+
     app.config.update(TESTING=True, APP_TOKEN=None)
     client = app.test_client()
 
@@ -112,9 +152,6 @@ def test_installer_noop_in_production(monkeypatch):
         app.preprocess_request()
         capture_actor_context()
     assert seen_context["value"] is None
-
-    resp = _upload_intent(client)
-    assert resp.status_code == 503
 
 
 def test_installer_installs_scope_and_unstrands_upload_intent(client, monkeypatch):

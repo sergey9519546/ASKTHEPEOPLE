@@ -261,7 +261,7 @@ class ProjectManager:
             try:
                 os.remove(tmp_path)
             except OSError:
-                pass
+                pass  # best-effort cleanup of an orphaned temp file; the canonical record at path is untouched
             raise
 
     @classmethod

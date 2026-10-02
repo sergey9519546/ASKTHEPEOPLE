@@ -360,7 +360,7 @@ def _parse_json_object(raw: str) -> Optional[Dict[str, Any]]:
         parsed = json.loads(text)
         return parsed if isinstance(parsed, dict) else None
     except json.JSONDecodeError:
-        pass
+        pass  # whole response is not JSON; fall through to the first-to-last brace salvage below
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
         return None

@@ -1,7 +1,7 @@
 ---
 title: "State Machines"
 status: "Normative"
-version: "1.2.0"
+version: "1.3.0"
 owner: "Domain Engineering + SRE"
 last_reviewed: "2026-08-08"
 review_cycle: "Per gate; at minimum quarterly"
@@ -20,6 +20,10 @@ applies_to: "all aggregates in backend/app/models/, all state.json files, all pe
 > documentation system. Where this document conflicts with generated output,
 > legacy copy, or an implementation convenience, this document controls until
 > superseded through an approved architecture or product decision record.
+> **Gate status is not recorded here.** Gate numbers in this document say which
+> gate a piece of work is tracked against; they are not a status assertion. The
+> single authoritative statement of gate status is
+> [`docs/architecture/index.md` § *Status of record*](../architecture/index.md#status-of-record).
 
 ## Rules common to all state machines
 

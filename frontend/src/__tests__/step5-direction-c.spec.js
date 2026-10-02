@@ -133,8 +133,22 @@ describe("Step 5 Direction C interaction contracts", () => {
     expect(interactionView).toContain(
       "height: calc(100dvh - 11rem) !important;",
     );
-    expect(interactionView).toContain(
-      "0 human respondents · not a forecast",
+    // The permanent disclosure is rendered once, by the shell's Truth Rail. A
+    // per-view footer restatement put a fifth, drifting copy of the truth
+    // contract on screen, so the views no longer carry it. What the view must
+    // still carry is the disclosure that matters at this artifact: the
+    // fictional-response boundary lives in the step, not the footer.
+    expect(interactionView).not.toContain('0 human respondents');
+    const shell = readFileSync(
+      resolve('src/components/DesktopShell.vue'),
+      'utf8',
     );
+    expect(shell).toContain('<TruthRail />');
+    const truthRail = readFileSync(
+      resolve('src/components/TruthRail.vue'),
+      'utf8',
+    );
+    expect(truthRail).toContain('HUMAN RESPONDENTS: 0');
+    expect(truthRail).toContain('NOT A FORECAST');
   });
 });

@@ -738,25 +738,6 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-.brand-home {
-  border: 0;
-  border-radius: 0;
-  text-align: left;
-}
-
-.brand-home:hover {
-  background: var(--signal-strong) !important;
-  color: var(--ink) !important;
-}
-
-.status-indicator.processing .dot {
-  background: var(--attention);
-}
-
-.status-indicator.error .dot {
-  background: var(--error) !important;
-}
-
 .workflow-path {
   display: grid;
   grid-template-columns: repeat(5, minmax(7rem, 1fr)) minmax(16rem, 1.25fr);
@@ -821,10 +802,6 @@ onMounted(async () => {
   text-align: right;
 }
 
-.workflow-path > p strong {
-  color: var(--paper-muted);
-}
-
 .mobile-workflow-picker {
   display: none;
 }
@@ -885,18 +862,6 @@ onMounted(async () => {
 
 .panel-wrapper {
   height: 100%;
-}
-
-@keyframes smooth-pulse {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: scale(0.8);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
 }
 
 @media (max-width: 860px) {
@@ -976,6 +941,15 @@ onMounted(async () => {
   .workspace-error {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .content-area,
+  .panel-wrapper {
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
   }
 }
 </style>

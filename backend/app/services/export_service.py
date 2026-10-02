@@ -163,7 +163,7 @@ class PDFGenerator:
                 self.pdf.ln(4)
             elif line.startswith('# '):
                 # Major title already handled or skip if inside body
-                pass
+                pass  # no in-body title rendering; the document title is emitted by the cover writer above
                 
             # Blockquotes (Citations)
             elif line.startswith('> '):

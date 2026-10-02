@@ -370,6 +370,53 @@ class Config:
 
     
     @classmethod
+    def validate_production_gates(cls):
+        """Refusals that must stop the process from booting.
+
+        These are the subset of `validate()` that describes a *production
+        gateway*: a configuration under which the app would accept traffic it
+        cannot serve safely. They are separated from the rest of `validate()`
+        because that method also carries ordinary capability checks --
+        `LLM_API_KEY` and `ZEP_API_KEY` must be present -- and turning those
+        into boot requirements would impose a new restriction on deployments
+        that currently run without them.
+
+        `validate()` had exactly one non-test call site
+        (`services/simulation_preflight.py`), so none of these refusals were
+        enforced at startup. `create_app` re-implemented two credential checks
+        and nothing else, which meant `SOURCE_INGESTION_V1_ENABLED=true` in
+        production activated the mutating source routes with no boot-time
+        objection -- the exact outcome the flag exists to prevent.
+        """
+        if cls.DEBUG:
+            return []
+        errors = []
+        if cls.SOURCE_INGESTION_V1_ENABLED:
+            errors.append(
+                "SOURCE_INGESTION_V1_ENABLED=true is not allowed in production. "
+                "The source-ingestion boundary (quarantine, scanning, isolated "
+                "parsing, tenant auth, object storage, outbox) is not complete. "
+                "See Task 4 section 5 production blockers."
+            )
+        if cls.DEV_ACTOR_CONTEXT_ENABLED:
+            errors.append(
+                "DEV_ACTOR_CONTEXT_ENABLED=true is not allowed in production. "
+                "It installs a synthetic LEGACY_DEV actor scope that bypasses "
+                "the server-derived tenant context required by ADR-0009."
+            )
+        eligible = {'txt', 'md', 'markdown', 'pdf', 'docx', 'xlsx'}
+        if cls.SOURCE_INGESTION_V1_FORMATS:
+            invalid = [
+                f for f in cls.SOURCE_INGESTION_V1_FORMATS if f not in eligible
+            ]
+            if invalid:
+                errors.append(
+                    f"SOURCE_INGESTION_V1_FORMATS contains unsupported format(s) "
+                    f"{invalid}. V1 extraction supports: {sorted(eligible)}."
+                )
+        return errors
+
+    @classmethod
     def validate(cls):
         """Validate necessary configurations"""
         errors = []

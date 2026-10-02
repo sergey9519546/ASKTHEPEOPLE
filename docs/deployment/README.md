@@ -187,20 +187,20 @@ nothing here is a work queue.
    always exits 78. Railway, Render (`render.yaml:1-4` declares no
    services), and Vercel paths are disabled until the
    canonical-persistence and revision-atomicity gates close
-   (`docs/release/RUNBOOK.md:382-399`). There is no supported PaaS
+   (`docs/release/RUNBOOK.md:386-403`). There is no supported PaaS
    deploy of the current code.
 2. ~~**`npm run setup:all` / `npm run setup:backend` is broken.**~~
    **RESOLVED 2026-10-01** (commit `47bff7b`). `package.json:7` now uses
    `uv sync --frozen --group dev` rather than `--extra dev`, so the runbook
    baseline command `npm run setup:all`
-   (`docs/release/RUNBOOK.md:121`) works. The original defect: the dev
+   (`docs/release/RUNBOOK.md:122-128`) works. The original defect: the dev
    dependencies are a uv dependency group, not an extra
    (`backend/pyproject.toml:112-117`), so `--extra dev` was rejected.
 3. **Exposed provider credentials must be revoked and rotated first.**
    The runbook requires revocation, rotation, usage review, and
    independent verification of the exposed ZEP, primary-LLM, boost-LLM,
    and search credentials before any connected run or canary
-   (`docs/release/RUNBOOK.md:531-535`).
+   (`docs/release/RUNBOOK.md:535-539`).
 4. **Required secrets are operator-supplied and cannot ship from the
    repo.** `SECRET_KEY` (refuses startup in production if unset,
    `backend/app/config.py:117-121`; minimum 32 characters,
@@ -217,20 +217,23 @@ nothing here is a work queue.
    from `.env.transition.example`; web, worker, beat, and Redis share one
    `uploads` bind mount (`docker-compose.yml:73,121,176`); the runbook
    forbids running from OneDrive, Dropbox, NFS, or SMB
-   (`docs/release/RUNBOOK.md:213-218`). The current checkout lives under
+   (`docs/release/RUNBOOK.md:217-222`). The current checkout lives under
    OneDrive, so a deployer must clone to a local disk first.
 6. ~~**The runbook's unified verification script does not exist.**~~
    **RESOLVED 2026-10-01** (commit `661f330`, portability fixed the same
    day). `./scripts/release/verify` exists and is the single entry point
-   required by `docs/release/RUNBOOK.md:129-131`; `package.json:16` wires
-   it as `npm run verify`. It runs the documentation validator, frontend
-   tests, the frontend production build, backend tests with evals
-   excluded, and a gitleaks working-tree scan when the binary is present.
+   required by `docs/release/RUNBOOK.md:131-135`; `package.json:18` wires
+   it as `npm run verify`. **Correction (2026-10-02):** this entry used to
+   enumerate five steps and cite `package.json:16`. The script actually runs
+   **six** gates - the numbering is in `scripts/release/verify:10-29`, which
+   includes a doc truth-gate self-test this list omitted entirely. Gate status
+   itself is not restated here; see the single authority at
+   `docs/architecture/index.md` (Status of record).
 7. **Provider dashboards must have automatic deployments disabled.**
    Railway's GitHub integration can autodeploy independently of Actions;
    the runbook requires the operator to disable autodeploy for every
    connected Railway, Vercel, and Render service and verify no legacy
-   public origin remains (`docs/release/RUNBOOK.md:392-397`).
+   public origin remains (`docs/release/RUNBOOK.md:396-401`).
 
 ### Recommendations
 
@@ -281,7 +284,7 @@ came from a pre-fix run and was stale — re-measure rather than quoting it.
 ## Release verification gate
 
 `./scripts/release/verify` (bash; runs under Git Bash on Windows) is now the
-single verification entry point required by `docs/release/RUNBOOK.md:127-131`
+single verification entry point required by `docs/release/RUNBOOK.md:131-135`
 and closes deployment blocker 6 above. It runs, in order:
 
 | # | Gate | Skips? |

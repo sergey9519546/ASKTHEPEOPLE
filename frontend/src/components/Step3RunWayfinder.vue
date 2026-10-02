@@ -24,10 +24,10 @@
       </aside>
     </header>
 
-    <section class="decision-band" aria-labelledby="decision-heading">
+    <section class="decision-band" aria-labelledby="run-decision-heading">
       <div class="decision-copy">
         <span class="section-index">Decision under rehearsal</span>
-        <h3 id="decision-heading">{{ decisionQuestion }}</h3>
+        <h3 id="run-decision-heading">{{ decisionQuestion }}</h3>
       </div>
 
       <div

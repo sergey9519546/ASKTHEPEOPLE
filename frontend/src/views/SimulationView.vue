@@ -288,116 +288,6 @@ onMounted(async () => {
   font-family: var(--font-sans);
 }
 
-.bauhaus-header {
-  height: 54px;
-  background: var(--bg-base);
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  z-index: 100;
-  box-shadow: none;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  padding: 0 !important;
-  border-radius: 0;
-  box-shadow: none;
-  transform: none;
-  cursor: pointer;
-}
-.brand-full {
-  font-weight: 400;
-  font-size: 1.2rem;
-  font-family: var(--font-display);
-  letter-spacing: 0.05em;
-  color: var(--text-primary);
-}
-
-.view-mode-selector {
-  display: flex;
-  border: 1px solid var(--line);
-  background: var(--bg-void);
-  padding: 3px;
-  border-radius: 0;
-  gap: 2px;
-}
-.mode-btn {
-  border: 1px solid transparent !important;
-  background: transparent !important;
-  padding: 5px 14px !important;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 11px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transform: none !important;
-}
-.mode-btn.is-active {
-  background: var(--accent) !important;
-  color: var(--accent-ink) !important;
-  border-color: var(--accent) !important;
-}
-.mode-btn:hover:not(.is-active) {
-  background: var(--bg-hover) !important;
-  color: var(--text-void) !important;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-.step-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 11px;
-  font-family: var(--font-mono);
-}
-.step-val {
-  color: var(--accent);
-}
-.status-box {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 10px;
-  color: var(--text-secondary);
-}
-.status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-muted);
-}
-.status-box.processing .status-dot {
-  background: var(--accent);
-  animation: flash 1s infinite alternate;
-}
-.status-box.completed .status-dot {
-  background: var(--status-live);
-}
-.status-box.error .status-dot {
-  background: var(--error);
-}
-@keyframes flash {
-  from { opacity: 0.3; }
-  to { opacity: 1; }
-}
-
 .workbench-viewport {
   flex: 1;
   display: flex;
@@ -442,20 +332,6 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   padding: 0px;
-}
-
-.bauhaus-footer-mini {
-  height: 36px;
-  padding: 0 24px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-weight: 500;
-  font-size: 9px;
-  color: var(--text-muted);
-  background: var(--bg-base);
 }
 
 @media (max-width: 1100px) {
@@ -516,32 +392,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 760px) {
-  .bauhaus-header {
-    height: 58px;
-    padding: 0 0.75rem;
-    gap: 0.6rem;
-  }
-
-  .header-right {
-    display: none;
-  }
-
-  .brand-full {
-    display: inline-block !important;
-    font-size: 1rem;
-    white-space: nowrap;
-  }
-
-  .view-mode-selector {
-    padding: 0;
-    gap: 0;
-  }
-
-  .mode-btn {
-    padding: 0.45rem 0.5rem !important;
-    font-size: 0.65rem;
-  }
-
   .workbench-viewport {
     padding: 0;
     gap: 0;
@@ -550,6 +400,12 @@ onMounted(async () => {
   .workspace-error {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-container {
+    transition: none;
   }
 }
 </style>

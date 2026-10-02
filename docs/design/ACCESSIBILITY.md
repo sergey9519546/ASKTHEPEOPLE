@@ -1,9 +1,9 @@
 ---
 title: "Accessibility"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "Accessibility Lead + Frontend Engineering"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-10-02"
 review_cycle: "Every release"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -63,6 +63,82 @@ Every function MUST be operable with keyboard alone. Required behaviors:
 - keyboard shortcuts are documented, remappable when single-character, and
   disabled in text inputs;
 - map interactions have list/button equivalents.
+
+### Workspace shell bindings
+
+These are the bindings of the workspace chrome described in
+[`DIRECTION_C.md`](DIRECTION_C.md) ledger entries D6 to D9. The rationale is
+in [`UX_REDESIGN_2026.md`](UX_REDESIGN_2026.md).
+
+**Journey spine** (`frontend/src/components/DesktopDock.vue`) — a `<nav>`
+labelled `Journey`, not a tablist, so it carries no tab keyboard contract. Each
+entry is a `<button>` in an `<ol>` with `aria-current="step"` on the current
+position and `aria-disabled` while locked. The collapse toggle is a `<button>`
+with `aria-expanded` and `aria-controls`. `Tab` reaches every entry; no arrow-key
+roving applies, because a sequence is not a set of tabs.
+
+**Panel switcher** (`frontend/src/components/DesktopTaskbar.vue`) — a real
+tablist, so it takes the full tab contract:
+
+| Key | Behavior |
+|---|---|
+| `Tab` | Enters the tablist once, on the selected tab; roving `tabindex` keeps one stop |
+| `ArrowRight` / `ArrowLeft` | Move focus to the next / previous tab, wrapping |
+| `Home` / `End` | Move focus to the first / last tab |
+| `Enter` or `Space` | Activate the focused tab and move the workspace selection with it |
+| `Delete` or `Backspace` | Close **only** the focused panel, then move focus to its neighbour |
+
+Activation is **manual**, not automatic. A panel may be running a polling loop
+or a heavy render, and auto-switching on focus would make arrowing past it
+expensive. `Delete` closes one panel, never the workspace.
+
+**Panel resize grip** (`frontend/src/components/DesktopWindow.vue`) — a
+focusable `role="separator"` with `aria-orientation="horizontal"`, rendered only
+in the free layout:
+
+| Key | Behavior |
+|---|---|
+| `ArrowRight` / `ArrowLeft` | Widen / narrow by 16px, floor 320px |
+| `ArrowDown` / `ArrowUp` | Grow / shrink by 16px, floor 240px |
+| `Shift` with any arrow | Same, at a 48px step |
+
+**Placement menu** (`frontend/src/components/DesktopWindow.vue`) — a
+`Placement` button with `aria-haspopup="menu"` in the window title bar, offering
+fill, centre, left half, and right half. This is the single-pointer,
+non-drag alternative that WCAG 2.2 SC 2.5.7 Dragging Movements requires; a
+modifier held while arrowing does not satisfy it.
+
+**Shell shortcuts** (`frontend/src/components/DesktopShell.vue`), all suppressed
+while focus is in a text input:
+
+| Key | Behavior |
+|---|---|
+| `Ctrl` / `Cmd` + `W` | Close the active panel |
+| `Alt` + `` ` `` | Cycle panels backwards or forwards, with `Shift` |
+| `Ctrl` + `K` | Open the command palette |
+
+Two chords the workspace deliberately does **not** take, because they belong to
+the browser and a workspace must never stand between a person and the tab they
+meant to open or close:
+
+| Key | Left to the browser because |
+|---|---|
+| `Ctrl` + `Tab` / `Ctrl` + `Shift` + `Tab` | Browser tab switching. An earlier draft of this design bound it to panel cycling; that was withdrawn. |
+| `Ctrl` + `W` outside the app frame | Closing the browser tab. The binding above only fires while the workspace has focus. |
+
+Every panel switch cross-fades through the View Transitions API, not just the
+keyboard one. The transition lives in `focusWindow` in `useDesktop.js` so the
+switcher, the journey spine, and the URL watcher all animate identically, and
+the workspace canvas carries `view-transition-name: workspace-canvas` so the
+cross-fade is scoped to the content rather than re-animating the truth rail,
+masthead, spine, and switcher underneath it.
+
+**Known gaps in the contract above.** The Placement menu declares
+`role="menu"` with `role="menuitem"` children but has no roving focus, no
+arrow-key movement, and no `Escape` handler. The resize grip carries no
+`aria-valuenow`, `aria-valuemin`, or `aria-valuemax`, so a screen reader
+announces that it resizes without saying how large the panel currently is.
+Both are recorded as PARTIAL below and must not be read as conformance claims.
 
 ## Dialogs and overlays
 
@@ -163,6 +239,7 @@ Use one signature motion cue:
 - reduced-motion mode renders final state immediately.
 
 Motion communicates sequence only. It must never imply probability, urgency, intelligence, or certainty.
+
 ## Testing program
 
 ## Accessibility testing
@@ -215,6 +292,7 @@ Create a fidelity ledger with:
 | Mobile list | one mode, no horizontal pan | screenshot | … | … |
 
 Passing builds, unit tests, or “looks close” do not replace visual inspection.
+
 ## Assistive-technology matrix
 
 At minimum before public beta:
@@ -268,18 +346,111 @@ test program**. Gate 1 + gate 5, owned by
 `askthepeople-frontend-steward` and
 `askthepeople-ai-eval-steward`.
 
-### Current state — PARTIAL
+Gate status is not stated here beyond the two gate identifiers this section
+already carried. The single authoritative statement of gate status is
+[architecture/index.md § Status of record](../architecture/index.md#status-of-record).
 
-- Frontend is Vue 3 + Vite + vue-router. Built into
-  `frontend/dist/` and served by
-  [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
+Status vocabulary is the legend defined in
+[architecture/index.md](../architecture/index.md#state-legend-used-in-this-document).
+
+### CURRENT
+
+- **Focus-not-obscured by default.** In the default `focus` panel layout there
+  is no floating chrome to occlude a focused control, because there is no
+  floating chrome (WCAG 2.2 SC 2.4.11 Focus Not Obscured (Minimum), AA).
+- **No critical workflow requires a drag.** Panel resizing is reachable from
+  the keyboard, and placement is reachable through a single-pointer menu, so
+  dragging is never the only route to any operation (SC 2.5.7 Dragging
+  Movements, AA).
+- **A control-height scale anchored on the WCAG 2.2 minimum.** `--target-min:
+  1.5rem` encodes the 24px floor, with `--control-h-sm`, `--control-h-md`, and
+  `--control-h-lg` as the sizes actually used, and a `.u-target` helper that
+  expands an icon-only control's hit area without changing what is visible
+  (SC 2.5.8 Target Size (Minimum), AA).
+- **One focus-ring definition, plus raised-contrast modes.** `--focus-ring-color`,
+  `--focus-ring-width`, and `--focus-ring-offset` are declared once in the token
+  layer, and `@media (prefers-contrast: more)` and `@media (forced-colors:
+  active)` blocks reassert borders and the focus ring (SC 2.4.7 Focus Visible,
+  AA; SC 1.4.11 Non-text Contrast, AA).
+- **Shell semantics match shell behavior.** The journey spine is a `<nav>` with
+  `aria-current="step"`; the panel switcher implements the tab pattern it
+  declares, including `aria-controls`, a matching `tabpanel`, roving `tabindex`,
+  and arrow-key movement; panels are `role="tabpanel"` labelled by the tab that
+  opens them (SC 4.1.2 Name, Role, Value).
+- **Secondary text clears the AA floor on every ink field.** `--paper-dim` is
+  `#908d85`, measuring 4.52:1 on `--ink-raised` and 5.04 to 5.78:1 on the other
+  three. The previous `#817e76` fell to 3.70:1 on raised surfaces. A test
+  recomputes every text pairing out of `design-tokens.css` rather than trusting
+  a table, so this cannot silently regress (SC 1.4.3 Contrast, Minimum, AA).
+- **One `h1` per route view.** A shared `ViewHeader.vue` owns it, and the panel
+  title bar is no longer a heading, so the outline no longer runs h2 then h1
+  inside every window (SC 2.4.6 Headings and Labels, AA).
+- **Motion is guarded.** `prefers-reduced-motion` is honored, and the View
+  Transitions cross-fade falls back to a no-op rather than to a degraded
+  animation (SC 2.3.3 Animation from Interactions, AAA).
+
+### PARTIAL
+
+- **SC 1.4.11 on structural rules.** `--line-dark` measures 1.46 to 1.86:1 on
+  the four ink fields, below the 3:1 floor, and it draws every band separator,
+  panel edge, and input border in the shell. A compliant value now ships as
+  `--line-structural` (`#6b716e`, 3.01 to 3.84:1) and `prefers-contrast: more`
+  selects it, but it is deliberately not the default: at roughly three times the
+  current luminance, applying it to every border would stop the ink fields
+  reading as one dark mass. Adopting it is a one-token change.
+- **Focus ring on paper fields.** `--attention` on `--paper` is 1.20:1. The
+  palette has no compliant ring for its own paper fields.
+- **Target size: AA floor met, product standard not.** `--target-min` encodes
+  24px, which is the WCAG AA floor. This document and
+  [`DIRECTION_C.md`](DIRECTION_C.md) both state 44 by 44 as the product's
+  enhanced target; `--control-h-md` is 2.25rem and `--control-h-sm` is 1.75rem.
+  The gap is not closed.
+- **The Placement menu is an incomplete menu widget.** No roving focus, no arrow
+  keys, no `Escape`.
+- **The resize grip reports no value.** No `aria-valuenow`,
+  `aria-valuemin`, or `aria-valuemax`.
+- **A heading inside a live region.** `InteractionView.vue`'s loading-state
+  section is `role="status"` with `aria-live="polite"` and carries a heading
+  inside it. That heading was an `<h1>` when this entry was first recorded and
+  has since been demoted to `<h2>`, which closes the duplicate-`h1` problem the
+  entry originally described. A heading inside a polite live region is still
+  incorrect: the announcement fires on content change rather than on
+  navigation, so the heading is read out as a status message.
+- **Focus-ring tokens are declared but not consumed.** The pre-existing global
+  `:focus-visible` rule still hard-codes the same two lengths, so there is one
+  *named* definition and not yet zero hard-coded copies.
+- **One view footer restates the permanent disclosure** that the shell's Truth
+  Rail already carries.
+
+### TARGET
+
+- **A semantic route list as the canonical accessible alternative to the visual
+  map**, and the parity test that would prove it. Required by
+  [`adr/ADR-0006-route-map-list-parity.md`](../architecture/adr/ADR-0006-route-map-list-parity.md)
+  and **still not done**. There is no canonical list at the API or JSON-LD level
+  that the visual map and the list view both consume, and no automated check
+  that every map fact has a list entry and vice versa. The October 2026 shell
+  redesign does not advance this requirement.
+- **WCAG 2.2 conformance evidence.** No automated scan, no named screen-reader
+  results, no focus-not-obscured capture, no forced-colors capture, no
+  comprehension testing. Conformance is **not** claimed by this document.
+- **44 by 44 primary pointer targets** across every control family.
+- **The disclosure block attached automatically** to every detached artifact:
+  exports, social cards, and share previews.
+- **Comprehension testing** confirming users understand that route geometry
+  carries no quantitative meaning.
+
+### Current state — PARTIAL (overall)
+
+- Frontend is Vue 3 + Vite + vue-router. Built into `frontend/dist/` and served
+  by the `serve_frontend` catch-all in `create_app`
+  ([`backend/app/__init__.py`](../../backend/app/__init__.py)). The
+  previously cited `:317-325` no longer resolves and was corrected here on
+  2026-10-02.
 - The accessibility conformance target is WCAG 2.2; no
   conformance evidence is recorded.
-- The semantic route list required by
-  [`adr/ADR-0006-route-map-list-parity.md`](../architecture/adr/ADR-0006-route-map-list-parity.md)
-  is not yet rendered.
-- The Truth Rail and the per-screen contextual statements
-  are not yet rendered in the frontend.
+- The Truth Rail renders once in the desktop shell. The
+  per-screen contextual statements remain **not yet rendered**.
 - The disclosure block required by the contract is not
   automatically attached to exports, social cards, or share
   previews.

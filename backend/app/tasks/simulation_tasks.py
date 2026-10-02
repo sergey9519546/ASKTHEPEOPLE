@@ -425,7 +425,7 @@ def prepare_simulation_task(
                 )
                 manager._save_simulation_state(state)
         except Exception:
-            pass
+            pass  # best-effort mirror of the in-process failure path; raise re-raises the real failure
         raise
 
 
@@ -586,7 +586,7 @@ def _write_reconcile_cursor(path: str, simulation_id: str) -> None:
         try:
             os.unlink(temp_path)
         except FileNotFoundError:
-            pass
+            pass  # best-effort cleanup of an orphaned temp file; raise re-raises the real failure
         raise
 
 

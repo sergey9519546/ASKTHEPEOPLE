@@ -173,7 +173,7 @@ class SimulationIPCClient:
                         os.remove(command_file)
                         os.remove(response_file)
                     except OSError:
-                        pass
+                        pass  # best-effort cleanup of the command and response pair; the response was already read
                     
                     logger.info(f"Received IPC Response: command_id={command_id}, status={response.status.value}")
                     return response
@@ -189,7 +189,7 @@ class SimulationIPCClient:
         try:
             os.remove(command_file)
         except OSError:
-            pass
+            pass  # best-effort cleanup of an abandoned command file
         
         raise TimeoutError(f"Wait for command response timeout ({timeout}s)")
     
@@ -422,7 +422,7 @@ class SimulationIPCServer:
             if os.path.exists(command_file):
                 os.remove(command_file)
         except OSError:
-            pass
+            pass  # command file already consumed by the responder or never written
     
     def send_success(self, command_id: str, result: Dict[str, Any]):
         """Send success response"""

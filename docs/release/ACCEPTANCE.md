@@ -1,9 +1,9 @@
 ---
 title: "Release Acceptance"
 status: "Normative"
-version: "1.2.0"
+version: "1.3.0"
 owner: "Release Council"
-last_reviewed: "2026-08-08"
+last_reviewed: "2026-10-02"
 review_cycle: "Per release; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -23,6 +23,12 @@ baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 > do not automatically make the product compliant, valid, accurate, or fit for a
 > particular legal jurisdiction. Legal and human-subject review remain separate
 > launch responsibilities.
+> **Gate status is not recorded in this document.** Any CURRENT/PARTIAL/TARGET
+> wording below describes the *evidence this document requires*, not the
+> project's gate state. The single authoritative statement of gate status is
+> [`docs/architecture/index.md` § *Status of record*](../architecture/index.md#status-of-record);
+> gate numbers here are pointers into that table, and where the two disagree,
+> that section wins.
 
 ## Purpose
 
@@ -738,29 +744,30 @@ are CURRENT, PARTIAL, or TARGET.
   `baseline_commit: 8b616dc7...`; container identity is read from the
   root-owned image revision file and any platform/runtime value must agree
   ([`backend/app/utils/build_revision.py`](../../backend/app/utils/build_revision.py)).
-- **Database and schema versions:** PostgreSQL is TARGET (gate 3);
+- **Database and schema versions:** PostgreSQL is required (gate 3 — see the status of record);
   current canonical store is filesystem JSON +
   `backend/uploads/`.
 - **Prompt, model, validator, and policy versions:** prompt registry
-  is TARGET (gate 1); the doc set is the policy version
+  is required (gate 1 — see the status of record); the doc set is the policy version
   (`docs/product/PRODUCT_TRUTH_CONTRACT.md`,
   `docs/product/USE_POLICY.md`).
 - **Automated test and evaluation reports:** `cd backend &&
   .\.venv\Scripts\pytest` runs the test suite; the CI workflow
   at `.github/workflows/ci.yml` runs the backend. The eval
-  suite is TARGET (gate 5).
+  suite is required (gate 5 — see the status of record).
 - **Accessibility and comprehension-test evidence:** WCAG 2.2
   conformance is TARGET; the comprehension-test program is
-  TARGET (gate 5).
+  (gate 5 — see the status of record).
 - **Security and privacy sign-offs:** the security headers and
   SafePathError handler are CURRENT
-  ([`backend/app/__init__.py:74-267`](../../backend/app/__init__.py:74));
-  the security review of the P0 cluster is gate 0.
+  ([`apply_security_headers`](../../backend/app/__init__.py) and
+  [`handle_unsafe_path`](../../backend/app/__init__.py));
+  the security review of the P0 cluster is the gate 0 evidence bundle.
 - **Provenance/disclosure validation for every export type:** the
   export route currently accepts client-supplied rows (audit P1);
   the disclosure block is not yet attached to detached artifacts.
 - **Migration and rollback evidence:** the canonical persistence
-  layer is TARGET (gate 3); migration rehearsal procedure is
+  layer is required (gate 3 — see the status of record); migration rehearsal procedure is
   TARGET.
 - **Known-risk register and approved exceptions:** the audit is
   the working risk register; the docs/archive/legacy-2026-07-29

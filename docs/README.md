@@ -1,9 +1,9 @@
 ---
 title: "ASKTHEPEOPLE Documentation System"
 status: "Normative"
-version: "1.1.0"
+version: "1.3.0"
 owner: "Product, Engineering, Security, Research"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-10-02"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -107,10 +107,23 @@ production observability are already implemented.
 
 ## Current state (baseline `8b616dc7`)
 
-All modular documents under this directory carry a
-**"Project-specific implementation status"** section grounded in the actual
-code at the baseline. Every ADR under `architecture/adr/` is accepted; the set
-is growing, so take the count from the validator rather than from this sentence.
+Modular documents under this directory carry a per-document
+**"Project-specific … status"** section grounded in the actual code at the
+baseline; the heading is not literally uniform (`## Project-specific evals
+status`, `## Project-specific prompt-registry status`, and so on). Measured
+2026-10-02, **83 of the 95** non-archive markdown files use the
+CURRENT/PARTIAL/TARGET/TRANSITION legend, and 13 carry a heading containing the
+exact phrase "Project-specific implementation status". Do not restate either
+count here; run the two greps rather than quoting. Every ADR under
+`architecture/adr/` is accepted; the set is growing, so take the count from the
+validator rather than from this sentence.
+
+> **Gate status is recorded in exactly one place.**
+> [`architecture/index.md` § *Status of record*](architecture/index.md#status-of-record)
+> is the single authoritative statement of gate status, shipped work, feature
+> backlog, and operator-blocked items. Six documents previously asserted it
+> independently and drifted into contradicting each other and the code. Any
+> other document — including this one — points there instead of restating it.
 The validator at
 [`tools/validate_docs.py`](../tools/validate_docs.py) reports
 **PASS, 0 errors, 0 warnings**. The CI workflow at
@@ -118,9 +131,9 @@ The validator at
 validator and the prohibited-language linter on every push and PR that
 touches `docs/`.
 
-**Do not hardcode a document count.** It goes stale on every edit, and an
-earlier revision of this file asserted "48 modular documents" when the
-validator reported 93. Run the validator and quote what it prints.
+**Do not hardcode a document count.** It goes stale on every edit, and earlier
+revisions of this file asserted one number here while the validator reported a
+different one. Run the validator and quote what it prints.
 
 The three P0 release-blocker findings in
 [`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md`](architecture/ASKTHEPEOPLE_GODMODE_BUILDPLAN.md)
@@ -157,10 +170,11 @@ Every production release MUST produce a release-evidence bundle containing:
 
 ### Design
 
-- [Direction C — Civic Wayfinding](design/DIRECTION_C.md)
+- [Direction C — Civic Wayfinding](design/DIRECTION_C.md) — Normative. The design direction and its convergence ledger.
 - [Route Grammar](design/ROUTE_GRAMMAR.md)
-- [Accessibility](design/ACCESSIBILITY.md)
+- [Accessibility](design/ACCESSIBILITY.md) — Normative. WCAG 2.2 AA target, keyboard contract, acceptance evidence.
 - [Content System](design/CONTENT_SYSTEM.md)
+- [Workspace shell UX redesign — rationale record](design/UX_REDESIGN_2026.md) — Reference. Why the workspace shell changed in October 2026, the computed palette contrast table, and the accepted-unresolved list. Read alongside [Direction C](design/DIRECTION_C.md) and [Accessibility](design/ACCESSIBILITY.md); it supersedes neither.
 
 ### Architecture
 
@@ -208,8 +222,9 @@ Every production release MUST produce a release-evidence bundle containing:
 # 1. The validator must pass. Quote the counts it prints; do not
 #    hardcode them — they change whenever a document moves.
 python tools/validate_docs.py
-# Expected shape: "Markdown files: <N> / ADR files: 12 / Errors: 0 / RESULT: PASS"
-# As of 2026-10-01: Markdown files: 93, Errors: 0, Warnings: 0, RESULT: PASS.
+# Expected shape: "Markdown files: <N> / ADR files: <N> / Errors: 0 /
+# Warnings: 0 / RESULT: PASS". Read the counts off the run; do not copy a
+# number from here, including from this file's own git history.
 
 # 2. The CI workflow runs the validator and the linters on every
 #    push and PR that touches docs/ or the validator.

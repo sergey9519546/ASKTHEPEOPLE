@@ -32,7 +32,7 @@
     </p>
 
     <div class="switcher-actions">
-      <p class="switcher-layout" aria-live="polite">
+      <p class="switcher-layout">
         <span class="switcher-layout-label">Layout</span>
         <span class="switcher-layout-value">{{ LAYOUT_LABEL[layoutMode] }}</span>
       </p>
@@ -54,7 +54,6 @@
 <script setup>
 import { nextTick } from "vue";
 import {
-  LAYOUT_MODES,
   activeKey,
   appById,
   closeAllWindows,
@@ -62,7 +61,6 @@ import {
   cycleLayoutMode,
   focusWindow,
   layoutMode,
-  windows,
 } from "../composables/useDesktop.js";
 
 /**
@@ -88,8 +86,6 @@ const LAYOUT_LABEL = {
   split: "Side by side",
   free: "Floating",
 };
-
-void LAYOUT_MODES;
 
 // A tablist with no tab in the tab order is a keyboard dead end. The selected
 // tab owns the tab stop, and when nothing is selected the first panel does.
@@ -125,8 +121,14 @@ function focusTab(index) {
 function onTablistKeydown(event) {
   const total = props.panels.length;
   if (total === 0) return;
-  const index = props.panels.findIndex((panel) => panel.key === activeKey.value);
-  const current = index === -1 ? 0 : index;
+  // Movement is relative to the tab that has focus, not the tab that is
+  // selected. With manual activation the selected tab stays put while focus
+  // walks, so anchoring on the selection would send a second ArrowRight back
+  // to where it started.
+  const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
+  const focused = tabs.indexOf(event.target);
+  const selected = props.panels.findIndex((panel) => panel.key === activeKey.value);
+  const current = focused === -1 ? (selected === -1 ? 0 : selected) : focused;
 
   switch (event.key) {
     case "ArrowRight":
@@ -169,7 +171,6 @@ function closePanel(key) {
   if (remaining > 0) focusTab(Math.min(index > 0 ? index - 1 : 0, remaining - 1));
 }
 
-void windows;
 </script>
 
 <style scoped>
@@ -180,7 +181,7 @@ void windows;
   gap: var(--space-3);
   min-height: var(--band-switcher);
   padding: 0 var(--space-3);
-  border-top: 1px solid var(--line-dark);
+  border-top: 1px solid var(--line-structural);
   background: var(--ink-deep);
 }
 

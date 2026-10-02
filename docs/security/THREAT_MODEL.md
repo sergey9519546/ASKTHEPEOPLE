@@ -429,30 +429,30 @@ legend.
 
 ### Defenses in place at the request/response seam — CURRENT
 
-[`create_app()`](../../backend/app/__init__.py:25) implements the
+[`create_app()`](../../backend/app/__init__.py) implements the
 outer security boundary:
 
 - Bearer auth + `hmac.compare_digest`
-  ([`app/__init__.py:125-141`](../../backend/app/__init__.py:125));
+  ([`require_auth`](../../backend/app/__init__.py));
   fail-closed at startup if `APP_TOKEN` is missing or weak
-  ([`app/__init__.py:30-39`](../../backend/app/__init__.py:30)).
+  ([`REQUIRE_APP_AUTH block in create_app`](../../backend/app/__init__.py)).
 - Production CORS lockdown — `CORS_ORIGINS='*'` refused
-  ([`app/__init__.py:74-82`](../../backend/app/__init__.py:74)).
+  ([`production CORS branch in create_app`](../../backend/app/__init__.py)).
 - Security headers — CSP, X-Content-Type-Options nosniff,
   X-Frame-Options DENY, Referrer-Policy no-referrer, Permissions-
   Policy (all sensitive features disabled), COOP same-origin, CORP
   same-origin, HSTS
-  ([`app/__init__.py:246-293`](../../backend/app/__init__.py:246)).
+  ([`apply_security_headers after-request hook`](../../backend/app/__init__.py)).
 - `Cache-Control: no-store` for `/api/*`, `/health`, and every `/health/*`
-  ([`app/__init__.py:290-293`](../../backend/app/__init__.py:290)).
+  ([`apply_security_headers after-request hook`](../../backend/app/__init__.py)).
 - Production stripping of `traceback` and 5xx `error` strings
-  ([`app/__init__.py:295-326`](../../backend/app/__init__.py:295)).
+  ([`strip_traceback_in_production after-request hook`](../../backend/app/__init__.py)).
 - `SafePathError` → `400 {"success": false, "error": "invalid_id"}`
-  ([`app/__init__.py:362-366`](../../backend/app/__init__.py:362)).
+  ([`handle_unsafe_path error handler`](../../backend/app/__init__.py)).
 - `RateLimitExceeded` → `429` with a stable error code
-  ([`app/__init__.py:351-360`](../../backend/app/__init__.py:351)).
+  ([`handle_rate_limit error handler`](../../backend/app/__init__.py)).
 - No request body logging in any debug path
-  ([`app/__init__.py:208-220`](../../backend/app/__init__.py:208)).
+  ([`log_request before-request hook`](../../backend/app/__init__.py)).
 - ZEP readiness performs only a bounded `project.get()` and discards its
   response. The cache contains status metadata only; public responses and logs
   contain stable reason codes rather than credentials, provider bodies,
@@ -564,10 +564,10 @@ provider-exposure ceiling. The audit's P1 finding
 ### Sensitive content in logs and traces — CURRENT (by design)
 
 The `log_request` middleware never logs request bodies
-([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)). The
+([`strip_traceback_in_production after-request hook`](../../backend/app/__init__.py)). The
 production stripping of tracebacks and 5xx error strings removes
 internal paths, credentials, and upstream API error bodies leaked
 via `str(e)`
-([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+([`strip_traceback_in_production after-request hook`](../../backend/app/__init__.py)).
 The doc's "keep secrets and sensitive content out of logs and
 analytics" objective is satisfied at the wire today.

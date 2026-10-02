@@ -139,7 +139,7 @@ def read_posts(
         try:
             conn.close()
         except Exception:  # pragma: no cover - best-effort close
-            pass
+            pass  # best-effort close; a close-time error must not mask the typed reader exception above
 
 
 def read_comments(
@@ -189,4 +189,4 @@ def read_comments(
         try:
             conn.close()
         except Exception:  # pragma: no cover - best-effort close
-            pass
+            pass  # best-effort close; a close-time error must not mask the typed reader exception above

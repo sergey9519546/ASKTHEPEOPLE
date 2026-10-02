@@ -3,7 +3,7 @@ title: "ULTRAPLAN"
 status: "Reference"
 version: "1.0.0"
 owner: "Architecture"
-last_reviewed: "2026-08-18"
+last_reviewed: "2026-10-02"
 review_cycle: "As needed"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "architecture planning"
@@ -107,7 +107,19 @@ user-facing contract and must ride on a clean doc baseline.
   allowed and recorded with provenance.
 - Verification: cd backend && .\.venv\Scripts\pytest -q tests/test_simulation_config_generator.py
 
-### B2. Quarantine or honestly wire calibration_metrics.py
+### B2. Quarantine or honestly wire calibration_metrics.py — RESOLVED BY DELETION
+
+> **Superseded 2026-10-02.** Every file named in this item no longer exists.
+> `backend/app/services/calibration_metrics.py` and
+> `backend/tests/test_calibration_metrics.py` were deleted by
+> [ADR-0014](adr/ADR-0014-removal-of-optimization-backtest-island.md) (commit
+> `8739d10`), together with `constraint_engine.py` and `game_theory.py`. The
+> decision below is therefore already made, and it was the **stronger** of the
+> two options offered here: rather than gating a dormant calibration switch, the
+> module was removed, so no `CALIBRATION_MODULE_MODE` flag exists and no future
+> change can wire it to self-generated outcomes. The risk this item named is
+> closed by absence, not by a guard. The verification greps named below now
+> return nothing by construction. The checklist entry is retained as history.
 - Problem: backend/app/services/calibration_metrics.py implements real
   brier_score, auc_roc, expected_calibration_error but is imported ONLY by its own
   tests - never by production (subagent finding). A dormant "we can show you
@@ -249,7 +261,7 @@ user-facing contract and must ride on a clean doc baseline.
       links resolve.
 - [ ] B1: LLM config path clamps to neutral without verified source span; tests
       green.
-- [ ] B2: calibration_metrics unreachable in default build; guarded
+- [x] B2: superseded by ADR-0014 (2026-10-02) — deleted, not guarded; `CALIBRATION_MODULE_MODE` was never added
       validation_delta only.
 - [ ] B3: runs require a validation plan; report is a divergence ledger; no
       "recommendations" prose.

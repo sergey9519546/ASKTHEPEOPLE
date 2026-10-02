@@ -295,7 +295,7 @@ def get_simulation_profiles_realtime(simulation_id: str):
                     is_generating = status == "preparing"
                     total_expected = state_data.get("entities_count")
             except Exception:
-                pass
+                pass  # unreadable or half-written state.json; is_generating stays False and the defaults are served
 
         return present(
             {
@@ -385,7 +385,7 @@ def get_simulation_config_realtime(simulation_id: str):
                     elif status == "ready":
                         generation_stage = "completed"
             except Exception:
-                pass
+                pass  # unreadable or half-written state.json; progress fields keep their defaults
 
         # Build return data
         response_data = {

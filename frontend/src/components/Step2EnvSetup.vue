@@ -960,11 +960,6 @@ const getAgentUsername = (agentId) => {
 const platformLabel = (platform) =>
   platform === "reddit" ? "Topic community" : "Short-post channel";
 
-const totalTopicsCount = computed(() => {
-  return profiles.value.reduce((sum, p) => {
-    return sum + (p.interested_topics?.length || 0);
-  }, 0);
-});
 
 const addLog = (msg) => {
   emit("add-log", msg);

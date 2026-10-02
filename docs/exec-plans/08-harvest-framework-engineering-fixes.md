@@ -4,7 +4,7 @@ status: "Partially Delivered"
 version: "1.1.0"
 owner: "askthepeople-architect + askthepeople-persistence-engineer"
 created: "2026-08-02"
-last_reviewed: "2026-10-01"
+last_reviewed: "2026-10-02"
 gate: "Gate 1-3 accelerators"
 baseline_commit: "67cd5484cb7b2dab22b6d134622cf9793b9c4e5d"
 research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
@@ -16,7 +16,7 @@ research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
 > [`../architecture/index.md` § Status of record](../architecture/index.md#status-of-record).
 > The reconciliation below is per-fix, not per-gate.
 >
-> **Status reconciliation (2026-08-05, verified against current `main`).**
+> **Status reconciliation (2026-08-05; fix 1 re-verified 2026-10-02).**
 > Five of these fixes were proposed against baseline `67cd5484`. Re-checked
 > against the current code:
 > - **Fix 2 (eval writer):** the contradictory-counts bug is **fixed**;
@@ -34,12 +34,29 @@ research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
 > - **Fix 5 (jobs endpoint):** **already done.** `GET /api/jobs/{task_id}`
 >   exists and is live (`backend/app/api/jobs.py`); the 202 `Location`
 >   header resolves.
-> - **Fix 1 (DB stack):** the **only** fully-open fix. The broken
->   `app.db.models.*` imports in `migrations/env.py` are repaired to import
->   from the real `app/db/schema.py` Base, and the dead
->   `migrate_json_to_postgres.py` now fails fast with a clear status. The
->   dual-schema reconciliation (UUIDv7 vs Integer PK migration) and a working
->   `alembic upgrade head` remain gate 3 (ADR-0012).
+> - **Fix 1 (DB stack):** **CLOSED 2026-10-02.** The dual-schema reconciliation
+>   was resolved by ADR-0013, which stripped `app/db/schema.py` to `Base` alone
+>   and made `backend/migrations/versions/` the single source of truth. Closing
+>   the "working `alembic upgrade head`" half then exposed two defects that
+>   were live, not merely unwired:
+>   1. `alembic upgrade head` aborted with `SECRET_KEY must be set in
+>      production` before touching the database, because `migrations/env.py`
+>      imported `app.db.schema` at module scope and that executes
+>      `app/__init__.py`. `env.py` now imports the ORM metadata lazily and only
+>      for autogenerate.
+>   2. `alembic revision --autogenerate` wrote a revision whose `upgrade()` was
+>      16 `op.drop_table` and 43 `op.drop_index` calls, because ADR-0013 left
+>      `Base.metadata` empty. It exited 0 and reported success. `env.py` now
+>      refuses autogenerate by name.
+>
+>   A required `migrations` job in `.github/workflows/ci.yml` asserts one linear
+>   head, applies every revision to an empty database with no credentials
+>   present, checks the canonical tables and the recorded head, round-trips
+>   downgrade and upgrade, and asserts autogenerate still refuses. Operator
+>   entry points: `npm run backend:migrate`, `npm run backend:migrate:status`.
+>   Pinned by `backend/tests/test_migrations_are_runnable.py` (6 tests). Gate
+>   status is recorded only in
+>   [`../architecture/index.md` § Status of record](../architecture/index.md#status-of-record).
 
 ## Purpose
 

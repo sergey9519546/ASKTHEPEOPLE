@@ -162,7 +162,7 @@ def _reject_ws(ws: Any, error_code: str) -> None:
     try:
         ws.close()
     except Exception:
-        pass
+        pass  # the close was already attempted; a close-time error cannot be reported anywhere useful
 
 
 def _simulation_state_frame(state: Any) -> Dict:

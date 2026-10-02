@@ -117,16 +117,24 @@ def test_upload_intent_rejects_invalid_byte_length(enabled_client):
 
 
 def test_upload_intent_accepts_txt(enabled_client):
-    """A valid TXT upload intent returns the structured intent shape."""
+    """A valid TXT request clears validation, then refuses honestly.
+
+    This route used to return 200 here with every field null, which asserted
+    that an upload had been prepared when nothing had been. It now refuses with
+    501 because direct upload needs canonical persistence and object storage,
+    neither of which this configuration has.
+
+    The test's purpose is unchanged and arguably better served: a 501 proves the
+    request got past the format gate and the byte-length gate, because those
+    return 422 and 400 respectively. Reaching the not-implemented refusal IS the
+    evidence that validation accepted the request.
+    """
     resp = enabled_client.post(
         "/api/simulation/sources/v1/upload-intent",
         json={"filename": "source.txt", "byte_length": 500, "content_type": "text/plain"},
     )
-    assert resp.status_code == 200
-    data = resp.get_json()["data"]
-    assert data["state"] == "UPLOADING"
-    assert data["format"] == "txt"
-    assert data["byte_length"] == 500
+    assert resp.status_code == 501
+    assert resp.get_json()["error"] == "upload_intent_not_implemented"
 
 
 def test_persistence_enabled_requires_trusted_tenant_context(enabled_client, monkeypatch):

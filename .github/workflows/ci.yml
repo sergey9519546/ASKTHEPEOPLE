@@ -361,6 +361,101 @@ jobs:
             "$WORKER_IMAGE_TAG" \
             -c 'cd /app/backend && celery -A app.celery_app beat --help >/dev/null'
 
+  migrations:
+    name: Schema migrations (gate 3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    defaults:
+      run:
+        working-directory: backend
+
+    # No SECRET_KEY, no APP_TOKEN, no provider keys. Schema creation must not
+    # depend on the web app's credentials: this job runs the migrations against a
+    # throwaway SQLite database, and `migrations/env.py` used to import
+    # `app.db.schema` at module scope, which executed `app/__init__.py` and its
+    # credential gate, so `alembic upgrade head` aborted before touching the
+    # database. See backend/tests/test_migrations_are_runnable.py.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.12.0"
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.11.15"
+
+      - name: Install dependencies
+        run: uv sync --frozen --group dev
+
+      - name: Require exactly one linear migration head
+        run: |
+          set -euo pipefail
+          heads="$(uv run --frozen alembic heads | grep -c '(head)')"
+          if [ "$heads" -ne 1 ]; then
+            echo "::error::Expected exactly one migration head, found ${heads}. The revision graph has branched."
+            uv run --frozen alembic heads
+            exit 1
+          fi
+          uv run --frozen alembic history | head -n 20
+
+      - name: Apply every migration to an empty database
+        env:
+          DATABASE_URL: sqlite:///${RUNNER_TEMP}/gate3.db
+        run: |
+          set -euo pipefail
+          uv run --frozen alembic upgrade head
+          uv run --frozen python - <<'PY'
+          import os, sqlite3, sys
+          db = os.environ["DATABASE_URL"].split("///", 1)[1]
+          conn = sqlite3.connect(db)
+          tables = {r[0] for r in conn.execute(
+              "select name from sqlite_master where type='table'")}
+          head = conn.execute("select version_num from alembic_version").fetchone()[0]
+          required = {"projects", "graphs", "simulations", "reports",
+                      "dw_runs", "dw_paths"}
+          missing = required - tables
+          if missing:
+              print(f"::error::Migrations ran but created no {sorted(missing)}")
+              sys.exit(1)
+          print(f"applied {head}: {len(tables)} tables")
+          PY
+
+      - name: Roll the migrations back and forward
+        env:
+          DATABASE_URL: sqlite:///${RUNNER_TEMP}/gate3.db
+        run: |
+          set -euo pipefail
+          uv run --frozen alembic downgrade base
+          uv run --frozen alembic upgrade head
+
+      - name: Refuse autogenerate instead of emitting a schema wipe
+        # ADR-0013 stripped app/db/schema.py to `Base` alone, so Base.metadata
+        # is empty. `alembic revision --autogenerate` diffs that against a live
+        # database, reads all 16 canonical tables as removed, and writes a
+        # revision whose upgrade() drops every one of them. It exits 0 and says
+        # it succeeded. This step asserts it refuses and writes nothing.
+        env:
+          DATABASE_URL: sqlite:///${RUNNER_TEMP}/gate3.db
+        run: |
+          set -euo pipefail
+          before="$(find migrations/versions -name '*.py' | sort)"
+          if uv run --frozen alembic revision --autogenerate -m ci-probe; then
+            echo "::error::alembic revision --autogenerate exited 0. Under ADR-0013 it must refuse."
+            exit 1
+          fi
+          after="$(find migrations/versions -name '*.py' | sort)"
+          test "$before" = "$after"
+          echo "autogenerate refused and wrote nothing"
   secret-scan:
     name: Secret scan (gitleaks)
     runs-on: ubuntu-latest
@@ -452,7 +547,7 @@ jobs:
   gate:
     name: Required checks passed
     if: always()
-    needs: [backend, frontend, container-smoke, secret-scan, codeql]
+    needs: [backend, frontend, container-smoke, migrations, secret-scan, codeql]
     runs-on: ubuntu-latest
     steps:
       - name: Enforce required checks
@@ -460,12 +555,14 @@ jobs:
           BACKEND_RESULT: ${{ needs.backend.result }}
           CODEQL_RESULT: ${{ needs.codeql.result }}
           CONTAINER_RESULT: ${{ needs.container-smoke.result }}
+          MIGRATIONS_RESULT: ${{ needs.migrations.result }}
           FRONTEND_RESULT: ${{ needs.frontend.result }}
           SECRET_SCAN_RESULT: ${{ needs.secret-scan.result }}
         run: |
           test "$BACKEND_RESULT" = "success"
           test "$CODEQL_RESULT" = "success"
           test "$CONTAINER_RESULT" = "success"
+          test "$MIGRATIONS_RESULT" = "success"
           test "$FRONTEND_RESULT" = "success"
           test "$SECRET_SCAN_RESULT" = "success"
 

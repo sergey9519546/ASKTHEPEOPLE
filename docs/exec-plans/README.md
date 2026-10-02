@@ -3,7 +3,7 @@ title: "Execution Plans"
 status: "Operational"
 version: "1.2.0"
 owner: "Program Lead + Architecture Council"
-last_reviewed: "2026-10-01"
+last_reviewed: "2026-10-02"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -105,7 +105,7 @@ been re-verified against the code; those are the authoritative per-plan claims.
 | [05](05-brief-handoff-exports-and-provenance.md) | Operational | Partially landed; export provenance derives from canonical attempt records |
 | [06](06-security-privacy-observability-and-operations.md) | Operational | Partially landed; gate 4 observability remains NOT STARTED |
 | [07](07-evals-accessibility-and-release.md) | Operational | Partially landed; eval suite runs in CI, release gate closed |
-| [08](08-harvest-framework-engineering-fixes.md) | Partially Delivered | 4 of 5 fixes done — see its status-reconciliation block |
+| [08](08-harvest-framework-engineering-fixes.md) | Delivered | All 5 fixes closed — fix 1 completed 2026-10-02; see its status-reconciliation block |
 | [09](09-source-material-workflow-improvements.md) | Partially Delivered | Tiers 1 and 2 shipped; Tier 3 not started |
 
 Plans 00-07 are `status: "Operational"`, meaning "this is the procedure," not
@@ -114,8 +114,8 @@ were NOT STARTED; that was wrong and had been for some time.
 
 **Key file:line references:**
 
-- The Flask application factory:
-  [`backend/app/__init__.py:25`](../../backend/app/__init__.py:25).
+- The Flask application factory (`create_app`):
+  [`backend/app/__init__.py`](../../backend/app/__init__.py).
 - The Flask blueprint registration:
   [`backend/app/api/__init__.py:13-17`](../../backend/app/api/__init__.py:13).
 - The partially decomposed simulation controller:
@@ -124,15 +124,21 @@ were NOT STARTED; that was wrong and had been for some time.
   [`backend/app/api/routes/`](../../backend/app/api/routes/)
   (write/lifecycle handlers).
 - The model layer:
-  [`backend/app/models/project.py:18-310`](../../backend/app/models/project.py),
-  [`backend/app/models/task.py:21-387`](../../backend/app/models/task.py).
+  `ProjectStatus` at
+  [`backend/app/models/project.py:87`](../../backend/app/models/project.py:87) and
+  `TaskStatus` at
+  [`backend/app/models/task.py:95`](../../backend/app/models/task.py:95).
+  (Line ranges corrected 2026-10-02; the earlier `18-310` / `21-387` spans
+  covered neither class and resolved to unrelated helpers.)
 - The service layer (largest files):
-  [`backend/app/services/report_agent.py:1`](../../backend/app/services/report_agent.py) (114 KB),
-  [`backend/app/services/simulation_runner.py:1`](../../backend/app/services/simulation_runner.py) (82 KB),
-  [`backend/app/services/zep_tools.py:1`](../../backend/app/services/zep_tools.py) (76 KB).
+  [`report_agent.py`](../../backend/app/services/report_agent.py) (3,226 lines),
+  [`simulation_runner.py`](../../backend/app/services/simulation_runner.py) (2,346),
+  [`zep_tools.py`](../../backend/app/services/zep_tools.py) (2,038). Sizes
+  re-measured 2026-10-02 in lines rather than KB, which is what
+  `Get-ChildItem` reports without rounding.
 - The task and Celery layer:
-  [`backend/app/tasks/simulation_tasks.py:16`](../../backend/app/tasks/simulation_tasks.py:16),
-  [`backend/app/celery_app.py:21`](../../backend/app/celery_app.py:21).
+  [`simulation_tasks.py:40`](../../backend/app/tasks/simulation_tasks.py:40) (`run_simulation_task`),
+  [`celery_app.py:27`](../../backend/app/celery_app.py:27) (the Celery instance).
 - The frontend:
   `frontend/src/` (Vue 3 + Vite + D3).
 - The release evidence layout described above is **TARGET**; the

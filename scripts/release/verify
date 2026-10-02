@@ -12,15 +12,22 @@
 #                                       two grep gates in .github/workflows/docs.yml
 #                                       actually compile and fire. Both were silently
 #                                       inert until 2026-10-01 (multi-line EREs).
-#   3. Frontend tests                   mirrors .github/workflows/ci.yml:133-134
-#   4. Frontend production build        mirrors .github/workflows/ci.yml:136-137
+#   3. Frontend tests                   mirrors .github/workflows/ci.yml:134
+#   4. Frontend production build        mirrors .github/workflows/ci.yml:137
 #   5. Backend tests, evals excluded    mirrors ci.yml:75-81
 #                                       (pytest -q --ignore=tests/evals, run via
-#                                       uv when available, else the local venv)
+#                                       uv when available, else the local venv).
+#                                       This gate also covers schema migrations:
+#                                       backend/tests/test_migrations_are_runnable.py
+#                                       applies every revision to an empty database
+#                                       and rolls it back. There is deliberately no
+#                                       separate local migration gate, because that
+#                                       test is the same work CI's dedicated
+#                                       `migrations` job does (ci.yml:364-459).
 #   6. Secret scan (gitleaks)           mirrors the CI working-tree scan
-#                                       (ci.yml:408-415); SKIPped with a
+#                                       (ci.yml:503-510); SKIPped with a
 #                                       warning when gitleaks is not installed
-#                                       (CI still enforces it, ci.yml:364-443)
+#                                       (CI still enforces it, ci.yml:459-539)
 #
 # Runs under Git Bash on Windows and POSIX shells. Exits non-zero when any
 # gate FAILs; a SKIPped gate does not fail the run.
@@ -137,9 +144,9 @@ backend_pytest() {
 }
 
 gitleaks_scan() {
-    # Mirrors the CI working-tree scan (ci.yml:408-415). The commit-range and
-    # full-history scans in CI (ci.yml:417-432) are out of scope for a local
-    # clean-environment gate.
+    # Mirrors the CI working-tree scan (ci.yml:503-510). The commit-range
+    # (ci.yml:512-518) and full-history (ci.yml:519-526) scans in CI are out of
+    # scope for a local clean-environment gate.
     gitleaks dir . --config .gitleaks.toml --redact --no-banner
 }
 
@@ -182,7 +189,7 @@ else
     record "SKIP" 6 "Secret scan (gitleaks binary not installed; CI enforces it)"
     printf '\n=== Gate 6: Secret scan (gitleaks working tree) ===\n'
     printf 'Gate 6: SKIP - gitleaks is not installed locally.\n'
-    printf 'CI still enforces the secret scan (.github/workflows/ci.yml:364-443).\n'
+    printf 'CI still enforces the secret scan (.github/workflows/ci.yml:459-539).\n'
 fi
 
 printf '\n================ RELEASE VERIFICATION SUMMARY ================\n'

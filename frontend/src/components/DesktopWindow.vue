@@ -19,25 +19,37 @@
         <span :id="tabId" class="window-title">{{ app.title }}</span>
       </div>
 
-      <div class="window-position" v-if="mode === 'free'">
+      <div v-if="mode === 'free'" ref="positionWrap" class="window-position">
         <button
+          ref="positionTrigger"
           class="window-control window-control-text"
           type="button"
           :aria-expanded="positionOpen"
           aria-haspopup="menu"
+          :aria-controls="positionMenuId"
           :aria-label="`Placement options for ${app.title}`"
-          @click.stop="positionOpen = !positionOpen"
-          @keydown.down.prevent.stop="openPositionAndFocusFirst"
+          @click.stop="togglePosition"
+          @keydown="onPositionTriggerKeydown"
         >
           Placement
         </button>
-        <div v-if="positionOpen" class="position-menu" role="menu">
+        <div
+          v-if="positionOpen"
+          :id="positionMenuId"
+          class="position-menu"
+          role="menu"
+          aria-orientation="vertical"
+          @keydown="onPositionMenuKeydown"
+        >
           <button
-            v-for="option in POSITION_OPTIONS"
+            v-for="(option, index) in POSITION_OPTIONS"
+            :id="`${positionMenuId}-${option.id}`"
             :key="option.id"
+            :ref="(el) => setPositionRef(el, index)"
             class="position-option"
             type="button"
             role="menuitem"
+            :tabindex="index === positionIndex ? 0 : -1"
             @click.stop="applyPosition(option.id)"
           >
             {{ option.label }}
@@ -69,6 +81,10 @@
       role="separator"
       :aria-label="`Resize ${app.title}. Use the arrow keys to change the size.`"
       aria-orientation="horizontal"
+      :aria-valuemin="MIN_PANEL_W"
+      :aria-valuemax="MAX_PANEL_W"
+      :aria-valuenow="panelWidth"
+      :aria-valuetext="panelSizeText"
       tabindex="0"
       @pointerdown.prevent="startResize"
       @keydown="onResizeKeydown"
@@ -77,13 +93,14 @@
 </template>
 
 <script setup>
-import { computed, provide, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from "vue";
 import {
   appById,
   activeKey,
   closeWindow,
   focusWindow,
   updateGeometry,
+  windows,
 } from "../composables/useDesktop.js";
 import { windowContextKey } from "../composables/useWindowContext.js";
 
@@ -119,7 +136,21 @@ const visible = computed(() => !props.win.minimized);
 const panelId = computed(() => `panel-body-${props.win.key}`);
 const tabId = computed(() => `panel-tab-${props.win.key}`);
 
+/**
+ * Placement menu.
+ *
+ * `role="menu"` is a promise. The previous markup declared a menu and shipped
+ * none of the menu behaviour: no roving tabindex, no arrow movement, no Home or
+ * End, no Escape, and no return of focus to the trigger. A keyboard user
+ * arriving at that control landed inside a menu with no way to move through it
+ * and no way out of it. Everything below exists to make the declared role true.
+ */
 const positionOpen = ref(false);
+const positionIndex = ref(0);
+const positionTrigger = ref(null);
+const positionWrap = ref(null);
+
+const positionMenuId = computed(() => `placement-menu-${props.win.key}`);
 
 const POSITION_OPTIONS = [
   { id: "fill", label: "Fill the workspace" },
@@ -127,6 +158,69 @@ const POSITION_OPTIONS = [
   { id: "left", label: "Left half" },
   { id: "right", label: "Right half" },
 ];
+
+// Collected through a callback ref rather than a v-for string ref so each item
+// is addressable by index the moment the menu opens, without waiting on the
+// array to settle.
+let positionEls = [];
+function setPositionRef(el, index) {
+  if (el) positionEls[index] = el;
+  else delete positionEls[index];
+}
+
+/**
+ * Free-panel geometry bounds, declared once.
+ *
+ * The floors are the numbers the keyboard and pointer paths already clamped to.
+ * The ceilings are the free-panel maximums the stylesheet already implies -
+ * `min(72rem, ...)` across, `min(48rem, ...)` down - so a floating panel can
+ * never be larger than the workspace the "Fill" option would give it.
+ *
+ * The split publishes these same constants as `aria-valuemin` / `aria-valuemax`.
+ * A second hard-coded set beside them would be free to drift from the
+ * arithmetic it describes, which is the whole defect being closed here.
+ */
+const MIN_PANEL_W = 320;
+const MIN_PANEL_H = 240;
+const MAX_PANEL_W = 72 * 16;
+const MAX_PANEL_H = 48 * 16;
+const DEFAULT_PANEL_W = 560;
+const DEFAULT_PANEL_H = 360;
+const RESIZE_STEP = 16;
+const RESIZE_STEP_LARGE = 48;
+
+/**
+ * Geometry is read back through the store rather than off the prop.
+ *
+ * `updateGeometry` writes to the reactive record inside `windows`, so a size
+ * read off a plain prop object can describe geometry the panel no longer has -
+ * which for a splitter means `aria-valuenow` quietly lying about its own size.
+ */
+const liveWin = computed(
+  () => windows.value.find((entry) => entry.key === props.win.key) || props.win,
+);
+
+const panelWidth = computed(() =>
+  panelSize(liveWin.value.w, DEFAULT_PANEL_W, MIN_PANEL_W, MAX_PANEL_W),
+);
+const panelHeight = computed(() =>
+  panelSize(liveWin.value.h, DEFAULT_PANEL_H, MIN_PANEL_H, MAX_PANEL_H),
+);
+
+// An unset dimension means the stylesheet default applies, so the reported size
+// is the default rather than zero. Values are rounded and bounded so
+// `aria-valuenow` can never fall outside the min and max it declares.
+function panelSize(value, fallback, floor, ceiling) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(ceiling, Math.max(floor, Math.round(parsed)));
+}
+
+// A splitter's value is one number, but this control moves both axes, so the
+// readable form names the driven axis first and the other one alongside it.
+const panelSizeText = computed(
+  () => `${panelWidth.value} by ${panelHeight.value} pixels`,
+);
 
 // Each window renders its view with an isolated route context so views that
 // read `useWindowRoute()` get their own decision/run params, never another
@@ -152,8 +246,14 @@ function raise() {
   if (!isActive.value) focusWindow(props.win.key);
 }
 
+/**
+ * Choosing a placement closes the menu and hands focus back to the trigger. A
+ * menu that closes without restoring focus drops a keyboard user at the top of
+ * the document, which is a worse outcome than the placement they chose not
+ * having taken effect.
+ */
 function applyPosition(id) {
-  positionOpen.value = false;
+  closePosition(true);
   if (id === "fill") {
     updateGeometry(props.win.key, { x: 0, y: 0, w: null, h: null, maximized: true });
     return;
@@ -171,50 +271,200 @@ function applyPosition(id) {
   });
 }
 
-function openPositionAndFocusFirst() {
-  positionOpen.value = true;
+function focusPositionItem(index) {
+  const total = POSITION_OPTIONS.length;
+  if (total === 0) return;
+  // Menus wrap. Stopping at the ends would make the last item a dead end.
+  const bounded = (index + total) % total;
+  positionIndex.value = bounded;
+  nextTick(() => {
+    const el = positionEls[bounded];
+    if (el && typeof el.focus === "function") el.focus();
+  });
 }
+
+function openPosition(index = 0) {
+  positionOpen.value = true;
+  focusPositionItem(index);
+}
+
+function closePosition(returnFocus) {
+  positionOpen.value = false;
+  if (!returnFocus) return;
+  nextTick(() => {
+    const el = positionTrigger.value;
+    if (el && typeof el.focus === "function") el.focus();
+  });
+}
+
+function togglePosition() {
+  if (positionOpen.value) closePosition(false);
+  else openPosition(0);
+}
+
+/**
+ * The menu button half of the WAI-ARIA menu-button pattern.
+ *
+ * Enter and Space are handled here and default-prevented rather than left to the
+ * button's own activation, because native activation also fires `click`; the
+ * trigger's click handler toggles, so letting both run would open the menu and
+ * immediately close it again.
+ */
+function onPositionTriggerKeydown(event) {
+  switch (event.key) {
+    case "ArrowDown":
+    case "Enter":
+    case " ":
+    case "Spacebar":
+      event.preventDefault();
+      event.stopPropagation();
+      openPosition(0);
+      break;
+    case "ArrowUp":
+      event.preventDefault();
+      event.stopPropagation();
+      openPosition(POSITION_OPTIONS.length - 1);
+      break;
+    case "Escape":
+      if (!positionOpen.value) return;
+      event.preventDefault();
+      event.stopPropagation();
+      closePosition(false);
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * The menu half of the pattern. `Tab` closes instead of moving focus itself: a
+ * menu is not a tab container, so it must not intercept traversal - it only
+ * gets to stop being open while focus continues on its way.
+ */
+function onPositionMenuKeydown(event) {
+  switch (event.key) {
+    case "ArrowDown":
+      event.preventDefault();
+      focusPositionItem(positionIndex.value + 1);
+      break;
+    case "ArrowUp":
+      event.preventDefault();
+      focusPositionItem(positionIndex.value - 1);
+      break;
+    case "Home":
+      event.preventDefault();
+      focusPositionItem(0);
+      break;
+    case "End":
+      event.preventDefault();
+      focusPositionItem(POSITION_OPTIONS.length - 1);
+      break;
+    case "Escape":
+      event.preventDefault();
+      event.stopPropagation();
+      closePosition(true);
+      break;
+    case "Tab":
+      closePosition(false);
+      break;
+    default:
+      break;
+  }
+}
+
+/**
+ * Clicking away dismisses the menu.
+ *
+ * The listener exists only while the menu is open, so a closed placement
+ * control costs nothing, and it is removed on unmount so a torn-down panel
+ * cannot leave a handler bound to the document. Capture is used so the check
+ * runs before anything the click would otherwise activate.
+ */
+function onDocumentPointerDown(event) {
+  const wrap = positionWrap.value;
+  if (wrap && event.target instanceof Node && wrap.contains(event.target)) return;
+  closePosition(false);
+}
+
+watch(positionOpen, (open) => {
+  if (typeof document === "undefined") return;
+  if (open) document.addEventListener("pointerdown", onDocumentPointerDown, true);
+  else document.removeEventListener("pointerdown", onDocumentPointerDown, true);
+});
+
+onBeforeUnmount(() => {
+  if (typeof document === "undefined") return;
+  document.removeEventListener("pointerdown", onDocumentPointerDown, true);
+});
 
 /**
  * Dragging Movements (WCAG 2.2 SC 2.5.7) requires a single-pointer, non-drag
  * alternative - a modifier held while arrowing does not count, which is why the
  * grip is a real focusable separator with its own arrow-key behaviour rather
  * than a passive corner graphic.
+ *
+ * A focusable separator is a window splitter, so it must also state its size.
+ * Both paths bound the same way the published `aria-valuemin` / `aria-valuemax`
+ * do, which is what stops `aria-valuenow` from ever describing a size outside
+ * the range the control claims.
  */
 function onResizeKeydown(event) {
-  const step = event.shiftKey ? 48 : 16;
-  const win = props.win;
-  const currentW = Number.isFinite(win.w) && win.w ? win.w : 560;
-  const currentH = Number.isFinite(win.h) && win.h ? win.h : 360;
+  const step = event.shiftKey ? RESIZE_STEP_LARGE : RESIZE_STEP;
   const next = {};
-  if (event.key === "ArrowRight") next.w = currentW + step;
-  else if (event.key === "ArrowLeft") next.w = Math.max(320, currentW - step);
-  else if (event.key === "ArrowDown") next.h = currentH + step;
-  else if (event.key === "ArrowUp") next.h = Math.max(240, currentH - step);
-  else return;
+  if (event.key === "ArrowRight") {
+    next.w = Math.min(MAX_PANEL_W, panelWidth.value + step);
+  } else if (event.key === "ArrowLeft") {
+    next.w = Math.max(MIN_PANEL_W, panelWidth.value - step);
+  } else if (event.key === "ArrowDown") {
+    next.h = Math.min(MAX_PANEL_H, panelHeight.value + step);
+  } else if (event.key === "ArrowUp") {
+    next.h = Math.max(MIN_PANEL_H, panelHeight.value - step);
+  } else return;
   event.preventDefault();
   updateGeometry(props.win.key, next);
 }
 
+// Set for the duration of a pointer drag so `onBeforeUnmount` can release the
+// listeners even when the panel is torn down mid-gesture.
+let activeDragCleanup = null;
+
+onBeforeUnmount(() => {
+  if (activeDragCleanup) activeDragCleanup();
+});
+
 function startResize(event) {
   if (event.button !== 0) return;
-  const originW = props.win.w;
-  const originH = props.win.h;
+  const originW = panelWidth.value;
+  const originH = panelHeight.value;
   const startX = event.clientX;
   const startY = event.clientY;
 
   const onMove = (moveEvent) => {
     updateGeometry(props.win.key, {
-      w: Math.max(320, (originW || 560) + moveEvent.clientX - startX),
-      h: Math.max(240, (originH || 360) + moveEvent.clientY - startY),
+      w: Math.min(
+        MAX_PANEL_W,
+        Math.max(MIN_PANEL_W, originW + moveEvent.clientX - startX),
+      ),
+      h: Math.min(
+        MAX_PANEL_H,
+        Math.max(MIN_PANEL_H, originH + moveEvent.clientY - startY),
+      ),
     });
   };
-  const onUp = () => {
+  // Teardown has to be reachable from more than the happy path. Unmounting
+  // mid-drag, or releasing the pointer outside the window, both skipped the
+  // removal and left two window-level listeners alive for the life of the tab.
+  const detach = () => {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", detach);
+    activeDragCleanup = null;
   };
+  const onUp = detach;
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", detach);
+  activeDragCleanup = detach;
 }
 </script>
 
@@ -243,13 +493,13 @@ function startResize(event) {
   height: 100%;
   min-width: 0;
   border: 0;
-  border-right: 1px solid var(--line-dark);
+  border-right: 1px solid var(--line-structural);
   overflow: hidden;
 }
 
 .layout-free {
   position: absolute;
-  border: 1px solid var(--line-dark);
+  border: 1px solid var(--line-structural);
   box-shadow: var(--shadow-md);
 }
 

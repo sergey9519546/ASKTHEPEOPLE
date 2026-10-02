@@ -136,7 +136,7 @@ class PTParams:
             if val > 1.0:
                 # Values above 1 invert the characteristic inverse-S shape.
                 # Permitted but unusual, so no error -- documented instead.
-                pass
+                pass  # the branch exists only to mark the above-one value as deliberately accepted
 
 
 # ---------------------------------------------------------------------------

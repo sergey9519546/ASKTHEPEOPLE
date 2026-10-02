@@ -1,7 +1,7 @@
 <template>
-  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <a href="#main-content" class="skip-link">Skip to the working panel</a>
   <div
-    id="main-content"
+    id="app-root"
     class="app-surface"
     :aria-hidden="accessRequired || hasCrashed ? 'true' : undefined"
     :inert="accessRequired || hasCrashed ? '' : undefined"

@@ -31,7 +31,7 @@
         v-if="nextStep"
         class="masthead-next"
         type="button"
-        :aria-label="`Continue to ${nextStep.title}, step ${nextStep.step} of ${DESKTOP_APPS.length}`"
+        :aria-label="`Continue to ${nextStep.title}, step ${nextStep.step} of ${JOURNEY_TOTAL}`"
         @click="launchNext"
       >
         <span class="next-label">Next</span>
@@ -52,7 +52,6 @@ import { useRouter } from "vue-router";
 import { openPalette } from "../composables/useCommandPalette.js";
 import { workspaceState } from "../composables/useWorkspaceState.js";
 import {
-  DESKTOP_APPS,
   JOURNEY_TOTAL,
   journeyState,
   launchRouteFor,
@@ -109,7 +108,6 @@ function goHome() {
   router.push({ name: "Home" });
 }
 
-void DESKTOP_APPS;
 </script>
 
 <style scoped>
@@ -118,7 +116,7 @@ void DESKTOP_APPS;
   grid-template-columns: auto minmax(10rem, 1fr) auto auto;
   align-items: stretch;
   min-height: var(--band-masthead);
-  border-bottom: 1px solid var(--line-dark);
+  border-bottom: 1px solid var(--line-structural);
   background: var(--ink-deep);
 }
 

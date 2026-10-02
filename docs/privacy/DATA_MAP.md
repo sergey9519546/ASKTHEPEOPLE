@@ -3,7 +3,7 @@ title: "Privacy Data Map"
 status: "Normative"
 version: "1.2.0"
 owner: "Privacy + Security + Data Governance"
-last_reviewed: "2026-08-08"
+last_reviewed: "2026-10-02"
 review_cycle: "Quarterly and every subprocessor/data-flow change"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -20,6 +20,10 @@ applies_to: "every byte uploaded, every model call, every export, every subproce
 > documentation system. Where this document conflicts with generated output,
 > legacy copy, or an implementation convenience, this document controls until
 > superseded through an approved architecture or product decision record.
+> **Gate status is not recorded here.** Gate numbers in this document say which
+> gate a piece of work is tracked against; they are not a status assertion. The
+> single authoritative statement of gate status is
+> [`docs/architecture/index.md` § *Status of record*](../architecture/index.md#status-of-record).
 > **Research status.** This document distinguishes binding product policy from
 > external standards and research. External sources inform the requirements but
 > do not automatically make the product compliant, valid, accurate, or fit for a
@@ -520,10 +524,10 @@ requires the canonical persistence layer.
 ### Sensitive content in logs and traces — CURRENT (by design)
 
 The `log_request` middleware never logs request bodies
-([`app/__init__.py:111-123`](../../backend/app/__init__.py:111)).
+([`log_request before-request hook`](../../backend/app/__init__.py)).
 The production stripping of tracebacks and 5xx error strings is in
 place
-([`app/__init__.py:198-226`](../../backend/app/__init__.py:198)).
+([`strip_traceback_in_production after-request hook`](../../backend/app/__init__.py)).
 The current behavior satisfies the doc's "no PII in logs" objective
 at the wire today.
 
@@ -532,7 +536,8 @@ at the wire today.
 `config.py` exposes
 [`CORS_ORIGINS`](../../backend/app/config.py),
 `REQUIRE_APP_AUTH`, `APP_TOKEN`, `SECRET_KEY`, and
-`TRUST_X_REAL_IP` (line 30-39 of `app/__init__.py`). The current
+`TRUST_X_REAL_IP` (read by the `_rate_limit_key()` helper in`r
+`backend/app/api/__init__.py`). The current
 configuration does not carry an explicit jurisdiction, a lawful
 basis, or a per-region data-residency policy. These are
 **TARGET** and land with gate 3.

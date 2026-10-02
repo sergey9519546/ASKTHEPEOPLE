@@ -351,7 +351,7 @@ class RunAttemptStore:
             try:
                 os.unlink(temp_path)
             except FileNotFoundError:
-                pass
+                pass  # best-effort cleanup of an orphaned temp file; raise re-raises the real failure
             raise
 
     @contextmanager

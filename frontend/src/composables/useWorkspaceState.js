@@ -56,7 +56,7 @@ export function loadSavedState() {
   }
 }
 
-export function saveState(updates = {}) {
+function saveState(updates = {}) {
   workspaceState.value = {
     ...workspaceState.value,
     ...updates,
@@ -105,7 +105,6 @@ export function useWorkspaceState() {
   return {
     workspaceState,
     loadSavedState,
-    saveState,
     setContext,
     clearState,
   };

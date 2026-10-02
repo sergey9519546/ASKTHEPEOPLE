@@ -31,9 +31,9 @@
 </template>
 
 <script setup>
-import { useRouter } from "vue-router";
-
-const router = useRouter();
+// No router here: the route-recovery page links home with a plain `href="/"` so
+// it still works when this view is rendered outside a router host (the shell's
+// 404 fallback, a static export, or a test mount).
 </script>
 
 <style scoped>

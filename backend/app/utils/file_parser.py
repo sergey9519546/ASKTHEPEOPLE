@@ -45,7 +45,7 @@ def _read_text_with_fallback(file_path: str) -> str:
     try:
         return data.decode('utf-8')
     except UnicodeDecodeError:
-        pass
+        pass  # not UTF-8; fall through to the detector chain below
     
     # Try detecting encoding using charset_normalizer
     encoding = None
@@ -55,7 +55,7 @@ def _read_text_with_fallback(file_path: str) -> str:
         if best and best.encoding:
             encoding = best.encoding
     except Exception:
-        pass
+        pass  # charset_normalizer absent or failed; fall through to chardet
     
     # Fallback to chardet
     if not encoding:
@@ -64,7 +64,7 @@ def _read_text_with_fallback(file_path: str) -> str:
             result = chardet.detect(data)
             encoding = result.get('encoding') if result else None
         except Exception:
-            pass
+            pass  # chardet absent or failed; fall through to the utf-8-with-replace final fallback
     
     # Final fallback: use UTF-8 + replace
     if not encoding:
@@ -340,7 +340,7 @@ class FileParser:
                     # the general case and is deliberately not chased here.
                     sheet_names[target] = sheet.get("name") or target
             except KeyError:
-                pass
+                pass  # xl/workbook.xml absent; sheet names fall back to positional sheetN labels below
 
             worksheet_names = sorted(
                 name for name in archive.namelist()

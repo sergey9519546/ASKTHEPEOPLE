@@ -391,7 +391,7 @@ list is **TARGET**. Gate 1 + gate 5, owned by
 
 - Frontend is Vue 3 + Vite + vue-router. Built into
   `frontend/dist/` and served by
-  [`backend/app/__init__.py:317-325`](../../backend/app/__init__.py:317).
+  [`backend/app/__init__.py`](../../backend/app/__init__.py) (`serve_frontend`). Corrected 2026-10-02: the previously cited `:317-325` no longer resolves.
 - Route visualization in the home view uses CSS-driven animations;
   D3 is used in `GraphPanel.vue` for graph rendering. The design is
   implemented in CSS and SVG.

@@ -116,7 +116,7 @@ def _connect(path: str) -> sqlite3.Connection:
     try:
         conn.execute("PRAGMA journal_mode=WAL;")
     except sqlite3.Error:
-        pass
+        pass  # WAL is an optimisation; a filesystem that refuses it still ingests correctly
     return conn
 
 
@@ -395,7 +395,7 @@ def _ingest_sqlite_platform(
                     ),
                 )
         except sqlite3.Error:
-            pass
+            pass  # platform schema differs; this optional action stream is skipped and the rest of the ingest continues
 
     if _table_exists(db_cursor, "post"):
         try:
@@ -424,7 +424,7 @@ def _ingest_sqlite_platform(
                     ),
                 )
         except sqlite3.Error:
-            pass
+            pass  # platform post row rejected by this schema; posts are optional evidence
 
     if _table_exists(db_cursor, "comment"):
         try:
@@ -453,7 +453,7 @@ def _ingest_sqlite_platform(
                     ),
                 )
         except sqlite3.Error:
-            pass
+            pass  # platform comment row rejected by this schema; comments are optional evidence
 
     conn.close()
 

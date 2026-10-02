@@ -10,6 +10,8 @@
     "backend": "cd backend && uv run python run.py",
     "backend:test": "cd backend && .\\.venv\\Scripts\\pytest -q",
     "backend:test:ci": "cd backend && uv run --frozen pytest -q --ignore=tests/evals",
+    "backend:migrate": "cd backend && uv run --frozen alembic upgrade head",
+    "backend:migrate:status": "cd backend && uv run --frozen alembic current && uv run --frozen alembic heads",
     "frontend": "npm --prefix frontend run dev",
     "build": "python backend/scripts/guard_vercel_build.py && npm --prefix frontend run build",
     "test": "npm --prefix frontend test --silent",

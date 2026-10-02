@@ -171,12 +171,23 @@ const openBranch = () => {
   color: var(--signal-soft);
 }
 
+/* An underlined text link inside a sentence, not a control button. It opts out
+   of the global button treatment - the floor and the inline-flex display both
+   applied to it and added vertical space to running prose. Its own target size
+   is carried by the surrounding line height. */
 .link-button {
+  display: inline;
+  min-height: 0;
   padding: 0;
   border: 0;
+  border-radius: 0;
   background: none;
   color: inherit;
   font: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
+  text-align: inherit;
   text-decoration: underline;
   cursor: pointer;
 }

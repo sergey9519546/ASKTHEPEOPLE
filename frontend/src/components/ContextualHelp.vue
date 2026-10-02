@@ -274,6 +274,10 @@ const iconPath = computed(() => {
   justify-content: center;
   width: 1.5rem;
   height: 1.5rem;
+  /* Restated explicitly: `min-height` outranks `height`, so the global button
+     floor would otherwise stretch this circle into an oval. 1.5rem is exactly
+     the SC 2.5.8 minimum this control needs. */
+  min-height: 1.5rem;
   padding: 0;
   border: 1px solid var(--line-dark);
   border-radius: 50%;

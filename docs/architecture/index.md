@@ -1,9 +1,9 @@
 ---
 title: "Architecture Overview — ASKTHEPEOPLE"
 status: "Normative"
-version: "1.2.0"
+version: "1.3.0"
 owner: "Architect + Security + Persistence + Orchestration"
-last_reviewed: "2026-10-01"
+last_reviewed: "2026-10-02"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -46,8 +46,8 @@ that no PR can claim the target without an acceptance-evidence bundle.
 ```text
                                   ┌────────────────────────────┐
    Vue 3 / Vite frontend  ───────►│  Flask app (single process)│
-   (frontend/dist served by        │  app/__init__.py:72-438   │
-    app/__init__.py:425-433)       │                            │
+   (frontend/dist served by        │  app/__init__.py (create_app)│
+    serve_frontend)                │                            │
                                    │  Blueprints (api/__init__.py:13-17)│
                                    │   /api/auth       auth_bp           │
                                    │   /api/graph      graph_bp (29 KB)  │
@@ -81,7 +81,7 @@ that no PR can claim the target without an acceptance-evidence bundle.
 
 ## HTTP layer — CURRENT
 
-The Flask application is created by [`create_app()`](../../backend/app/__init__.py:72).
+The Flask application is created by [`create_app()`](../../backend/app/__init__.py).
 The route responsibility contract — **auth → parse → authorize → dispatch →
 present** — is stated here and is this document's own terminology; it is not
 defined in the build plan or any ADR. The architectural decision to decompose
@@ -115,14 +115,14 @@ produced by running the command. Re-measure before re-quoting.
 | Module | Route decorators | Lines | Holds |
 |---|---:|---:|---|
 | [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 406 | shared helpers imported by `routes/` (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
-| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 19 | 926 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
-| [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 10 | 891 | start / stop / status / inject / env / durable runtime controls |
-| [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 8 | 501 | generated-response routes |
-| [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 541 | create / prepare / profiles / preflight |
+| [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 19 | 978 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
+| [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 10 | 917 | start / stop / status / inject / env / durable runtime controls |
+| [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 8 | 521 | generated-response routes |
+| [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) | 6 | 563 | create / prepare / profiles / preflight |
 | [`api/routes/source_routes.py`](../../backend/app/api/routes/source_routes.py) | 5 (+ dynamic) | 378 | feature-gated source-ingestion capability and commands; registered onto `simulation_bp` by `register_source_routes()` (`routes/__init__.py:29`) |
 | [`api/routes/decision_lens_routes.py`](../../backend/app/api/routes/decision_lens_routes.py) | 0 (+ dynamic) | 221 | immutable decision-lens review, registered dynamically |
 | [`api/routes/entity_routes.py`](../../backend/app/api/routes/entity_routes.py) | 3 | 159 | graph entity listing |
-| [`api/routes/export_routes.py`](../../backend/app/api/routes/export_routes.py) | 4 | 160 | config / script / survey download |
+| [`api/routes/export_routes.py`](../../backend/app/api/routes/export_routes.py) | 4 | 166 | config / script / survey download |
 | [`api/routes/workspace_routes.py`](../../backend/app/api/routes/workspace_routes.py) | 1 | 27 | decision-workspace manifest |
 | [`api/routes/__init__.py`](../../backend/app/api/routes/__init__.py) | 0 | 29 | registers every module in this package |
 
@@ -132,13 +132,13 @@ package because they serve `report_bp` rather than `simulation_bp`. Measured
 
 | Module | Routes | Lines | Holds |
 |---|---|---|---|
-| [`api/report_routes/report_lifecycle_routes.py`](../../backend/app/api/report_routes/report_lifecycle_routes.py) | 5 | 596 | generate / generate-status / progress / delete / check |
+| [`api/report_routes/report_lifecycle_routes.py`](../../backend/app/api/report_routes/report_lifecycle_routes.py) | 5 | 598 | generate / generate-status / progress / delete / check |
 | [`api/report_routes/report_read_routes.py`](../../backend/app/api/report_routes/report_read_routes.py) | 5 | 265 | single report / by-simulation / list / sections / one section |
 | [`api/report_routes/report_export_routes.py`](../../backend/app/api/report_routes/report_export_routes.py) | 4 | 169 | download / export pdf, csv, executive |
 | [`api/report_routes/report_log_routes.py`](../../backend/app/api/report_routes/report_log_routes.py) | 4 | 216 | agent-log, console-log, and both streams |
-| [`api/report_routes/report_tool_routes.py`](../../backend/app/api/report_routes/report_tool_routes.py) | 2 | 156 | tools/search / tools/statistics |
+| [`api/report_routes/report_tool_routes.py`](../../backend/app/api/report_routes/report_tool_routes.py) | 2 | 163 | tools/search / tools/statistics |
 | [`api/report_routes/report_evidence_routes.py`](../../backend/app/api/report_routes/report_evidence_routes.py) | 2 | 66 | related-records + evidence (one handler, two rules) |
-| [`api/report_routes/report_interaction_routes.py`](../../backend/app/api/report_routes/report_interaction_routes.py) | 1 | 137 | chat |
+| [`api/report_routes/report_interaction_routes.py`](../../backend/app/api/report_routes/report_interaction_routes.py) | 1 | 139 | chat |
 | [`api/report_routes/__init__.py`](../../backend/app/api/report_routes/__init__.py) | 0 | 57 | `register_report_routes(blueprint)` |
 | **Total** | **23** | | `api/report.py` is 24 lines, 0 route decorators |
 
@@ -168,56 +168,57 @@ honors the auth → parse → authorize → dispatch → present contract.
 
 ### Authentication and security headers — CURRENT
 
-All implemented at the request/response seam in
-[`create_app()`](../../backend/app/__init__.py:72). Line numbers below were
-re-measured against `backend/app/__init__.py` (438 lines) at `b868477` on
-2026-10-01; an earlier revision of this section cited a range that was 40-100
-lines short throughout, because it was measured against a much older version of
-the file. Verify before re-quoting.
+All implemented at the request/response seam in `create_app()` in
+[`backend/app/__init__.py`](../../backend/app/__init__.py). Each item below
+names the **symbol** rather than a line, on purpose: this module was 438 lines
+on 2026-10-01, 496 when measured on 2026-10-02, and 519 by the end of that
+session, so a line anchor measured twice in one day was already stale twice.
+Grep the symbol name; do not re-add line numbers without re-measuring.
 
 - Bearer-token auth on every `/api/*` route when `APP_TOKEN` is set
-  ([`require_auth` before-request hook](../../backend/app/__init__.py:223-252));
-  constant-time comparison via [`hmac.compare_digest`](../../backend/app/__init__.py:248).
+  ([`require_auth` before-request hook](../../backend/app/__init__.py));
+  constant-time comparison via [`hmac.compare_digest`](../../backend/app/__init__.py).
   `/health` is exempt; unknown `/api` paths fail closed via
-  [`api_not_found`](../../backend/app/__init__.py:412-415) rather than falling
+  [`api_not_found`](../../backend/app/__init__.py) rather than falling
   through to the SPA catch-all.
 - Production CORS lockdown: `CORS_ORIGINS='*'` is refused in production and
   replaced with `http://127.0.0.1`
-  ([`create_app` CORS branch](../../backend/app/__init__.py:126-146)).
+  ([`create_app` CORS branch](../../backend/app/__init__.py)).
 - Security response headers (production only):
   Content-Security-Policy, X-Content-Type-Options: nosniff, X-Frame-Options:
   DENY, Referrer-Policy: no-referrer, Permissions-Policy with all sensitive
   features disabled, Cross-Origin-Opener-Policy: same-origin,
   Cross-Origin-Resource-Policy: same-origin, and HSTS when forwarded-proto is
   https
-  ([`apply_security_headers` after-request hook](../../backend/app/__init__.py:266-313)).
+  ([`apply_security_headers` after-request hook](../../backend/app/__init__.py)).
 - `Cache-Control: no-store` for `/api/*`, `/health`, and every `/health/*`
-  (same hook, [`backend/app/__init__.py:266-313`](../../backend/app/__init__.py:266-313)).
+  (same `apply_security_headers` hook,
+  [`backend/app/__init__.py`](../../backend/app/__init__.py)).
 - Production stripping of `traceback` and 5xx `error` strings
-  ([`strip_traceback_in_production` after-request](../../backend/app/__init__.py:315-346)).
+  ([`strip_traceback_in_production` after-request](../../backend/app/__init__.py)).
 - No request body logging in any debug path
-  ([`log_request` before-request](../../backend/app/__init__.py:210-221)).
+  ([`log_request` before-request](../../backend/app/__init__.py)).
 - `SafePathError` → `400 {"success": false, "error": "invalid_id"}`
-  ([`handle_unsafe_path`](../../backend/app/__init__.py:384-386)).
+  ([`handle_unsafe_path`](../../backend/app/__init__.py)).
 - `RateLimitExceeded` → `429 {"success": false, "error": "rate_limit_exceeded"}`
-  ([`handle_rate_limit`](../../backend/app/__init__.py:376-378), registered only
+  ([`handle_rate_limit`](../../backend/app/__init__.py), registered only
   when `flask-limiter` imports). The catch-all
-  [`handle_exception`](../../backend/app/__init__.py:397-406) returns a scrubbed
+  [`handle_exception`](../../backend/app/__init__.py) returns a scrubbed
   `internal_server_error` outside DEBUG.
 
 `/health` is provider-independent liveness. `/health/readiness` additionally
 declares `scope: web` and requires the cached ZEP dependency status to be
 current and available; failure returns 503 and marks only
 `web_graph_backed` unavailable while leaving canonical records intact
-([`api/health.py:124-190`](../../backend/app/api/health.py:124),
-[`services/zep_dependency_status.py:118-231`](../../backend/app/services/zep_dependency_status.py:118)).
+([`api/health.py:257`](../../backend/app/api/health.py:257),
+[`services/zep_dependency_status.py:118`](../../backend/app/services/zep_dependency_status.py:118)).
 The process-local probe performs only `project.get()` with a two-second timeout,
 caches success for 30 seconds and failure for 10 seconds, and never accepts a
 stale success. ZEP remains a derived, rebuildable index rather than a canonical
 store. A context-scoped filter suppresses `httpx` and `httpcore` transport
 records only while that probe runs; application diagnostics remain enabled
-([`services/zep_dependency_status.py:48-74`](../../backend/app/services/zep_dependency_status.py:48),
-[`services/zep_dependency_status.py:178-204`](../../backend/app/services/zep_dependency_status.py:178)).
+([`services/zep_dependency_status.py:54-76`](../../backend/app/services/zep_dependency_status.py:54),
+[`services/zep_dependency_status.py:229`](../../backend/app/services/zep_dependency_status.py:229)).
 This web readiness result does not establish worker-provider reachability.
 
 The worker has a separate **CURRENT availability attestation**, not a
@@ -228,8 +229,8 @@ runtime revision. Missing, malformed, stale, mismatched, or shutdown markers
 return 503. Both response states contain exactly `status`, `service`, and
 `revision`; they contain no dependency value, process identifier, exception,
 or provider result
-([`worker_health.py:61-151`](../../backend/scripts/worker_health.py:61),
-[`celery_app.py:84-130`](../../backend/app/celery_app.py:84)).
+([`worker_health.py:60-163`](../../backend/scripts/worker_health.py:60),
+[`celery_app.py:146`](../../backend/app/celery_app.py:146)).
 
 Before broker connection, the worker bootstep performs a pure no-network
 configuration validation for the graph/report task boundary. It requires the
@@ -239,9 +240,9 @@ immutable runtime revision. After validating the dedicated marker target, the
 bootstep clears any stale marker before broker connection. The wrapper binds
 the health process to the actual Celery PID and removes both marker and health
 process on exit
-([`worker_startup.py:56-159`](../../backend/app/utils/worker_startup.py:56),
-[`celery_app.py:84-145`](../../backend/app/celery_app.py:84),
-[`worker_wrapper.sh:6-57`](../../backend/scripts/worker_wrapper.sh:6)).
+([`worker_startup.py:58`](../../backend/app/utils/worker_startup.py:58),
+[`celery_app.py:55-60`](../../backend/app/celery_app.py:55),
+[`worker_wrapper.sh:1-57`](../../backend/scripts/worker_wrapper.sh:1)).
 This attestation proves that the configured worker reached Celery readiness;
 it still does not prove live provider reachability. That stronger technical
 seam requires the protected fictional canary in the release runbook.
@@ -256,7 +257,7 @@ Source: [`backend/app/models/project.py`](../../backend/app/models/project.py).
 
 The `Project` dataclass is persisted as JSON at
 `backend/uploads/projects/{project_id}/project.json`. Lifecycle is a 5-state
-enum defined in [`models/project.py:18-25`](../../backend/app/models/project.py:18):
+enum defined in [`models/project.py:87-93`](../../backend/app/models/project.py:87):
 
 ```text
 CREATED → ONTOLOGY_GENERATED → GRAPH_BUILDING → GRAPH_COMPLETED
@@ -265,17 +266,29 @@ CREATED → ONTOLOGY_GENERATED → GRAPH_BUILDING → GRAPH_COMPLETED
                                                     FAILED
 ```
 
-`ProjectManager` ([`models/project.py:102-310`](../../backend/app/models/project.py:102))
-reads and writes this JSON directly. **Defects:**
+`ProjectManager` ([`models/project.py:171`](../../backend/app/models/project.py:171))
+reads and writes this JSON directly. **One audit finding is closed, two remain
+partly open.** Re-measured 2026-10-02:
 
-- `save_project` writes JSON non-atomically
-  ([`models/project.py:168-175`](../../backend/app/models/project.py:168)) —
-  matches audit P1 "Non-atomic file persistence."
-- `list_projects` does `os.listdir` + per-project `get_project` JSON read
-  ([`models/project.py:198-225`](../../backend/app/models/project.py:198)) —
-  matches audit P2 "Nested report-directory scans."
-- `delete_project` uses `shutil.rmtree` with no audit log or soft delete
-  ([`models/project.py:227-244`](../../backend/app/models/project.py:227)).
+- **CLOSED — `save_project` is atomic.** It writes through
+  `ProjectManager._atomic_write_text`
+  ([`models/project.py:236-265`](../../backend/app/models/project.py:236)),
+  which writes a sibling temp file, `fsync`s it, then `os.replace`s onto the
+  final path; `save_project` calls it at
+  [`models/project.py:345`](../../backend/app/models/project.py:345). Audit P1
+  "Non-atomic file persistence" no longer describes this path, and the
+  method's own docstring records the fix. An earlier revision of this section
+  still listed it as a defect; that was stale.
+- OPEN — `list_projects` does `os.listdir` + per-project `get_project` JSON
+  read ([`models/project.py:605-621`](../../backend/app/models/project.py:605)) —
+  matches audit P2 "Nested report-directory scans." A per-directory
+  `SafePathError` is caught so one malformed entry cannot break the listing.
+- PARTLY CLOSED — `delete_project` still hard-deletes with `shutil.rmtree`
+  ([`models/project.py:651`](../../backend/app/models/project.py:651)), but it
+  now writes an audit event **before** the removal
+  ([`models/project.py:645-650`](../../backend/app/models/project.py:645)) with
+  `reason="hard_delete"`, deliberately ordered so the record survives a partial
+  removal. "No audit log" is therefore closed; **soft delete is not.**
 - There is no `organization_id` or `workspace_id` on the `Project` aggregate
   — multi-tenant isolation is **TARGET**, not CURRENT.
 
@@ -283,18 +296,18 @@ reads and writes this JSON directly. **Defects:**
 
 Source: [`backend/app/models/task.py`](../../backend/app/models/task.py).
 
-`TaskManager` ([`models/task.py:236`](../../backend/app/models/task.py:236))
+`TaskManager` ([`models/task.py:342`](../../backend/app/models/task.py:342))
 retains a process-local cache, but idempotent task admission is now shared:
 the semantic payload is hashed and the reservation plus task record are
 created in one Redis `WATCH`/`MULTI` transaction
-([`models/task.py:413-596`](../../backend/app/models/task.py:413)). A matching
+([`models/task.py:539-648`](../../backend/app/models/task.py:539)). A matching
 in-flight request returns the reserved task ID across processes; a mismatched
 payload conflicts; and a matching reservation whose task expired can create a
 new task without overwriting another record. Updates use optimistic Redis CAS
 and fail after bounded contention instead of falling through to an
 unconditional write
-([`models/task.py:842-1035`](../../backend/app/models/task.py:842)). Lifecycle is
-a 5-state enum at [`models/task.py:94-101`](../../backend/app/models/task.py:94):
+([`models/task.py:1201-1276`](../../backend/app/models/task.py:1201)). Lifecycle
+is a 5-state enum at [`models/task.py:95-101`](../../backend/app/models/task.py:95):
 
 ```text
 PENDING → PROCESSING → COMPLETED
@@ -305,9 +318,9 @@ PENDING → PROCESSING → COMPLETED
 Report generation has a **TRANSITION** worker fence: one Redis-backed owner can
 claim a queued report task, and report checkpoints re-check that owner before
 writes
-([`models/task.py:662-791`](../../backend/app/models/task.py:662),
-[`report_tasks.py:159-220`](../../backend/app/tasks/report_tasks.py:159),
-[`report_tasks.py:329-339`](../../backend/app/tasks/report_tasks.py:329)). A
+([`models/task.py:778-924`](../../backend/app/models/task.py:778),
+[`report_tasks.py:139-220`](../../backend/app/tasks/report_tasks.py:139),
+[`report_tasks.py:329-338`](../../backend/app/tasks/report_tasks.py:329)). A
 duplicate delivery fails without entering report generation or downgrading the
 owner's task.
 
@@ -321,7 +334,7 @@ owner's task.
   ([`models/task.py:879`](../../backend/app/models/task.py:879)). Each
   takeover emits an operator `task_execution_takeover` warning naming the
   displaced and seizing owner and the new token
-  ([`models/task.py:888`](../../backend/app/models/task.py:888)), so a
+  ([`models/task.py:886-895`](../../backend/app/models/task.py:887)), so a
   wedged worker is visible in logs. The lease horizon is env-tunable
   ([`models/task.py:260`](../../backend/app/models/task.py:260)) so a slow
   LLM provider can raise it at deploy; the legacy-lease migration grace is
@@ -330,7 +343,7 @@ owner's task.
   operator can widen it during a rolling deploy without slowing new-code crash
   recovery. The report agent renews the lease *before* the write-time
   validation at every checkpoint cadence
-  ([`report_agent.py:1102-1131`](../../backend/app/services/report_agent.py:1102)),
+  ([`report_agent.py:1186-1204`](../../backend/app/services/report_agent.py:1186)),
   so a self-lapsed lease (a slow step that exceeded the horizon, with no
   takeover) is recovered for the rightful owner rather than aborting the
   report; transient heartbeat contention is best-effort, only a real fence
@@ -388,11 +401,11 @@ path exists but the route still uses the in-process one.
 
 [`celery_app.py`](../../backend/app/celery_app.py) configures Celery against
 the Redis broker and result backend. The single registered task is
-[`run_simulation_task`](../../backend/app/tasks/simulation_tasks.py:16),
+[`run_simulation_task`](../../backend/app/tasks/simulation_tasks.py:40),
 which calls
-[`SimulationRunner.start_simulation`](../../backend/app/tasks/simulation_tasks.py:55)
-and polls every 0.5 s for status
-([`simulation_tasks.py:69-116`](../../backend/app/tasks/simulation_tasks.py:69)).
+[`SimulationRunner.start_simulation`](../../backend/app/tasks/simulation_tasks.py:79)
+and polls in a loop
+([`simulation_tasks.py:95`](../../backend/app/tasks/simulation_tasks.py:95)).
 The task is real and used; the polling loop is a smell — the audit
 recommends push-based event delivery.
 
@@ -440,7 +453,7 @@ The actual OASIS / CAMEL simulation is driven by
 (16 KB).
 
 This is process-local: the runner registers a cleanup hook at app startup
-([`create_app` → `SimulationRunner.register_cleanup`](../../backend/app/__init__.py:203-205))
+([`create_app` → `SimulationRunner.register_cleanup`](../../backend/app/__init__.py))
 that terminates spawned processes when the web process exits. The audit
 identifies this as a horizontal-scaling blocker: another web worker cannot see
 or control the process. **TARGET** is a dedicated simulation worker process
@@ -486,7 +499,7 @@ are **TARGET** — they are not yet centralized.
 ## Frontend — CURRENT
 
 Vue 3 + Vue Router + Vite + D3, built into `frontend/dist/` and served by
-[`create_app` static handler](../../backend/app/__init__.py:425-433). The
+[`create_app` static handler](../../backend/app/__init__.py). The
 Civic Wayfinding design direction
 ([`docs/design/DIRECTION_C.md`](../design/DIRECTION_C.md)) is implemented
 in CSS and SVG; the semantic route list required by
@@ -518,6 +531,26 @@ state persists across refresh and deep links resolve through the router.
 >   in [ADR-0013](adr/ADR-0013-schema-source-convergence.md).
 > - **Gate 4 observability** moved again in commit `6e71f39` and is described
 >   in its own subsection below with its own test citations.
+> - **Gate 3 schema creation** moved on 2026-10-02 and is measured in its own
+>   subsection below, with the two defects that were found and the tests that
+>   pin them.
+> - **ADR-0014 island deletion** landed in commit `8739d10` on 2026-10-02.
+>   Claims that described the deleted files as present are corrected in place
+>   and marked as such; they are not silently dropped, because a reader who
+>   remembers the old text needs to see that it was wrong and why.
+> - **Citation sweep, 2026-10-02.** Every `backend/app/__init__.py` anchor in
+>   this document was re-measured; `models/project.py` and `models/task.py`
+>   anchors were re-measured against 743 and 1473 lines. Two counts in this
+>   document were found **overstated** — the typed-boundary ratio and the "other
+>   five models" `extra="forbid"` tally — and are corrected with the
+>   measurement shown.
+> - **`backend/app/__init__.py` is cited by symbol, not by line, throughout
+>   this document.** It was 438 lines on 2026-10-01, 496 when measured, and 519
+>   by the end of the same session — a concurrent change to that module moved
+>   every line anchor twice. `AGENTS.md` §5 rule 1 permits `file` + symbol where
+>   a line was not pinned, and a wrong line number is worse than none. Grep the
+>   symbol. The same treatment was applied to the security, privacy, design, and
+>   release documents that cited it by line.
 >
 > Line counts anywhere in this document were true at the commit named beside
 > them and go stale silently. Per `AGENTS.md` §0, re-measure before quoting: the
@@ -552,7 +585,8 @@ both anchors were fabricated and have been removed.
 defense on source ingestion (`backend/app/utils/safe_url.py`); bearer auth on
 `/api/*` and signed WebSocket tickets (`backend/app/__init__.py`,
 `backend/app/api/ws.py`); fail-closed `SECRET_KEY`/`APP_TOKEN` and production
-CORS refusal (`backend/app/config.py:117-121`, `backend/app/config.py:368-373`);
+CORS refusal (`backend/app/config.py:117-121`, and the
+  `_is_production and _cors_origins.strip() == "*"` branch in `create_app`);
 5xx traceback scrubbing (`backend/app/__init__.py`). Remaining P0 coverage is
 specified in [`../security/THREAT_MODEL.md`](../security/THREAT_MODEL.md).
 
@@ -569,15 +603,40 @@ lines, `decision_lens.py` 379, `possible_path.py` 354, `decision_workspace.py`
 281, `authorization.py` 139, `identifiers.py` 138, `actor_context.py` 82). No
 route owns a preparation daemon thread or opens the activity SQLite directly.
 
-The typed request boundary is **partial, and deliberately so**: 27 of 99 routes
-carry a schema. `prep_routes`, `execution_routes`, `decision_lens_routes` and
-`sources` typed them earlier; exec-plan T26 added the rest on 2026-10-02 —
-four JSON-body report routes, eight interview routes, two export routes, one
-graph route, and two settings routes. Twenty routes were left untyped **on
-purpose**, because a body schema on them would validate `{}` and never fire:
-`read_routes` and `entity_routes` are GET-only, `graph.py`'s upload seam is
-`multipart/form-data`, two graph routes take `project_id` in the query string,
-and `GET/POST generate/status` reads identifiers from the query string on GET.
+The typed request boundary is **partial, and deliberately so**. **Correction
+(2026-10-02):** an earlier revision of this paragraph claimed "27 of 99 routes
+carry a schema". Measured against the live app, that is wrong in both numbers.
+The denominator is **102** unique `/api` endpoints
+(`create_app()` → `url_map.iter_rules()`, excluding `HEAD`/`OPTIONS`), and the
+numerator is **18** — counted as every `@enforce_schema(...)` and
+`@validate_schema(...)` decorator plus the two handler-wrapping
+`enforce_schema(...)` calls in `api/settings.py`:
+
+| Where | Count | Mechanism |
+|---|---:|---|
+| `api/routes/prep_routes.py` | 2 | `@validate_schema` |
+| `api/routes/execution_routes.py` | 3 | `@validate_schema` |
+| `api/sources.py` | 1 | `@validate_schema` |
+| `api/report_routes/report_lifecycle_routes.py` | 1 | `@enforce_schema` |
+| `api/report_routes/report_interaction_routes.py` | 1 | `@enforce_schema` |
+| `api/report_routes/report_tool_routes.py` | 2 | `@enforce_schema` |
+| `api/routes/interview_routes.py` | 4 | `@enforce_schema` |
+| `api/routes/export_routes.py` | 1 | `@enforce_schema` |
+| `api/graph.py` | 1 | `@enforce_schema` |
+| `api/settings.py` | 2 | `enforce_schema(...)` call, not a decorator |
+
+Two corrections inside the old claim survive scrutiny: the two settings routes
+*are* typed, but by function call (`api/settings.py:309`, `:391`) rather than a
+decorator, which is why a decorator-only grep misses them; and
+`decision_lens_routes` is **not** part of this boundary — it imports from
+`app/api/decision_lens_schemas.py` (`api/routes/decision_lens_routes.py:25`),
+a different module from the request-boundary schemas in `api/schemas.py`.
+
+Roughly twenty routes were left untyped **on purpose**, because a body schema on
+them would validate `{}` and never fire: `read_routes` and `entity_routes` are
+GET-only, `graph.py`'s upload seam is `multipart/form-data`, two graph routes
+take `project_id` in the query string, and `GET/POST generate/status` reads
+identifiers from the query string on GET.
 `test_read_typed_boundary.py` and `test_graph_typed_boundary.py` assert that
 those stay untyped, so the decision cannot silently reverse.
 
@@ -590,10 +649,21 @@ and `/graph/build` — because each has a test that posts a canary field
 a canonical record. Forbidding extras would reject the request before the handler
 could demonstrate that, making the payload-provenance guarantee in
 `test_report_worker_dispatch.py` and `test_graph_worker_final_fixes.py`
-**vacuous** (`AGENTS.md` §5 rule 5). The other five models use
-`extra="forbid"`, each verified against the frontend's real payload. Every model
-is `strict=True`, which blocks the coercion that matters: `"force_regenerate":
-"yes"` cannot become `True`, and `simulation_id: 5` cannot become `"5"`.
+**vacuous** (`AGENTS.md` §5 rule 5). **Correction (2026-10-02):** an earlier
+revision said "the other five models use `extra="forbid"`". Re-read on
+2026-10-02, **at least twelve** bound models declare `extra="forbid"` — the
+four `schemas_interview_export.py` interview models, `ExportGeneratedResponsesRequest`,
+`ReportChatRequest`, `GraphSearchRequest`, `GraphStatisticsRequest`,
+`StopSimulationRequest`, and `SimulationControlRequest`. Two further bound
+models (`CreateSimulationRequest`, `PrepareSimulationRequest`) declare **no**
+`model_config` at all, so they inherit Pydantic's default `extra="ignore"`
+and are **not** strict. A model is only `strict=True` if it says so: the
+`extra="ignore"` pair and every `extra="forbid"` model in `api/schemas.py`
+carry `strict=True`, and the two unconfigured models do not. The coercion the
+rule is protecting against is real and is covered where `strict=True` is set —
+`"force_regenerate": "yes"` cannot become `True` on
+`PrepareSimulationRequest`'s sibling graph model, and `simulation_id: 5`
+cannot become `"5"` — but do not restate it as a property of *every* model.
 
 **Gate 2.** Routes enqueue to Celery and return 202 rather than spawning daemon
 threads (`backend/app/api/routes/prep_routes.py`,
@@ -617,7 +687,35 @@ sources, runs, decision lenses, and first-class path aggregates
 `backend/migrations/versions/a1b2c3d4e5f6_domain_aggregates.py`,
 `backend/migrations/versions/b2c3d4e5f6a7_path_aggregates.py`). Persistence is
 opt-in behind `USE_SUPABASE_PERSISTENCE`
-(`backend/app/config.py:321-322`).
+(`backend/app/config.py:354-356`).
+
+**Schema creation is now performed by something.** Measured 2026-10-02, this
+was the open half of exec-plan 08 fix 1, and both halves turned out to be broken
+rather than merely unwired:
+
+- `alembic upgrade head` could not run at all without production credentials.
+  `backend/migrations/env.py` imported `app.db.schema` at module scope;
+  importing any `app.*` submodule executes `backend/app/__init__.py`, whose
+  `Config` class body raises `SECRET_KEY must be set in production`. The
+  migration tool aborted before reaching the database, even against a throwaway
+  SQLite file. `env.py` now loads the ORM metadata lazily and only for
+  autogenerate, so `upgrade`/`downgrade` depend on no credentials at all.
+- `alembic revision --autogenerate` generated a **schema wipe**. ADR-0013 left
+  `app/db/schema.py` declaring `Base` and no tables, so autogenerate diffed an
+  empty target against a live database and read all 16 canonical tables as
+  removed. Run against a database at head, it wrote a revision whose `upgrade()`
+  was 16 `op.drop_table` and 43 `op.drop_index` calls, exited 0, and reported
+  success. It is the standard tool for the documented workflow, so this was a
+  live landmine rather than a theoretical one. `env.py` now refuses autogenerate
+  by name and tells the operator to hand-write the revision.
+- A required `migrations` job in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
+  asserts a single linear head, applies all three revisions to an empty database
+  with no credentials in the environment, asserts the canonical tables exist and
+  the recorded head is reached, round-trips downgrade and upgrade, and asserts
+  autogenerate still refuses and writes nothing. Operator entry points are
+  `npm run backend:migrate` and `npm run backend:migrate:status`. All of it is
+  pinned by
+  [`backend/tests/test_migrations_are_runnable.py`](../../backend/tests/test_migrations_are_runnable.py).
 
 **The divergence as measured before it was closed.** Recorded because the
 measurement is what justified stripping rather than mirroring: `schema.py`
@@ -628,7 +726,7 @@ key (`sa.Integer()` autoincrement in
 `Column(Uuid, ...)` in the ORM). The two shared tables were not the same
 tables: `projects` shared 4 of 6 ORM columns with its 16-column migration
 counterpart, `simulations` 5. **The live code targeted the migration** —
-`backend/app/services/project_repository.py:252` queries
+`backend/app/services/project_repository.py:241` queries
 `WHERE project_id = :project_id`, a column only the migration has. There is no
 longer a second source to compare, so this is history; the current measurement
 is that `backend/app/db/schema.py` is a 63-line module declaring zero tables
@@ -652,7 +750,7 @@ unreachable `DATABASE_URL` in production — and issues no DDL. `init_db()` now
 instead of silently reinstating the old behaviour. Removing `create_all` was
 safe precisely because it was harmful: it built a `projects` table with no
 `project_id`, which is the column
-`backend/app/services/project_repository.py:252` queries.
+`backend/app/services/project_repository.py:241` queries.
 
 Two guards pin this, both proven by planting a violation and watching them fail:
 
@@ -686,23 +784,25 @@ The check runs once on engine acquisition, not per query, and
 declared table is one a migration actually creates. Proven by neutering
 `require_tables`: two tests fail.
 
-**Phantom imports are now guarded.** Two modules import packages that do not
-exist, and nothing detected it:
-`backend/scripts/migrate_json_to_postgres.py:37-39` imports
-`app.db.database` and `app.db.models.*`, and
-`backend/app/optimization/learning_loop.py:26` imports `app.db.models`. Neither
-module exists — `backend/migrations/env.py:14` records that the same package
-"never existed", and the script's own docstring at line 6 says so before
-proceeding anyway. Both fail with a bare `ModuleNotFoundError` far from the
-cause.
-`backend/tests/test_no_phantom_imports.py` (6 tests) resolves every absolute
-`app.*` import against the filesystem. It is **static** — parsing each file's
-AST rather than importing it — because importing every module would execute
-Celery app construction and database engine creation, making the test
-order-dependent and environment-sensitive. Both known-broken files are on a
-recorded allowance with a reason, a staleness test fails if either is repaired,
-and another asserts the allowance is not decorative. Proven by planting
-`from app.services.does_not_exist import thing`: the guard fails.
+**Phantom imports are guarded, and the two offenders are gone.** Two modules used
+to import packages that did not exist, and nothing detected it:
+`backend/scripts/migrate_json_to_postgres.py` imported `app.db.database` and
+`app.db.models.*`, and `backend/app/optimization/learning_loop.py` imported
+`app.db.models`. Neither package existed — `backend/migrations/env.py` records
+that the same package "never existed" — and both failed with a bare
+`ModuleNotFoundError` far from the cause. **Both files were deleted on
+2026-10-02** by
+[ADR-0014](adr/ADR-0014-removal-of-optimization-backtest-island.md), which
+emptied the `KNOWN_UNRESOLVED` allowance that had been tolerating them and
+removed the two pinning tests.
+`backend/tests/test_no_phantom_imports.py` (**5** collected tests, re-measured
+2026-10-02; an earlier revision here said 6) resolves every absolute `app.*`
+import against the filesystem. It is **static** — parsing each file's AST rather
+than importing it — because importing every module would execute Celery app
+construction and database engine creation, making the test order-dependent and
+environment-sensitive. The allowance is now empty, so there is no reason for an
+entry to exist; a staleness test would fail if a phantom reappeared. Proven by
+planting `from app.services.does_not_exist import thing`: the guard fails.
 
 **Per-call prompt provenance now reaches disk.** ADR-0004 requires a SHA-256
 record for every model call. Those records were being constructed in
@@ -725,7 +825,7 @@ canonical, which *implements*
 rather than re-deciding it — ADR-0012 already required "schema changes are
 Alembic-only; web and worker startup never call `create_all`". ADR-0013 records
 the measured divergence, the boot path
-(`backend/app/__init__.py:164` → `:167` → `backend/app/db/__init__.py:27`),
+(`backend/app/__init__.py` → `:167` → `backend/app/db/__init__.py:27`),
 and the verified reachability table. That table is the load-bearing part: it
 shows the divergence was a **trap, not active corruption**, because
 `RunRepository` and `PathRepository` have no production importer at all and
@@ -757,13 +857,14 @@ already exposes about component state. A deployment that needs it hidden should
 put it behind the ingress rather than add a token check that would break
 scraping.
 
-Tested by `backend/tests/test_metrics_gate4.py` (32 tests) and
-`backend/tests/test_metrics_wiring.py` (6 tests). The privacy property is
-asserted on the **output**, not the input: the exposition is scraped and checked
-for path separators and id-shaped hex, so a future change that passes
-`request.path` fails a test rather than leaking. The wiring tests prove the
-middleware is installed, that an exception path still returns the in-flight
-gauge to zero, and that a removed registration fails 4 of 6.
+Tested by `backend/tests/test_metrics_gate4.py` (32 collected tests, re-measured
+2026-10-02). **Correction:** an earlier revision of this paragraph also cited
+`backend/tests/test_metrics_wiring.py` (6 tests). That module was **deleted**,
+and the "removed registration fails 4 of 6" claim died with it — do not
+restate it. The surviving coverage proves the privacy property on the
+**output**, not the input: the exposition is scraped and checked for path
+separators and id-shaped hex, so a future change that passes `request.path`
+fails a test rather than leaking.
 
 **Still missing:** distributed tracing, SLO and cost-budget definitions,
 alerting rules, Redis-backed rate limiting, and horizontal scaling. Sentry is
@@ -776,13 +877,18 @@ concrete while the procedures they describe are still partly unimplemented.
 by `backend/tests/test_reasoning_scrub.py`). A versioned prompt registry
 ([`../ai/PROMPT_REGISTRY.md`](../ai/PROMPT_REGISTRY.md)) and a single
 OpenAI-compatible adapter exist, and a narrow eval suite
-(`backend/tests/evals/`) passes in CI. The behavioural modules `big_five`,
-`prospect_theory`, `diffusion_model`, `constraint_engine`, `game_theory`, and
-`calibration_metrics` are exported from `backend/app/services/__init__.py` and
-unit-tested, but the last three have **no production importer** and are blocked
-on inputs the product does not have — see the analysis in
-[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md). Wiring them would require
-inventing the quantities they consume.
+(`backend/tests/evals/`) passes in CI. The behavioural modules `big_five` and `prospect_theory` remain, exported from
+`backend/app/services/__init__.py` and unit-tested; `diffusion_model` is
+exported at `services/__init__.py:41` and is **wired in production** by
+`simulation_config_generator.py`. **Correction (2026-10-02):**
+`constraint_engine`, `game_theory`, and `calibration_metrics` no longer exist.
+They were deleted, not wired, by
+[ADR-0014](adr/ADR-0014-removal-of-optimization-backtest-island.md) (commit
+`8739d10`) together with their five tests; a grep for any of the three names
+under `backend/` now returns nothing. Their Phase 2 analysis survives in
+[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md) and §B2 of
+[`ULTRAPLAN.md`](ULTRAPLAN.md), both of which describe modules that are gone —
+those two documents need a correction pass.
 
 **Character distinctness is measured, not assumed.** The distinctness eval
 (`backend/tests/evals/test_variant_persona_distinctness.py`) failed on entry:
@@ -813,19 +919,26 @@ never ran on archetype-expanded variants at all; `generate_archetype_profiles`
 now validates the expanded population. The threshold and its limits are pinned
 by `backend/tests/test_profile_validation.py`.
 
-**Gate 5 blocker — the θ-optimization island has no admissible authority.**
-Five unimported artifacts cited a now-archived roadmap as "Authority". All five
-now carry a DO-NOT-WIRE warning naming the superseded document and the truth
-rail clause it violates:
+**Gate 5 blocker — CLOSED by deletion, 2026-10-02.** This subsection is now
+history and is retained because the *reason* still constrains future work. The
+θ-optimization island once comprised five unimported artifacts citing a
+now-archived roadmap as "Authority", each carrying a DO-NOT-WIRE warning naming
+the superseded document and the truth-rail clause it violates:
 
-- `backend/app/optimization/theta_optimizer.py:19` — fits θ to observed outcomes
-- `backend/app/optimization/multi_objective_loss.py:13` — scores against `P_real_world`
-- `backend/app/optimization/learning_loop.py:14` — closed loop that consumes outcomes
-- `backend/app/simulation/hybrid_simulator.py:21` — pipeline from *real observed
+- `backend/app/optimization/theta_optimizer.py` — fit θ to observed outcomes
+- `backend/app/optimization/multi_objective_loss.py` — scored against `P_real_world`
+- `backend/app/optimization/learning_loop.py` — closed loop consuming outcomes
+- `backend/app/simulation/hybrid_simulator.py` — pipeline from *real observed
   platform state* to a *final predictive distribution*
-- `backend/db/migrations/20260819_add_capability_registry.sql:22` — table keyed
+- `backend/db/migrations/20260819_add_capability_registry.sql` — table keyed
   to `forecast_horizon` and a real population
 
+**Every one of those five paths no longer exists.**
+[ADR-0014](adr/ADR-0014-removal-of-optimization-backtest-island.md) (commit
+`8739d10`) deleted the island rather than warning about it, because an agent
+looking for this code should find the ADR and not a header comment. Verified
+2026-10-02: `Get-ChildItem backend -Recurse -Filter '*capabilit*'` and
+existence checks on each of the five paths return nothing under `backend/`.
 The roadmap,
 [`../archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md`](../archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md),
 was archived on 2026-10-01 because its stated objective is to minimize the
@@ -850,8 +963,9 @@ open.
   gate 3.
 - **Exec-plan 09 Tier 1** (decision-only mode): source material is no longer
   required to submit — the `files.value.length > 0` guard was removed from
-  `canSubmit` (`frontend/src/views/Home.vue:599-603`, with the requirement list
-  updated at `frontend/src/views/Home.vue:605-615`).
+  `canSubmit` (`frontend/src/views/Home.vue:535`, with the requirement list
+  updated at `frontend/src/views/Home.vue:541`; re-measured 2026-10-02 after the
+  decision-first rebuild of that view).
 - **Exec-plan 09 Tier 2** (URL ingestion): `POST /api/sources/fetch` is live
   (`backend/app/api/sources.py:20-22`), backed by
   `backend/app/services/url_fetcher.py` and the SSRF guard in
@@ -868,8 +982,8 @@ open.
   `/api/simulation/list` and `/history`. The branch **tree and comparison
   views** are still unbuilt.
 - **Release verification gate**: `scripts/release/verify` is the single
-  verification entry point required by `../release/RUNBOOK.md:127-131`, invoked
-  by `npm run verify` (`package.json:16`). It runs **six** gates:
+  verification entry point required by `../release/RUNBOOK.md:131-135`, invoked
+  by `npm run verify` (`package.json:18`). It runs **six** gates:
   the documentation validator
   (`tools/validate_docs.py`), the doc truth-gate self-test
   (`scripts/release/check-docs-gates.sh`), frontend tests, the frontend
@@ -905,32 +1019,42 @@ open.
   [ADR-0001](adr/ADR-0001-product-category-and-truth-contract.md) classifies the
   product as a **Synthetic Decision Explorer**
   (`docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md:30`).
-  The product surface and the design spec use the *generated* family instead:
-  `frontend/src/views/InteractionView.vue:8`,
-  `frontend/src/views/MainView.vue:4`,
-  `frontend/src/views/ReportView.vue:8`,
-  `frontend/src/views/SimulationRunView.vue:8`, and
-  `frontend/src/views/SimulationView.vue:5` all render
-  `aria-label="Ask The People / generated Decision Explorer — home"`, and
-  `docs/design/DIRECTION_C.md:66` pins the lockup as
-  `ASKTHEPEOPLE / GENERATED DECISION EXPLORER`. So `DIRECTION_C.md` is
-  *consistent with the code*; the split is ADR-0001 against everything else.
+  The split was wider than this document recorded. As of 2026-10-02, after the
+  shell redesign consolidated five hand-written route headers into
+  `frontend/src/components/ViewHeader.vue`, **`frontend/src/**` now uses the
+  ADR-0001 family throughout**: the shared header, the masthead lockup
+  (`frontend/src/components/DesktopMasthead.vue`), and the entry view
+  (`frontend/src/views/Home.vue`) all render
+  `Synthetic Decision Explorer`. The five per-view brand blocks that used to
+  render `Ask The People / generated Decision Explorer — home` no longer exist
+  as markup, so the seven naked-wordmark truth violations they carried are gone.
   `tools/lint_frontend_truth.mjs` `APPROVED_PRODUCT_DESCRIPTOR_PATTERN`
-  accepts all of `generated decision explorer`, `generated scenario
-  exploration`, `synthetic decision explorer`, `synthetic scenario
-  exploration`, and `research-planning handoff`, so no gate fires.
-  **This is deliberately not resolved here.** Unifying it either edits what
-  users see or edits an accepted ADR; both are product-claim changes that
-  require a PR with named reviewers, an impact statement, and a rollback plan
-  per `AGENTS.md` §5 rule 13.
-- **The frontend truth linter has a known blind spot.** Its
-  `VISIBLE_ATTRIBUTE_PATTERN` matches only `aria-label`, `title`, `placeholder`,
-  `alt`, and `content` attributes, so **visible text nodes are unenforced**. A
-  live consequence: `frontend/src/views/Home.vue:11` renders
-  `Generated scenario explorer` as visible body text, and that string is
-  **not** in the approved descriptor pattern (the approved form is
-  `generated scenario *exploration*`). Extending the linter to visible text is
-  a truth-gate change and needs the same review as above.
+  accepts both families, so nothing gates the difference.
+  **What remains is `frontend/index.html`, which still ships
+  `GENERATED DECISION EXPLORER`** in `<title>` (line 20), the description meta
+  (line 10), and the Open Graph title (line 12); the two wordmark SVGs
+  (`frontend/public/mark.svg:2`, `frontend/public/social-card.svg:2`); **and
+  `frontend/src/views/NotFoundView.vue:9`, which still renders the bare
+  `Ask The People` wordmark in visible body text.** An earlier revision of this
+  paragraph named only the first three surfaces and so under-counted the
+  residual. That is the residual split, and
+  it is still deliberately unresolved: unifying it edits what users see or
+  edits an accepted ADR, and both are product-claim changes requiring a PR with
+  named reviewers, an impact statement, and a rollback plan per `AGENTS.md`
+  §5 rule 13.
+- **CORRECTION — the frontend truth linter does not have the blind spot this
+  document used to record.** It previously claimed that
+  `VISIBLE_ATTRIBUTE_PATTERN` matched attributes only and that visible text
+  nodes were therefore unenforced. That was wrong, and re-running the linter on
+  2026-10-02 disproves it: it reports **6 violations, 3 of them on visible text
+  nodes** (`frontend/src/components/Step4Report.vue:251`,
+  `frontend/src/views/NotFoundView.vue:9`, and both wordmark SVGs). The linter
+  has three candidate sources — attributes via `VISIBLE_ATTRIBUTE_PATTERN`
+  (`tools/lint_frontend_truth.mjs:7-8`), template text between `>` and `<`
+  reported as surface `text` (`tools/lint_frontend_truth.mjs:189-197`), and
+  `<script>` string literals reported as `script-string`
+  (`tools/lint_frontend_truth.mjs:208-217`). Only the attribute pattern is
+  attribute-only; visible copy is enforced.
 - **The doc validator now checks link anchors (2026-10-01).** It previously
   stripped `#fragment` and never resolved it, so two **fabricated** anchors
   shipped and survived: `…BUILDPLAN.md#13-highest-value-implementation-order`
@@ -944,7 +1068,8 @@ open.
   headings or de-linked with the fabrication recorded. It also accepts `#LlNNN`
   highlighter anchors and explicit HTML `id=` targets.
 - **The backend and frontend prohibited-term lists had drifted, and now
-  cannot.** `tools/lint_frontend_truth.mjs` `TERM_PATTERNS` holds 32 patterns
+  cannot.** `tools/lint_frontend_truth.mjs` `TERM_PATTERNS` holds 33 patterns (re-measured 2026-10-02; `_term_regexes()` in
+  `backend/tests/test_backend_truth_terms.py` returns 33)
   applied to `frontend/src/**`; `backend/app/utils/llm_client.py`
   `_TRUTH_KEYWORDS_PROHIBITED` held 5 strings applied to every LLM response by
   `_audit_response`. Nothing enforced agreement, and the two differed: the
@@ -966,9 +1091,11 @@ open.
   prohibition list itself. `backend/tests/test_backend_truth_terms.py` now
   gates the rest: it compiles the frontend `TERM_PATTERNS` as Python regexes,
   skips any match whose **clause** carries a negation, excludes the reviewed
-  island, and fails on anything else. **100 of 135 `backend/app` modules are
-  gated**; 35 are allowlisted, each with a written reason, and the test asserts
-  every allowlist entry still points at a real file. Verified by planting
+  island, and fails on anything else. **114 of 139 `backend/app` modules are
+  gated** and 25 are allowlisted, each with a written reason, and the test
+  asserts every allowlist entry still points at a real file — so none is stale.
+  (Re-measured 2026-10-02 after ADR-0014 removed nine dead-island allowlist
+  rows; an earlier revision said 100 of 135 with 35 allowlisted.) Verified by planting
   `backend/app/__truth_probe__.py` containing "this run predicts what people
   will do" — the gate failed, and passed again once removed.
 - **Step 1 progressive guidance** is live: `ProgressiveGuidance` and
@@ -998,17 +1125,19 @@ in their own revertible commit, uncommitted at the time of writing):
 `frontend/src/components/EvidenceBadge.vue` (290 lines), and
 `frontend/src/components/HistoryDatabase.vue` (1013 lines — removed from
 `Home.vue` by the Direction C redesign `d57898f`). Nothing imported any of
-them, no route rendered them, and the frontend suite passes without them
-(200 tests in 28 files). `HistoryDatabase.vue` was the only one with a note
+them, no route rendered them, and the frontend suite passes without them (290 tests
+in 32 files, measured 2026-10-02; an earlier revision here said 200 in 28). `HistoryDatabase.vue` was the only one with a note
 warning against reviving it; see
-[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md). A stale comment in
-`frontend/src/__tests__/branch-lineage.spec.js:41-42` still describes
-`HistoryDatabase.vue` as an existing alternative; it asserts on `Home.vue`
-content and passes either way.
+[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md). **Correction:** an earlier
+revision of this paragraph called the comment at
+`frontend/src/__tests__/branch-lineage.spec.js:41-42` stale. It has since been
+corrected — it now states that `HistoryDatabase.vue` "has since been deleted".
+Do not restore the older wording.
 
 ### Blocked on operator actions, not on engineering
 
-`../deployment/README.md` lines 178-226 records seven deployment blockers.
+`../deployment/README.md` § *Deployment blockers* (lines 178-234) records seven
+deployment blockers.
 Blocker 6 (missing `scripts/release/verify`) is closed. The rest gate a
 **deploy**, not the documentation or feature work, and must not be scheduled as
 engineering tasks:
@@ -1019,7 +1148,7 @@ engineering tasks:
 - Blocker 2 — `npm run setup:backend` is repaired in `package.json:7`
   (`uv sync --frozen --group dev`).
 - Blocker 5 — the runbook forbids the only runnable topology from OneDrive,
-  Dropbox, NFS, or SMB (`../release/RUNBOOK.md:214-218`). This checkout is
+  Dropbox, NFS, or SMB (`../release/RUNBOOK.md:217-222`). This checkout is
   under OneDrive, so a deployer must clone to a local disk first.
 
 The Product Truth Contract

@@ -965,7 +965,7 @@ class SimulationConfigGenerator:
                 try:
                     return json.loads(json_str)
                 except:
-                    pass
+                    pass  # every repair strategy failed; the caller treats None as "no config produced"
         
         return None
     

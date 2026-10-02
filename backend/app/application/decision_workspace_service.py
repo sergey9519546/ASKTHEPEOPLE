@@ -97,7 +97,7 @@ def _workspace_manifest_lock(project_dir: str) -> Iterator[None]:
                 _unlock_file(lock_file)
             except OSError:
                 # Closing the descriptor releases an OS-owned advisory lock.
-                pass
+                pass  # and the exiting `with` block closes the descriptor, which is what actually releases the OS lock
 
 
 class CapabilityAvailability(str, Enum):

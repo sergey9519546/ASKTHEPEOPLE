@@ -124,24 +124,10 @@ describe("frontend product-truth guard", () => {
         surface: "text",
         snippet: "Ask The People · Route recovery",
       },
-      {
-        path: "frontend/src/views/Home.vue",
-        term: "product-name",
-        surface: "text",
-        snippet: "ASKTHEPEOPLE",
-      },
-      {
-        path: "frontend/src/views/Home.vue",
-        term: "product-name",
-        surface: "text",
-        snippet: "ASK THE PEOPLE",
-      },
-      {
-        path: "frontend/src/views/Home.vue",
-        term: "product-name",
-        surface: "aria-label",
-        snippet: "ASKTHEPEOPLE home",
-      },
+      // Home.vue's three entries used to follow this one. The decision-first
+      // rebuild paired every occurrence of the wordmark with the
+      // "Synthetic Decision Explorer" descriptor and dropped the unlabelled
+      // home link, so those three debts were retired by deleting them here.
     ];
     const isAcceptedDebt = (violation) =>
       acceptedDebt.some(
@@ -169,9 +155,9 @@ describe("frontend product-truth guard", () => {
     );
     expect(stale).toEqual([]);
 
-    // Eight entries cover nine violations: frontend/index.html carries the
+    // Five entries cover six violations: frontend/index.html carries the
     // zero-human disclosure twice, in its description and its social copy.
-    expect(result.violations.filter(isAcceptedDebt)).toHaveLength(9);
+    expect(result.violations.filter(isAcceptedDebt)).toHaveLength(6);
   });
 
   it("keeps every primary route behind the permanent five-fact Truth Rail", () => {

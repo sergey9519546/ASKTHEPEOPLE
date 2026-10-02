@@ -425,7 +425,7 @@ class ZepGraphMemoryUpdater:
                             time.sleep(self.SEND_INTERVAL)
                     
                 except Empty:
-                    pass
+                    pass  # queue drain with a short timeout returned nothing new; loop and wait again
                     
             except Exception as e:
                 logger.error(f"Worker loop exception: {e}")

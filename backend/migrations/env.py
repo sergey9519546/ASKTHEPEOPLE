@@ -10,18 +10,70 @@ from alembic import context
 # Add parent directory to path to import app modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import the Base and all ORM models from the single canonical schema module.
-# The previous env.py imported from app.db.models.*, a package that never
-# existed (only a stale __pycache__/database.cpython-312.pyc remained),
-# which crashed alembic on import. app.db.schema is the real home of Base
-# and the Organization/Project/Simulation/AgentProfile/Attempt/Observation
-# models; importing it registers them with Base.metadata for autogenerate.
-from app.db.schema import Base  # noqa: F401  (registers models on import)
-import app.db.schema  # noqa: F401
-
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+
+# ---------------------------------------------------------------------------
+# The ORM metadata is imported LAZILY, and only for autogenerate.
+#
+# Two measured defects motivated this, both verified on 2026-10-02.
+#
+# 1. Importing `app.db.schema` executes `app/__init__.py`, which raises
+#    `SECRET_KEY must be set in production` at import time. So `alembic
+#    upgrade head` could not run at all without production credentials --
+#    even against a throwaway SQLite file. A migration tool must not depend
+#    on the web app's secrets, and after ADR-0013 it does not need them:
+#    `app/db/schema.py` now declares `Base` and no tables.
+#
+# 2. Because ADR-0013 stripped `app/db/schema.py` to `Base` alone,
+#    `Base.metadata` is EMPTY. `alembic revision --autogenerate` therefore
+#    diffs an empty target against a live database and reads every one of the
+#    16 canonical tables as "removed". Measured on a database migrated to
+#    head, it generated a revision whose `upgrade()` was 16 `op.drop_table`
+#    and 43 `op.drop_index` calls -- a total schema wipe presented as a
+#    routine revision. Autogenerate is refused below rather than left armed.
+# ---------------------------------------------------------------------------
+def _autogenerate_requested() -> bool:
+    return bool(getattr(context.config.cmd_opts, "autogenerate", False))
+
+
+def _load_target_metadata():
+    """Return the ORM metadata for autogenerate, or fail loudly.
+
+    Migrations are the single source of truth under ADR-0013, so a table is
+    added by hand-writing a revision -- see ADR-0013 and `AGENTS.md` rule 9.
+    Autogenerate cannot be correct in that world, and it fails DESTRUCTIVELY
+    rather than obviously, which is the worst combination available.
+    """
+    # Refuse on the ADR-0013 state before touching the import, so the operator
+    # reads the real cause rather than whatever the app's credential gate says
+    # first. Importing `app.db.schema` executes `app/__init__.py`, which
+    # raises without SECRET_KEY; surfacing that as the headline would point at
+    # the wrong problem entirely.
+    reason = (
+        "alembic revision --autogenerate is disabled on purpose.\n"
+        "ADR-0013 removed every table declaration from app/db/schema.py, so the "
+        "ORM metadata is empty and autogenerate would diff an empty target "
+        "against the live database and emit op.drop_table() for all 16 "
+        "canonical tables -- a total schema wipe presented as a routine "
+        "revision.\n"
+        "To add a table, hand-write a revision. backend/migrations/versions/ is "
+        "the single source of truth for schema (ADR-0012, ADR-0013, "
+        "AGENTS.md rule 9). To check the current head: alembic heads."
+    )
+
+    try:
+        from app.db.schema import Base
+    except Exception as exc:  # noqa: BLE001 - the import is advisory here
+        raise RuntimeError(reason) from exc
+
+    if not Base.metadata.tables:
+        raise RuntimeError(reason)
+    return Base.metadata
+
+
+target_metadata = _load_target_metadata() if _autogenerate_requested() else None
 
 # Get DATABASE_URL from environment, with fallback to SQLite
 from dotenv import load_dotenv
@@ -49,9 +101,6 @@ config.set_main_option('sqlalchemy.url', database_url)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

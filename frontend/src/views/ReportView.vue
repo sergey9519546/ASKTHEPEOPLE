@@ -330,132 +330,10 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.bauhaus-header {
-  height: 70px;
-  background: var(--ink-soft);
-  border-bottom: 1px solid var(--line-dark);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 40px;
-  z-index: 100;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 2.75rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  text-transform: none;
-  transform: none;
-}
-
-.header-left:hover {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  transform: none;
-}
-.brand-monogram {
-  background: var(--signal);
-  color: var(--ink);
-  padding: 4px 8px;
-  font-weight: 700;
-  font-size: 1rem;
-  border-radius: 4px;
-}
-.brand-full {
-  font-weight: 600;
-  font-size: 1rem;
-  letter-spacing: -0.5px;
-}
-
-.view-mode-selector {
-  display: flex;
-  gap: 0;
-  padding: 0;
-  border: 1px solid var(--line-dark);
-  background: var(--ink);
-}
-.mode-btn {
-  padding: 8px 16px 7px !important;
-  border: 0 !important;
-  border-right: 1px solid var(--line-dark) !important;
-  background: transparent !important;
-  color: var(--paper-muted) !important;
-  font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.075em;
-  text-transform: uppercase;
-  cursor: pointer;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transform: none !important;
-}
-.mode-btn:last-child {
-  border-right: 0 !important;
-}
-.mode-btn.is-active {
-  background: var(--signal) !important;
-  color: var(--ink) !important;
-}
-.mode-btn:hover:not(.is-active) {
-  background: var(--ink-raised) !important;
-  color: var(--paper) !important;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 25px;
-}
-.step-indicator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  font-size: 11px;
-}
-.step-val {
-  color: var(--attention);
-  font-family: var(--font-mono);
-}
-.status-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 10px;
-}
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.status-box.processing .status-dot {
-  background: var(--signal);
-  animation: flash 1s infinite alternate;
-}
-.status-box.completed .status-dot {
-  background: var(--success) !important;
-}
-.status-box.failed .status-dot {
-  background: var(--error) !important;
-}
-@keyframes flash {
-  from { opacity: 0.3; }
-  to { opacity: 1; }
-}
-
+/* The mode switcher and its active state live in the shared ViewHeader
+   component, which is where the signal-red active fill is declared. Scoped CSS
+   cannot reach into another component's internals, so there is nothing to
+   restyle here; do not reintroduce a competing mode-button rule in this file. */
 .workbench-viewport {
   flex: 1;
   display: flex;
@@ -537,7 +415,7 @@ onMounted(() => {
   text-transform: uppercase;
 }
 
-.report-shell-error h1 {
+.report-shell-error h2 {
   max-width: 13ch;
   margin: 0;
   font-family: var(--font-display);
@@ -546,7 +424,7 @@ onMounted(() => {
   line-height: 0.9;
 }
 
-.report-shell-error h1 + p {
+.report-shell-error h2 + p {
   max-width: 52ch;
   margin: 1.2rem 0 0;
   color: var(--ink-muted);
@@ -640,54 +518,31 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
-  .bauhaus-header {
-    min-height: 0;
-    flex-wrap: wrap;
-  }
-
-  .header-center {
-    order: 3;
-    flex: 0 0 100% !important;
-    width: 100% !important;
-    min-width: 100% !important;
-    padding: 0 0 0.55rem !important;
-  }
-
-  .header-right {
-    width: auto !important;
-    margin-left: auto;
-    padding: 0.8rem 0.9rem !important;
-    border-top: 0 !important;
-    border-left: 1px solid var(--line-dark) !important;
-  }
-
-  .view-mode-selector {
-    width: 100%;
-  }
-
-  .mode-btn {
-    flex: 1;
-    padding-inline: 0.45rem !important;
-  }
-
-  .brand-full,
-  .step-label,
-  .status-msg {
-    display: none;
-  }
-
   .report-shell-error {
     grid-template-columns: 1fr;
     align-content: start;
     padding: 1.5rem 1rem;
   }
 
-  .report-shell-error h1 {
+  .report-shell-error h2 {
     font-size: clamp(3rem, 15vw, 4.5rem);
   }
 
   .report-shell-error > div > div {
     display: grid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-container,
+  .wb-content {
+    transition: none;
+    scroll-behavior: auto;
+  }
+
+  .shell-retry:hover:not(:disabled),
+  .shell-home:hover:not(:disabled) {
+    transform: none;
   }
 }
 </style>

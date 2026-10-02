@@ -3,7 +3,7 @@
 Connects the pure-domain kernel in ``app/domain/source_ingestion.py`` to the
 ``sources``, ``source_versions``, ``source_segments``, and ``source_candidates``
 tables created by migration ``a1b2c3d4e5f6``. Follows the same raw-SQL pattern
-as ``project_repository.py`` and ``run_repository.py``.
+as ``project_repository.py``.
 
 Opt-in via ``Config.USE_SUPABASE_PERSISTENCE``.
 """
@@ -47,9 +47,10 @@ class SourceRepository:
             database_url = Config.DATABASE_URL
             if not database_url or database_url.startswith("sqlite"):
                 raise RuntimeError("canonical_store_not_configured")
-            from .run_repository import _ensure_psycopg_driver
+            from .db_url import ensure_psycopg_driver
+
             cls._engine = create_engine(
-                _ensure_psycopg_driver(database_url), future=True
+                ensure_psycopg_driver(database_url), future=True
             )
             require_tables(cls._engine, cls._REQUIRED_TABLES)
         return cls._engine

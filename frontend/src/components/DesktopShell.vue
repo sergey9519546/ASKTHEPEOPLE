@@ -7,10 +7,10 @@
     <div class="desktop-main">
       <DesktopDock :collapsed="dockCollapsed" @toggle="dockCollapsed = !dockCollapsed" />
 
-      <main
+      <section
         class="desktop-surface"
-        :class="[`layout-${layoutMode}`]"
-        :aria-busy="switching"
+        aria-label="Workspace panels"
+        :class="[`layout-${isNarrow ? 'focus' : layoutMode}`]"
       >
         <DesktopWindow
           v-for="win in renderedPanels"
@@ -18,7 +18,7 @@
           :win="win"
           :mode="layoutMode"
         />
-      </main>
+      </section>
     </div>
 
     <DesktopTaskbar :panels="switcherPanels" />
@@ -47,6 +47,7 @@ import {
   visiblePair,
   windows,
 } from "../composables/useDesktop.js";
+import { loadSavedState } from "../composables/useWorkspaceState.js";
 
 /**
  * The shell owns four bands - truth rail, masthead, journey spine, panel
@@ -59,46 +60,41 @@ import {
  * task, and floating remains available for people who want two surfaces at
  * once, but neither is the default.
  *
- * Panel switching goes through the View Transitions API when the browser has it
- * and the user has not asked for reduced motion, so the outgoing and incoming
- * panels cross-fade instead of cutting. There is deliberately no hand-written
- * overlap animation: keeping both panels in the DOM at once is exactly what
- * causes reading-position loss and focus confusion.
+ * Panel switching goes through the View Transitions API, and `focusWindow` in
+ * the desktop store owns it so the switcher, the spine, and the URL watcher all
+ * animate identically. This component's contribution is the canvas's
+ * `view-transition-name`: naming only the canvas is what keeps the truth rail,
+ * masthead, spine, and switcher still while the panel beneath them cross-fades.
+ * There is deliberately no hand-written overlap animation - keeping both panels
+ * in the DOM at once is exactly what causes reading-position loss and the
+ * confusing live-region announcements MDN warns about.
  */
 const route = useRoute();
 const router = useRouter();
 
 const isNarrow = ref(false);
 const dockCollapsed = ref(false);
-const switching = ref(false);
 let syncing = false;
 let narrowQuery = null;
 let dockQuery = null;
 
-const prefersReducedMotion = () =>
-  Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
 
-const supportsViewTransitions = () =>
-  typeof document !== "undefined" && typeof document.startViewTransition === "function";
 
-function withPanelTransition(update) {
-  if (prefersReducedMotion() || !supportsViewTransitions()) {
-    update();
-    return;
-  }
-  switching.value = true;
-  const transition = document.startViewTransition(update);
-  transition.finished.finally(() => {
-    switching.value = false;
-  });
-}
-
-/** Panels the canvas renders for the current layout mode. */
+/**
+ * Panels the canvas renders for the current layout mode.
+ *
+ * A narrow viewport overrides the chosen mode. Splitting a 700px viewport gives
+ * each panel less width than a decision brief can be read at, and a floating
+ * cascade has nowhere to cascade to, so both degrade to one panel. The user's
+ * chosen mode is not overwritten - it is honoured again on the way back up.
+ */
 const renderedPanels = computed(() => {
-  if (layoutMode.value === "focus") {
-    const active = activeWindow.value;
-    return active && !active.minimized ? [active] : windows.value.filter((w) => !w.minimized);
-  }
+  const active = activeWindow.value;
+  const single = active && !active.minimized
+    ? [active]
+    : windows.value.filter((win) => !win.minimized);
+
+  if (isNarrow.value || layoutMode.value === "focus") return single;
   if (layoutMode.value === "split") {
     return visiblePair().filter((win) => !win.minimized);
   }
@@ -185,6 +181,9 @@ function onKeydown(event) {
   if (typing) return;
 
   const mod = event.ctrlKey || event.metaKey;
+  // Ctrl/Cmd+W closes the focused panel. This deliberately does NOT also bind
+  // Ctrl+Tab: that chord belongs to the browser, and a workspace must never
+  // stand between a person and the tab they meant to switch to.
   if (mod && !event.altKey && !event.shiftKey && (event.key === "w" || event.key === "W")) {
     if (activeWindow.value) {
       event.preventDefault();
@@ -194,12 +193,8 @@ function onKeydown(event) {
   }
   if (event.altKey && event.code === "Backquote") {
     event.preventDefault();
-    cycleWindow(1);
-    return;
-  }
-  if (event.ctrlKey && event.key === "Tab") {
-    event.preventDefault();
-    withPanelTransition(() => cycleWindow(event.shiftKey ? -1 : 1));
+    // cycleWindow routes through focusWindow, which owns the cross-fade.
+    cycleWindow(event.shiftKey ? -1 : 1);
   }
 }
 
@@ -226,6 +221,17 @@ onMounted(async () => {
   }
   document.addEventListener("keydown", onKeydown);
 
+  // Workspace state MUST be restored before the panel session, and both must be
+  // restored before any journey state is read.
+  //
+  // `setContext()` persists every id a window reports to localStorage, but
+  // nothing was calling `loadSavedState()`, so on a refresh `workspaceState`
+  // came back as DEFAULT_STATE with empty ids. `journeyState()` gates
+  // cumulatively on those ids, so every completed step reappeared as LOCKED
+  // even though its panel was still open and its work was still on screen. The
+  // spine made this visible: before it existed, nothing read workspace state at
+  // boot, so the omission was harmless.
+  loadSavedState();
   restoreSession();
 
   // vue-router resolves the initial navigation asynchronously, so a direct
@@ -251,8 +257,6 @@ onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeydown);
 });
 
-void withPanelTransition;
-void focusWindow;
 </script>
 
 <style scoped>
@@ -274,6 +278,10 @@ void focusWindow;
 }
 
 .desktop-surface {
+  /* Names the canvas for the View Transitions API. Without a name the browser
+     transitions the document root, which would cross-fade all four orientation
+     bands on every switch. */
+  view-transition-name: workspace-canvas;
   position: relative;
   display: flex;
   flex: 1;
@@ -319,12 +327,14 @@ void focusWindow;
   min-height: 0 !important;
 }
 
-/* Panel switching is a cross-fade, not an overlap. Naming both states the same
-   way and letting the browser interpolate keeps reading position and focus
-   stable, which a hand-managed overlap does not. */
+/* Panel switching is a cross-fade scoped to the canvas, not an overlap, and not
+   a whole-document cross-fade. Naming only the canvas keeps the orientation
+   surfaces still while the content beneath them changes; letting the browser
+   interpolate keeps reading position and focus stable, which a hand-managed
+   overlap does not. */
 @media (prefers-reduced-motion: no-preference) {
-  ::view-transition-old(panel),
-  ::view-transition-new(panel) {
+  ::view-transition-old(workspace-canvas),
+  ::view-transition-new(workspace-canvas) {
     animation-duration: 160ms;
     animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
   }

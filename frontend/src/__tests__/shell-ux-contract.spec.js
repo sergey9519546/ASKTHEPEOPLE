@@ -20,6 +20,8 @@ import DesktopDock from "../components/DesktopDock.vue";
 import DesktopMasthead from "../components/DesktopMasthead.vue";
 import DesktopTaskbar from "../components/DesktopTaskbar.vue";
 import DesktopWindow from "../components/DesktopWindow.vue";
+import DesktopShell from "../components/DesktopShell.vue";
+import TruthRail from "../components/TruthRail.vue";
 import ViewHeader from "../components/ViewHeader.vue";
 import {
   DEFAULT_LAYOUT_MODE,
@@ -177,28 +179,45 @@ describe("panel switcher implements the tab pattern it declares", () => {
       props: { panels: windows.value },
     });
 
-    const tablist = wrapper.get('[role="tablist"]');
+    // Capture after the first render: the tab elements must be the same nodes
+    // the component moves focus to.
+    await nextTick();
     const tabs = wrapper.findAll('[role="tab"]');
-    // Arrow keys are relative to the selected tab, which is the last one opened.
     expect(activeKey.value).toBe(active.key);
 
-    // Focus moves on the tick after render, so settle the microtask queue
-    // rather than a single nextTick.
-    await tablist.trigger("keydown", { key: "ArrowLeft" });
-    await flushPromises();
-    expect(document.activeElement).toBe(tabs[0].element);
+    // Real keydowns originate on the focused tab and bubble to the tablist, so
+    // they are dispatched that way here too.
+    const press = async (tab, key) => {
+      await tab.trigger("keydown", { key });
+      await flushPromises();
+      return tabs.findIndex((candidate) => candidate.element === document.activeElement);
+    };
 
-    await tablist.trigger("keydown", { key: "ArrowRight" });
-    await flushPromises();
-    expect(document.activeElement).toBe(tabs[1].element);
+    // The selected tab is the last one opened; arrows walk from there.
+    expect(await press(tabs[1], "ArrowLeft")).toBe(0);
+    // Activation is manual, so the selection has not moved yet...
+    expect(activeKey.value).toBe(active.key);
+    // ...and the next arrow continues from where focus is, not from where the
+    // selection is. Anchoring on the selection would bounce back to 0.
+    expect(await press(tabs[0], "ArrowRight")).toBe(1);
+    expect(await press(tabs[1], "Home")).toBe(0);
+    expect(await press(tabs[0], "End")).toBe(1);
+    wrapper.unmount();
+  });
 
-    await tablist.trigger("keydown", { key: "Home" });
-    await flushPromises();
-    expect(document.activeElement).toBe(tabs[0].element);
+  it("activates a tab on click and moves the workspace selection with it", async () => {
+    const first = openApp("decision", { name: "Home" });
+    openApp("brief", { name: "Report", params: { reportId: "r-1" } });
+    const wrapper = mount(DesktopTaskbar, {
+      attachTo: document.body,
+      props: { panels: windows.value },
+    });
+    await nextTick();
 
-    await tablist.trigger("keydown", { key: "End" });
+    await wrapper.findAll('[role="tab"]')[0].trigger("click");
     await flushPromises();
-    expect(document.activeElement).toBe(tabs[1].element);
+
+    expect(activeKey.value).toBe(first.key);
     wrapper.unmount();
   });
 
@@ -321,6 +340,83 @@ describe("the shell renders a deterministic layout, not a cascade", () => {
   });
 });
 
+describe("the shell assembles the four bands and one canvas", () => {
+  const mountShell = () =>
+    mount(DesktopShell, {
+      global: {
+        stubs: {
+          DesktopMasthead: true,
+          DesktopDock: true,
+          DesktopTaskbar: true,
+          DesktopWindow: true,
+        },
+      },
+    });
+
+  it("stacks the disclosure, the masthead, the spine, and the switcher once each", async () => {
+    const wrapper = mountShell();
+    await nextTick();
+
+    expect(wrapper.findAllComponents(TruthRail)).toHaveLength(1);
+    expect(wrapper.findAllComponents(DesktopMasthead)).toHaveLength(1);
+    expect(wrapper.findAllComponents(DesktopDock)).toHaveLength(1);
+    expect(wrapper.findAllComponents(DesktopTaskbar)).toHaveLength(1);
+    expect(wrapper.get(".desktop-surface").attributes("aria-label")).toBe(
+      "Workspace panels",
+    );
+    wrapper.unmount();
+  });
+
+  it("renders only the active panel in the default layout", async () => {
+    openApp("decision", { name: "Home" });
+    openApp("brief", { name: "Report", params: { reportId: "r-1" } });
+    openApp("followup", { name: "Interaction", params: { reportId: "r-1" } });
+
+    const wrapper = mountShell();
+    await nextTick();
+
+    // Three panels are open; the canvas shows one. A sequential journey does not
+    // need a cascade of windows competing for the same viewport.
+    expect(wrapper.vm.renderedPanels).toHaveLength(1);
+    expect(wrapper.vm.renderedPanels[0].key).toBe(activeKey.value);
+    wrapper.unmount();
+  });
+
+  it("shows two panels side by side when comparison is the task", async () => {
+    openApp("decision", { name: "Home" });
+    openApp("brief", { name: "Report", params: { reportId: "r-1" } });
+
+    setLayoutMode("split");
+    const wrapper = mountShell();
+    await nextTick();
+
+    expect(wrapper.vm.renderedPanels).toHaveLength(2);
+    expect(wrapper.get(".desktop-surface").classes()).toContain("layout-split");
+    wrapper.unmount();
+  });
+
+  it("gives every rendered panel a unique, switcher-reachable identity", async () => {
+    setLayoutMode("split");
+    openApp("decision", { name: "Home" });
+    openApp("brief", { name: "Report", params: { reportId: "r-1" } });
+
+    const wrapper = mountShell();
+    await nextTick();
+
+    const keys = wrapper.vm.renderedPanels.map((win) => win.key);
+    expect(new Set(keys).size).toBe(keys.length);
+    wrapper.unmount();
+  });
+
+  it("does not reserve a browser chord the user needs", () => {
+    const shell = readFileSync(resolve("src/components/DesktopShell.vue"), "utf8");
+    // Ctrl+Tab switches browser tabs. A workspace must never sit between a
+    // person and the tab they meant to open.
+    expect(shell).not.toMatch(/key === "Tab"/);
+    expect(shell).toContain("Backquote");
+  });
+});
+
 describe("the shared view header", () => {
   it("owns the view's only h1 and takes its identity from the store", () => {
     const wrapper = mount(ViewHeader, {
@@ -427,6 +523,38 @@ describe("the shell no longer restates what the shell already says", () => {
     }
   });
 
+  it("leaves the h1 to the shared header, so no view carries a second one", () => {
+    for (const view of views) {
+      const source = readFileSync(resolve(`src/views/${view}`), "utf8");
+      const template = source.slice(0, source.indexOf("</script>"));
+      const h1s = template.match(/<h1[\s>]/g) || [];
+      expect(h1s.length, `${view} must not render its own h1`).toBe(0);
+    }
+  });
+
+  it("styles every heading level a view actually renders", () => {
+    // A heading-level change that does not retarget the matching CSS is silent:
+    // nothing fails, and the heading quietly falls back to the user-agent
+    // default size. This walks each view's rendered heading levels and
+    // requires a selector for each one.
+    for (const view of views) {
+      const source = readFileSync(resolve(`src/views/${view}`), "utf8");
+      const template = source.slice(0, source.indexOf("</script>"));
+      const levels = new Set(
+        [...template.matchAll(/<(h[1-6])[\s>]/g)].map((match) => match[1]),
+      );
+      for (const level of levels) {
+        // A heading is styled by a type selector in some ancestor context
+        // (".report-shell-error h2"), never by a class of its own.
+        const styled = new RegExp(`[.#>\\s]${level}\\b`).test(source);
+        expect(
+          styled,
+          `${view} renders a <${level}> but its CSS never targets ${level}`,
+        ).toBe(true);
+      }
+    }
+  });
+
   it("keeps exactly one skip link per view", () => {
     for (const view of views) {
       const source = readFileSync(resolve(`src/views/${view}`), "utf8");
@@ -441,6 +569,98 @@ describe("the shell no longer restates what the shell already says", () => {
     expect(shell).toMatch(/import\s+TruthRail\s+from\s+["'][^"']+TruthRail\.vue["']/);
     // The rail must never become conditional or the whole workspace loses it.
     expect(shell).not.toMatch(/<TruthRail[^>]*v-(if|show)/);
+  });
+});
+
+describe("palette contrast is computed, not assumed", () => {
+  const tokens = readFileSync(resolve("src/assets/design-tokens.css"), "utf8");
+
+  const hexOf = (name) => {
+    const match = tokens.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`));
+    return match ? match[1] : null;
+  };
+  const luminance = (hex) => {
+    const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const [r, g, b] = channels.map((c) =>
+      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+    );
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const ratio = (a, b) => {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  const INK_FIELDS = ["ink", "ink-deep", "ink-soft", "ink-raised"];
+  const worstAgainst = (fg, backgrounds) =>
+    Math.min(...backgrounds.map((bg) => ratio(hexOf(fg), hexOf(bg))));
+
+  it("clears 4.5:1 for every text colour on every ink field", () => {
+    for (const textColor of ["paper", "paper-muted", "paper-dim"]) {
+      const worst = worstAgainst(textColor, INK_FIELDS);
+      expect(
+        worst,
+        `${textColor} measures ${worst.toFixed(2)}:1 on the lightest ink field, below the WCAG 2.2 SC 1.4.3 floor of 4.5`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps the attention colour clear of the signal red", () => {
+    // Yellow on ink is excellent; red on yellow is 2.56:1 and fails SC 1.4.11.
+    // The palette stays as it is, so the pairing has to be asserted as a rule.
+    expect(ratio(hexOf("signal"), hexOf("attention"))).toBeLessThan(3);
+    expect(ratio(hexOf("attention"), hexOf("ink-raised"))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("treats signal-text as a paper-surface colour and says so", () => {
+    // --signal-text is the darkened signal for small copy. It is tuned for the
+    // warm paper surfaces (6.47:1 on paper) and measures under 2.5:1 on the ink
+    // fields, so the token's contract is that it is a paper colour only. The
+    // token has to keep stating that, because nothing else in the cascade stops
+    // it being set on an ink field by mistake.
+    expect(ratio(hexOf("signal-text"), hexOf("paper"))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(hexOf("signal-text"), hexOf("ink-raised"))).toBeLessThan(3);
+    const declared = tokens.indexOf("--signal-text:");
+    expect(declared).toBeGreaterThan(-1);
+    expect(tokens.slice(Math.max(0, declared - 600), declared)).toContain(
+      "paper surfaces",
+    );
+  });
+
+  it("ships a structural boundary colour that meets the 3:1 non-text floor", () => {
+    for (const field of INK_FIELDS) {
+      expect(ratio(hexOf("line-structural"), hexOf(field))).toBeGreaterThanOrEqual(3);
+    }
+    expect(tokens).toContain("--line-structural:");
+  });
+
+  it("uses the compliant boundary on the bands and panels, and keeps the restrained hairline for interior detail", () => {
+    // WCAG 2.2 SC 1.4.11 applies to the boundaries a user must be able to see
+    // in order to know where they are. In a dense workspace those are the four
+    // band separators and the panel edges. --line-dark measures 1.46-1.86:1 and
+    // is kept for input borders, table rules and inner dividers, which are not
+    // boundaries anyone reads to orient themselves.
+    for (const band of ["DesktopDock.vue", "DesktopMasthead.vue", "DesktopTaskbar.vue"]) {
+      const source = readFileSync(resolve(`src/components/${band}`), "utf8");
+      expect(source, band).toContain("var(--line-structural)");
+    }
+
+    const panel = readFileSync(
+      resolve("src/components/DesktopWindow.vue"),
+      "utf8",
+    );
+    expect(panel).toContain("border: 1px solid var(--line-structural)");
+    expect(panel).toContain("border-right: 1px solid var(--line-structural)");
+
+    // Interior detail must not have been dragged along with it.
+    expect(tokens).toMatch(
+      /button,\s*\.btn\s*\{[\s\S]*?border:\s*1px solid var\(--line-dark\)/,
+    );
+  });
+
+  it("keeps the text hierarchy ordered from paper down to paper-dim", () => {
+    expect(luminance(hexOf("paper"))).toBeGreaterThan(luminance(hexOf("paper-muted")));
+    expect(luminance(hexOf("paper-muted"))).toBeGreaterThan(luminance(hexOf("paper-dim")));
   });
 });
 
@@ -471,6 +691,39 @@ describe("token layer supports the contracts the shell relies on", () => {
     expect(tokens).toContain("--focus-ring-color:");
     expect(tokens).toContain("@media (prefers-contrast: more)");
     expect(tokens).toContain("@media (forced-colors: active)");
+  });
+
+  it("reserves the display face for nouns, not for labels a person must read", () => {
+    // Staatliches is a single-weight condensed all-caps poster face. Below
+    // roughly 20px it loses the stroke contrast that makes small caps
+    // legible, so labels, buttons, and metadata are set in the text face.
+    for (const labelRule of [
+      /\.eyebrow,\s*\.label,\s*\.data-label\s*\{[\s\S]*?\}/,
+      /\.wb-label\s*\{[\s\S]*?\}/,
+      /\.step-name,[\s\S]*?\.phase-name\s*\{[\s\S]*?\}/,
+      /\.final-action-btn,[\s\S]*?\.app-cta-btn\s*\{[\s\S]*?\}/,
+    ]) {
+      const rule = tokens.match(labelRule);
+      expect(rule, labelRule).not.toBeNull();
+      expect(rule[0], labelRule).not.toContain("var(--font-display)");
+      expect(rule[0], labelRule).toContain("var(--font-sans)");
+    }
+  });
+
+  it("keeps the display face for the wordmark and for section titles", () => {
+    // The split only holds if the display face is still used somewhere real.
+    const titleRule = tokens.match(/\.map-title,[\s\S]*?\.legend-header\s*\{[\s\S]*?\}/);
+    expect(titleRule).not.toBeNull();
+    expect(titleRule[0]).toContain("var(--font-display)");
+
+    const masthead = readFileSync(
+      resolve("src/components/DesktopMasthead.vue"),
+      "utf8",
+    );
+    expect(masthead).toMatch(/\.masthead-wordmark\s*\{[\s\S]*?font-family:\s*var\(--font-display\)/);
+    // The step numeral is a noun too, and it is the same attention colour the
+    // spine uses for the current step.
+    expect(masthead).toMatch(/\.position-value\s*\{[\s\S]*?var\(--font-display\)/);
   });
 
   it("does not animate layout on the panel scroll containers", () => {

@@ -1081,7 +1081,7 @@ class TaskManager:
                     self._tasks[task_id] = c_task
                 return c_task
         except Exception:
-            pass
+            pass  # Celery result backend not readable; fall through to "not a live task", which is the documented answer
 
         return None
     

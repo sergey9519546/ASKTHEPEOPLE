@@ -812,7 +812,7 @@ class OasisProfileGenerator:
                     result["_fixed"] = True
                     return result
                 except:
-                    pass
+                    pass  # final repair attempt failed; fall through to the regex field salvage below
         
         # 6. Try to extract partial info from the content
         bio_match = re.search(r'"bio"\s*:\s*"([^"]*)"', content)
@@ -1292,7 +1292,7 @@ class OasisProfileGenerator:
                         }
                     )
                 except Exception:
-                    pass
+                    pass  # telemetry must never mask the ProfileValidationError that follows
                 
                 raise ProfileValidationError(
                     message=f"Generated profiles failed diversity validation: {reason}",
@@ -1313,7 +1313,7 @@ class OasisProfileGenerator:
                 os.remove(checkpoint_path)
                 logger.debug("Checkpoint file cleaned up after successful completion")
             except Exception:
-                pass
+                pass  # best-effort cleanup of the resume checkpoint; the run already completed
         
         return profiles
     

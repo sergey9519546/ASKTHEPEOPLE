@@ -81,16 +81,20 @@
                 </div>
               </div>
             </section>
+            <!-- The live region holds the status sentence and nothing else.
+                 A heading inside one is announced as a status message on every
+                 content change, which is not navigation, and it re-announces a
+                 heading the reader already has in the document outline. The
+                 heading keeps its element, its classes, and its place in the
+                 grid - only the role moved. -->
             <section
               v-else-if="currentStatus === 'processing' || !simulationId"
               class="interaction-shell-state is-loading"
-              role="status"
-              aria-live="polite"
             >
               <span class="shell-state-index" aria-hidden="true">05</span>
               <div>
-                <p>Opening follow-up questions</p>
-                <h1>Loading the report and its saved run.</h1>
+                <p role="status" aria-live="polite">Opening follow-up questions</p>
+                <h2>Loading the report and its saved run.</h2>
                 <div class="shell-loading-route" aria-hidden="true">
                   <span></span>
                 </div>
@@ -347,139 +351,6 @@ onMounted(() => {
   overflow: hidden;
 }
 
-.app-header {
-  height: 70px;
-  flex: 0 0 70px;
-  background: var(--ink-deep);
-  border-bottom: 3px solid var(--signal);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 40px;
-  z-index: 100;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 2.75rem;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-  text-transform: none;
-  transform: none;
-}
-
-.header-left:hover {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  transform: none;
-}
-.brand-monogram {
-  border: 1px solid var(--signal);
-  background: var(--ink-deep);
-  color: var(--signal);
-  padding: 5px 9px 4px;
-  font-family: var(--font-display);
-  font-size: 1.18rem;
-  line-height: 1;
-  letter-spacing: 0.04em;
-}
-.brand-full {
-  font-family: var(--font-display);
-  font-size: 1.28rem;
-  letter-spacing: 0.045em;
-}
-
-.view-mode-selector {
-  display: flex;
-  border: 1px solid var(--line-dark);
-  background: var(--ink);
-  padding: 0;
-  gap: 0;
-}
-.mode-btn {
-  border: none !important;
-  background: transparent !important;
-  border-right: 1px solid var(--line-dark) !important;
-  padding: 8px 16px 7px !important;
-  color: var(--paper-muted) !important;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.68rem;
-  letter-spacing: 0.075em;
-  text-transform: uppercase;
-  cursor: pointer;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transform: none !important;
-}
-.mode-btn:last-child {
-  border-right: 0 !important;
-}
-.mode-btn.is-active {
-  background: var(--signal) !important;
-  color: var(--ink) !important;
-}
-.mode-btn:hover:not(.is-active) {
-  background: var(--ink-raised) !important;
-  color: var(--paper) !important;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 25px;
-}
-.step-indicator {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 700;
-  font-size: 0.7rem;
-  letter-spacing: 0.055em;
-  text-transform: uppercase;
-}
-.step-val {
-  color: var(--signal);
-  font-family: var(--font-sans);
-}
-.status-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-left: 1px solid var(--line-dark);
-  padding-left: 1rem;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
-}
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.status-box.processing .status-dot {
-  background: var(--signal) !important;
-  animation: flash 1s infinite alternate;
-}
-.status-box.ready .status-dot {
-  background: var(--success) !important;
-}
-.status-box.error .status-dot {
-  background: var(--error) !important;
-}
-@keyframes flash {
-  from { opacity: 0.3; }
-  to { opacity: 1; }
-}
-
 .workbench-viewport {
   flex: 1;
   display: flex;
@@ -576,7 +447,7 @@ onMounted(() => {
   color: var(--error-text);
 }
 
-.interaction-shell-state h1 {
+.interaction-shell-state h2 {
   max-width: 15ch;
   margin: 0;
   color: var(--ink);
@@ -586,7 +457,7 @@ onMounted(() => {
   line-height: 0.9;
 }
 
-.interaction-shell-state h1 + p {
+.interaction-shell-state h2 + p {
   max-width: 54ch;
   margin: 1.2rem 0 0;
   color: var(--ink-muted);
@@ -702,48 +573,6 @@ onMounted(() => {
 }
 
 @media (max-width: 760px) {
-  .app-header {
-    height: auto;
-    min-height: 0;
-    flex: 0 0 auto;
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 0.65rem;
-    padding: 0.8rem 0.9rem;
-  }
-
-  .brand-full,
-  .step-label,
-  .status-msg {
-    display: none;
-  }
-
-  .header-center {
-    order: 3;
-    flex: 0 0 100% !important;
-    width: 100% !important;
-    min-width: 100% !important;
-    padding: 0 0 0.55rem !important;
-  }
-
-  .view-mode-selector {
-    width: 100%;
-  }
-
-  .mode-btn {
-    flex: 1;
-    padding-inline: 0.45rem !important;
-  }
-
-  .header-right {
-    width: auto !important;
-    margin-left: auto;
-    padding: 0.8rem 0.9rem !important;
-    border-top: 0 !important;
-    border-left: 1px solid var(--line-dark) !important;
-    gap: 0.7rem;
-  }
-
   .workbench-viewport.mode-workbench .panel-container.right,
   .workbench-viewport.mode-graph .panel-container.left {
     height: calc(100dvh - 10.75rem) !important;
@@ -773,7 +602,7 @@ onMounted(() => {
     padding: 1.5rem 1rem;
   }
 
-  .interaction-shell-state h1 {
+  .interaction-shell-state h2 {
     font-size: clamp(3rem, 15vw, 4.5rem);
   }
 
@@ -783,10 +612,15 @@ onMounted(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .status-box.processing .status-dot,
   .shell-loading-route span {
     animation: none;
     transform: none;
+  }
+
+  .panel-container,
+  .wb-content {
+    transition: none;
+    scroll-behavior: auto;
   }
 }
 </style>

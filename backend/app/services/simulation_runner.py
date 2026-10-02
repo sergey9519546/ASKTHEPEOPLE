@@ -468,7 +468,7 @@ class SimulationRunner:
             try:
                 os.unlink(temp_file)
             except FileNotFoundError:
-                pass
+                pass  # best-effort cleanup of an orphaned temp file; raise re-raises the real failure
             raise
 
     @classmethod
@@ -815,7 +815,7 @@ class SimulationRunner:
                 try:
                     main_log_file.close()
                 except Exception:
-                    pass
+                    pass  # Popen failed; closing the log is best effort and must not mask the startup failure
             state.runner_status = RunnerStatus.FAILED
             state.error = str(e)
             if attempt is not None:
@@ -1014,7 +1014,7 @@ class SimulationRunner:
                         with open(main_log_path, 'r', encoding='utf-8') as f:
                             error_info = f.read()[-2000:]  # Last 2000 chars
                 except Exception:
-                    pass
+                    pass  # log unreadable; state.error falls back to the exit code alone
                 state.error = f"Exit code: {exit_code}, error: {error_info}"
                 logger.error(f"Simulation failed: {simulation_id}, error={state.error}")
             
@@ -1238,7 +1238,7 @@ class SimulationRunner:
                     if "event_type" not in d and d.get("round") == round_num:
                         results.append(d)
                 except json.JSONDecodeError:
-                    pass
+                    pass  # a truncated or interleaved JSONL line is skipped; the other lines still parse
         return results
 
     @classmethod
@@ -1796,14 +1796,14 @@ class SimulationRunner:
                 if file_handle:
                     file_handle.close()
             except Exception:
-                pass
+                pass  # best-effort close; a stuck child must not leave cleanup half-done
         
         for simulation_id, file_handle in list(cls._stderr_files.items()):
             try:
                 if file_handle:
                     file_handle.close()
             except Exception:
-                pass
+                pass  # best-effort close; a stuck child must not leave cleanup half-done
         cls._stderr_files.clear()
         
         # Clean up state in memory

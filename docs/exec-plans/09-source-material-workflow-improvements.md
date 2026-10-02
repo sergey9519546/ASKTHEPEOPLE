@@ -1,10 +1,10 @@
 ---
 title: "Source Material Workflow Improvements"
 status: "Partially Delivered"
-version: "1.1.0"
+version: "1.2.0"
 owner: "askthepeople-architect"
 created: "2026-08-03"
-last_reviewed: "2026-10-01"
+last_reviewed: "2026-10-02"
 ---
 
 # Source Material Workflow Improvements
@@ -15,15 +15,21 @@ last_reviewed: "2026-10-01"
 >
 > - **Tier 1 (decision-only mode): DONE.** The `files.value.length > 0` guard
 >   was removed from `canSubmit`
->   ([`frontend/src/views/Home.vue:599-603`](../../frontend/src/views/Home.vue)),
+>   ([`frontend/src/views/Home.vue:535`](../../frontend/src/views/Home.vue)),
 >   and `submissionRequirements` no longer lists source material
->   ([`frontend/src/views/Home.vue:605-615`](../../frontend/src/views/Home.vue)).
+>   ([`frontend/src/views/Home.vue:541`](../../frontend/src/views/Home.vue)).
+>   Re-measured 2026-10-02: the decision-first rebuild of this view moved the
+>   guard from 599 to 535.
 > - **Tier 2 (URL ingestion): DONE.** `POST /api/sources/fetch` is registered at
 >   [`backend/app/api/sources.py:20-22`](../../backend/app/api/sources.py),
 >   backed by [`backend/app/services/url_fetcher.py`](../../backend/app/services/url_fetcher.py)
 >   and the SSRF guard [`backend/app/utils/safe_url.py`](../../backend/app/utils/safe_url.py).
->   The frontend accepts pasted URLs (`frontend/src/views/Home.vue:585`,
->   `frontend/src/views/Home.vue:723-724`).
+>   The frontend accepts pasted URLs (`frontend/src/views/Home.vue:193` for the
+>   input, `frontend/src/views/Home.vue:641` for `fetchUrls`). Note that the
+>   call now goes through the typed frontend module
+>   `fetchSourceUrls` in [`frontend/src/api/sources.js`](../../frontend/src/api/sources.js)
+>   rather than an inline `api.post`, which is the Gate 1 typed boundary. The
+>   feature is unchanged; only its call site moved.
 > - **Tier 3 (auto-research): NOT STARTED.** No source-discovery endpoint exists.
 >
 > Gate status is not recorded here; see
@@ -34,7 +40,7 @@ last_reviewed: "2026-10-01"
 Current workflow requires users to manually gather and upload files before running any simulation. This creates friction:
 
 1. **Manual download-upload cycle** — users find URLs, download files, then upload them
-2. **~~Source material is required~~** — **RESOLVED.** `frontend/src/views/Home.vue:404` no longer blocks submission on `files.value.length === 0`; the guard was removed from `canSubmit`
+2. **~~Source material is required~~** — **RESOLVED.** `frontend/src/views/Home.vue:535` no longer blocks submission on `files.value.length === 0`; the guard was removed from `canSubmit`
 3. **~~No URL ingestion~~** — **RESOLVED.** `POST /api/sources/fetch` exists
    (`backend/app/api/sources.py:20-22`)
 4. **~~"Just ask the question" not possible~~** — **RESOLVED** by items 2 and 3
@@ -52,7 +58,7 @@ User request: *"all they have to do is ask the questions or scenario, and if the
 **Goal:** Make source files optional so users can run simulations with just a decision/scenario.
 
 **Changes:**
-- ~~`frontend/src/views/Home.vue:404` — remove `files.value.length > 0` from `canSubmit` guard~~ — **DONE** (`frontend/src/views/Home.vue:599-603`)
+- ~~remove `files.value.length > 0` from the `canSubmit` guard~~ — **DONE** (`frontend/src/views/Home.vue:535`)
 - Update help text: "Source material optional — upload files or paste URLs to ground personas in specific context"
 - Backend already handles zero-file case (generates personas from decision text via OASIS)
 - Add note in results: "This exploration used only the decision text. Upload sources for context-grounded personas."
@@ -300,7 +306,7 @@ async function fetchUrls() {
 
 ## References
 
-- **Current file upload:** `frontend/src/views/Home.vue:401-409` (canSubmit guard)
+- **Current file upload:** `frontend/src/views/Home.vue:535` (`canSubmit` guard)
 - **OASIS persona generation:** `backend/app/services/oasis_profile_generator.py`
 - **Firecrawl skills:** Available in skill list (`firecrawl-scrape`, `firecrawl-download`)
-- **Product Truth Contract:** `docs/product/PRODUCT_TRUTH_CONTRACT.md` — ensure "0 human respondents" disclaimer remains regardless of source mode
+- **Product Truth Contract:** [`docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md`](../architecture/adr/ADR-0001-product-category-and-truth-contract.md) — the "0 human respondents" disclosure is permanent regardless of source mode and is rendered once by the shell's Truth Rail
