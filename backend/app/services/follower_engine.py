@@ -29,6 +29,10 @@ class FollowerAgent:
     behavior_type: FollowerBehavior
     opinion_bias: float          # -1.0 to +1.0
     activity_probability: float  # 0.0 to 1.0
+    # Role/topic-varied display name from the compositional matrix. None on
+    # agents built before the matrix existed; the old agent_name stays the
+    # unique identifier either way.
+    display_name: Optional[str] = None
 
 
 _CONTRARIAN_PHRASES = [
@@ -71,6 +75,24 @@ class FollowerEngine:
         behaviors = list(FollowerBehavior)
         weights = [dist.get(b.value, 0.0) for b in behaviors]
 
+        # Role/topic-varied display names from the compositional matrix. A
+        # 45,000-follower crowd of "Follower 42" names reads as a counter,
+        # not characters; role rotation fixes that while staying
+        # deterministic and unique (agent_name remains the identifier).
+        try:
+            from .persona_composition import compose_display_name
+            from .role_normalizer import normalize_entity_type
+            compose_names = True
+        except Exception:  # pragma: no cover - matrix must never break a run
+            compose_names = False
+        role_rotation = [
+            normalize_entity_type(role_key)
+            for role_key in (
+                "resident", "citizen", "worker", "parent", "individual",
+                "volunteer", "student", "neighborhood",
+            )
+        ] if compose_names else []
+
         agents: List[FollowerAgent] = []
         for i in range(count):
             behavior = random.choices(behaviors, weights=weights, k=1)[0]
@@ -88,6 +110,14 @@ class FollowerEngine:
                 opinion_bias = random.uniform(-0.5, 0.5)
                 activity_prob = random.uniform(0.02, 0.1)
 
+            display_name = None
+            if compose_names and role_rotation:
+                display_name = compose_display_name(
+                    archetype_id=0,
+                    variant_index=i,
+                    role_info=role_rotation[i % len(role_rotation)],
+                )
+
             agents.append(
                 FollowerAgent(
                     agent_id=self.id_base + i,
@@ -95,6 +125,7 @@ class FollowerEngine:
                     behavior_type=behavior,
                     opinion_bias=opinion_bias,
                     activity_probability=activity_prob,
+                    display_name=display_name,
                 )
             )
         return agents
