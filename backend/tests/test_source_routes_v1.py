@@ -196,11 +196,27 @@ def test_production_gate_refuses_source_flag(monkeypatch):
     assert "not allowed in production" in source_errors[0]
 
 
-def test_production_gate_rejects_non_txt_formats(monkeypatch):
-    """Only txt is an eligible V1 format; pdf/md/etc must be rejected."""
+def test_production_gate_accepts_parser_supported_formats(monkeypatch):
+    """Every format FileParser can extract under declared ceilings is
+    eligible for V1; pdf/docx/xlsx must pass the eligibility check."""
     monkeypatch.setattr(Config, "DEBUG", True)
     monkeypatch.setattr(Config, "SOURCE_INGESTION_V1_ENABLED", True)
-    monkeypatch.setattr(Config, "SOURCE_INGESTION_V1_FORMATS", ["txt", "pdf"])
+    monkeypatch.setattr(
+        Config,
+        "SOURCE_INGESTION_V1_FORMATS",
+        ["txt", "md", "markdown", "pdf", "docx", "xlsx"],
+    )
+    errors = Config.validate()
+    fmt_errors = [e for e in errors if "unsupported format" in e.lower()]
+    assert fmt_errors == []
+
+
+def test_production_gate_rejects_unextractable_formats(monkeypatch):
+    """Formats FileParser cannot extract stay rejected (e.g. exe, doc)."""
+    monkeypatch.setattr(Config, "DEBUG", True)
+    monkeypatch.setattr(Config, "SOURCE_INGESTION_V1_ENABLED", True)
+    monkeypatch.setattr(Config, "SOURCE_INGESTION_V1_FORMATS", ["txt", "exe", "doc"])
     errors = Config.validate()
     fmt_errors = [e for e in errors if "unsupported format" in e.lower()]
     assert len(fmt_errors) == 1
+    assert "exe" in fmt_errors[0] and "doc" in fmt_errors[0]

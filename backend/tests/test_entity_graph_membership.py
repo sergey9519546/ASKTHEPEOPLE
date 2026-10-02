@@ -80,7 +80,7 @@ def test_entity_detail_cannot_return_a_foreign_graph_node(
             assert uuid_ == "entity-foreign"
             return foreign_node
 
-        def get_entity_edges(self, *, node_uuid):
+        def get_edges(self, *, node_uuid):
             provider_calls.append(("global-edges", node_uuid))
             return []
 
@@ -117,7 +117,7 @@ def test_entity_membership_provider_failure_is_sanitized(
         def get(self, *, uuid_):
             return _node(uuid_, "Owned entity")
 
-        def get_entity_edges(self, *, node_uuid):
+        def get_edges(self, *, node_uuid):
             assert node_uuid == "entity-owned"
             return []
 
@@ -166,7 +166,7 @@ def test_entity_detail_excludes_foreign_graph_edge_facts(
             provider_calls.append(("list-nodes", graph_id))
             return [owned_node, related_node]
 
-        def get_entity_edges(self, *, node_uuid):
+        def get_edges(self, *, node_uuid):
             provider_calls.append(("global-edges", node_uuid))
             return [owned_edge, foreign_edge]
 
@@ -210,7 +210,7 @@ def test_entity_edge_inventory_failure_is_sanitized_and_fails_closed(
         def get_by_graph_id(self, _graph_id, **_kwargs):
             return [owned_node]
 
-        def get_entity_edges(self, *, node_uuid):
+        def get_edges(self, *, node_uuid):
             assert node_uuid == "entity-owned"
             raise RuntimeError(provider_secret)
 
@@ -246,7 +246,7 @@ def test_node_edge_helper_propagates_failure_without_raw_logging(
     provider_secret = "global-edge-provider-secret-detail"
 
     class NodeApi:
-        def get_entity_edges(self, *, node_uuid):
+        def get_edges(self, *, node_uuid):
             assert node_uuid == "entity-owned"
             raise RuntimeError(provider_secret)
 

@@ -211,7 +211,7 @@ class ZepEntityReader:
         """
         try:
             edges = self._call_with_retry(
-                func=lambda: self.client.graph.node.get_entity_edges(
+                func=lambda: self.client.graph.node.get_edges(
                     node_uuid=node_uuid
                 ),
                 operation_name=f"get_node_edges(node={node_uuid[:8]}...)",

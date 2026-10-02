@@ -28,8 +28,8 @@ class TestFileUploadSecurity:
         from app.config import Config
         
         allowed = Config.ALLOWED_EXTENSIONS
-        assert allowed == {'pdf', 'md', 'txt', 'markdown'}, \
-            "Only PDF, MD, TXT, MARKDOWN should be allowed"
+        assert allowed == {'pdf', 'md', 'txt', 'markdown', 'docx', 'xlsx'}, \
+            "Only PDF, MD, TXT, MARKDOWN, DOCX, XLSX should be allowed"
     
     def test_mime_validation_exists(self):
         """Test that MIME validation utility exists"""

@@ -201,7 +201,10 @@ class Config:
             os.path.join(os.path.dirname(__file__), '../uploads'),
         )
     )
-    ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown'}
+    # docx/xlsx are OOXML zip containers; FileParser extracts them stdlib-only
+    # with declared uncompressed-size ceilings and a DTD rejection guard.
+    # Legacy binary .doc has no safe stdlib parser and stays refused.
+    ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown', 'docx', 'xlsx'}
     
     # Text Processing Configuration
     DEFAULT_CHUNK_SIZE = 500  # Default chunk size
@@ -232,8 +235,10 @@ class Config:
     SOURCE_INGESTION_V1_ENABLED = os.environ.get(
         'SOURCE_INGESTION_V1_ENABLED', 'False'
     ).lower() == 'true'
-    # Comma-separated enabled formats. Only 'txt' is eligible for V1; empty
-    # means no formats are accepted even if the master flag is on.
+    # Comma-separated enabled formats. Eligible formats are exactly those
+    # FileParser extracts under declared ceilings: txt, md, markdown, pdf,
+    # docx, xlsx. Empty means no formats are accepted even if the master
+    # flag is on.
     SOURCE_INGESTION_V1_FORMATS = [
         f.strip().lower()
         for f in os.environ.get('SOURCE_INGESTION_V1_FORMATS', '').split(',')
@@ -420,13 +425,18 @@ class Config:
                 "It installs a synthetic LEGACY_DEV actor scope that bypasses "
                 "the server-derived tenant context required by ADR-0009."
             )
-        # If formats are configured but include anything other than 'txt',
-        # reject — only TXT is eligible for V1.
+        # Format eligibility: every configured format must be one FileParser
+        # can extract under the declared ceilings (char cap, PDF pages, OOXML
+        # zip size/structure). The master flag stays fail-closed off by
+        # default; widening eligibility does not enable ingestion.
+        eligible = {'txt', 'md', 'markdown', 'pdf', 'docx', 'xlsx'}
         if cls.SOURCE_INGESTION_V1_FORMATS:
-            invalid = [f for f in cls.SOURCE_INGESTION_V1_FORMATS if f != 'txt']
+            invalid = [
+                f for f in cls.SOURCE_INGESTION_V1_FORMATS if f not in eligible
+            ]
             if invalid:
                 errors.append(
                     f"SOURCE_INGESTION_V1_FORMATS contains unsupported format(s) "
-                    f"{invalid}. V1 supports txt only."
+                    f"{invalid}. V1 extraction supports: {sorted(eligible)}."
                 )
         return errors

@@ -14,10 +14,14 @@ ALLOWED_MIME_TYPES = {
     'text/plain',
     'text/markdown',
     'text/x-markdown',
+    # OOXML zip containers; magic bytes are checked separately below.
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/zip',
 }
 
 # Allowed file extensions
-ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown'}
+ALLOWED_EXTENSIONS = {'pdf', 'md', 'txt', 'markdown', 'docx', 'xlsx'}
 
 
 def validate_file_upload(file: FileStorage, max_size_bytes: int = 10 * 1024 * 1024) -> Tuple[bool, Optional[str]]:
@@ -76,6 +80,16 @@ def validate_file_upload(file: FileStorage, max_size_bytes: int = 10 * 1024 * 10
                 header.decode('latin-1', errors='strict')
             except:
                 return False, "Text file contains invalid encoding"
+
+    # Check OOXML files: must be real zip containers (PK magic). The
+    # structural member/size/DTD guards live in FileParser; this seam only
+    # verifies the container is what the extension claims.
+    if ext in {'docx', 'xlsx'}:
+        if not header.startswith(b'PK\x03\x04'):
+            return False, f"File claims to be .{ext} but is not a zip container"
+        guessed_ooxml, _ = mimetypes.guess_type(file.filename)
+        if guessed_ooxml and guessed_ooxml not in ALLOWED_MIME_TYPES:
+            return False, f"Invalid MIME type for .{ext}: {guessed_ooxml}"
     
     # 3. Check file size (stream to avoid loading entire file into memory)
     file.seek(0, 2)  # Seek to end

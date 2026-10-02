@@ -133,7 +133,7 @@
               ref="fileInput"
               type="file"
               multiple
-              accept=".pdf,.md,.txt"
+              accept=".pdf,.md,.txt,.docx,.xlsx"
               hidden
               @change="handleFileSelect"
             />
@@ -149,7 +149,7 @@
               </svg>
               <div>
                 <strong>{{ files.length ? "Add more source material" : "Add source material (optional)" }}</strong>
-                <span>PDF, Markdown, or TXT · 10 files / 50 MB maximum</span>
+                <span>PDF, Markdown, TXT, DOCX, or XLSX · 10 files / 50 MB maximum</span>
               </div>
             </button>
 
@@ -656,7 +656,7 @@ const handleFileSelect = (event) => {
 };
 
 const addFiles = (newFiles) => {
-  const acceptedExtensions = ["pdf", "md", "txt"];
+  const acceptedExtensions = ["pdf", "md", "txt", "docx", "xlsx"];
   const supportedFiles = newFiles.filter((file) =>
     acceptedExtensions.includes(file.name.split(".").pop()?.toLowerCase()),
   );

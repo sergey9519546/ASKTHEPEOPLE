@@ -19,6 +19,13 @@ GRAPH_QUERY_MAX = 1_000
 UPLOAD_FILE_COUNT_MAX = 10
 EXTRACTED_TEXT_CHARACTERS_MAX = 2_000_000
 PDF_PAGE_MAX = 1_000
+# OOXML (docx/xlsx) extraction ceilings. Both formats are zip containers of
+# XML parts, so the limits are uncompressed-size and structural caps rather
+# than page counts.
+ZIP_MEMBER_MAX_BYTES = 64 * 1024 * 1024
+ZIP_TOTAL_MAX_BYTES = 128 * 1024 * 1024
+XLSX_SHEET_MAX = 50
+XLSX_ROW_MAX = 20_000
 ENTITY_TYPE_FILTER_MAX = 50
 ENTITY_TYPE_NAME_MAX = 120
 PREPARE_ENTITY_MAX = 500
