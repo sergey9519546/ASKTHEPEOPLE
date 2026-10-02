@@ -97,19 +97,34 @@ def api_client(monkeypatch):
     return app.test_client()
 
 
+@pytest.fixture
+def startable_simulation_id(monkeypatch):
+    """A real simulation record.
+
+    The start endpoint loads the simulation state before validating the run
+    controls, because the follower bound reads the run's population tier from
+    it. A missing simulation therefore answers 404 before validation, so the
+    bound-rejection tests need a record that exists.
+    """
+    from app.services.simulation_manager import SimulationManager
+
+    manager = SimulationManager()
+    state = manager.create_simulation(
+        project_id="proj_resource_bounds",
+        graph_id="atp_resource_bounds",
+    )
+    return state.simulation_id
+
+
 @pytest.mark.parametrize(
-    ("payload", "expected_code"),
+    ("payload_override", "expected_code"),
     [
         (
-            {
-                "simulation_id": "sim_missing",
-                "max_rounds": SIMULATION_ROUNDS_MAX + 1,
-            },
+            {"max_rounds": SIMULATION_ROUNDS_MAX + 1},
             "integer_field_out_of_range",
         ),
         (
             {
-                "simulation_id": "sim_missing",
                 "enable_followers": True,
                 "follower_count": FOLLOWER_COUNT_MAX + 1,
             },
@@ -117,7 +132,6 @@ def api_client(monkeypatch):
         ),
         (
             {
-                "simulation_id": "sim_missing",
                 "enable_followers": True,
                 "follower_distribution": {
                     "AMPLIFIER": 1.0,
@@ -130,9 +144,11 @@ def api_client(monkeypatch):
 )
 def test_simulation_start_rejects_unbounded_run_controls(
     api_client,
-    payload,
+    startable_simulation_id,
+    payload_override,
     expected_code,
 ):
+    payload = {"simulation_id": startable_simulation_id, **payload_override}
     response = api_client.post("/api/simulation/start", json=payload)
 
     assert response.status_code == 400

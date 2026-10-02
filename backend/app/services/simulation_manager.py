@@ -660,6 +660,228 @@ class SimulationManager:
             self._save_simulation_state(state)
             raise
 
+    def _prepare_population_tier4(
+        self,
+        *,
+        state: SimulationState,
+        simulation_requirement: str,
+        document_text: str,
+        defined_entity_types: Optional[List[str]],
+        progress_callback: Optional[callable],
+        archetype_count: Optional[int],
+        expansion_factor: Optional[int],
+    ) -> SimulationState:
+        """Tier-4 (MASS_POPULATION) preparation: the archetype-composition path.
+
+        Composition (docs/plans/2026-10-01-50k-character-scale-plan.md):
+        250 archetypes x 20 profiles (1 centroid + 19 variants) = 5,000
+        LLM-tier characters, plus 45,000 follower crowd characters generated
+        at run start (FollowerEngine, outside the OASIS subprocess) = 50,000.
+
+        Gated by POPULATION_TIER_4_ENABLED (re-checked by the caller). The
+        population is a declared composition, never a sample size; the
+        follower crowd never enters the OASIS subprocess.
+        """
+        requirement = simulation_requirement.strip()
+        if not requirement:
+            raise DecisionLensPreparationError(
+                "decision_lens_requirement_required"
+            )
+
+        # Tier-4 bounds from Config; the flag was verified by the caller.
+        n_arch = bounded_integer(
+            archetype_count or Config.TIER4_ARCHETYPE_COUNT,
+            field="archetype_count",
+            minimum=1,
+            maximum=Config.TIER4_ARCHETYPE_COUNT,
+        )
+        expand = bounded_integer(
+            expansion_factor or Config.TIER4_EXPANSION_FACTOR,
+            field="expansion_factor",
+            minimum=1,
+            maximum=Config.TIER4_EXPANSION_FACTOR,
+        )
+        prepared_max = Config.TIER4_PREPARED_PROFILE_MAX
+        if n_arch * expand > prepared_max:
+            raise ValueError(
+                "Requested tier-4 archetype expansion exceeds the prepared "
+                f"profile limit of {prepared_max}."
+            )
+
+        try:
+            state.status = SimulationStatus.PREPARING
+            state.error = None
+            self._save_simulation_state(state)
+            sim_dir = self._get_simulation_dir(state.simulation_id)
+
+            # ========== Phase 1: Read and filter entities ==========
+            if progress_callback:
+                progress_callback("reading", 0, "Connecting to Zep graph...")
+            filtered = ZepEntityReader().filter_defined_entities(
+                graph_id=state.graph_id,
+                defined_entity_types=defined_entity_types,
+                enrich_with_edges=True,
+            )
+            # Tier 4 clusters at most 500 source entities (the archetype
+            # engine's clustering input cap); the composition multiplies
+            # them, not the entity count.
+            if filtered.filtered_count > PREPARE_ENTITY_MAX:
+                raise ValueError(
+                    "Selected graph contains "
+                    f"{filtered.filtered_count} records; the maximum is "
+                    f"{PREPARE_ENTITY_MAX}."
+                )
+            state.entities_count = filtered.filtered_count
+            state.entity_types = list(filtered.entity_types)
+            if filtered.filtered_count == 0:
+                raise DecisionLensPreparationError(
+                    "decision_lens_source_records_required"
+                )
+            if progress_callback:
+                progress_callback(
+                    "reading",
+                    100,
+                    f"Read {filtered.filtered_count} graph records",
+                    current=filtered.filtered_count,
+                    total=filtered.filtered_count,
+                )
+
+            # ========== Phase 2: Archetype-composition profiles ==========
+            if progress_callback:
+                progress_callback(
+                    "generating_profiles", 0,
+                    "Generating archetype-composition profiles...",
+                )
+            generator = OasisProfileGenerator(graph_id=state.graph_id)
+
+            def profile_progress(current, total, msg):
+                if progress_callback:
+                    progress_callback(
+                        "generating_profiles",
+                        int(current / total * 100),
+                        msg,
+                        current=current,
+                        total=total,
+                    )
+
+            profiles, archetypes = generator.generate_archetype_profiles(
+                entities=filtered.entities,
+                n_archetypes=n_arch,
+                expansion_factor=expand,
+                use_llm=True,
+                progress_callback=profile_progress,
+                graph_id=state.graph_id,
+            )
+            if len(profiles) > prepared_max:
+                raise ValueError(
+                    "Tier-4 archetype generation produced "
+                    f"{len(profiles)} profiles; the maximum is {prepared_max}."
+                )
+            write_json(
+                SimulationPaths.archetypes_file(state.simulation_id),
+                [a.to_dict() for a in archetypes],
+            )
+
+            state.profiles_count = len(profiles)
+            canonical_agents = build_canonical_agents_from_profiles(profiles)
+            write_json(
+                SimulationPaths.canonical_profiles_file(state.simulation_id),
+                canonical_agents,
+            )
+            write_json(
+                SimulationPaths.relationship_bootstrap_file(state.simulation_id),
+                [],
+            )
+            write_exports_from_canonical(
+                simulation_dir=sim_dir,
+                canonical_agents=canonical_agents,
+            )
+            if progress_callback:
+                progress_callback(
+                    "generating_profiles", 100,
+                    f"Completed, total {len(profiles)} profile characters",
+                    current=len(profiles),
+                    total=len(profiles),
+                )
+
+            # ========== Phase 3: LLM intelligent config generation ==========
+            if progress_callback:
+                progress_callback(
+                    "generating_config", 0,
+                    "Analyzing simulation requirements...",
+                )
+            config_generator = SimulationConfigGenerator()
+            if progress_callback:
+                progress_callback(
+                    "generating_config", 30,
+                    "Calling LLM to generate config...",
+                )
+            sim_params = config_generator.generate_config(
+                simulation_id=state.simulation_id,
+                project_id=state.project_id,
+                graph_id=state.graph_id,
+                simulation_requirement=requirement,
+                document_text=document_text,
+                entities=filtered.entities,
+                canonical_agents=canonical_agents,
+                enable_twitter=state.enable_twitter,
+                enable_reddit=state.enable_reddit,
+            )
+            if progress_callback:
+                progress_callback(
+                    "generating_config", 70,
+                    "Saving configuration file...",
+                )
+            config_path = SimulationPaths.config_file(state.simulation_id)
+            with open(config_path, 'w', encoding='utf-8') as f:
+                f.write(sim_params.to_json())
+
+            preflight = run_preflight(sim_dir)
+            if preflight.get("status") != "passed":
+                raise ValueError(
+                    f"Simulation preflight failed: {preflight.get('failed_checks', [])}"
+                )
+
+            state.config_generated = True
+            state.config_reasoning = sim_params.generation_reasoning
+            if progress_callback:
+                progress_callback(
+                    "generating_config", 100,
+                    "Configuration generation completed",
+                )
+
+            # The 45,000 follower crowd characters are generated at RUN start
+            # (SimulationRunner, FollowerEngine), not during preparation: they
+            # never enter the OASIS subprocess and their per-round actions are
+            # computed in the monitor thread. The declared total is recorded
+            # so the run-status surface can present the composition.
+            state.population_tier = "mass_population"
+            state.status = SimulationStatus.READY
+            self._save_simulation_state(state)
+
+            logger.info(
+                "Tier-4 simulation preparation completed: %s, records=%s, "
+                "archetypes=%s, profile_characters=%s, crowd_characters=%s, "
+                "declared_total=%s",
+                state.simulation_id,
+                state.entities_count,
+                n_arch,
+                len(profiles),
+                Config.TIER4_FOLLOWER_COUNT,
+                len(profiles) + Config.TIER4_FOLLOWER_COUNT,
+            )
+            return state
+        except Exception as exc:
+            logger.error(
+                "Tier-4 preparation failed: %s, error=%s",
+                state.simulation_id,
+                str(exc),
+            )
+            state.status = SimulationStatus.FAILED
+            state.error = str(exc)
+            self._save_simulation_state(state)
+            raise
+
     def _prepare_decision_lens_review(
         self,
         *,

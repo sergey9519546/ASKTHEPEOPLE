@@ -259,6 +259,26 @@ def start_simulation():
         if not simulation_id:
             return error_response("Please provide simulation_id", status=400)
 
+        # The simulation state is loaded before validation because the
+        # follower bound below reads the run's population tier from it.
+        manager = SimulationManager()
+        state = manager.get_simulation(simulation_id)
+        if not state:
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
+
+        # The simulation state is loaded before validation because the
+        # follower bound below reads the run's population tier from it.
+        manager = SimulationManager()
+        state = manager.get_simulation(simulation_id)
+        if not state:
+            return error_response(
+                f"Simulation does not exist: {simulation_id}",
+                status=404,
+            )
+
         platform = data.get('platform', 'parallel')
         force = data.get('force', False)  # Optional: force restart
         enable_followers = data.get('enable_followers', False)
@@ -274,11 +294,23 @@ def start_simulation():
                 if max_rounds_value is not None
                 else None
             )
+            # A tier-4 (mass_population) run raises the follower bound to the
+            # declared crowd size; every other run keeps the default 500.
+            follower_max = (
+                Config.TIER4_FOLLOWER_COUNT_MAX
+                if getattr(state, 'population_tier', None) == 'mass_population'
+                else FOLLOWER_COUNT_MAX
+            )
+            follower_default = (
+                Config.TIER4_FOLLOWER_COUNT
+                if follower_max == Config.TIER4_FOLLOWER_COUNT_MAX
+                else Config.FOLLOWER_DEFAULT_COUNT
+            )
             follower_count = bounded_integer(
-                data.get('follower_count', Config.FOLLOWER_DEFAULT_COUNT),
+                data.get('follower_count', follower_default),
                 field="follower_count",
                 minimum=0,
-                maximum=FOLLOWER_COUNT_MAX,
+                maximum=follower_max,
             )
             follower_distribution = validate_weight_distribution(
                 data.get('follower_distribution'),
@@ -304,15 +336,8 @@ def start_simulation():
                 status=400,
             )
 
-        # Check if the simulation is ready
-        manager = SimulationManager()
-        state = manager.get_simulation(simulation_id)
-
-        if not state:
-            return error_response(
-                f"Simulation does not exist: {simulation_id}",
-                status=404,
-            )
+        # The simulation state was loaded above (before validation), because
+        # the follower bound reads the run's population tier from it.
 
         # Admission precedes force-stop, cleanup, task creation, dispatch, and
         # all simulation state mutation. READY alone is never authorization.
