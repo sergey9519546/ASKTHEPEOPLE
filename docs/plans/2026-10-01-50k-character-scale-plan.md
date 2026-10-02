@@ -1,7 +1,7 @@
 ---
 title: "50,000-Character Population Scale Plan"
-status: "Proposed"
-version: "1.0.0"
+status: "Partially Delivered"
+version: "1.1.0"
 owner: "askthepeople-orchestration-engineer + askthepeople-architect"
 last_reviewed: "2026-10-01"
 review_cycle: "On material change"
@@ -10,6 +10,36 @@ applies_to: "backend/app/services/, backend/app/utils/input_policy.py, backend/a
 ---
 
 # 50,000-Character Population Scale Plan
+
+> **Delivery state (2026-10-01).** Phases 1–4 are implemented and tested;
+> Phase 5's documentation and eval wiring (this section, the env examples,
+> the release verification) is in flight. Implemented surface:
+>
+> - **Phase 1** — `Config.POPULATION_TIER_4_ENABLED` (fail-closed),
+>   `TIER4_ARCHETYPE_COUNT` / `TIER4_EXPANSION_FACTOR` /
+>   `TIER4_PREPARED_PROFILE_MAX` / `TIER4_FOLLOWER_COUNT` /
+>   `TIER4_FOLLOWER_COUNT_MAX`, the `api/routes` tier validation, and the
+>   tier-4 preparation path in `simulation_manager._prepare_population_tier4`
+>   (`backend/tests/test_population_tiers.py`).
+> - **Phase 2** — `backend/app/services/persona_composition.py`: seeded,
+>   deterministic variant composition over per-archetype shuffled axes
+>   (posture, voice, disposition, topics) with an import-time axis-length
+>   invariant; mandatory disclosure suffix on every generated profile
+>   (`backend/tests/test_persona_composition.py`,
+>   `backend/tests/test_follower_naming.py`, and the distinctness eval at
+>   `backend/tests/evals/test_variant_persona_distinctness.py`).
+> - **Phase 3** — per-round crowd action ceiling
+>   (`TIER4_CROWD_ACTIONS_PER_ROUND_MAX`, deterministic down-sample) and
+>   single-buffered `follower_actions.jsonl` writes; load test at
+>   `backend/tests/test_follower_load.py` (45,000 followers, ~25 ms/round
+>   against a 5 s budget).
+> - **Phase 4** — preflight `population_tier_gate` +
+>   `population_composition` checks with tier-resolved profile capacity,
+>   `SimulationRunState` composition fields, and the declared-composition
+>   display in `frontend/src/components/Step3RunWayfinder.vue`
+>   (`backend/tests/test_preflight_tier4.py`,
+>   `backend/tests/test_run_state_composition.py`,
+>   `frontend/src/__tests__/step3-run-wayfinder.spec.js`).
 
 A plan for scaling a single simulation run from the current hard cap of
 1,000 characters to at least 50,000 **distinct** synthetic characters,
