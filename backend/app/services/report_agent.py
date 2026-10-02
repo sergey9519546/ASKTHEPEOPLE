@@ -13,6 +13,7 @@ import os
 import json
 import time
 import re
+import tempfile
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -43,6 +44,47 @@ from .zep_tools import (
 )
 
 logger = get_logger('askthepeople.report_agent')
+
+
+def _atomic_write_text(path: str, content: str) -> None:
+    """Write ``content`` to ``path`` so a reader never observes a partial file.
+
+    ``open(path, 'w')`` truncates the destination before the first byte is
+    written, so a crash, a provider timeout, or an operator kill mid-write
+    leaves a truncated artifact: a section file or an assembled report that
+    looks complete to an existence or size check and is missing its tail to
+    anything that reads it.
+
+    Writing to a staging file in the same directory and then ``os.replace``
+    makes the swap atomic on POSIX and on Windows. The staging file is fsynced
+    first so the content is durable before the rename publishes it, and it is
+    removed on any failure so a crashed write leaves neither debris nor a
+    damaged artifact.
+
+    This does not close the remaining fence window. ``write_guard`` calls
+    ``checkpoint()`` and then yields, so a takeover landing between the check
+    and this call is not observed; only a compare-and-swap at commit time would
+    catch that. What is guaranteed here is that whichever worker wins that race,
+    the file on disk is one worker's complete content rather than a mixture.
+    """
+    directory = os.path.dirname(os.path.abspath(path))
+    os.makedirs(directory, exist_ok=True)
+
+    handle, staging = tempfile.mkstemp(
+        dir=directory, prefix=".tmp-", suffix=".part"
+    )
+    try:
+        with os.fdopen(handle, "w", encoding="utf-8") as staged:
+            staged.write(content)
+            staged.flush()
+            os.fsync(staged.fileno())
+        os.replace(staging, path)
+    except BaseException:
+        try:
+            os.unlink(staging)
+        except OSError:
+            pass
+        raise
 
 GENERATED_REPORT_DISCLOSURE = (
     "**Human respondents: 0. Evidence type: synthetic.** "
@@ -2731,8 +2773,7 @@ class ReportManager:
         # Save file
         file_suffix = f"section_{section_index:02d}.md"
         file_path = os.path.join(cls._get_report_folder(report_id), file_suffix)
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(md_content)
+        _atomic_write_text(file_path, md_content)
 
         logger.info(f"Section saved: {report_id}/{file_suffix}")
         return file_path
@@ -2901,8 +2942,7 @@ class ReportManager:
         
         # Save Full report
         full_path = cls._get_report_markdown_path(report_id)
-        with open(full_path, 'w', encoding='utf-8') as f:
-            f.write(md_content)
+        _atomic_write_text(full_path, md_content)
         
         logger.info(f"Full report assembled: {report_id}")
         return md_content

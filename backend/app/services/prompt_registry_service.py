@@ -3,9 +3,24 @@ import json
 from pathlib import Path
 from typing import Optional, Dict
 
+# Anchored to the package location, not the process working directory.
+# backend/app/services/prompt_registry_service.py -> repo root is parents[3].
+_DEFAULT_REGISTRY_PATH = (
+    Path(__file__).resolve().parents[3] / "docs" / "ai" / "PROMPT_REGISTRY.md"
+)
+
+
 class PromptRegistryService:
-    def __init__(self, registry_path: str = "docs/ai/PROMPT_REGISTRY.md"):
-        self.registry_path = Path(registry_path)
+    def __init__(self, registry_path: Optional[str] = None):
+        # A relative default resolved against the CWD, so from `backend/` -- the
+        # runtime working directory for both the Dockerfile and `npm run dev` --
+        # it pointed at backend/docs/ai/PROMPT_REGISTRY.md, which does not exist.
+        # `_parse_registry` returns {} for a missing file rather than raising,
+        # so every `get_prompt` failed afterwards and every pre-existing test
+        # passed an explicit mock path, leaving the default unexercised.
+        self.registry_path = (
+            Path(registry_path) if registry_path else _DEFAULT_REGISTRY_PATH
+        )
         self.prompts = self._parse_registry()
 
     def _parse_registry(self) -> Dict[str, Dict[str, str]]:
