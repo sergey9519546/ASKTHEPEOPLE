@@ -3,9 +3,20 @@ Pydantic v2 request schemas and validation helper for typed API boundaries.
 """
 
 from typing import Optional, List, Dict, Any, Literal
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from flask import request, jsonify
 from functools import wraps
+
+from ..utils.logger import get_logger
+
+logger = get_logger("askthepeople.api.schemas")
 
 
 class ProblemDetailsResponse(BaseModel):
@@ -236,6 +247,84 @@ class FetchUrlsRequest(BaseModel):
     simulation_id: Optional[str] = Field(None, description="Optional simulation identifier")
 
 
+# ---------------------------------------------------------------------------
+# Report request bodies (exec-plan T26).
+#
+# These exist to type the four report routes that take a JSON body, which
+# `api/report_routes/` had left untyped after the T25 decomposition.
+#
+# Scope is deliberately narrow: SHAPE only. `extra="forbid"` rejects unknown
+# keys, and `strict=True` rejects wrong JSON types instead of coercing them.
+# Semantic bounds -- required fields, maximum lengths, ranges -- stay with
+# `utils.input_policy` (`bounded_text`, `bounded_integer`,
+# `validate_chat_history`), because those already produce the specific error
+# codes the frontend handles. Duplicating them here would change the error
+# contract, which is a breaking change and not a refactor.
+#
+# `strict=True` matters at a trust boundary: without it Pydantic coerces
+# `"force_regenerate": "yes"` to True and `"simulation_id": 5` to `"5"`. The
+# first invents consent, the second invents an identifier.
+# ---------------------------------------------------------------------------
+
+
+class GenerateReportRequest(BaseModel):
+    # extra="ignore", NOT "forbid", and the reason is a security property.
+    #
+    # `tests/test_report_worker_dispatch.py` posts a body carrying five
+    # client-supplied fields the handler must ignore -- `user_prompt`,
+    # `custom_instructions`, `graph_id`, `decision_text`,
+    # `simulation_requirement` -- as privacy canaries, then asserts the
+    # enqueued Celery kwargs contain only server-side ids. That is the proof
+    # for AGENTS.md rule 5: no client-supplied data reaches a canonical
+    # server-side record.
+    #
+    # With extra="forbid" the request would be rejected 400 before the handler
+    # ran, and the test would pass for the wrong reason while proving nothing
+    # about provenance. Refusing unknown keys here would make the one test
+    # that guards payload provenance unable to guard it.
+    #
+    # `strict=True` still does the part that matters: it blocks coercion, so
+    # `"force_regenerate": "yes"` cannot become True and `simulation_id: 5`
+    # cannot become "5".
+    model_config = ConfigDict(extra="ignore", strict=True)
+
+    # Optional rather than required: the handler owns the "missing
+    # simulation_id" response, which is `report_simulation_id_missing` and not
+    # the generic `report_request_invalid`. Making it required here would
+    # collapse two distinct error codes into one and break clients that branch
+    # on them.
+    simulation_id: Optional[str] = None
+    force_regenerate: Optional[bool] = None
+
+
+class ReportChatRequest(BaseModel):
+    """Shape only. `message` requirement and length stay in input_policy."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    simulation_id: Optional[str] = None
+    message: Optional[str] = None
+    chat_history: Optional[List[Any]] = None
+
+
+class GraphSearchRequest(BaseModel):
+    """Shape only. `query` requirement and the 1-50 range stay in input_policy."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    project_id: Optional[str] = None
+    graph_id: Optional[str] = None
+    query: Optional[str] = None
+    limit: Optional[int] = None
+
+
+class GraphStatisticsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    project_id: Optional[str] = None
+    graph_id: Optional[str] = None
+
+
 def validate_schema(schema_cls):
     """
     Decorator to validate JSON request body using a Pydantic v2 model.
@@ -258,6 +347,41 @@ def validate_schema(schema_cls):
                     instance=request.path,
                 )
                 return jsonify(problem.model_dump()), 422
+            return fn(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def enforce_schema(schema_cls, error_code: str):
+    """Enforce a request schema while preserving the endpoint's own error shape.
+
+    `validate_schema` answers validation failures with RFC-7807 Problem Details
+    and a 422. The report endpoints have always answered 400 with the
+    `{"success": false, "error": ...}` envelope, and clients match on those
+    codes. This decorator therefore keeps that envelope and that status, so
+    adding the typed boundary is additive rather than a breaking API change.
+
+    Apply this INSIDE `@limiter.limit`, so malformed requests are still counted
+    against the rate limit exactly as they are today.
+    """
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            raw_data = request.get_json(silent=True) or {}
+            try:
+                request.validated_data = schema_cls.model_validate(raw_data)
+            except ValidationError as exc:
+                logger.warning(
+                    "typed request rejected: code=%s schema=%s fields=%s",
+                    error_code,
+                    schema_cls.__name__,
+                    # A non-object body (a list, a bare string) yields an error
+                    # with an empty `loc`, so indexing [-1] here would raise
+                    # IndexError and turn a 400 into a 500.
+                    sorted(str(e["loc"][-1]) for e in exc.errors() if e.get("loc")),
+                    extra={"privacy_safe": True},
+                )
+                return jsonify({"success": False, "error": error_code}), 400
             return fn(*args, **kwargs)
         return wrapper
     return decorator

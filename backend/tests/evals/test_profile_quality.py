@@ -86,6 +86,12 @@ def extract_decision_criteria(profile: OasisAgentProfile) -> str:
     return "|".join(sorted(criteria_parts))
 
 
+_MBTI_CODES = [
+    "INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP",
+    "ISTJ", "ISFJ", "ESTJ", "ESFJ", "ISTP", "ISFP", "ESTP", "ESFP",
+]
+
+
 def test_profile_diversity(profile_generator, sample_entity, sample_decision_prompt, eval_results_path):
     """
     Test profile diversity: Generate 100 profiles and measure uniqueness.
@@ -152,7 +158,11 @@ def test_profile_diversity(profile_generator, sample_entity, sample_decision_pro
         profile.profession = profession
         profile.interested_topics = topics
         profile.age = 20 + (i % 50)  # Ages 20-69
-        profile.mbti = profile_generator.MBTI_TYPES[i % len(profile_generator.MBTI_TYPES)]
+        # Fixture data, not production behaviour: the generator's dead
+        # MBTI_TYPES list was removed, and nothing in the generator reads
+        # it. This eval varies the field so the diversity measurement is not
+        # confounded by a constant.
+        profile.mbti = _MBTI_CODES[i % len(_MBTI_CODES)]
         
         profiles.append(profile)
         

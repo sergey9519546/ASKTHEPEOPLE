@@ -38,6 +38,8 @@ from ..utils.input_policy import (
 from ..utils.logger import get_logger
 from ..utils.response import truth_metadata
 from . import graph_bp, limiter
+from .schemas import enforce_schema
+from .schemas_graph import BuildGraphRequest
 
 # Get Logger
 logger = get_logger('askthepeople.api')
@@ -471,6 +473,10 @@ def generate_ontology():
 
 @graph_bp.route('/build', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
+# Shape only, and inside the limiter so a malformed body is still charged
+# against the same budget as a well-formed one. The handler below keeps
+# ownership of every condition it already reported.
+@enforce_schema(BuildGraphRequest, "graph_build_request_invalid")
 def build_graph():
     """
     Endpoint 2: Build graph based on project_id

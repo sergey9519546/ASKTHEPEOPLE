@@ -95,6 +95,39 @@ def report_evidence_path(report_dir: str) -> str:
     return os.path.join(report_dir, REPORT_EVIDENCE_FILENAME)
 
 
+def write_run_manifest(
+    simulation_dir: str,
+    prompt_records: Sequence[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Write `run_manifest.json`: the per-call prompt provenance for this run.
+
+    ADR-0004 requires a SHA-256 record for every model call. Those records were
+    being built and then discarded — `OasisProfileGenerator` accumulated them
+    and nothing wrote them anywhere, so the audit trail the rule requires did
+    not exist on disk. This closes that gap.
+
+    Scope: this is the on-disk RUN ARTIFACT, alongside the other JSON
+    artifacts in the simulation directory, and it needs no schema change. It
+    is deliberately NOT the canonical run-manifest table, which lands with the
+    canonical persistence layer in gate 3 (ADR-0012). When that table arrives
+    it becomes the system of record and this file is the run-local copy.
+
+    Writing is best-effort: provenance must never fail a run that otherwise
+    produced valid artifacts.
+    """
+    payload: Dict[str, Any] = {
+        "schema_version": 1,
+        "prompt_call_count": len(prompt_records),
+        "prompt_calls": list(prompt_records),
+    }
+    try:
+        write_json(run_manifest_path(simulation_dir), payload)
+    except Exception as exc:  # pragma: no cover - provenance is not load-bearing
+        logger.warning("Failed to write run manifest: %s", exc)
+        return {"written": False, "error": str(exc)}
+    return {"written": True, "prompt_call_count": len(prompt_records)}
+
+
 def _normalize_gender(value: str | None) -> str:
     if not value:
         return "other"

@@ -10,6 +10,13 @@ from .. import simulation_bp
 from ..simulation import optimize_interview_prompt
 from .. import limiter
 from ..presentation import error_response, present, present_raw
+from ..schemas import enforce_schema
+from ..schemas_interview_export import (
+    InterviewAgentRequest,
+    InterviewAgentsBatchRequest,
+    InterviewAllAgentsRequest,
+    InterviewHistoryRequest,
+)
 from ...config import Config
 from ...services.simulation_runner import SimulationRunner
 from ...services.claim_boundary import synthetic_output_disclosure
@@ -39,6 +46,9 @@ logger = get_logger('askthepeople.api.simulation')
 @simulation_bp.route('/generated-response', methods=['POST'])
 @simulation_bp.route('/interview', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
+# invalid_text_field is the code this route already returns when a body field
+# arrives as the wrong JSON type, and the first thing bounded_text checks.
+@enforce_schema(InterviewAgentRequest, "invalid_text_field")
 def interview_agent():
     """
     Ask one fictional generated profile a follow-up question.
@@ -172,6 +182,9 @@ def interview_agent():
 @simulation_bp.route('/generated-response/batch', methods=['POST'])
 @simulation_bp.route('/interview/batch', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
+# invalid_text_field, as above: it is this handler's own answer to a
+# wrong-typed body field, reached through the per-item bounded_text pass.
+@enforce_schema(InterviewAgentsBatchRequest, "invalid_text_field")
 def interview_agents_batch():
     """
     Ask multiple fictional generated profiles follow-up questions.
@@ -330,6 +343,8 @@ def interview_agents_batch():
 @simulation_bp.route('/generated-response/all', methods=['POST'])
 @simulation_bp.route('/interview/all', methods=['POST'])
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
+# invalid_text_field, as above.
+@enforce_schema(InterviewAllAgentsRequest, "invalid_text_field")
 def interview_all_agents():
     """
     Ask every fictional generated profile the same follow-up question.
@@ -437,6 +452,11 @@ def interview_all_agents():
 
 @simulation_bp.route('/generated-response/history', methods=['POST'])
 @simulation_bp.route('/interview/history', methods=['POST'])
+# This handler runs no input_policy pass, so it has no code for a wrong-typed
+# field. "Please provide simulation_id" is the only 400 it already emits, and
+# it is the answer clients match on for a body this route cannot use, so a
+# shape violation has to reuse it rather than invent one.
+@enforce_schema(InterviewHistoryRequest, "Please provide simulation_id")
 def get_interview_history():
     """
     Get saved fictional generated-profile follow-up records.

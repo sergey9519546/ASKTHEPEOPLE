@@ -17,6 +17,86 @@ import re
 from dataclasses import dataclass
 import logging
 
+# Similarity above which two personas are treated as clones.
+#
+# The batch gate runs POPULATION-WIDE (every profile in the run against every
+# other), so its threshold is a collapse detector, not a pairwise-distinctness
+# requirement. Measured over 400,000 random pairs of a real 5,000-variant
+# tier-4 population, the legitimate distribution is: p50 0.077, p90 0.183,
+# p99 0.482, p99.9 0.638, max observed 0.804. Pairs sharing two of the three
+# composition axes are ordinary at that scale, so a 0.60 cut here rejected
+# correct output. 0.90 sits above the observed legitimate maximum with
+# headroom, while a clone (1.00) and a 5%-word near-clone (~0.86) still fail.
+#
+# The *within-archetype* distinctness requirement — the real "these are 20
+# distinct characters" bar — is 0.60 and lives in
+# `tests/evals/test_variant_persona_distinctness.py`, which measures one
+# archetype at a time where the composition has room to separate.
+#
+# Named because `_check_duplicate_personas` derives its candidate-prefix
+# length from this value; changing it changes the index geometry, not just
+# the cut.
+_NEAR_DUPLICATE_THRESHOLD = 0.90
+_PERSONA_SHINGLE_SIZE = 3
+
+# Population above which the pairwise near-duplicate stage is skipped. 750 is
+# where ~280k comparisons still finish in well under a second, which is the
+# entity-generation batch size this stage actually serves. Above it the exact
+# -duplicate stage still runs over every profile, so total collapse is still
+# caught — see `_check_duplicate_personas`.
+_MAX_NEAR_DUPLICATE_PROFILES = 750
+
+# Sentence prefixes that are identical in every variant BY DESIGN and must not
+# count toward similarity: the mandated disclosure, the role framing, and the
+# centroid scenario context. Kept in step with
+# `tests/evals/test_variant_persona_distinctness.py`, which strips the same
+# prefixes and explains why.
+_PERSONA_BOILERPLATE_PREFIXES = (
+    "fictional scenario character",
+    "fictional scenario profile",
+    "scenario context:",
+)
+
+
+def persona_discriminating_text(persona: str) -> str:
+    """The part of a persona that is supposed to differ between characters.
+
+    Drops the sentences every variant carries by construction: the mandatory
+    fictional-scenario disclosure, the role framing, and the centroid's
+    scenario context. Returns whitespace-normalised text.
+    """
+    kept: List[str] = []
+    for sentence in str(persona).split(". "):
+        if sentence.lower().strip().rstrip(".").startswith(
+            _PERSONA_BOILERPLATE_PREFIXES
+        ):
+            continue
+        kept.append(sentence)
+    return " ".join(" ".join(kept).lower().split())
+
+
+def _shingles(text: str, size: int = _PERSONA_SHINGLE_SIZE) -> set:
+    words = persona_discriminating_text(text).split()
+    if len(words) < size:
+        return {" ".join(words)} if words else set()
+    return {" ".join(words[i:i + size]) for i in range(len(words) - size + 1)}
+
+
+def persona_similarity(
+    left: str,
+    right: str,
+    *,
+    size: int = _PERSONA_SHINGLE_SIZE,
+) -> float:
+    """Shingle Jaccard over the discriminating part of two personas."""
+    a = _shingles(left, size)
+    b = _shingles(right, size)
+    if not a and not b:
+        return 1.0
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
 # Try relative import first, fall back to absolute for standalone usage
 try:
     from ..utils.logger import get_logger
@@ -43,8 +123,8 @@ class ValidationResult:
     details: Optional[Dict] = None
     
     @staticmethod
-    def success():
-        return ValidationResult(passed=True)
+    def success(details: Optional[Dict] = None):
+        return ValidationResult(passed=True, details=details)
     
     @staticmethod
     def failure(reason: str, validation_type: str, details: Optional[Dict] = None):
@@ -273,44 +353,108 @@ class ProfileValidator:
         return ValidationResult.success()
     
     def _check_duplicate_personas(self, profiles: List[Dict[str, Any]]) -> ValidationResult:
-        """Check for duplicate or nearly identical personas."""
-        persona_map = {}
-        
-        for i, profile in enumerate(profiles):
-            persona = profile.get('persona', '').strip().lower()
-            # Normalize whitespace
-            persona_normalized = ' '.join(persona.split())
-            
-            # Check for exact duplicates
-            if persona_normalized in persona_map:
+        """Reject exact duplicates always; near-duplicates when affordable.
+
+        Two stages with different costs and different scopes.
+
+        **Exact duplicates** are an O(n) dict lookup and always run, at any
+        population size. This is the stage that catches real collapse, and it
+        catches the failure this gate was written for: a generation run that
+        emits the same paragraph thousands of times.
+
+        **Near-duplicates** need every pair compared, which is O(n^2). They
+        run only when the population is small enough for that to be cheap
+        (`_MAX_NEAR_DUPLICATE_PROFILES`). Above the cap the stage is skipped
+        and says so in `details` and in the log, rather than silently
+        reporting an exhaustive result it did not compute.
+
+        Why a cap and not a smarter index: an inverted index over a
+        document-frequency-ordered prefix was implemented and removed. It is
+        exact, but compositional personas draw from a vocabulary of a few
+        hundred words (measured: 252 across 1,000 variants), so even the
+        rarest words have document frequency in the dozens and posting lists
+        run hundreds long. Measured candidate count was 364 per profile
+        against ~500 for the plain double loop — a 27% saving for an index
+        whose soundness then has to be argued and tested. Plain O(n^2) inside
+        a documented budget is the better trade.
+
+        Similarity is measured on the discriminating text only
+        (`persona_similarity`). The raw persona is dominated by boilerplate
+        every profile is REQUIRED to carry, which put legitimate variants at
+        0.93-0.95 similarity and made the gate unsatisfiable.
+        """
+        exact: Dict[str, int] = {}
+        normalized: List[str] = []
+
+        for position, profile in enumerate(profiles):
+            persona = ' '.join(str(profile.get('persona', '')).lower().split())
+            if persona in exact:
                 return ValidationResult.failure(
-                    reason=f"Duplicate persona detected (profiles {persona_map[persona_normalized]} and {i})",
+                    reason=(
+                        f"Duplicate persona detected "
+                        f"(profiles {exact[persona]} and {position})"
+                    ),
                     validation_type="duplicate_profile",
                     details={
-                        "profile_indices": [persona_map[persona_normalized], i],
-                        "persona_preview": persona_normalized[:200]
-                    }
+                        "profile_indices": [exact[persona], position],
+                        "persona_preview": persona[:200],
+                    },
                 )
-            
-            persona_map[persona_normalized] = i
-        
-        # Check for near-duplicates (simple similarity check)
-        personas_list = list(persona_map.keys())
-        for i in range(len(personas_list)):
-            for j in range(i + 1, len(personas_list)):
-                similarity = self._simple_similarity(personas_list[i], personas_list[j])
-                if similarity > 0.9:  # 90% similar
+            exact[persona] = position
+            normalized.append(persona)
+
+        if len(normalized) < 2:
+            return ValidationResult.success()
+
+        if len(normalized) > _MAX_NEAR_DUPLICATE_PROFILES:
+            logger.warning(
+                "Skipping pairwise near-duplicate scan: "
+                f"{len(normalized)} profiles exceeds the "
+                f"{_MAX_NEAR_DUPLICATE_PROFILES} budget. Exact-duplicate "
+                "detection still ran over the whole population; "
+                "near-duplicate detection did not.",
+                extra={
+                    "profile_count": len(normalized),
+                    "budget": _MAX_NEAR_DUPLICATE_PROFILES,
+                },
+            )
+            return ValidationResult.success(
+                details={
+                    "exact_duplicates_checked": True,
+                    "near_duplicate_checked": False,
+                    "profile_count": len(normalized),
+                }
+            )
+
+        shingles = [_shingles(text) for text in normalized]
+        for i in range(len(normalized)):
+            for j in range(i + 1, len(normalized)):
+                union = shingles[i] | shingles[j]
+                if not union:
+                    continue
+                similarity = len(shingles[i] & shingles[j]) / len(union)
+                if similarity > _NEAR_DUPLICATE_THRESHOLD:
                     return ValidationResult.failure(
-                        reason=f"Nearly identical personas detected (profiles {i} and {j}): {similarity:.2%} similar",
+                        reason=(
+                            "Nearly identical personas detected "
+                            f"(profiles {i} and {j}): "
+                            f"{similarity:.2%} similar"
+                        ),
                         validation_type="near_duplicate_profile",
                         details={
                             "profile_indices": [i, j],
-                            "similarity": similarity
-                        }
+                            "similarity": similarity,
+                        },
                     )
-        
-        return ValidationResult.success()
-    
+
+        return ValidationResult.success(
+            details={
+                "exact_duplicates_checked": True,
+                "near_duplicate_checked": True,
+                "profile_count": len(normalized),
+            }
+        )
+
     def _check_pure_demographic_variations(self, profiles: List[Dict[str, Any]]) -> ValidationResult:
         """
         Check that profiles don't differ only on demographics.

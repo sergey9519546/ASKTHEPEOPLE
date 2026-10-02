@@ -22,6 +22,11 @@ from ...utils.input_policy import (
 )
 
 from .. import limiter
+from ..schemas import (
+    GraphSearchRequest,
+    GraphStatisticsRequest,
+    enforce_schema,
+)
 from ...utils.logger import get_logger
 
 logger = get_logger('askthepeople.api.report')
@@ -29,6 +34,7 @@ logger = get_logger('askthepeople.api.report')
 
 
 @limiter.limit(Config.RATELIMIT_LLM_MEDIUM)
+@enforce_schema(GraphSearchRequest, "graph_query_invalid")
 def search_graph_tool():
     """
     Graph search tool interface (for debugging)
@@ -110,6 +116,7 @@ def search_graph_tool():
         }), 503
 
 
+@enforce_schema(GraphStatisticsRequest, "graph_query_invalid")
 def get_graph_statistics_tool():
     """
     Graph statistics tool interface (for debugging)

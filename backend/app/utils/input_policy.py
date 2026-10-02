@@ -23,6 +23,11 @@ ENTITY_TYPE_FILTER_MAX = 50
 ENTITY_TYPE_NAME_MAX = 120
 PREPARE_ENTITY_MAX = 500
 PARALLEL_PROFILE_WORKERS_MAX = 16
+# Default archetype/expansion ceiling for tiers 1-3. The name reads like a
+# global maximum but is not: a tier-4 run raises it via PopulationBounds from
+# Config.TIER4_ARCHETYPE_COUNT (250) / TIER4_EXPANSION_FACTOR (20), which is
+# why the two disagree by design. Anything that must hold for EVERY population
+# should be checked against Config, not against these.
 ARCHETYPE_COUNT_MAX = 50
 ARCHETYPE_EXPANSION_MAX = 20
 PREPARED_PROFILE_MAX = 500

@@ -14,6 +14,10 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+from ..utils.logger import get_logger
+
+logger = get_logger("askthepeople.follower_engine")
+
 # Module-level handle so tests can seed determinism without touching the
 # interpreter-global RNG — every stochastic draw in this module goes through
 # this name. The stdlib module is bound privately as `_random_module` so that
@@ -95,10 +99,23 @@ class FollowerEngine:
         role_rotation = [
             normalize_entity_type(role_key)
             for role_key in (
-                "resident", "citizen", "worker", "parent", "individual",
+                "resident", "citizen", "worker", "parent",
                 "volunteer", "student", "neighborhood",
             )
         ] if compose_names else []
+
+        # Every entry must normalize to a real role. "individual" was here
+        # and is not: it is absent from the role table, so it normalizes to
+        # the generic "entity" fallback and one follower in eight was named
+        # "Entity 5". `test_follower_naming.py` pins that none do.
+        if any(
+            str(role.get("normalized_role") or "entity") == "entity"
+            for role in role_rotation
+        ):
+            logger.warning(
+                "Follower role rotation contains a role that normalizes to the "
+                "generic fallback; follower display names would be generic."
+            )
 
         agents: List[FollowerAgent] = []
         for i in range(count):

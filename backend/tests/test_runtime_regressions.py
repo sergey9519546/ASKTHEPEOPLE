@@ -139,8 +139,6 @@ def test_parallel_ipc_polls_oldest_command_and_removes_completed_command(tmp_pat
 
 def test_unknown_entity_type_gets_rule_based_fallback_profile():
     generator = OasisProfileGenerator.__new__(OasisProfileGenerator)
-    generator.MBTI_TYPES = ["INTJ"]
-    generator.COUNTRIES = ["United States"]
 
     profile = generator._generate_profile_rule_based(
         "Neighborhood Council",

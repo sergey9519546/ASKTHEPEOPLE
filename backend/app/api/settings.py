@@ -21,6 +21,12 @@ from ..config import Config
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from . import settings_bp
+from .schemas import enforce_schema
+from .schemas_entity_settings import (
+    SETTINGS_REQUEST_INVALID,
+    ProviderConnectionTestRequest,
+    ProviderSettingsUpdateRequest,
+)
 
 logger = get_logger("askthepeople.settings")
 
@@ -239,15 +245,7 @@ def get_settings():
     return jsonify({"success": True, "data": _configuration_metadata()})
 
 
-@settings_bp.route("", methods=["POST"])
-def update_settings():
-    """Update allowlisted provider settings when explicitly enabled."""
-    if not _runtime_settings_enabled():
-        return jsonify({
-            "success": False,
-            "error": "runtime_settings_disabled",
-        }), 403
-
+def _update_settings_body():
     try:
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
@@ -308,15 +306,27 @@ def update_settings():
         }), 500
 
 
-@settings_bp.route("/test", methods=["POST"])
-def test_settings():
-    """Test an operator-allowlisted endpoint using only caller-supplied credentials."""
+_enforced_update_settings = enforce_schema(
+    ProviderSettingsUpdateRequest, SETTINGS_REQUEST_INVALID
+)(_update_settings_body)
+
+
+@settings_bp.route("", methods=["POST"])
+def update_settings():
+    """Update allowlisted provider settings when explicitly enabled."""
+    # The gate is evaluated before the typed boundary, not after it. A route
+    # decorator would run first, so a malformed body against a disabled control
+    # plane would answer 400 instead of the 403 this route has always returned
+    # for every request. The gate must not leak whether a body parses.
     if not _runtime_settings_enabled():
         return jsonify({
             "success": False,
             "error": "runtime_settings_disabled",
         }), 403
+    return _enforced_update_settings()
 
+
+def _test_settings_body():
     try:
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
@@ -376,4 +386,21 @@ def test_settings():
             "success": False,
             "error": "connection_test_failed",
         }), 502
+
+
+_enforced_test_settings = enforce_schema(
+    ProviderConnectionTestRequest, SETTINGS_REQUEST_INVALID
+)(_test_settings_body)
+
+
+@settings_bp.route("/test", methods=["POST"])
+def test_settings():
+    """Test an operator-allowlisted endpoint using only caller-supplied credentials."""
+    # Gate first, for the same reason as update_settings.
+    if not _runtime_settings_enabled():
+        return jsonify({
+            "success": False,
+            "error": "runtime_settings_disabled",
+        }), 403
+    return _enforced_test_settings()
 

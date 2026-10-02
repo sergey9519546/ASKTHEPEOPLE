@@ -98,7 +98,7 @@ build exports.
 | `/api/auth` | `auth_bp` | [`api/auth.py`](../../backend/app/api/auth.py) | 1 KB | CURRENT |
 | `/api/graph` | `graph_bp` | [`api/graph.py`](../../backend/app/api/graph.py) | 29 KB | CURRENT |
 | `/api/simulation` | `simulation_bp` | [`api/simulation.py`](../../backend/app/api/simulation.py) + [`api/routes/`](../../backend/app/api/routes/) | 0.5 kloc helpers + ~4.0 kloc routes | **CURRENT (decomposition)** — all simulation routes live in `api/routes/`; `simulation.py` holds only shared helpers |
-| `/api/report` | `report_bp` | [`api/report.py`](../../backend/app/api/report.py) | 48 KB | CURRENT (route layer) |
+| `/api/report` | `report_bp` | [`api/report.py`](../../backend/app/api/report.py) + [`api/report_routes/`](../../backend/app/api/report_routes/) | 24-line helper + ~1.6 kloc routes | **CURRENT (decomposition)** — all report routes live in `api/report_routes/`; `report.py` holds no handler |
 | `/api/settings` | `settings_bp` | [`api/settings.py`](../../backend/app/api/settings.py) | 13 KB | CURRENT |
 | WebSocket | (none — registered in [`api/ws.py`](../../backend/app/api/ws.py)) | `api/ws.py` | 10 KB | CURRENT |
 
@@ -125,6 +125,35 @@ produced by running the command. Re-measure before re-quoting.
 | [`api/routes/export_routes.py`](../../backend/app/api/routes/export_routes.py) | 4 | 160 | config / script / survey download |
 | [`api/routes/workspace_routes.py`](../../backend/app/api/routes/workspace_routes.py) | 1 | 27 | decision-workspace manifest |
 | [`api/routes/__init__.py`](../../backend/app/api/routes/__init__.py) | 0 | 29 | registers every module in this package |
+
+Report routes were decomposed the same way by exec-plan T25, into a sibling
+package because they serve `report_bp` rather than `simulation_bp`. Measured
+2026-10-02:
+
+| Module | Routes | Lines | Holds |
+|---|---|---|---|
+| [`api/report_routes/report_lifecycle_routes.py`](../../backend/app/api/report_routes/report_lifecycle_routes.py) | 5 | 596 | generate / generate-status / progress / delete / check |
+| [`api/report_routes/report_read_routes.py`](../../backend/app/api/report_routes/report_read_routes.py) | 5 | 265 | single report / by-simulation / list / sections / one section |
+| [`api/report_routes/report_export_routes.py`](../../backend/app/api/report_routes/report_export_routes.py) | 4 | 169 | download / export pdf, csv, executive |
+| [`api/report_routes/report_log_routes.py`](../../backend/app/api/report_routes/report_log_routes.py) | 4 | 216 | agent-log, console-log, and both streams |
+| [`api/report_routes/report_tool_routes.py`](../../backend/app/api/report_routes/report_tool_routes.py) | 2 | 156 | tools/search / tools/statistics |
+| [`api/report_routes/report_evidence_routes.py`](../../backend/app/api/report_routes/report_evidence_routes.py) | 2 | 66 | related-records + evidence (one handler, two rules) |
+| [`api/report_routes/report_interaction_routes.py`](../../backend/app/api/report_routes/report_interaction_routes.py) | 1 | 137 | chat |
+| [`api/report_routes/__init__.py`](../../backend/app/api/report_routes/__init__.py) | 0 | 57 | `register_report_routes(blueprint)` |
+| **Total** | **23** | | `api/report.py` is 24 lines, 0 route decorators |
+
+Registration here is **explicit** — `register_report_routes(report_bp)` called
+from `api/__init__.py` — rather than `@blueprint.route` at import time, because
+Flask 3 refuses to add rules to a blueprint that has already been registered on
+an app, and `api/__init__.py` imports every route module eagerly. That makes the
+404-before/200-after property testable, which
+[`test_report_route_decomposition.py`](../../backend/tests/test_report_route_decomposition.py)
+asserts, along with the same `entity_routes`-style "module written but never
+registered" guard.
+
+`api/report.py` survives as a 24-line module re-exporting `ReportManager`,
+because `tests/test_task5_run_control_fixes.py` imports it through that path.
+**No handler may be added back there**; the same test fails if one appears.
 
 Every module in `api/routes/` must be listed in that package's `__init__.py`.
 `entity_routes` once was not, and the decorators it replaced were commented
@@ -529,13 +558,42 @@ specified in [`../security/THREAT_MODEL.md`](../security/THREAT_MODEL.md).
 
 **Gate 1.** `backend/app/api/simulation.py` is a **406-line** helper module
 that holds only shared helpers; it contains no request handler. Simulation
-handlers live in `backend/app/api/routes/` (9 route modules). Typed schemas and
+      handlers live in `backend/app/api/routes/` (9 route modules). Report
+      handlers were decomposed on 2026-10-02 by exec-plan T25: `api/report.py`
+      is a 24-line module with no route decorators and all 23 report handlers
+      live in `backend/app/api/report_routes/` (7 modules). Typed schemas and
 the `app/application/` + `app/domain/` foundations are present —
 `backend/app/application/decision_workspace_service.py` and nine modules under
 `backend/app/domain/` (`run_attempt.py` 469 lines, `source_ingestion.py` 831
 lines, `decision_lens.py` 379, `possible_path.py` 354, `decision_workspace.py`
 281, `authorization.py` 139, `identifiers.py` 138, `actor_context.py` 82). No
 route owns a preparation daemon thread or opens the activity SQLite directly.
+
+The typed request boundary is **partial, and deliberately so**: 27 of 99 routes
+carry a schema. `prep_routes`, `execution_routes`, `decision_lens_routes` and
+`sources` typed them earlier; exec-plan T26 added the rest on 2026-10-02 —
+four JSON-body report routes, eight interview routes, two export routes, one
+graph route, and two settings routes. Twenty routes were left untyped **on
+purpose**, because a body schema on them would validate `{}` and never fire:
+`read_routes` and `entity_routes` are GET-only, `graph.py`'s upload seam is
+`multipart/form-data`, two graph routes take `project_id` in the query string,
+and `GET/POST generate/status` reads identifiers from the query string on GET.
+`test_read_typed_boundary.py` and `test_graph_typed_boundary.py` assert that
+those stay untyped, so the decision cannot silently reverse.
+
+`enforce_schema()` in [`api/schemas.py`](../../backend/app/api/schemas.py)
+preserves each endpoint's existing `400` `{success, error}` envelope rather than
+`validate_schema`'s `422` Problem Details, so typing was additive rather than a
+breaking change. Two routes use `extra="ignore"` on purpose — `/report/generate`
+and `/graph/build` — because each has a test that posts a canary field
+(`user_prompt`, `graph_name`) to prove client data is discarded before it reaches
+a canonical record. Forbidding extras would reject the request before the handler
+could demonstrate that, making the payload-provenance guarantee in
+`test_report_worker_dispatch.py` and `test_graph_worker_final_fixes.py`
+**vacuous** (`AGENTS.md` §5 rule 5). The other five models use
+`extra="forbid"`, each verified against the frontend's real payload. Every model
+is `strict=True`, which blocks the coercion that matters: `"force_regenerate":
+"yes"` cannot become `True`, and `simulation_id: 5` cannot become `"5"`.
 
 **Gate 2.** Routes enqueue to Celery and return 202 rather than spawning daemon
 threads (`backend/app/api/routes/prep_routes.py`,

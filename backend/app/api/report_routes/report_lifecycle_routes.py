@@ -34,6 +34,7 @@ from ...utils.response import (
 from ...utils.safe_path import SafePathError
 
 from .. import limiter
+from ..schemas import GenerateReportRequest, enforce_schema
 from ...utils.logger import get_logger
 
 logger = get_logger('askthepeople.api.report')
@@ -100,6 +101,7 @@ def _get_status_request_data():
 
 
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
+@enforce_schema(GenerateReportRequest, "report_request_invalid")
 def generate_report():
     """
     Generate simulation analysis report (asynchronous task)

@@ -64,3 +64,29 @@ def test_follower_contract_unchanged():
         assert f.behavior_type.value in {"AMPLIFIER", "CONTRARIAN", "NEUTRAL", "LURKER"}
         assert -1.0 <= f.opinion_bias <= 1.0
         assert 0.0 <= f.activity_probability <= 1.0
+
+
+def test_no_follower_display_name_falls_back_to_the_generic_label():
+    """Every rotation entry must normalize to a real role.
+
+    The rotation listed "individual", which is absent from the role table, so
+    it normalized to the generic "entity" fallback and one follower in eight
+    was named "Entity 5" in a 45,000-follower crowd.
+    """
+    from app.services.follower_engine import FollowerEngine
+
+    names = [
+        agent.display_name
+        for agent in FollowerEngine().generate_followers(2000)
+    ]
+    assert all(names)
+    generic = [n for n in names if n.startswith("Entity ")]
+    assert not generic, f"{len(generic)} followers got the generic label"
+
+
+def test_follower_display_names_are_unique_across_the_full_crowd():
+    from app.services.follower_engine import FollowerEngine
+
+    agents = FollowerEngine().generate_followers(5000)
+    assert len({a.display_name for a in agents}) == 5000
+    assert len({a.agent_name for a in agents}) == 5000

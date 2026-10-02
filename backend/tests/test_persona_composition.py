@@ -23,6 +23,14 @@ from app.services.archetype_engine import AgentArchetype, ArchetypeEngine
 from app.services.oasis_profile_generator import OasisAgentProfile
 from app.services.persona_composition import (
     DISCLOSURE_SUFFIX,
+    _ATTENTION_FOCI,
+    _DISPOSITION_ROTATIONS,
+    _ENGAGEMENT_POSTURES,
+    _EXPANSION_STRIDE,
+    _VOICE_TEXTURES,
+    _axis_space,
+    _axis_values,
+    _dominant_trait,
     compose_variant_persona,
 )
 from app.services.role_normalizer import normalize_entity_type
@@ -194,3 +202,158 @@ def test_disposition_from_jittered_big_five():
     # across variants; assert the disposition section exists in every one.
     for v in variants:
         assert "Disposition:" in v.persona
+
+
+# --- population-wide distinctness -------------------------------------------- #
+#
+# Everything above measures ONE archetype. That was a blind spot: a
+# per-archetype guarantee says nothing about two variants of DIFFERENT
+# archetypes, and a composition scheme that was injective inside an archetype
+# still produced exact duplicate personas across archetypes.
+
+
+def test_axis_tuple_is_injective_across_the_whole_population():
+    """No two variants anywhere share a (posture, voice, disposition, focus).
+
+    The property the per-archetype tests cannot see. A per-archetype shuffle
+    was injective within an archetype and still collided across them.
+    """
+    triples = {
+        _axis_values(archetype_id, variant_index)
+        for archetype_id in range(1, 251)
+        for variant_index in range(20)
+    }
+    assert len(triples) == 250 * 20
+
+
+def test_axis_space_covers_the_declared_population():
+    """The radix decomposition must not wrap at the declared population size."""
+    from app.utils.input_policy import ARCHETYPE_COUNT_MAX, ARCHETYPE_EXPANSION_MAX
+
+    assert _axis_space() >= ARCHETYPE_COUNT_MAX * ARCHETYPE_EXPANSION_MAX
+
+
+def test_no_axis_length_divides_the_composition_stride():
+    """An axis whose length divides the stride is constant within an archetype.
+
+    With 20-entry axes and a stride of 20, `slot // 20` never changes inside
+    one archetype, so every variant shared a single voice texture — 20
+    variants produced 4 distinct bios. `_validate_axes` raises on this; the
+    test pins the invariant rather than relying on the import guard alone.
+    """
+    import math
+
+    from app.services.persona_composition import _EXPANSION_STRIDE
+
+    for axis in (
+        _ENGAGEMENT_POSTURES, _VOICE_TEXTURES,
+        _DISPOSITION_ROTATIONS, _ATTENTION_FOCI,
+    ):
+        assert math.gcd(len(axis), _EXPANSION_STRIDE) == 1, len(axis)
+
+
+def test_personas_are_distinct_across_different_archetypes():
+    """Cross-archetype exact duplicates: the case one-archetype tests miss."""
+    seen = {}
+    for archetype_id in range(1, 41):
+        for variant in _expand(archetype_id=archetype_id, count=20):
+            assert variant.persona not in seen, (
+                f"archetypes {seen.get(variant.persona)} and {archetype_id} "
+                "produced the same persona"
+            )
+            seen[variant.persona] = archetype_id
+    assert len(seen) == 800
+
+
+# --- the Big Five tie ------------------------------------------------------ #
+
+
+def test_uniform_traits_yield_no_dominant_trait():
+    """A tie is not a dominant trait.
+
+    `ENABLE_TRAIT_INFERENCE` is off by default, so every profile carries the
+    neutral population midpoint: all five scores equal. `max()` on that
+    returns whichever key iterates first, so every variant was handed the
+    same trait-derived disposition and the whole axis collapsed while still
+    looking trait-driven.
+    """
+    neutral = dict.fromkeys(
+        ("openness", "conscientiousness", "extraversion",
+         "agreeableness", "neuroticism"),
+        50.0,
+    )
+    assert _dominant_trait(neutral) is None
+    assert _dominant_trait({"openness": 80.0, "conscientiousness": 20.0}) == "openness"
+    assert _dominant_trait(None) is None
+
+
+def test_uniform_traits_produce_distinct_dispositions():
+    """Tied traits must not pin every variant to one disposition.
+
+    Exercised on the composer directly: `expand_archetype` jitters the
+    centroid's traits, so it cannot produce the tied input that this guards.
+    """
+    neutral = dict.fromkeys(
+        ("openness", "conscientiousness", "extraversion",
+         "agreeableness", "neuroticism"),
+        50.0,
+    )
+    dispositions = set()
+    for variant_index in range(20):
+        persona = compose_variant_persona(
+            archetype_id=7,
+            variant_index=variant_index,
+            role_info={"normalized_role": "resident", "role_family": "person"},
+            concern_topics=list(_TOPICS),
+            disposition_traits=neutral,
+            constraint_text=None,
+        )
+        dispositions.add(persona.split("Disposition: ")[1].split(".")[0])
+    # Not 20: mixed radix advances only the low digit within one archetype,
+    # so individual axes are not guaranteed to differ there. What must not
+    # happen is collapse onto ONE disposition — the defect this fixes. The
+    # per-variant distinctness guarantee is on the triple, asserted
+    # separately by test_axis_tuple_is_injective_across_the_whole_population
+    # and test_no_two_variants_share_a_persona.
+    assert len(dispositions) >= 15
+
+
+def test_a_real_dominant_trait_is_still_honoured():
+    """Tie-detection must not discard a genuine winner."""
+    winner = {
+        "openness": 80.0, "conscientiousness": 20.0, "extraversion": 30.0,
+        "agreeableness": 40.0, "neuroticism": 25.0,
+    }
+    dispositions = {
+        compose_variant_persona(
+            archetype_id=7,
+            variant_index=variant_index,
+            role_info={"normalized_role": "resident", "role_family": "person"},
+            concern_topics=list(_TOPICS),
+            disposition_traits=winner,
+            constraint_text=None,
+        ).split("Disposition: ")[1].split(".")[0]
+        for variant_index in range(20)
+    }
+    assert dispositions == {
+        "drawn to new angles and alternatives in the discussion"
+    }
+
+
+# --- the global RNG must not be touched ------------------------------------ #
+
+
+def test_expansion_does_not_mutate_the_global_rng():
+    """`expand_archetype` must not reseed the interpreter-global stream.
+
+    It called `random.seed()` inside the per-variant loop, so anything later
+    in the same worker that read the global stream — FollowerEngine runs in
+    the same call — inherited a stream advanced by an unrelated loop.
+    """
+    import random as stdlib_random
+
+    stdlib_random.seed(1234)
+    expected = [stdlib_random.random() for _ in range(5)]
+    stdlib_random.seed(1234)
+    _expand(archetype_id=7, count=20)
+    assert [stdlib_random.random() for _ in range(5)] == expected

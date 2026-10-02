@@ -36,6 +36,7 @@ from .simulation_artifacts import (
     save_prepare_artifacts,
     write_exports_from_canonical,
     write_json,
+    write_run_manifest,
 )
 from .simulation_config_generator import SimulationConfigGenerator
 from .simulation_preflight import run_preflight
@@ -532,6 +533,7 @@ class SimulationManager:
                 canonical_agents = build_canonical_agents_from_profiles(profiles)
                 write_json(SimulationPaths.canonical_profiles_file(simulation_id), canonical_agents)
                 write_json(SimulationPaths.relationship_bootstrap_file(simulation_id), [])
+                write_run_manifest(sim_dir, generator.drain_prompt_records())
                 write_exports_from_canonical(sim_dir, canonical_agents)
             else:
                 # ========== Normal entity-zip path ==========
@@ -792,6 +794,7 @@ class SimulationManager:
                 SimulationPaths.relationship_bootstrap_file(state.simulation_id),
                 [],
             )
+            write_run_manifest(sim_dir, generator.drain_prompt_records())
             write_exports_from_canonical(
                 simulation_dir=sim_dir,
                 canonical_agents=canonical_agents,

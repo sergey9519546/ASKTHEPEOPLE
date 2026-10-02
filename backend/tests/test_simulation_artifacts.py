@@ -146,3 +146,72 @@ def test_relationship_wording_does_not_change_behavioral_controls(tmp_path):
     assert {item["follow_seed"] for item in relationships} == {0.7}
     assert {item["affinity_score"] for item in relationships} == {0.65}
     assert {item["interaction_bias"] for item in relationships} == {0.65}
+
+
+# --- run manifest: per-call prompt provenance ----------------------------- #
+
+
+def test_run_manifest_records_every_prompt_call(tmp_path):
+    """ADR-0004 requires a SHA-256 record per model call; it must reach disk.
+
+    These records were built by the generator and then discarded, so the audit
+    trail the rule requires did not exist.
+    """
+    from app.services.simulation_artifacts import (
+        read_json,
+        run_manifest_path,
+        write_run_manifest,
+    )
+
+    records = [
+        {
+            "model": "test-model",
+            "prompt_id": "profile_generation",
+            "prompt_version": "v1",
+            "prompt_sha256": "a" * 64,
+            "system_prompt_sha256": "b" * 64,
+            "user_prompt_sha256": "c" * 64,
+            "output_sha256": "d" * 64,
+            "tools_bound": [],
+            "structured_output": True,
+            "truth_audit": {"passed": True},
+            "recorded_at": "2026-10-02T00:00:00",
+        },
+        {"model": "test-model", "output_sha256": "e" * 64},
+    ]
+    result = write_run_manifest(str(tmp_path), records)
+    assert result["written"] is True
+
+    payload = read_json(run_manifest_path(str(tmp_path)))
+    assert payload["prompt_call_count"] == 2
+    assert len(payload["prompt_calls"]) == 2
+    assert payload["prompt_calls"][0]["prompt_sha256"] == "a" * 64
+    assert payload["schema_version"] == 1
+
+
+def test_run_manifest_with_no_calls_is_still_written(tmp_path):
+    from app.services.simulation_artifacts import (
+        read_json,
+        run_manifest_path,
+        write_run_manifest,
+    )
+
+    assert write_run_manifest(str(tmp_path), [])["written"] is True
+    assert read_json(run_manifest_path(str(tmp_path)))["prompt_call_count"] == 0
+
+
+def test_prompt_records_are_drained_not_replayed():
+    """A second manifest write must not duplicate the first one's rows."""
+    import threading
+
+    from app.services.oasis_profile_generator import OasisProfileGenerator
+
+    generator = OasisProfileGenerator.__new__(OasisProfileGenerator)
+
+    generator._prompt_records = [{"output_sha256": "a" * 64}]
+    generator._prompt_records_lock = threading.Lock()
+
+    first = generator.drain_prompt_records()
+    second = generator.drain_prompt_records()
+    assert len(first) == 1
+    assert second == []

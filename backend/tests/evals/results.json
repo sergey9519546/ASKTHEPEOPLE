@@ -1,9 +1,9 @@
 {
   "_test_summary": {
-    "total_tests": 2,
-    "passed": 2,
+    "total_tests": 6,
+    "passed": 5,
     "failed": 0,
-    "skipped": 0,
+    "skipped": 1,
     "exit_status": 0,
     "session_exit_status": 0
   }

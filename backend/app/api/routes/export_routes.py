@@ -12,6 +12,8 @@ from flask import request, send_file
 
 from .. import simulation_bp
 from ..presentation import error_response
+from ..schemas import enforce_schema
+from ..schemas_interview_export import ExportGeneratedResponsesRequest
 from ..simulation import _with_config_truth
 from ...services.simulation_manager import SimulationManager
 from ...services.simulation_paths import SimulationPaths
@@ -113,6 +115,10 @@ def download_simulation_script(script_name: str):
 
 @simulation_bp.route('/<simulation_id>/export/generated-responses', methods=['POST'])
 @simulation_bp.route('/<simulation_id>/export/survey', methods=['POST'])
+# "No results to export" is the only 400 this handler emits, and it is the
+# answer clients already match on for a body it cannot use. A shape violation
+# reuses it instead of introducing a new code.
+@enforce_schema(ExportGeneratedResponsesRequest, "No results to export")
 def export_survey_csv(simulation_id: str):
     """
     Export model-generated profile responses as CSV.

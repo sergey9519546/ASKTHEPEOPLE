@@ -22,6 +22,7 @@ from ...utils.input_policy import (
 )
 
 from .. import limiter
+from ..schemas import ReportChatRequest, enforce_schema
 from ...utils.logger import get_logger
 
 logger = get_logger('askthepeople.api.report')
@@ -29,6 +30,7 @@ logger = get_logger('askthepeople.api.report')
 
 
 @limiter.limit(Config.RATELIMIT_LLM_HEAVY)
+@enforce_schema(ReportChatRequest, "report_request_invalid")
 def chat_with_report_agent():
     """
     Chat with Report Agent

@@ -7,6 +7,7 @@ biography, representative sample, digital twin, or prediction of a named actor.
 """
 
 import json
+import threading
 import random
 import time
 from typing import Dict, Any, List, Optional, Tuple
@@ -22,6 +23,30 @@ from .zep_entity_reader import EntityNode, ZepEntityReader
 from .profile_validators import ProfileValidator, ProfileValidationError, validate_profile_batch
 
 logger = get_logger('askthepeople.oasis_profile')
+
+
+# Deliberately uniform demographics for the no-model fallback.
+#
+# Every branch of `_generate_profile_rule_based` used to repeat
+# `age=30, gender="other", mbti="ISTJ", country="Unknown"` inline, which
+# read as an oversight and invited "fixes" that invented values. They are
+# uniform on purpose: a role label carries no demographic evidence (see
+# `entity_type_registry.json`'s `reasoning` field), so this path has no
+# basis for an age, a gender, a nationality, or a personality instrument
+# score, and inventing one would be fabricated specificity about a
+# fictional character. Variety in the fallback comes from `profession`
+# and `interested_topics`, which are derived from the role; it does not
+# come from guessing who the character is.
+#
+# `MBTI_TYPES` and `COUNTRIES` used to sit here as lists to draw from and
+# were never read by any code path. They were deleted rather than wired
+# up, because using them would mean inventing exactly the values above.
+_NEUTRAL_DEMOGRAPHICS = {
+    "age": 30,
+    "gender": "other",
+    "mbti": "ISTJ",
+    "country": "Unknown",
+}
 
 
 @dataclass
@@ -190,21 +215,7 @@ class OasisProfileGenerator:
     3. Distinguishes individual entities from group/institutional entities
     """
     
-    # MBTI type list
-    MBTI_TYPES = [
-        "INTJ", "INTP", "ENTJ", "ENTP",
-        "INFJ", "INFP", "ENFJ", "ENFP",
-        "ISTJ", "ISFJ", "ESTJ", "ESFJ",
-        "ISTP", "ISFP", "ESTP", "ESFP"
-    ]
-    
-    # Common countries
-    COUNTRIES = [
-        "China", "US", "UK", "Japan", "Germany", "France", 
-        "Canada", "Australia", "Brazil", "India", "South Korea"
-    ]
-    
-    # Individual entity types (generate specific personal personas)
+        # Individual entity types (generate specific personal personas)
     INDIVIDUAL_ENTITY_TYPES = [
         "student", "alumni", "professor", "person", "publicfigure", 
         "expert", "faculty", "official", "journalist", "activist",
@@ -246,6 +257,13 @@ class OasisProfileGenerator:
         self.zep_api_key = zep_api_key or Config.ZEP_API_KEY
         self.zep_client = None
         self.graph_id = graph_id
+
+        # Per-call prompt provenance (ADR-0004 requires a SHA-256 record per
+        # call). Generation runs on a thread pool, so the accumulator is
+        # lock-guarded. `drain_prompt_records` hands these to the run
+        # manifest; see `write_run_manifest`.
+        self._prompt_records: List[Dict[str, Any]] = []
+        self._prompt_records_lock = threading.Lock()
         
         if self.zep_api_key:
             try:
@@ -693,11 +711,11 @@ class OasisProfileGenerator:
                 )
                 result = contract_result["data"]
 
-                # Record the per-call manifest on the profile for the
-                # gate-1 run manifest. Not yet persisted to the run
-                # manifest table; that lands with the canonical
-                # persistence layer in gate 3.
-                result["_prompt_record"] = {
+                # Record the per-call manifest on the profile AND accumulate
+                # it for the run manifest. The on-disk run manifest is
+                # written by `write_run_manifest`; the canonical run-manifest
+                # TABLE lands with the persistence layer in gate 3.
+                record = {
                     "model": contract_result["model"],
                     "prompt_id": contract_result.get("prompt_id"),
                     "prompt_version": contract_result.get("prompt_version"),
@@ -708,7 +726,11 @@ class OasisProfileGenerator:
                     "tools_bound": contract_result["tools_bound"],
                     "structured_output": contract_result["structured_output"],
                     "truth_audit": contract_result["truth_audit"],
+                    "recorded_at": datetime.now().isoformat(timespec="seconds"),
                 }
+                result["_prompt_record"] = record
+                with self._prompt_records_lock:
+                    self._prompt_records.append(record)
 
                 # Validate required fields.
                 if "bio" not in result or not result["bio"]:
@@ -832,10 +854,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Communication style, interests, and behavior are assumptions to explore, not claims about a real person.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": "Student",
                 "interested_topics": ["Education", "Social Issues", "Technology"],
             }
@@ -844,10 +863,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_attributes.get("occupation", "Expert"),
                 "interested_topics": ["Politics", "Economics", "Culture & Society"],
             }
@@ -856,10 +872,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_attributes.get("occupation", entity_type.title()),
                 "interested_topics": ["Education", "Research", "Community Programs"],
             }
@@ -868,10 +881,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not an official position, authorized statement, or prediction of a real person.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_attributes.get("occupation", "Public Official"),
                 "interested_topics": ["Public Policy", "Civic Programs", "Community"],
             }
@@ -880,10 +890,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not medical advice, a biography, or a prediction of a real person.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_attributes.get("occupation", entity_type.title()),
                 "interested_topics": ["Healthcare Access", "Community Health", "Public Services"],
             }
@@ -892,10 +899,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_attributes.get("occupation", entity_type.title()),
                 "interested_topics": ["Local Economy", "Employment", "Community"],
             }
@@ -904,10 +908,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_attributes.get("occupation", entity_type.title()),
                 "interested_topics": ["Community", "Local Events", "Culture & Society"],
             }
@@ -916,10 +917,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account seeded from {entity_name}.",
                 "persona": f"{entity_name} is a fictional scenario profile for a media-role account. Its posts and behavior are generated assumptions, not authorized statements or predicted real-world actions.",
-                "age": 30,  # Institutional virtual age
-                "gender": "other",  # Institutions use 'other'
-                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": "Media",
                 "interested_topics": ["General News", "Current Events", "Public Affairs"],
             }
@@ -928,10 +926,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account seeded from {entity_name}.",
                 "persona": f"{entity_name} is a fictional institutional scenario profile. Its posts and behavior are generated assumptions, not official positions, authorized statements, or predicted actions.",
-                "age": 30,  # Institutional virtual age
-                "gender": "other",  # Institutions use 'other'
-                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_type,
                 "interested_topics": ["Public Policy", "Community", "Official Announcements"],
             }
@@ -940,10 +935,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account seeded from {entity_name}.",
                 "persona": f"{entity_name} is a fictional civic-service scenario profile. Its posts and behavior are generated assumptions, not official positions, authorized statements, or predicted actions.",
-                "age": 30,  # Institutional virtual age
-                "gender": "other",  # Institutions use 'other'
-                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_type,
                 "interested_topics": ["Public Services", "Community", "Service Updates"],
             }
@@ -952,10 +944,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account seeded from {entity_name}.",
                 "persona": f"{entity_name} is a fictional member-organization scenario profile. Its posts and behavior are generated assumptions, not official positions, authorized statements, or predicted actions.",
-                "age": 30,  # Institutional virtual age
-                "gender": "other",  # Institutions use 'other'
-                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_type,
                 "interested_topics": ["Community", "Member Updates", "Local Initiatives"],
             }
@@ -964,10 +953,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account seeded from {entity_name}.",
                 "persona": f"{entity_name} is a fictional business scenario profile. Its posts and behavior are generated assumptions, not endorsements, authorized statements, or predicted actions.",
-                "age": 30,  # Institutional virtual age
-                "gender": "other",  # Institutions use 'other'
-                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_type,
                 "interested_topics": ["Local Economy", "Business Updates", "Community"],
             }
@@ -977,10 +963,7 @@ class OasisProfileGenerator:
             return {
                 "bio": f"Fictional scenario account based on the role: {entity_type}.",
                 "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Any generated communication or behavior is an assumption within this run, not a claim about a real actor.",
-                "age": 30,
-                "gender": "other",
-                "mbti": "ISTJ",
-                "country": "Unknown",
+                **_NEUTRAL_DEMOGRAPHICS,
                 "profession": entity_type,
                 "interested_topics": ["General", "Social Issues"],
             }
@@ -1405,7 +1388,43 @@ class OasisProfileGenerator:
         for i, p in enumerate(all_profiles):
             p.user_id = i
 
+        # Gate 1 on the EXPANDED population. The batch check in
+        # `generate_profiles_from_entities` runs before expansion, so every
+        # variant produced here was previously unvalidated — and expansion is
+        # where a collapse would actually show up, since all variants of an
+        # archetype descend from one centroid. The check is cheap at this
+        # scale because `_check_duplicate_personas` runs its pairwise stage
+        # only inside a documented budget and its exact-duplicate stage is
+        # O(n) over the whole population.
+        expanded = [p.to_dict() for p in all_profiles if p is not None]
+        passed, reason, details = validate_profile_batch(expanded, self.validator)
+        if not passed:
+            logger.error(
+                "Expanded population failed validation: %s",
+                reason,
+                extra={"validation_details": details, "profile_count": len(expanded)},
+            )
+            raise ProfileValidationError(
+                message=(
+                    "Expanded archetype population failed validation: "
+                    f"{reason}"
+                ),
+                validation_type="diversity_check",
+                details=details,
+            )
+
         return all_profiles, archetypes
+
+    def drain_prompt_records(self) -> List[Dict[str, Any]]:
+        """Hand over the accumulated per-call prompt records and clear them.
+
+        Draining rather than reading keeps a second manifest write from
+        duplicating rows the first one already recorded.
+        """
+        with self._prompt_records_lock:
+            records = list(self._prompt_records)
+            self._prompt_records.clear()
+        return records
 
     def _print_generated_profile(self, entity_name: str, entity_type: str, profile: OasisAgentProfile):
         """Print generated persona to console (full content, NOT truncated)"""

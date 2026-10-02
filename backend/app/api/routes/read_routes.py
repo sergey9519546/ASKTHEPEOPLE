@@ -898,7 +898,16 @@ def get_simulation_opinions(simulation_id: str):
         limit: Maximum number of records to return (default 1000, most recent)
     """
     try:
-        limit = int(request.args.get('limit', 1000))
+        # Same guard as /posts and /comments. Without it a non-numeric limit
+        # raised ValueError into the blanket except below, which answered 500
+        # with str(e) in the body -- the exception text reached the client, and
+        # strip_traceback_in_production does not inspect JSON body text.
+        try:
+            limit = int(request.args.get('limit', 1000))
+        except (TypeError, ValueError):
+            return error_response("invalid_limit_or_offset", status=422)
+        if limit < 0:
+            return error_response("limit_out_of_range", status=422, limit_max=1000)
         sim_dir = _safe_sim_dir(simulation_id)
         opinion_file = os.path.join(sim_dir, 'opinions.jsonl')
 

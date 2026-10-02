@@ -34,16 +34,16 @@ present synthetic text as human evidence.
 
 from __future__ import annotations
 
+import math
 import random
 import re
-from functools import lru_cache
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 # --- matrix axes --------------------------------------------------------- #
 
-# Engagement postures. Walked injectively per archetype: see `_axis_at` for
-# why the axis length is a hard floor, not a style choice.
+# Engagement postures. One of the three axes addressed by mixed radix over the
+# global slot: see `_axis_values` for the injectivity argument.
 _ENGAGEMENT_POSTURES: Sequence[str] = (
     "follows the discussion closely and weighs in when the topic touches "
     "direct experience, mostly reacting to specific claims rather than the "
@@ -78,6 +78,9 @@ _ENGAGEMENT_POSTURES: Sequence[str] = (
     "keeps a running note of what has already been ruled out",
     "engages late, once other positions are visible",
     "responds to the strongest version of the opposing view",
+    "sorts the discussion by who is willing to act on it",
+    "leads with what has to be true and works backwards",
+    "stays on the thread others already started",
 )
 
 # Voice textures. Walked on the same injective per-archetype order as the
@@ -107,6 +110,9 @@ _VOICE_TEXTURES: Sequence[str] = (
     "clipped and technical",
     "warm and receptive",
     "dry and matter-of-fact",
+    "forthright without being harsh",
+    "quietly persistent",
+    "plainly didactic",
 )
 
 # Disposition phrases, selected by the jittered Big Five dominant trait.
@@ -150,6 +156,38 @@ _DISPOSITION_ROTATIONS: Sequence[str] = (
     "returns to the constraint everyone else skipped",
     "weighs what survives contact with the timetable",
     "asks what would have to be true for this to work",
+    "keeps a running list of what would change its mind",
+)
+
+# Attention focus: the thing this character notices first in the scenario.
+# The fourth axis, added because injectivity alone left genuinely distinct
+# characters landing on the batch gate's clone threshold (worst legitimate
+# pair 0.80 against a 0.90 gate) - see `_axis_values`. Framed as a reading
+# habit, never as a measured or predicted behaviour.
+_ATTENTION_FOCI: Sequence[str] = (
+    "notices where the language stops being specific",
+    "tracks who is named in the plan and who is not",
+    "watches for the assumption the whole plan rests on",
+    "keeps returning to what the second-order effect would be on the routine",
+    "reads the piece as someone already inside it",
+    "notices which detail is doing most of the work",
+    "checks whether the trade is being described honestly",
+    "keeps an eye on who carries the downside",
+    "watches what happens first once the plan is live",
+    "flags the part of the claim that is doing no work",
+    "follows which commitments the plan actually keeps",
+    "notes what the smaller version of this would cost",
+    "watches the sequence, not the headline",
+    "keeps count of what has already been ruled out",
+    "looks for the cost that nobody has priced",
+    "asks what survives if the first step slips",
+    "tracks what would have to change to reverse course",
+    "reads the concession as the actual position",
+    "keeps an eye on the part that was left out",
+    "notes which promise has no owner attached",
+    "watches what the timeline quietly requires",
+    "checks what the comparison is actually against",
+    "asks who would notice first if this changed",
 )
 
 # The mandatory disclosure suffix. Same legal content as the long form the
@@ -164,9 +202,18 @@ DISCLOSURE_SUFFIX = (
 
 
 def _dominant_trait(traits: Optional[Any]) -> Optional[str]:
-    """The highest Big Five score, or None when traits are absent.
+    """The highest Big Five score, or None when there is no dominant trait.
 
     Accepts a dict of scores or a BigFive-like object with a ``to_dict``.
+
+    **A tie yields None, not an arbitrary winner.** `ENABLE_TRAIT_INFERENCE`
+    is off by default, so traits are the neutral population midpoint on every
+    profile: all five scores equal. `max()` on that returns whichever key
+    happens to come first in iteration order, so every variant of every
+    archetype was handed the SAME trait-derived disposition — the entire
+    disposition axis silently collapsed to one phrase while still looking
+    like trait-driven output. None lets the composer fall through to the
+    injective rotation, which is what actually distinguishes the variants.
     """
     if traits is None:
         return None
@@ -175,58 +222,16 @@ def _dominant_trait(traits: Optional[Any]) -> Optional[str]:
     if not isinstance(traits, dict) or not traits:
         return None
     try:
-        return max(traits, key=lambda key: float(traits[key]))
+        scores = {key: float(value) for key, value in traits.items()}
     except (TypeError, ValueError):
         return None
-
-
-def _rotation(values: Sequence[str], index: int) -> str:
-    return values[index % len(values)]
-
-
-@lru_cache(maxsize=4096)
-def _axis_order(
-    axis: Tuple[str, ...],
-    archetype_id: int,
-    axis_seed: int,
-) -> Tuple[str, ...]:
-    """Per-archetype shuffled order for one axis.
-
-    Seeded by ``(archetype_id, axis_seed)``: deterministic for a given
-    archetype and distinct per axis, so the three axes do not walk in step.
-    Cached because tier 4 walks 45,000 variants and re-shuffling per call
-    would be pure waste.
-    """
-    shuffled = list(axis)
-    random.Random(archetype_id * 100 + axis_seed).shuffle(shuffled)
-    return tuple(shuffled)
-
-
-def _axis_at(
-    axis: Sequence[str],
-    archetype_id: int,
-    variant_index: int,
-    *,
-    axis_seed: int,
-) -> str:
-    """Take position `variant_index` from a per-archetype shuffled axis.
-
-    Two variants of one archetype therefore **cannot** share an axis value
-    while ``variant_index < len(axis)``: a permutation's distinct positions
-    hold distinct entries. That is the property the distinctness eval
-    measures, and it is why the axis length is a hard floor rather than a
-    style choice — see `_validate_axes`.
-
-    Sampling was tried first and failed the same way every time. A modular
-    stride repeats with a period that divides the axis length, so variants one
-    cycle apart collided on every axis simultaneously. A seeded
-    ``random.choice`` is better but not better enough: with 12 postures and
-    20 variants roughly 12 of the 190 pairs collide by birthday argument, and
-    a pair sharing posture plus disposition scores 0.65-0.76 shingle
-    similarity — the "crowd is collapsing into clones" failure this avoids.
-    """
-    order = _axis_order(tuple(axis), archetype_id, axis_seed)
-    return order[variant_index % len(order)]
+    if not scores:
+        return None
+    top = max(scores.values())
+    leaders = [key for key, value in scores.items() if value == top]
+    if len(leaders) != 1:
+        return None
+    return leaders[0]
 
 
 def _topic_rotation(
@@ -251,28 +256,163 @@ def _topic_rotation(
     return rotated[:count] if len(rotated) >= count else rotated
 
 
-def _validate_axes() -> None:
-    """Fail at import if any axis is shorter than the largest expansion.
+# Variants per archetype. The global slot is `archetype_id * STRIDE +
+# variant_index`, so this must equal the largest legal expansion;
+# `_validate_axes` asserts it does.
+_EXPANSION_STRIDE = 20
 
-    `_axis_at` only guarantees distinctness while ``variant_index`` stays
-    below the axis length. The largest expansion this module must survive is
-    `ARCHETYPE_EXPANSION_MAX`; an axis shorter than that reintroduces the
-    collision silently, so the invariant is asserted rather than left to a
-    comment.
+
+def _axis_space() -> int:
+    """Size of the joint axis space: postures x voices x dispositions x focus."""
+    return (
+        len(_ENGAGEMENT_POSTURES)
+        * len(_VOICE_TEXTURES)
+        * len(_DISPOSITION_ROTATIONS)
+        * len(_ATTENTION_FOCI)
+    )
+
+
+# Multiplier that scrambles the global slot before it is decomposed. Must be
+# coprime with the axis space or the decomposition stops being injective.
+# 8801 is prime and shares no factor with the space (23**4 = 279,841);
+# `_validate_axes` re-checks the coprimality at import rather than trusting
+# the comment.
+_SLOT_SCRAMBLE = 8801
+
+
+def _axis_values(
+    archetype_id: int,
+    variant_index: int,
+) -> Tuple[str, str, str, str]:
+    """The (posture, voice, disposition, focus) tuple for one variant.
+
+    Injective over the WHOLE population, not just within one archetype. The
+    per-archetype shuffle this replaced guaranteed distinctness only inside
+    an archetype; across 250 archetypes two variants sharing a posture and a
+    voice still scored 0.80 shingle similarity, and with identical centroids
+    the triple collided outright — an exact duplicate persona. The distinctness
+    eval never caught either, because it measured one archetype at a time.
+
+    The joint space is addressed by mixed radix over a single global slot::
+
+        slot = archetype_id * STRIDE + variant_index     # injective in the id
+        slot = slot * SCRAMBLE % SPACE                   # still injective (gcd 1)
+        posture = AXIS_P[slot % len(P)]
+        voice    = AXIS_V[(slot // len(P)) % len(V)]
+        disposition = AXIS_D[(slot // (len(P) * len(V))) % len(D)]
+        focus    = AXIS_F[(slot // (len(P) * len(V) * len(D))) % len(F)]
+
+    Mixed radix is a bijection on 0..SPACE-1, so no two variants anywhere in
+    the population agree on the tuple while the population fits the space — and
+    the scramble keeps consecutive archetypes from landing on consecutive
+    postures, which the eval's similarity check would otherwise notice.
+
+    **Why there are four axes and not three.** Injectivity only guarantees the
+    tuple differs; two variants may still differ on the *shortest* axis alone
+    and read as near-identical. Measured over 300,000 random pairs of a real
+    5,000-variant population, the worst legitimate similarity was 0.80 against
+    a batch gate at 0.90 — distinct characters were landing right on the
+    clone threshold, which is a variety defect the injectivity guarantee does
+    not cover. A fourth axis makes "differs on the shortest axis only" rarer
+    and drops the worst pair.
     """
-    from ..utils.input_policy import ARCHETYPE_EXPANSION_MAX
+    space = _axis_space()
+    stride = _EXPANSION_STRIDE
+    if variant_index >= stride:
+        # Beyond the declared expansion the radix decomposition would alias
+        # onto another archetype's slot. Surface it rather than silently
+        # emitting a duplicate character.
+        raise ValueError(
+            f"variant_index {variant_index} exceeds the composition stride "
+            f"{stride}; expand the persona axes before raising the "
+            "expansion factor"
+        )
+    slot = (archetype_id * stride + variant_index) * _SLOT_SCRAMBLE % space
+    posture_axis = _ENGAGEMENT_POSTURES
+    voice_axis = _VOICE_TEXTURES
+    disposition_axis = _DISPOSITION_ROTATIONS
+    focus_axis = _ATTENTION_FOCI
+    posture_digit = slot % len(posture_axis)
+    voice_digit = (slot // len(posture_axis)) % len(voice_axis)
+    disposition_digit = (
+        slot // (len(posture_axis) * len(voice_axis))
+    ) % len(disposition_axis)
+    focus_digit = (
+        slot // (len(posture_axis) * len(voice_axis) * len(disposition_axis))
+    ) % len(focus_axis)
+    return (
+        posture_axis[posture_digit],
+        voice_axis[voice_digit],
+        disposition_axis[disposition_digit],
+        focus_axis[focus_digit],
+    )
 
+
+def _validate_axes() -> None:
+    """Fail at import if the axis space cannot address the whole population.
+
+    Two invariants, both of which silently reintroduce duplicate characters if
+    broken:
+
+    1. The stride must cover the largest legal expansion, or the global slot
+       aliases between archetypes.
+    2. The joint axis space must be at least as large as the largest declared
+       population, or mixed radix wraps and two variants collide. Tier 4's
+       defaults (250 archetypes x 20) need 5,000; four 23-entry axes provide
+       279,841.
+    """
+    from ..utils.input_policy import ARCHETYPE_COUNT_MAX, ARCHETYPE_EXPANSION_MAX
+
+    if _EXPANSION_STRIDE != ARCHETYPE_EXPANSION_MAX:
+        raise RuntimeError(
+            f"_EXPANSION_STRIDE is {_EXPANSION_STRIDE} but the legal expansion "
+            f"is {ARCHETYPE_EXPANSION_MAX}"
+        )
+
+    space = _axis_space()
+    required = 0
+    try:
+        from ..config import Config
+
+        required = max(
+            ARCHETYPE_COUNT_MAX * ARCHETYPE_EXPANSION_MAX,
+            Config.TIER4_ARCHETYPE_COUNT * Config.TIER4_EXPANSION_FACTOR,
+        )
+    except Exception:  # pragma: no cover - config import is best effort here
+        required = ARCHETYPE_COUNT_MAX * ARCHETYPE_EXPANSION_MAX
+
+    if space < required:
+        raise RuntimeError(
+            f"persona axis space is {space} ({len(_ENGAGEMENT_POSTURES)}x"
+            f"{len(_VOICE_TEXTURES)}x{len(_DISPOSITION_ROTATIONS)}x"
+            f"{len(_ATTENTION_FOCI)}) but the "
+            f"declared population reaches {required} variants; add entries to "
+            "an axis"
+        )
+
+    # An axis whose LENGTH divides the stride is constant for every variant of
+    # one archetype: slot advances by 1 per variant, so the low digit
+    # `slot // stride` never changes inside an archetype. With 20-entry axes
+    # and a stride of 20 that made every variant of an archetype share one
+    # voice texture — 20 variants, 4 distinct bios. The axis must be
+    # coprime with the stride, not merely long enough.
     for name, axis in (
         ("_ENGAGEMENT_POSTURES", _ENGAGEMENT_POSTURES),
         ("_VOICE_TEXTURES", _VOICE_TEXTURES),
         ("_DISPOSITION_ROTATIONS", _DISPOSITION_ROTATIONS),
     ):
-        if len(axis) < ARCHETYPE_EXPANSION_MAX:
+        if math.gcd(len(axis), _EXPANSION_STRIDE) != 1:
             raise RuntimeError(
-                f"{name} has {len(axis)} entries but expansion can reach "
-                f"{ARCHETYPE_EXPANSION_MAX}; two variants of one archetype "
-                "would share an axis value and read as the same character"
+                f"{name} has {len(axis)} entries, which shares a factor with "
+                f"the composition stride {_EXPANSION_STRIDE}; the axis would be "
+                "constant across every variant of one archetype"
             )
+
+    if math.gcd(_SLOT_SCRAMBLE, space) != 1:
+        raise RuntimeError(
+            f"_SLOT_SCRAMBLE {_SLOT_SCRAMBLE} is not coprime with the axis "
+            f"space {space}; the slot scramble would not be injective"
+        )
 
 
 _validate_axes()
@@ -327,32 +467,23 @@ def compose_variant_persona(
         role_label = str(role_info.get("normalized_role") or "entity")
         role_family = str(role_info.get("role_family") or "unknown")
 
-    # Axes are drawn by INDEX into per-archetype shuffled orders. Drawing
-    # from the rng (a birthday-collision draw) left ~78% of 20-variant
-    # archetypes with a shared posture pair, and pairs sharing posture +
-    # disposition scored 0.65 in the distinctness eval. Instead: each axis
-    # is shuffled deterministically per archetype with a DISTINCT seed per
-    # axis, and variant n takes position n from each shuffled list — so no
-    # two variants in an archetype repeat a full axis triple by
-    # construction, while the same archetype id always produces the same
-    # shuffles (deterministic).
-    posture = _axis_at(
-        _ENGAGEMENT_POSTURES, archetype_id, variant_index, axis_seed=1
-    )
-    voice = _axis_at(
-        _VOICE_TEXTURES, archetype_id, variant_index, axis_seed=2
+    # Injective over the whole population: see `_axis_values`. Every earlier
+    # scheme failed here — a modular stride repeats inside its cycle, a
+    # birthday draw collides on ~12 of 190 pairs at 20 variants, and a
+    # per-archetype shuffle was injective only *within* one archetype.
+    posture, voice, walked_disposition, focus = _axis_values(
+        archetype_id, variant_index
     )
 
     disposition = _DISPOSITION_DEFAULT
     dominant = _dominant_trait(disposition_traits)
     if dominant and dominant in _DISPOSITION_PHRASES:
+        # Source-derived traits win over the walked axis. That costs
+        # injectivity — several variants can share a dominant trait — but
+        # trait evidence outranks composition, so it is honoured.
         disposition = _DISPOSITION_PHRASES[dominant]
     else:
-        # No source-derived traits: take the disposition from the same
-        # per-archetype shuffled-axis mechanism (distinct axis seed).
-        disposition = _axis_at(
-            _DISPOSITION_ROTATIONS, archetype_id, variant_index, axis_seed=3
-        )
+        disposition = walked_disposition
 
     parts: List[str] = []
 
@@ -372,10 +503,10 @@ def compose_variant_persona(
 
     # 3. Concern axis. Topics drawn from the centroid's list through a
     #    seeded rng, so the concern axis differs across variants even when
-    #    the centroid's topic list is short. This one axis is sampled rather
-    #    than walked because the centroid's list is of unknown length — it
-    #    can be shorter than the expansion, and it is not under this
-    #    module's control.
+    #    the centroid's topic list is short. This one axis is drawn through the
+    #    rng rather than walked, because the centroid's list is of unknown
+    #    length — it can be shorter than the expansion and it is not under
+    #    this module's control.
     topics = _rng_topic_rotation(
         rng, concern_topics, archetype_id, variant_index
     )
@@ -389,7 +520,13 @@ def compose_variant_persona(
     # 4. Disposition. From the jittered Big Five when present.
     parts.append(f"Disposition: {disposition}.")
 
-    # 5. Entity context (the centroid's LLM persona context), when supplied.
+    # 5. Attention focus. What this character notices first, before the
+    #    centroid context. Placed ahead of the shared context so it is not
+    #    drowned by it - a near-identical pair would otherwise be lifted by
+    #    similarity toward the clone threshold.
+    parts.append(f"It {focus}.")
+
+    # 6. Entity context (the centroid's LLM persona context), when supplied.
     #    Collapsed to one line and truncated: context anchors the character
     #    to the archetype without repeating the whole centroid paragraph.
     #    Trailing punctuation is stripped before the full stop is appended,
@@ -402,11 +539,11 @@ def compose_variant_persona(
             if trimmed:
                 parts.append(f"Scenario context: {trimmed}.")
 
-    # 6. Constraint framing from the role contract.
+    # 7. Constraint framing from the role contract.
     if constraint_text:
         parts.append(str(constraint_text).strip())
 
-    # 7. The mandatory disclosure. Appended last, never dropped. Compact
+    # 8. The mandatory disclosure. Appended last, never dropped. Compact
     #    form: one sentence, same legal content as the long form, so the
     #    shared boilerplate cannot drown the variant-specific axes.
     parts.append(DISCLOSURE_SUFFIX)
@@ -432,9 +569,7 @@ def compose_variant_bio(
     role_label = "entity"
     if isinstance(role_info, dict):
         role_label = str(role_info.get("normalized_role") or "entity")
-    voice = _axis_at(
-        _VOICE_TEXTURES, archetype_id, variant_index, axis_seed=4
-    )
+    voice = _axis_values(archetype_id, variant_index)[1]
     topics = _topic_rotation(concern_topics, archetype_id, variant_index, count=2)
     topic_text = f" Interested in {', '.join(topics)}." if topics else ""
     voice_text = f" {voice[0].upper()}{voice[1:]}."

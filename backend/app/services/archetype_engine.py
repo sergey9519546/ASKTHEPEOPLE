@@ -307,7 +307,14 @@ class ArchetypeEngine:
 
         variants: List[OasisAgentProfile] = []
         for n in range(count):
-            random.seed(archetype.archetype_id * 1000 + n)
+            # An isolated generator, NOT random.seed(). The module-level
+            # call this replaced reseeded the *interpreter-global* stream
+            # count times per archetype, so anything downstream in the same
+            # worker that read the global stream — FollowerEngine.generate_
+            # followers runs later in the same call — inherited a stream
+            # advanced by an unrelated loop. Same seed, same values, no
+            # cross-module coupling.
+            rng = random.Random(archetype.archetype_id * 1000 + n)
 
             user_id = base_agent_id + n
             username = compose_username(
@@ -324,29 +331,29 @@ class ArchetypeEngine:
 
             age: Optional[int]
             if base_profile.age:
-                age = max(18, min(80, base_profile.age + random.randint(-5, 5)))
+                age = max(18, min(80, base_profile.age + rng.randint(-5, 5)))
             else:
                 age = 30
 
             # Only jitter if base value exists and is source-derived
             # Don't fabricate counts from None
             karma = (
-                int(base_profile.karma * random.uniform(0.7, 1.3))
+                int(base_profile.karma * rng.uniform(0.7, 1.3))
                 if base_profile.karma is not None
                 else None
             )
             follower_count = (
-                int(base_profile.follower_count * random.uniform(0.7, 1.3))
+                int(base_profile.follower_count * rng.uniform(0.7, 1.3))
                 if base_profile.follower_count is not None
                 else None
             )
             friend_count = (
-                int(base_profile.friend_count * random.uniform(0.7, 1.3))
+                int(base_profile.friend_count * rng.uniform(0.7, 1.3))
                 if base_profile.friend_count is not None
                 else None
             )
             statuses_count = (
-                int(base_profile.statuses_count * random.uniform(0.7, 1.3))
+                int(base_profile.statuses_count * rng.uniform(0.7, 1.3))
                 if base_profile.statuses_count is not None
                 else None
             )
@@ -356,7 +363,7 @@ class ArchetypeEngine:
             # never fabricate a personality that was not derived from source.
             base_traits = base_profile.traits
             big_five = (
-                base_traits.jitter(rng=random).to_dict()
+                base_traits.jitter(rng=rng).to_dict()
                 if base_traits is not None
                 else None
             )

@@ -497,3 +497,131 @@ class TestBatchValidation:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+# --- batch diversity gate: scope, scale, and metric ----------------------- #
+
+
+def _variant_persona(index: int) -> str:
+    """A persona shaped like a real archetype-expanded variant."""
+    from app.services.persona_composition import compose_variant_persona
+
+    return compose_variant_persona(
+        archetype_id=index + 1,
+        variant_index=0,
+        role_info={"normalized_role": "resident", "role_family": "person"},
+        concern_topics=["Housing", "Transport", "Budget", "Safety"],
+        disposition_traits=None,
+        constraint_text="Operates as an individual with limited resources.",
+        entity_context=f"Distinct scenario paragraph for archetype {index}.",
+    )
+
+
+def test_batch_gate_accepts_a_real_variant_population():
+    """A correctly generated population must pass.
+
+    The gate used to compare the RAW persona, whose word overlap is dominated
+    by the disclosure, role framing, and carrier scaffolding every variant is
+    REQUIRED to carry. Legitimate variants measured 0.93-0.95 similarity and
+    the gate rejected its own correct output.
+    """
+    from app.services.profile_validators import ProfileValidator
+
+    profiles = [{"persona": _variant_persona(i)} for i in range(400)]
+    assert ProfileValidator()._check_duplicate_personas(profiles).passed
+
+
+def test_batch_gate_rejects_an_injected_duplicate_at_scale():
+    """The O(n) exact stage must still run when the pairwise stage is skipped."""
+    from app.services.profile_validators import ProfileValidator
+
+    profiles = [{"persona": _variant_persona(i)} for i in range(2000)]
+    profiles.append(dict(profiles[0]))
+    result = ProfileValidator()._check_duplicate_personas(profiles)
+    assert not result.passed
+    assert result.validation_type == "duplicate_profile"
+
+
+def test_pairwise_stage_is_skipped_above_budget_and_says_so():
+    """Above the budget the gate must report what it did not do.
+
+    Otherwise a skip is indistinguishable from a clean pass, which is how a
+    coverage gap becomes a silent one.
+    """
+    from app.services.profile_validators import (
+        _MAX_NEAR_DUPLICATE_PROFILES,
+        ProfileValidator,
+    )
+
+    profiles = [
+        {"persona": f"unique persona number {i} with distinct words {i * 7}"}
+        for i in range(_MAX_NEAR_DUPLICATE_PROFILES + 1)
+    ]
+    result = ProfileValidator()._check_duplicate_personas(profiles)
+    assert result.passed
+    assert result.details["near_duplicate_checked"] is False
+    assert result.details["exact_duplicates_checked"] is True
+
+
+def test_pairwise_stage_runs_below_budget_and_catches_a_near_duplicate():
+    """Near-identity is rejected; a correct population is not.
+
+    3-shingle Jaccard for "one extra trailing word over 30 words" is
+    28/29 = 0.966. The gate fires on that. It is a collapse detector, not a
+    paraphrase detector — see the next test for the margin that leaves.
+    """
+    from app.services.profile_validators import ProfileValidator
+
+    profiles = [
+        {"persona": f"unique persona number {i} with distinct words {i * 7}"}
+        for i in range(50)
+    ]
+    long_base = " ".join(f"word{i}" for i in range(30))
+    profiles.append({"persona": long_base})
+    profiles.append({"persona": long_base + " appendix"})
+    result = ProfileValidator()._check_duplicate_personas(profiles)
+    assert not result.passed
+    assert result.validation_type == "near_duplicate_profile"
+
+
+def test_gate_margin_over_real_variant_population():
+    """Pin the separation the 0.90 threshold depends on.
+
+    The batch gate runs population-wide, where pairs sharing two of three
+    composition axes are ORDINARY. Measured over 300,000 random pairs of a
+    real 5,000-variant population the legitimate maximum was 0.80; the gate
+    sits at 0.90. If composition ever gets less varied this test fails
+    instead of the gate silently starting to reject correct output.
+    """
+    from app.services.profile_validators import (
+        _NEAR_DUPLICATE_THRESHOLD,
+        persona_similarity,
+    )
+
+    personas = [_variant_persona(i) for i in range(300)]
+    worst = max(
+        persona_similarity(personas[i], personas[j])
+        for i in range(len(personas))
+        for j in range(i + 1, len(personas))
+    )
+    assert worst < _NEAR_DUPLICATE_THRESHOLD, (
+        f"legitimate variant similarity {worst:.3f} has reached the "
+        f"{_NEAR_DUPLICATE_THRESHOLD} batch gate"
+    )
+
+
+def test_similarity_ignores_mandated_boilerplate():
+    """Two personas differing only in mandated text are the same character."""
+    from app.services.profile_validators import persona_similarity
+
+    a = (
+        "Fictional scenario character, resident role. This character reads "
+        "widely but posts rarely. Scenario interests: Housing, Transport. "
+        "Fictional scenario profile: assumptions in this run."
+    )
+    b = (
+        "Fictional scenario character, expert role. This character reads "
+        "widely but posts rarely. Scenario interests: Housing, Transport. "
+        "Fictional scenario profile: assumptions in this run."
+    )
+    assert persona_similarity(a, b) == 1.0
