@@ -33,6 +33,7 @@ class PopulationTierId(str, Enum):
     TIER_1 = "MICRO_PRECISION"
     TIER_2 = "BALANCED_NETWORK"
     TIER_3 = "MACRO_CROWD"
+    TIER_4 = "MASS_POPULATION"
 
 
 @dataclass
@@ -82,6 +83,22 @@ TIER_SPECS: Dict[PopulationTierId, PopulationTierSpec] = {
         follower_count=5000,
         variance_level=0.35,
     ),
+    PopulationTierId.TIER_4: PopulationTierSpec(
+        tier_id=PopulationTierId.TIER_4,
+        name="Mass Population",
+        description=(
+            "50,000-character composition: 250 archetypes x 20 profiles "
+            "(1 centroid + 19 variants) = 5,000 LLM-tier characters, plus "
+            "45,000 rule-based crowd characters computed outside the OASIS "
+            "subprocess. Gated by POPULATION_TIER_4_ENABLED; a population "
+            "count is a declared composition, never a sample size."
+        ),
+        target_llm_agents=5000,
+        n_archetypes=250,
+        expansion_factor=20,
+        follower_count=45000,
+        variance_level=0.35,
+    ),
 }
 
 
@@ -125,6 +142,8 @@ class ArchetypeEngine:
             return TIER_SPECS[PopulationTierId.TIER_2]
         elif tier_str in ("3", "TIER_3", "TIER3", "MACRO"):
             return TIER_SPECS[PopulationTierId.TIER_3]
+        elif tier_str in ("4", "TIER_4", "TIER4", "MASS", "MASSPOPULATION"):
+            return TIER_SPECS[PopulationTierId.TIER_4]
 
         return TIER_SPECS[PopulationTierId.TIER_2]
 

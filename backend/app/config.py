@@ -264,6 +264,34 @@ class Config:
     ARCHETYPE_DEFAULT_COUNT = int(os.environ.get('ARCHETYPE_DEFAULT_COUNT', '10'))
     ARCHETYPE_DEFAULT_EXPANSION_FACTOR = int(os.environ.get('ARCHETYPE_DEFAULT_EXPANSION_FACTOR', '10'))
 
+    # Population Tier 4 (MASS_POPULATION) — the 50,000-character tier per
+    # docs/plans/2026-10-01-50k-character-scale-plan.md. Fail-closed: the
+    # default run stays at the current 1,000-character ceiling, and every
+    # bound below only takes effect when this flag is explicitly true at
+    # runtime. A deployment must opt in; nothing defaults to tier 4.
+    POPULATION_TIER_4_ENABLED = os.environ.get(
+        'POPULATION_TIER_4_ENABLED', 'False'
+    ).lower() == 'true'
+    # 250 archetypes x 20 profiles/archetype (1 centroid + 19 variants)
+    # = 5,000 LLM-tier characters.
+    TIER4_ARCHETYPE_COUNT = int(os.environ.get('TIER4_ARCHETYPE_COUNT', '250'))
+    TIER4_EXPANSION_FACTOR = int(os.environ.get('TIER4_EXPANSION_FACTOR', '20'))
+    TIER4_PREPARED_PROFILE_MAX = int(
+        os.environ.get('TIER4_PREPARED_PROFILE_MAX', '5000')
+    )
+    # 45,000 rule-based crowd characters, computed outside the OASIS
+    # subprocess (FollowerEngine). The composition lands exactly 50,000.
+    TIER4_FOLLOWER_COUNT = int(os.environ.get('TIER4_FOLLOWER_COUNT', '45000'))
+    TIER4_FOLLOWER_COUNT_MAX = int(
+        os.environ.get('TIER4_FOLLOWER_COUNT_MAX', '50000')
+    )
+    # Crowd participation cap: the follower round callback must not emit more
+    # than this many actions per round regardless of follower count, so crowd
+    # work stays bounded inside the monitor loop.
+    TIER4_CROWD_ACTIONS_PER_ROUND_MAX = int(
+        os.environ.get('TIER4_CROWD_ACTIONS_PER_ROUND_MAX', '2000')
+    )
+
     # Follower Engine Configuration
     FOLLOWER_DEFAULT_COUNT = int(os.environ.get('FOLLOWER_DEFAULT_COUNT', '100'))
     FOLLOWER_ID_BASE = int(os.environ.get('FOLLOWER_ID_BASE', '1000'))

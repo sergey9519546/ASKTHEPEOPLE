@@ -29,6 +29,25 @@ PREPARED_PROFILE_MAX = 500
 SIMULATION_ROUNDS_MAX = 200
 FOLLOWER_COUNT_MAX = 500
 
+
+@dataclass(frozen=True)
+class PopulationBounds:
+    """Per-run population bounds for one preparation/start request.
+
+    The default instance carries the module constants above; a tier-4 run
+    resolves a raised instance from Config at the call site. Validators take
+    ``maximum=`` from the instance, so no validator signature changes.
+    """
+
+    entity_max: int = PREPARE_ENTITY_MAX
+    prepared_max: int = PREPARED_PROFILE_MAX
+    follower_max: int = FOLLOWER_COUNT_MAX
+    archetype_max: int = ARCHETYPE_COUNT_MAX
+    expansion_max: int = ARCHETYPE_EXPANSION_MAX
+
+
+DEFAULT_POPULATION_BOUNDS = PopulationBounds()
+
 ALLOWED_INTENDED_USES = frozenset(
     {
         "scenario_planning",

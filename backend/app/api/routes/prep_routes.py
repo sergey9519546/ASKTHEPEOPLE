@@ -174,11 +174,28 @@ def prepare_simulation():
             prepare_controls = _validate_prepare_controls(data)
         except InputPolicyError as exc:
             return error_response(exc.code, status=400, message=exc.message)
-        if prepare_controls["use_archetypes"]:
+        population_tier = prepare_controls.get("population_tier")
+        # Archetype controls are refused for default (reviewed) preparation
+        # runs, but a tier-4 mass-population run REQUIRES the archetype path:
+        # the composition is 250 archetypes x 20 profiles. The refusal stays
+        # for every other tier.
+        if prepare_controls["use_archetypes"] and population_tier != "mass_population":
             return error_response(
                 "deprecated_control_not_supported",
                 status=422,
                 message="Archetype controls are not supported for reviewed preparation.",
+            )
+        if (
+            population_tier == "mass_population"
+            and not prepare_controls["use_archetypes"]
+        ):
+            return error_response(
+                "population_tier_requires_archetypes",
+                status=422,
+                message=(
+                    "mass_population composition requires the archetype path "
+                    "(250 archetypes x 20 profiles)."
+                ),
             )
         
         manager = SimulationManager()
@@ -243,6 +260,7 @@ def prepare_simulation():
         use_archetypes = prepare_controls["use_archetypes"]
         archetype_count = prepare_controls["archetype_count"]
         expansion_factor = prepare_controls["expansion_factor"]
+        # population_tier read above alongside prepare_controls.
         
         # ========== Synchronously get entity count (before background task start) ==========
         # This allows the frontend to get the expected total Agent count immediately after calling prepare
@@ -304,6 +322,8 @@ def prepare_simulation():
 
         # Update simulation state (including pre-fetched entity count)
         state.status = SimulationStatus.PREPARING
+        if population_tier:
+            state.population_tier = population_tier
         manager._save_simulation_state(state)
 
         # Only enqueue the worker job for a genuinely new task. A deduped
@@ -322,6 +342,7 @@ def prepare_simulation():
                     "use_archetypes": use_archetypes,
                     "archetype_count": archetype_count,
                     "expansion_factor": expansion_factor,
+                    "population_tier": population_tier,
                     "simulation_requirement": simulation_requirement,
                     "document_text": document_text,
                 },
@@ -336,7 +357,8 @@ def prepare_simulation():
                 "message": "Preparation task enqueued. Poll /api/simulation/prepare/status for progress.",
                 "already_prepared": False,
                 "expected_entities_count": state.entities_count,  # Expected total Agents
-                "entity_types": state.entity_types  # Entity types list
+                "entity_types": state.entity_types,  # Entity types list
+                "population_tier": population_tier,  # None means the default run
             },
             status=202,
         )

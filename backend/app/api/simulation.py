@@ -137,33 +137,74 @@ def _validate_prepare_controls(data: dict) -> dict:
 
     archetype_count = data.get("archetype_count")
     expansion_factor = data.get("expansion_factor")
+    # Population tier (docs/plans/2026-10-01-50k-character-scale-plan.md).
+    # Omitted means the default run at the current ceiling. mass_population
+    # requires the fail-closed POPULATION_TIER_4_ENABLED flag at runtime.
+    ALLOWED_POPULATION_TIERS = (
+        "micro_precision",
+        "balanced_network",
+        "macro_crowd",
+        "mass_population",
+    )
+    raw_tier = data.get("population_tier")
+    population_tier = None
+    if raw_tier is not None:
+        if not isinstance(raw_tier, str) or raw_tier not in ALLOWED_POPULATION_TIERS:
+            raise InputPolicyError(
+                "invalid_population_tier",
+                "population_tier must be one of "
+                f"{', '.join(ALLOWED_POPULATION_TIERS)}.",
+            )
+        if raw_tier == "mass_population" and not Config.POPULATION_TIER_4_ENABLED:
+            raise InputPolicyError(
+                "population_tier_not_enabled",
+                (
+                    "mass_population requires POPULATION_TIER_4_ENABLED=true "
+                    "at runtime. The flag is fail-closed; the default run "
+                    "stays at the current population ceiling."
+                ),
+            )
+        population_tier = raw_tier
+
+    is_tier4 = population_tier == "mass_population"
+    # Tier-4 bounds come from Config when the flag is on; default bounds
+    # otherwise. Every maximum below resolves through this, so the default
+    # run's validation is byte-identical to before this block existed.
+    archetype_max = Config.TIER4_ARCHETYPE_COUNT if is_tier4 else ARCHETYPE_COUNT_MAX
+    expansion_max = (
+        Config.TIER4_EXPANSION_FACTOR if is_tier4 else ARCHETYPE_EXPANSION_MAX
+    )
+    prepared_max = (
+        Config.TIER4_PREPARED_PROFILE_MAX if is_tier4 else PREPARED_PROFILE_MAX
+    )
+
     if use_archetypes or archetype_count is not None or expansion_factor is not None:
         archetype_count = bounded_integer(
             (
-                Config.ARCHETYPE_DEFAULT_COUNT
+                (Config.TIER4_ARCHETYPE_COUNT if is_tier4 else Config.ARCHETYPE_DEFAULT_COUNT)
                 if archetype_count is None
                 else archetype_count
             ),
             field="archetype_count",
             minimum=1,
-            maximum=ARCHETYPE_COUNT_MAX,
+            maximum=archetype_max,
         )
         expansion_factor = bounded_integer(
             (
-                Config.ARCHETYPE_DEFAULT_EXPANSION_FACTOR
+                (Config.TIER4_EXPANSION_FACTOR if is_tier4 else Config.ARCHETYPE_DEFAULT_EXPANSION_FACTOR)
                 if expansion_factor is None
                 else expansion_factor
             ),
             field="expansion_factor",
             minimum=1,
-            maximum=ARCHETYPE_EXPANSION_MAX,
+            maximum=expansion_max,
         )
-        if archetype_count * expansion_factor > PREPARED_PROFILE_MAX:
+        if archetype_count * expansion_factor > prepared_max:
             raise InputPolicyError(
                 "profile_count_out_of_range",
                 (
                     "archetype_count multiplied by expansion_factor may not "
-                    f"exceed {PREPARED_PROFILE_MAX} prepared profiles."
+                    f"exceed {prepared_max} prepared profiles."
                 ),
             )
 
@@ -175,6 +216,7 @@ def _validate_prepare_controls(data: dict) -> dict:
         "force_regenerate": force_regenerate,
         "archetype_count": archetype_count,
         "expansion_factor": expansion_factor,
+        "population_tier": population_tier,
     }
 
 

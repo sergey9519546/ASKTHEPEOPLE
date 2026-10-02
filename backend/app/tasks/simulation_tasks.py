@@ -248,7 +248,8 @@ def prepare_simulation_task(
     use_archetypes: bool,
     archetype_count: int,
     expansion_factor: int,
-    document_text: str,
+    population_tier: Optional[str] = None,
+    document_text: str = "",
     simulation_requirement: str = "",
 ):
     """Celery task wrapper for the simulation preparation work.
@@ -352,6 +353,7 @@ def prepare_simulation_task(
             use_archetypes=use_archetypes,
             archetype_count=archetype_count,
             expansion_factor=expansion_factor,
+            population_tier=population_tier,
         )
         if effective_task_id:
             task_result = result_state.to_simple_dict()

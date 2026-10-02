@@ -91,6 +91,9 @@ class SimulationState:
     profiles_count: int = 0
     decision_lenses_count: int = 0
     entity_types: List[str] = field(default_factory=list)
+    # Population tier ("mass_population" on tier-4 runs; None on default runs).
+    # A tier-4 population is a declared composition, never a sample size.
+    population_tier: Optional[str] = None
     
     # Configuration generation info
     config_generated: bool = False
@@ -129,6 +132,7 @@ class SimulationState:
             "profiles_count": self.profiles_count,
             "decision_lenses_count": self.decision_lenses_count,
             "entity_types": self.entity_types,
+            "population_tier": self.population_tier,
             "config_generated": self.config_generated,
             "config_reasoning": self.config_reasoning,
             "current_round": self.current_round,
@@ -153,6 +157,7 @@ class SimulationState:
             "profiles_count": self.profiles_count,
             "decision_lenses_count": self.decision_lenses_count,
             "entity_types": self.entity_types,
+            "population_tier": self.population_tier,
             "config_generated": self.config_generated,
             "error": self.error,
             # Carried in the list payload so a client can build the branch tree
@@ -245,6 +250,7 @@ class SimulationManager:
             profiles_count=data.get("profiles_count", 0),
             decision_lenses_count=data.get("decision_lenses_count", 0),
             entity_types=data.get("entity_types", []),
+            population_tier=data.get("population_tier"),
             config_generated=data.get("config_generated", False),
             config_reasoning=data.get("config_reasoning", ""),
             current_round=data.get("current_round", 0),
@@ -309,17 +315,18 @@ class SimulationManager:
         use_archetypes: bool = False,
         archetype_count: Optional[int] = None,
         expansion_factor: Optional[int] = None,
+        population_tier: Optional[str] = None,
     ) -> SimulationState:
         """
         Prepare simulation environment (fully automated)
-        
+
         Steps:
         1. Read and filter entities from Zep graph
         2. Generate OASIS Agent Profile for each entity (optional LLM enhancement, supports parallel)
         3. Intelligent generation of simulation config via LLM (time, activity, speaking frequency, etc.)
         4. Save config files and Profile files
         5. Copy preset scripts to simulation directory
-        
+
         Args:
             simulation_id: Simulation ID
             simulation_requirement: Simulation requirement description (for LLM)
@@ -328,7 +335,11 @@ class SimulationManager:
             use_llm_for_profiles: Whether to use LLM for detailed persona
             progress_callback: Progress callback function (stage, progress, message)
             parallel_profile_count: Number of parallel persona generations, default 3
-            
+            population_tier: Optional population tier. "mass_population" runs
+                the archetype-composition path (250 x 20 + 45,000 followers)
+                behind POPULATION_TIER_4_ENABLED; every other value means the
+                default reviewed-decision-lens run at the current ceiling.
+
         Returns:
             SimulationState
         """
@@ -352,6 +363,34 @@ class SimulationManager:
             raise DecisionLensPreparationError(
                 "decision_lens_preparation_unavailable"
             )
+
+        is_tier4 = population_tier == "mass_population"
+        if is_tier4:
+            # The tier-4 composition REQUIRES the archetype path. The flag
+            # was validated at the request seam (_validate_prepare_controls);
+            # re-checked here so a worker-side call cannot bypass it.
+            if not Config.POPULATION_TIER_4_ENABLED:
+                raise DecisionLensPreparationError(
+                    "population_tier_not_enabled"
+                )
+            if not use_archetypes:
+                raise DecisionLensPreparationError(
+                    "population_tier_requires_archetypes"
+                )
+            state.population_tier = population_tier
+            # Route AROUND the decision-lens early return below: tier 4 runs
+            # the archetype-composition path, not the reviewed-decision-lens
+            # path. The early return remains for every other tier.
+            return self._prepare_population_tier4(
+                state=state,
+                simulation_requirement=simulation_requirement,
+                document_text=document_text,
+                defined_entity_types=defined_entity_types,
+                progress_callback=progress_callback,
+                archetype_count=archetype_count,
+                expansion_factor=expansion_factor,
+            )
+
         if use_archetypes:
             raise DecisionLensPreparationError(
                 "deprecated_control_not_supported"
