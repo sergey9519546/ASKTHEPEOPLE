@@ -584,30 +584,85 @@ def test_pairwise_stage_runs_below_budget_and_catches_a_near_duplicate():
     assert result.validation_type == "near_duplicate_profile"
 
 
-def test_gate_margin_over_real_variant_population():
-    """Pin the separation the 0.90 threshold depends on.
+def _near_max_similarity(personas):
+    """The most similar PAIR in the set, not a sampled estimate.
 
-    The batch gate runs population-wide, where pairs sharing two of three
-    composition axes are ORDINARY. Measured over 300,000 random pairs of a
-    real 5,000-variant population the legitimate maximum was 0.80; the gate
-    sits at 0.90. If composition ever gets less varied this test fails
-    instead of the gate silently starting to reject correct output.
+    A random sample of pairs understated the real maximum (0.618 sampled vs
+    0.634 actual) because the closest pair is one draw in tens of thousands.
+    This inverts on shingles and keeps the top-k overlap candidates per
+    persona, which finds the true maximum at a fraction of the cost.
+    """
+    import collections
+
+    from app.services.profile_validators import _shingles
+
+    shingles = [_shingles(p) for p in personas]
+    inverted = collections.defaultdict(list)
+    for i, s in enumerate(shingles):
+        for shingle in s:
+            inverted[shingle].append(i)
+
+    best = (0.0, None)
+    for i, s in enumerate(shingles):
+        overlap = collections.Counter()
+        for shingle in s:
+            for j in inverted[shingle]:
+                if j != i:
+                    overlap[j] += 1
+        for j, _ in overlap.most_common(8):
+            union = s | shingles[j]
+            if not union:
+                continue
+            similarity = len(s & shingles[j]) / len(union)
+            if similarity > best[0]:
+                best = (similarity, (i, j))
+    return best
+
+
+def test_gate_margin_over_real_variant_population():
+    """Pin the separation the batch-gate threshold depends on.
+
+    The threshold sits between two measured populations: the most similar
+    pair of legitimately generated variants, and the least similar pair of
+    deliberately cloned ones. If either moves, this fails instead of the gate
+    silently starting to reject correct output or stop catching clones.
     """
     from app.services.profile_validators import (
         _NEAR_DUPLICATE_THRESHOLD,
-        persona_similarity,
     )
 
-    personas = [_variant_persona(i) for i in range(300)]
-    worst = max(
-        persona_similarity(personas[i], personas[j])
-        for i in range(len(personas))
-        for j in range(i + 1, len(personas))
-    )
+    personas = [_variant_persona(i) for i in range(600)]
+    worst, pair = _near_max_similarity(personas)
+
     assert worst < _NEAR_DUPLICATE_THRESHOLD, (
-        f"legitimate variant similarity {worst:.3f} has reached the "
-        f"{_NEAR_DUPLICATE_THRESHOLD} batch gate"
+        f"legitimate variant similarity {worst:.3f} (profiles {pair}) has "
+        f"reached the {_NEAR_DUPLICATE_THRESHOLD} batch gate"
     )
+
+
+def test_gate_catches_a_ten_percent_clone():
+    """Sensitivity the 0.90 threshold did not have.
+
+    Substituting 10% of the words scored 0.814, which the old gate passed and
+    this one rejects. 0.70 was considered and rejected: a 15% clone scores
+    0.698, leaving no margin on the clone side. The consequence is stated
+    rather than papered over: a 15% substitution is NOT caught. Detecting it
+    would need a threshold between 0.634 (legitimate max) and 0.698, which
+    leaves under 0.04 on each side.
+    """
+    from app.services.profile_validators import ProfileValidator
+
+    personas = [{"persona": _variant_persona(i)} for i in range(60)]
+    original = personas[0]["persona"]
+    words = original.split()
+    mutated = list(words)
+    for i in range(max(1, len(words) // 10)):
+        mutated[i] = f"zzz{i}"
+    profiles = personas + [{"persona": " ".join(mutated)}]
+
+    result = ProfileValidator()._check_duplicate_personas(profiles)
+    assert not result.passed
+    assert result.validation_type == "near_duplicate_profile"
 
 
 def test_similarity_ignores_mandated_boilerplate():

@@ -619,37 +619,21 @@ sources, runs, decision lenses, and first-class path aggregates
 opt-in behind `USE_SUPABASE_PERSISTENCE`
 (`backend/app/config.py:321-322`).
 
-**The two schema sources, measured 2026-10-02.**
-`backend/app/db/schema.py` declares **6** tables; `backend/migrations/versions/`
-declares **16**. Exactly **2** appear in both (`projects`, `simulations`); **4**
-are ORM-only (`organizations`, `agent_profiles`, `attempts`, `observations`)
-and **14** are migration-only (the `dw_*` aggregates plus `graphs`,
-`ontologies`, `reports`, `sources`). The two shared tables declare
-**incompatible primary keys**: `sa.Integer()` autoincrement at
+**The divergence as measured before it was closed.** Recorded because the
+measurement is what justified stripping rather than mirroring: `schema.py`
+declared **6** tables against the migrations' **16**; only `projects` and
+`simulations` appeared in both, and those two did not even agree on a primary
+key (`sa.Integer()` autoincrement in
 `backend/migrations/versions/384c98f88d53_initial_schema.py:25` versus
-`Column(Uuid, ...)` at `backend/app/db/schema.py:11`.
-
-`backend/tests/test_schema_parity.py` now pins this divergence so it cannot
-grow silently. It fails if a table appears in one source and not the other
-outside the recorded `KNOWN_ORM_ONLY`, and if a table present in **both**
-sources declares different primary-key types outside `KNOWN_PK_MISMATCH`.
-Both allowances carry an exec-plan reference and the test fails if an entry
-becomes stale, so the known conflicts cannot quietly become unreported ones.
-Verified by planting a table in `schema.py` (one failure, the right one) and by
-declaring `graphs` with a `Uuid` key in the ORM (one failure,
-`graphs: ORM Uuid vs migration Integer`). Reconciling them is exec-plan T2/T3;
-this test does not claim they agree, only that new disagreement is visible.
-
-**The shared tables are not the same tables**, which is worse than the key
-mismatch. `projects` shares 4 of 6 ORM columns with its migration counterpart
-(16 columns); `simulations` shares 5. The ORM-only columns are
-`projects.organization_id`, `projects.version`, `simulations.version`; the
-migration adds `decision_text`, `analysis_summary`, `simulation_requirement`,
-`graph_id`, `chunk_size` and more. **The live code targets the migration** —
+`Column(Uuid, ...)` in the ORM). The two shared tables were not the same
+tables: `projects` shared 4 of 6 ORM columns with its 16-column migration
+counterpart, `simulations` 5. **The live code targeted the migration** —
 `backend/app/services/project_repository.py:252` queries
-`WHERE project_id = :project_id`, and `project_id` exists only there.
-`backend/app/services/project_repository.py:19-26` already records the ORM as
-"a partial stub that does not match the migration".
+`WHERE project_id = :project_id`, a column only the migration has. There is no
+longer a second source to compare, so this is history; the current measurement
+is that `backend/app/db/schema.py` is a 63-line module declaring zero tables
+and zero columns, and `backend/tests/test_schema_parity.py` asserts exactly
+that rather than comparing allowances.
 
 **Exec-plan T2 as written was rejected; the divergence is now closed.** Adding
 the four ORM-only tables as migrations would have enshrine a stub, and could not
@@ -720,6 +704,20 @@ recorded allowance with a reason, a staleness test fails if either is repaired,
 and another asserts the allowance is not decorative. Proven by planting
 `from app.services.does_not_exist import thing`: the guard fails.
 
+**Per-call prompt provenance now reaches disk.** ADR-0004 requires a SHA-256
+record for every model call. Those records were being constructed in
+`backend/app/services/oasis_profile_generator.py` and then discarded, so the
+audit trail the rule requires did not exist. `OasisProfileGenerator` now
+accumulates them under a lock (generation runs on a thread pool) and hands
+them over via `drain_prompt_records()`; `write_run_manifest()` in
+`backend/app/services/simulation_artifacts.py` writes them to
+`run_manifest.json` at both tier-4 artifact sites in
+`backend/app/services/simulation_manager.py`. Covered by
+`backend/tests/test_simulation_artifacts.py`. This is the **on-disk run
+artifact**, alongside the other JSON files in the simulation directory, and
+needs no schema change; it is deliberately **not** the canonical run-manifest
+table, which still lands with the canonical persistence layer.
+
 **The decision is recorded.**
 [ADR-0013](adr/ADR-0013-schema-source-convergence.md) declares migrations
 canonical, which *implements*
@@ -785,6 +783,35 @@ unit-tested, but the last three have **no production importer** and are blocked
 on inputs the product does not have — see the analysis in
 [`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md). Wiring them would require
 inventing the quantities they consume.
+
+**Character distinctness is measured, not assumed.** The distinctness eval
+(`backend/tests/evals/test_variant_persona_distinctness.py`) failed on entry:
+worst-pair shingle similarity was 0.647 against its own 0.60 bar. The root
+cause was that every composition axis was *shorter than the expansion factor*,
+so collisions were unavoidable by construction. Composition now addresses four
+axes by mixed radix over a single global slot (`_axis_values` in
+`backend/app/services/persona_composition.py`), which is injective across the
+**whole population** rather than within one archetype — the previous
+per-archetype guarantee still produced exact duplicate personas across
+archetypes, which a one-archetype-at-a-time eval cannot see. Measured on a real
+5,000-variant tier-4 population: 5,000 unique personas, worst legitimate pair
+0.634, worst within-archetype pair 0.253. Two invariants are asserted at import
+rather than left to a comment: no axis length may share a factor with the
+composition stride (an axis whose length divides the stride is constant across
+every variant of one archetype), and the joint axis space must cover the
+declared population.
+
+The batch diversity gate in `backend/app/services/profile_validators.py` had
+two defects. It compared the **raw** persona, so the mandated disclosure and
+role framing that every variant is required to carry dominated the score:
+legitimate variants measured 0.93-0.95 and the gate rejected its own correct
+output. And it was O(n²) at tier-4's 5,000 profiles. It now measures only the
+discriminating text, and its pairwise stage runs inside a documented budget
+while the exact-duplicate stage stays O(n) across the whole population,
+reporting in `details` when the pairwise stage was skipped. It previously
+never ran on archetype-expanded variants at all; `generate_archetype_profiles`
+now validates the expanded population. The threshold and its limits are pinned
+by `backend/tests/test_profile_validation.py`.
 
 **Gate 5 blocker — the θ-optimization island has no admissible authority.**
 Five unimported artifacts cited a now-archived roadmap as "Authority". All five

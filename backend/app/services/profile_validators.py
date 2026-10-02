@@ -19,24 +19,34 @@ import logging
 
 # Similarity above which two personas are treated as clones.
 #
-# The batch gate runs POPULATION-WIDE (every profile in the run against every
-# other), so its threshold is a collapse detector, not a pairwise-distinctness
-# requirement. Measured over 400,000 random pairs of a real 5,000-variant
-# tier-4 population, the legitimate distribution is: p50 0.077, p90 0.183,
-# p99 0.482, p99.9 0.638, max observed 0.804. Pairs sharing two of the three
-# composition axes are ordinary at that scale, so a 0.60 cut here rejected
-# correct output. 0.90 sits above the observed legitimate maximum with
-# headroom, while a clone (1.00) and a 5%-word near-clone (~0.86) still fail.
+# The batch gate runs POPULATION-WIDE (every profile against every other), so
+# its threshold is a collapse detector, not a pairwise-distinctness
+# requirement. Measured on a real 5,000-variant tier-4 population:
 #
-# The *within-archetype* distinctness requirement — the real "these are 20
+#   legitimate pairs   p99 0.351   p99.9 0.478   TRUE MAX 0.634
+#   (the true max is the nearest pair found by an inverted-index top-k search,
+#   not a random sample, which under-reported it as 0.618)
+#
+#   deliberately cloned pairs, by share of words substituted:
+#     2% / 5%   -> 0.911
+#     10%       -> 0.814
+#     15%       -> 0.698
+#
+# 0.75 sits between the two populations: 0.12 above every legitimate pair and
+# 0.06 below a 10%-substituted clone. The previous value of 0.90 caught only
+# substitutions of 5% or less, because 0.911 was the first clone score below
+# it. 0.70 was rejected: the 15% clone scores 0.698, so a 0.70 gate has no
+# usable margin on the clone side.
+#
+# The *within-archetype* distinctness requirement — the "these are 20
 # distinct characters" bar — is 0.60 and lives in
 # `tests/evals/test_variant_persona_distinctness.py`, which measures one
-# archetype at a time where the composition has room to separate.
+# archetype at a time (measured worst there: 0.253).
 #
 # Named because `_check_duplicate_personas` derives its candidate-prefix
 # length from this value; changing it changes the index geometry, not just
 # the cut.
-_NEAR_DUPLICATE_THRESHOLD = 0.90
+_NEAR_DUPLICATE_THRESHOLD = 0.75
 _PERSONA_SHINGLE_SIZE = 3
 
 # Population above which the pairwise near-duplicate stage is skipped. 750 is
