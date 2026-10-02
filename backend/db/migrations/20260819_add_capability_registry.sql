@@ -1,6 +1,25 @@
 -- Migration: Add capability registry for evidence-gated forecasting
 -- Date: 2026-08-19
--- Authority: PREDICTIVE_SIMULATION_ROADMAP.md Phase 1.1
+--
+-- AUTHORITY SUPERSEDED 2026-10-01. The "Authority" line below cites a document
+-- archived as superseded on that date:
+--   docs/archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md
+-- The roadmap it came from defined the product objective as minimizing the
+-- distance between simulated and observed real-world behaviour. This table
+-- encodes that: forecast_horizon, outcome, and evidence levels keyed to a real
+-- population. ADR-0001 fixes the run disclosure to NOT A FORECAST /
+-- HUMAN RESPONDENTS: 0 / SOURCES: STARTING CONDITIONS ONLY.
+--
+-- This migration is NOT part of the canonical schema. Per AGENTS.md §5 rule 9
+-- there are two divergent sources of database truth and Alembic is not invoked
+-- by any Dockerfile, compose service, or CI job; create_app materialises only
+-- the ORM's six tables via Base.metadata.create_all, so this file is not applied
+-- by any runtime path. The capability registry it creates is reached only by
+-- backend/app/api/capability.py, which is an unimported FastAPI router in a
+-- Flask app (AGENTS.md §5 rule 16).
+--
+-- Do not wire this up without a new accepted ADR superseding ADR-0001.
+-- Former authority, now archived: PREDICTIVE_SIMULATION_ROADMAP.md Phase 1.1
 
 -- Capability registry: tracks evidence levels per narrow capability key
 CREATE TABLE IF NOT EXISTS capability_registry (

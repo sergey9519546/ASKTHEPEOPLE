@@ -93,3 +93,4 @@ data/
 # Local debug scratch
 test_debug.py
 test_output.txt
+static/dist/

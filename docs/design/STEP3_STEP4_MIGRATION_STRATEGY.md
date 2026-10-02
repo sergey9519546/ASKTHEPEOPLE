@@ -11,10 +11,17 @@ applies_to: "Step3Simulation.vue and Step4Report.vue refactoring"
 
 # Step3 & Step4 Migration Strategy
 
-> **These checkboxes are the live work items for this migration.** Verified
-> 2026-10-01: `Step3RunWayfinder.vue` and `Step4Report.vue` each have **zero**
-> `ProgressiveGuidance`, `ContextualHelp`, and adaptive-copy references. Do not
-> tick a box without changing the component.
+> **These checkboxes are the live work items for this migration.** Re-measured
+> 2026-10-01 after the adoption commits `e039a9f` and `6f3b039`:
+> `Step3RunWayfinder.vue` has 0 `ProgressiveGuidance` and 3 `ContextualHelp`
+> references; `Step4Report.vue` has 0 `ProgressiveGuidance` and 2
+> `ContextualHelp`. Contextual help has landed for both. An earlier revision of
+> this banner claimed zero for all three patterns; that was true when written
+> and is now stale. Why the truth boundary is deliberately **not**
+> capability-wrapped, and why the export controls keep their native `<details>`
+> disclosure, is recorded per-component in
+> [`../architecture/index.md`](../architecture/index.md) § *Status of record*.
+> Do not tick a box without changing the component.
 >
 > This is the feature-level backlog for `Step3RunWayfinder.vue` and
 > `Step4Report.vue`. Release gate status lives in
@@ -212,6 +219,21 @@ Add help for key concepts:
    ```
 
 ### Step3 Migration Checklist
+
+> **Verified 2026-10-02 against `main` at `5f598bc`.** Boxes are left unticked
+> where the code does not evidence them.
+>
+> | Item | Evidence | State |
+> |---|---|---|
+> | Phase 4: contextual help for key concepts | `frontend/src/components/Step3RunWayfinder.vue:161`, `frontend/src/components/Step3RunWayfinder.vue:306`, imported at `:379` | done (2 concepts) |
+> | Phase 1: wrap truth boundary with `ProgressiveGuidance` | **none** — zero `ProgressiveGuidance` in the file | **not done, deliberately** |
+> | Phases 2-3: adaptive status codes, wrap diagnostics/metrics | no `useAdaptiveUI` import in the file | **not done** |
+> | All four "Test"/"Verify" rows | not source-verifiable | **unverified** |
+>
+> Phase 1 is intentionally skipped: wrapping the truth boundary in a
+> capability-gated disclosure would let it be hidden from a first-use user,
+> which the truth contract forbids. Recorded per-component in
+> [`../architecture/index.md`](../architecture/index.md) § *Status of record*.
 
 - [ ] Phase 1: Wrap truth boundary with ProgressiveGuidance
 - [ ] Phase 2: Implement adaptive status codes
@@ -425,6 +447,22 @@ const sectionOrder = computed(() => {
 ```
 
 ### Step4 Migration Checklist
+
+> **Verified 2026-10-02 against `main` at `5f598bc`.** Boxes are left unticked
+> where the code does not evidence them.
+>
+> | Item | Evidence | State |
+> |---|---|---|
+> | Phase 3: contextual help for key concepts | `frontend/src/components/Step4Report.vue:300`, imported at `:476` | done (1 concept) |
+> | Phase 2: wrap export controls with `ProgressiveGuidance` | **none** — zero `ProgressiveGuidance` in the file | **not done, deliberately** |
+> | Phases 1 and 4: priority insights, intent-based ordering | no `useAdaptiveUI` import in the file | **not done** |
+> | All four "Test"/"Verify" rows | not source-verifiable | **unverified** |
+>
+> Phase 2 is intentionally skipped: `ProgressiveGuidance`'s availability tier
+> would hide the Markdown/TXT exports from a first-use user entirely. That
+> regression is caught by
+> `frontend/src/__tests__/report-recovery.spec.js`, which is why the export
+> controls keep their native `<details>` disclosure.
 
 - [ ] Phase 1: Implement priority-based insight display
 - [ ] Phase 2: Wrap export controls with ProgressiveGuidance

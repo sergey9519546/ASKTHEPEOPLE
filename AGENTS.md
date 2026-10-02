@@ -123,7 +123,8 @@ field of `entity_type_registry.json`.
 
 | Surface | Enforcement | Status |
 |---|---|---|
-| `frontend/src/**` visible copy **and** accessible labels | `tools/lint_frontend_truth.mjs`, imported by `product-truth-guard.spec.js` | **live** — runs on every `npm test` |
+| `frontend/src/**` accessible labels (`aria-label`, `title`, `placeholder`, `alt`, `content`) | `tools/lint_frontend_truth.mjs`, imported by `product-truth-guard.spec.js` | **live** — runs on every `npm test` |
+| `frontend/src/**` **visible text nodes** | nothing | **unenforced** — the linter's `VISIBLE_ATTRIBUTE_PATTERN` matches attributes only, so body text is invisible to it |
 | `docs/**`, root `README.md` | the two grep steps in `.github/workflows/docs.yml`, plus `scripts/release/check-docs-gates.sh` as gate 2 of `npm run verify` | **live** since 2026-10-01 |
 | `backend/app/**` | nothing | **unenforced** — you are the linter |
 | `frontend/dist/**`, `static/dist/**` | nothing | build output; never edit, never cite as source |

@@ -1,11 +1,27 @@
 """
 Hybrid Simulator: Statistical Behavioral Policy + LLM Semantic Layer
 
-This is the actual simulation engine that produces predictions from θ.
+DO NOT WIRE THIS MODULE. It has no production importer — it is reachable only
+from backend/app/evals/first_backtest.py, which is itself unimported. Its
+pipeline below is a calibrated predictive pipeline, and the truth contract
+forbids shipping it as-is.
 
-Authority: PREDICTIVE_SIMULATION_ROADMAP.md Phase 3.3 + "Reality is the final evaluator"
+The "Authority" line cites a document ARCHIVED on 2026-10-01 as superseded:
+docs/archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md. Its first stage
+consumes REAL OBSERVED PLATFORM STATE and its last emits a FINAL PREDICTIVE
+DISTRIBUTION calibrated against it. ADR-0001 fixes the run disclosure to
+ACTIONS + ANSWERS: GENERATED / HUMAN RESPONDENTS: 0 / NOT A FORECAST /
+SOURCES: STARTING CONDITIONS ONLY. This pipeline consumes observed outcomes
+rather than starting conditions, and its output is a forecast.
 
-Architecture:
+Wiring it requires a new accepted ADR that supersedes ADR-0001 — a product
+decision, not a refactor. See docs/architecture/index.md § Status of record
+(gate 5).
+
+Former authority, now archived: PREDICTIVE_SIMULATION_ROADMAP.md Phase 3.3
++ "Reality is the final evaluator"
+
+Architecture (as designed under the now-superseded roadmap):
     REAL OBSERVED PLATFORM STATE
             ↓
     POPULATION / COMMUNITY ESTIMATION

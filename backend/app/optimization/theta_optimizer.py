@@ -1,10 +1,23 @@
 """
 Theta Optimizer: Core parameter search engine for predictive simulation.
 
-This is the heart of the system. Everything else (capability registry, evidence badges,
-claim gating) tracks OUTCOMES of this optimizer.
+DO NOT WIRE THIS MODULE. It has no production importer, and the objective it
+optimizes is inadmissible under the current truth contract.
 
-Authority: PREDICTIVE_SIMULATION_ROADMAP.md + θ* = argmin_θ D(P_sim, P_real)
+The "Authority" line below cites a document that was ARCHIVED on 2026-10-01 as
+superseded: docs/archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md. That
+roadmap defined the product's objective as minimizing the distance between
+simulated and OBSERVED REAL-WORLD BEHAVIOUR. A parameter search that fits
+generated agents to observed human outcomes is a forecast, and ADR-0001 fixes
+the run disclosure to NOT A FORECAST / HUMAN RESPONDENTS: 0. Adopting this
+module would falsify the disclosure the product is required to carry.
+
+Wiring it requires a new accepted ADR that supersedes ADR-0001 — a product
+decision, not a refactor. See docs/architecture/index.md § Status of record
+(gate 5).
+
+Former authority, now archived: PREDICTIVE_SIMULATION_ROADMAP.md
++ θ* = argmin_θ D(P_sim, P_real)
 """
 
 import json

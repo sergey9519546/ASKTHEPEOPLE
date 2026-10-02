@@ -1,10 +1,17 @@
 """
 Multi-Objective Loss Function D(P_simulation, P_real_world)
 
-Composes multiple fidelity metrics into a single optimization target.
-This is the evaluator that determines whether θ is good or bad.
+DO NOT WIRE THIS MODULE. It has no production importer, and it scores generated
+output against real-world outcomes, which the truth contract forbids.
 
-Authority: PREDICTIVE_SIMULATION_ROADMAP.md + "Reality is the final evaluator"
+The "Authority" line below cites a document ARCHIVED on 2026-10-01 as
+superseded: docs/archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md.
+Measuring how closely simulated output tracks P_real_world is a calibration
+claim; ADR-0001 fixes the run disclosure to NOT A FORECAST / HUMAN RESPONDENTS:
+0. See docs/architecture/index.md § Status of record (gate 5).
+
+Former authority, now archived: PREDICTIVE_SIMULATION_ROADMAP.md
++ "Reality is the final evaluator"
 """
 
 from dataclasses import dataclass

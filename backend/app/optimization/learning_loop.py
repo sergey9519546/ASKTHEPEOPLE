@@ -1,9 +1,18 @@
 """
 Automatic Learning Loop: Forecast → Score → Update θ → Repeat
 
-This is the closed-loop system that makes the engine improve over time.
+DO NOT WIRE THIS MODULE. It has no production importer, and a closed loop that
+scores output against observed outcomes and updates itself is a self-calibrating
+forecast, which the truth contract forbids.
 
-Authority: PREDICTIVE_SIMULATION_ROADMAP.md Phase 5 + "Reality is the final evaluator"
+The "Authority" line below cites a document ARCHIVED on 2026-10-01 as
+superseded: docs/archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md.
+ADR-0001 fixes the run disclosure to NOT A FORECAST / HUMAN RESPONDENTS: 0 and
+SOURCES: STARTING CONDITIONS ONLY — this loop consumes outcomes, not starting
+conditions. See docs/architecture/index.md § Status of record (gate 5).
+
+Former authority, now archived: PREDICTIVE_SIMULATION_ROADMAP.md Phase 5
++ "Reality is the final evaluator"
 """
 
 import asyncio

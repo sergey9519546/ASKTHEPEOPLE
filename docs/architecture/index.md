@@ -566,16 +566,25 @@ on inputs the product does not have — see the analysis in
 inventing the quantities they consume.
 
 **Gate 5 blocker — the θ-optimization island has no admissible authority.**
-Four unimported modules cite a now-archived roadmap as "Authority":
-`backend/app/optimization/theta_optimizer.py:7`,
-`backend/app/optimization/multi_objective_loss.py:7`,
-`backend/app/optimization/learning_loop.py:6`, and
-`backend/app/simulation/hybrid_simulator.py:6`. That roadmap,
+Five unimported artifacts cited a now-archived roadmap as "Authority". All five
+now carry a DO-NOT-WIRE warning naming the superseded document and the truth
+rail clause it violates:
+
+- `backend/app/optimization/theta_optimizer.py:19` — fits θ to observed outcomes
+- `backend/app/optimization/multi_objective_loss.py:13` — scores against `P_real_world`
+- `backend/app/optimization/learning_loop.py:14` — closed loop that consumes outcomes
+- `backend/app/simulation/hybrid_simulator.py:21` — pipeline from *real observed
+  platform state* to a *final predictive distribution*
+- `backend/db/migrations/20260819_add_capability_registry.sql:22` — table keyed
+  to `forecast_horizon` and a real population
+
+The roadmap,
 [`../archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md`](../archive/misc/PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md),
 was archived on 2026-10-01 because its stated objective is to minimize the
 distance between simulated and **observed real-world behaviour** — a
 calibration objective against human outcomes, which the truth rail forbids
-(`NOT A FORECAST`, `HUMAN RESPONDENTS: 0`). Its companion
+(`NOT A FORECAST`, `HUMAN RESPONDENTS: 0`, `SOURCES: STARTING CONDITIONS ONLY`).
+Its companion
 [`../archive/misc/predictive-persona-system-integration-2026-08-03.md`](../archive/misc/predictive-persona-system-integration-2026-08-03.md)
 proposed a "target capability" of reporting a **68% probability** of a market
 outcome. Both contradict accepted
@@ -643,6 +652,37 @@ open.
   **zero** violations under that scope.
 - **Two documents that contradicted ADR-0001 were archived.** See the truth
   surface note below.
+- **OPEN DECISION — the brand descriptor is inconsistent across three
+  variants, and no gate catches it.** The accepted
+  [ADR-0001](adr/ADR-0001-product-category-and-truth-contract.md) classifies the
+  product as a **Synthetic Decision Explorer**
+  (`docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md:30`).
+  The product surface and the design spec use the *generated* family instead:
+  `frontend/src/views/InteractionView.vue:8`,
+  `frontend/src/views/MainView.vue:4`,
+  `frontend/src/views/ReportView.vue:8`,
+  `frontend/src/views/SimulationRunView.vue:8`, and
+  `frontend/src/views/SimulationView.vue:5` all render
+  `aria-label="Ask The People / generated Decision Explorer — home"`, and
+  `docs/design/DIRECTION_C.md:66` pins the lockup as
+  `ASKTHEPEOPLE / GENERATED DECISION EXPLORER`. So `DIRECTION_C.md` is
+  *consistent with the code*; the split is ADR-0001 against everything else.
+  `tools/lint_frontend_truth.mjs` `APPROVED_PRODUCT_DESCRIPTOR_PATTERN`
+  accepts all of `generated decision explorer`, `generated scenario
+  exploration`, `synthetic decision explorer`, `synthetic scenario
+  exploration`, and `research-planning handoff`, so no gate fires.
+  **This is deliberately not resolved here.** Unifying it either edits what
+  users see or edits an accepted ADR; both are product-claim changes that
+  require a PR with named reviewers, an impact statement, and a rollback plan
+  per `AGENTS.md` §5 rule 13.
+- **The frontend truth linter has a known blind spot.** Its
+  `VISIBLE_ATTRIBUTE_PATTERN` matches only `aria-label`, `title`, `placeholder`,
+  `alt`, and `content` attributes, so **visible text nodes are unenforced**. A
+  live consequence: `frontend/src/views/Home.vue:11` renders
+  `Generated scenario explorer` as visible body text, and that string is
+  **not** in the approved descriptor pattern (the approved form is
+  `generated scenario *exploration*`). Extending the linter to visible text is
+  a truth-gate change and needs the same review as above.
 - **Step 1 progressive guidance** is live: `ProgressiveGuidance` and
   `ContextualHelp` are used in `frontend/src/components/Step1GraphBuild.vue`
   (5 and 2 references) with adaptive title copy.

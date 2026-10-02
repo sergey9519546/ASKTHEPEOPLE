@@ -1,9 +1,9 @@
 ---
 title: "Step2EnvSetup Migration Strategy"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Frontend Design"
-last_reviewed: "2026-09-03"
+last_reviewed: "2026-10-01"
 review_cycle: "Per migration"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "Step2EnvSetup.vue refactoring"
@@ -11,11 +11,14 @@ applies_to: "Step2EnvSetup.vue refactoring"
 
 # Step2EnvSetup Migration Strategy
 
-> **These checkboxes are the live work items for this migration.** Unlike the
-> SDD plans under `docs/superpowers/`, they were never mass-completed by later
-> work — `Step2EnvSetup.vue` still has **zero** `ProgressiveGuidance`
-> references (verified 2026-10-01). Do not tick a box without changing the
-> component.
+> **These checkboxes are the live work items for this migration.** Re-measured
+> 2026-10-01 after the adoption commit `e039a9f`: `Step2EnvSetup.vue` now has
+> **4** `ProgressiveGuidance` and **3** `ContextualHelp` references, so the
+> progressive profile display has landed and the remaining unchecked boxes are
+> the help/adaptive-copy depth work. An earlier revision of this banner claimed
+> zero `ProgressiveGuidance`; that was true when written and is now stale.
+> Do not tick a box without changing the component. Per-component counts live
+> in [`../architecture/index.md`](../architecture/index.md) § *Status of record*.
 >
 > This is the feature-level backlog for `Step2EnvSetup.vue`. Release gate status
 > lives in
@@ -288,6 +291,28 @@ const shouldShowExpandButton = computed(() => {
 ```
 
 ## Implementation Checklist
+
+> **Verified 2026-10-02 against `main` at `5f598bc`.** The boxes below are
+> deliberately left unticked where the code does not evidence them. A ticked box
+> implies its whole session is done; these sessions are partly done, so a
+> partially-ticked list would misrepresent the state. What the code *does* show:
+>
+> | Checklist item | Evidence | State |
+> |---|---|---|
+> | Import `ProgressiveGuidance` | `frontend/src/components/Step2EnvSetup.vue:739` | done |
+> | Import `ContextualHelp` | `frontend/src/components/Step2EnvSetup.vue:738` | done |
+> | Import `useAdaptiveUI` | `frontend/src/components/Step2EnvSetup.vue:740` | done |
+> | Wrap profile section | `frontend/src/components/Step2EnvSetup.vue:114-157` | done |
+> | Refactor step titles | `frontend/src/components/Step2EnvSetup.vue:759,773` (`adaptiveCopy`) | done |
+> | Implement adaptive profile limits | `frontend/src/components/Step2EnvSetup.vue:945` (remaining-profiles disclosure) | done |
+> | Wrap advanced settings (lines 173-370) | no `ProgressiveGuidance` in that range | **not done** |
+> | Session 2 help topics, Session 3 status/label copy, all Session 5 flow tests | not evidenced by a source reference | **unverified** |
+>
+> `ContextualHelp` is used twice, at
+> `frontend/src/components/Step2EnvSetup.vue:66` and
+> `frontend/src/components/Step2EnvSetup.vue:194`. The "test" items are not
+> source-verifiable; the frontend suite (200 tests in 28 files) passes, but that
+> is not the same claim as any individual item here.
 
 ### Session 1: Low-Risk Wrapping (2 hours)
 - [ ] Import `ProgressiveGuidance` and `ContextualHelp`
