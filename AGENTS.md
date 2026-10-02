@@ -126,7 +126,7 @@ field of `entity_type_registry.json`.
 | `frontend/src/**` accessible labels (`aria-label`, `title`, `placeholder`, `alt`, `content`) | `tools/lint_frontend_truth.mjs`, imported by `product-truth-guard.spec.js` | **live** — runs on every `npm test` |
 | `frontend/src/**` **visible text nodes** | nothing | **unenforced** — the linter's `VISIBLE_ATTRIBUTE_PATTERN` matches attributes only, so body text is invisible to it |
 | `docs/**`, root `README.md` | the two grep steps in `.github/workflows/docs.yml`, plus `scripts/release/check-docs-gates.sh` as gate 2 of `npm run verify` | **live** since 2026-10-01 |
-| `backend/app/**` | nothing | **unenforced** — you are the linter |
+| `backend/app/**` string literals | `backend/tests/test_backend_truth_terms.py`, applied by `backend/tests/test_truth_term_sync.py`'s pattern source | **live** since 2026-10-01 — 100 of 135 modules gated; 35 on a reviewed allowlist with written reasons |
 | `frontend/dist/**`, `static/dist/**` | nothing | build output; never edit, never cite as source |
 
 Three structural facts about that CI job, all corrected on 2026-10-01:

@@ -44,7 +44,7 @@ const TERM_PATTERNS = [
   /\bparticipants?\b/gi,
   /\bsampl(?:e|es|ed|ing)\b/gi,
   /\bsurvey(?:s|ed|ing)?\b/gi,
-  /\bpolls?\b/gi,
+  /\bpoll(?:s|ed|ing)?\b/gi,
   /\bevidence from (?:the )?graph\b/gi,
   /\bverified lineage\b/gi,
   /\bcorroborated claim\b/gi,

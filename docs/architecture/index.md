@@ -695,6 +695,34 @@ open.
   and two in `docs/architecture/state-machines.md`. All are repointed to real
   headings or de-linked with the fabrication recorded. It also accepts `#LlNNN`
   highlighter anchors and explicit HTML `id=` targets.
+- **The backend and frontend prohibited-term lists had drifted, and now
+  cannot.** `tools/lint_frontend_truth.mjs` `TERM_PATTERNS` holds 32 patterns
+  applied to `frontend/src/**`; `backend/app/utils/llm_client.py`
+  `_TRUTH_KEYWORDS_PROHIBITED` held 5 strings applied to every LLM response by
+  `_audit_response`. Nothing enforced agreement, and the two differed: the
+  frontend pattern was `polls?`, which matches "poll" and "polls" but **not**
+  "polling" — a term the backend prohibited. A response asserting "polling data
+  suggests" was therefore rejected by the backend and accepted by the UI
+  linter. `backend/tests/test_truth_term_sync.py` compiles the JS patterns as
+  Python regexes and asserts each backend-prohibited term is actually matched
+  by one, so this cannot drift again; the frontend pattern is now
+  `poll(?:s|ed|ing)?`.
+- **A backend-wide term gate now exists, with a reviewed allowlist.** The plan
+  called this T16 and warned it would be false-positive prone. It was:
+  `backend/scripts/survey_backend_truth_terms.py` found **194** matching
+  literals in `backend/app/**`, **104** of them with no negation marker, and
+  hand-classification showed none was a truth-contract violation. They fall
+  into four groups — the DO-NOT-WIRE'd θ-optimization island (~61), disclosure
+  *field names* whose value is "not calibrated" (~14), non-claim vocabulary
+  such as the verb "Poll" and the route path `/export/survey` (~14), and the
+  prohibition list itself. `backend/tests/test_backend_truth_terms.py` now
+  gates the rest: it compiles the frontend `TERM_PATTERNS` as Python regexes,
+  skips any match whose **clause** carries a negation, excludes the reviewed
+  island, and fails on anything else. **100 of 135 `backend/app` modules are
+  gated**; 35 are allowlisted, each with a written reason, and the test asserts
+  every allowlist entry still points at a real file. Verified by planting
+  `backend/app/__truth_probe__.py` containing "this run predicts what people
+  will do" — the gate failed, and passed again once removed.
 - **Step 1 progressive guidance** is live: `ProgressiveGuidance` and
   `ContextualHelp` are used in `frontend/src/components/Step1GraphBuild.vue`
   (5 and 2 references) with adaptive title copy.

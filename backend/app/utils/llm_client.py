@@ -334,10 +334,16 @@ def _sha256(text: str) -> str:
 # so the caller can decide what to do (warning log here, gate 5 lands the
 # block).
 _TRUTH_KEYWORDS_REQUIRED = (
-    # Required in JSON output, per PRODUCT_TRUTH_CONTRACT.md:
+    # Required in JSON output, per the truth contract in
+    # docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md:
     ("isForecast", "is_forecast", '"is_forecast"'),
 )
 
+# Kept in sync with TERM_PATTERNS in tools/lint_frontend_truth.mjs by
+# backend/tests/test_truth_term_sync.py. That test exists because these two
+# lists had already drifted: the frontend caught 26 terms and this caught 5, and
+# `polls?` did not match the "polling" listed below, so a response saying
+# "polling data suggests" was rejected here and accepted by the UI linter.
 _TRUTH_KEYWORDS_PROHIBITED = (
     # Output MUST NOT contain framing that implies real respondents,
     # measured public opinion, or a digital twin.
