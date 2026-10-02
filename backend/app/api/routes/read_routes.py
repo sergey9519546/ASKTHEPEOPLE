@@ -48,6 +48,41 @@ from ...utils.safe_path import SafePathError
 logger = get_logger('askthepeople.api.routes.read')
 
 
+class MalformedQueryScalar(ValueError):
+    """A query parameter that must be an integer did not parse."""
+
+    def __init__(self, name: str):
+        super().__init__(name)
+        self.name = name
+
+
+def int_query_arg(name: str, default=None):
+    """Read an integer query parameter, refusing a malformed value.
+
+    ``request.args.get(name, default, type=int)`` yields the default whenever
+    the value will not parse, so ``?limit=abc`` is indistinguishable from an
+    absent parameter: the caller gets a 200 built from the default and no
+    indication that its query was wrong. That is the query-string counterpart
+    of the coercion ``strict=True`` blocks on a JSON body.
+
+    ``/posts`` and ``/comments`` already answer ``422 invalid_limit_or_offset``
+    for this input. This keeps the rest of the module consistent, and raises
+    rather than returning so the handler can emit its own error envelope.
+    """
+    raw = request.args.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        raise MalformedQueryScalar(name)
+
+
+def bad_scalar_response(exc: MalformedQueryScalar):
+    """The module's existing envelope for a malformed integer query parameter."""
+    return error_response("invalid_limit_or_offset", status=422)
+
+
 # ============== Simulation status and listing ==============
 
 
@@ -125,7 +160,7 @@ def get_simulation_history():
         limit: Return quantity limit (default 20)
     """
     try:
-        limit = request.args.get('limit', 20, type=int)
+        limit = int_query_arg('limit', 20)
 
         manager = SimulationManager()
         simulations = sorted(
@@ -140,6 +175,8 @@ def get_simulation_history():
 
         return present(enriched_simulations, extra={"count": len(enriched_simulations)})
 
+    except MalformedQueryScalar as e:
+        return bad_scalar_response(e)
     except Exception as e:
         logger.error(f"Failed to get simulation history: {str(e)}")
         return error_response(
@@ -435,12 +472,14 @@ def search_simulation_observations(simulation_id: str):
             simulation_dir=sim_dir,
             query=request.args.get('q', ''),
             platform=request.args.get('platform'),
-            agent_id=request.args.get('agent_id', type=int),
-            limit=request.args.get('limit', 50, type=int),
+            agent_id=int_query_arg('agent_id'),
+            limit=int_query_arg('limit', 50),
         )
         result = dict(result)
         result["results"] = _with_activity_truth(result.get("results", []))
         return present(result, extra={"disclosure": synthetic_output_disclosure()})
+    except MalformedQueryScalar as e:
+        return bad_scalar_response(e)
     except Exception as e:
         logger.error(f"Failed to search observations: {str(e)}")
         return error_response(
