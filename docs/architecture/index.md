@@ -677,17 +677,42 @@ fencing-credential stripping in `to_public_dict`
 `backend/app/models/task.py:949`, `backend/app/models/task.py:1030`).
 
 **Gate 3.** Tenant/workspace-scoped PostgreSQL repositories cover projects,
-sources, runs, decision lenses, and first-class path aggregates
+sources, and decision lenses
 (`backend/app/services/project_repository.py`,
 `backend/app/services/source_repository.py`,
-`backend/app/services/run_repository.py`,
-`backend/app/services/path_repository.py`,
 `backend/app/services/decision_lens_repository.py`), with three migrations
 (`backend/migrations/versions/384c98f88d53_initial_schema.py`,
 `backend/migrations/versions/a1b2c3d4e5f6_domain_aggregates.py`,
-`backend/migrations/versions/b2c3d4e5f6a7_path_aggregates.py`). Persistence is
+`backend/migrations/versions/b2c3d4e5f6_path_aggregates.py`). Persistence is
 opt-in behind `USE_SUPABASE_PERSISTENCE`
 (`backend/app/config.py:354-356`).
+
+**Two repositories in this list were never live, and this section contradicted
+itself about it.** `run_repository.py` and `path_repository.py` were cited here
+as Gate 3 evidence while a later paragraph in this same document stated that
+`RunRepository` and `PathRepository` "have no production importer at all". Both
+halves were true. Verified 2026-10-02: `path_repository.py` had zero importers
+anywhere, and `RunRepository` was imported by nothing — only its private
+`_ensure_psycopg_driver` helper was live, and only because `source_repository.py`
+reached across for it. Both files are deleted. The helper moved to
+`backend/app/services/db_url.py`, which breaks the coupling that made a live
+code path depend on a dead module. The `dw_runs` and `dw_paths` tables remain,
+declared by migration `b2c3d4e5f6a7`, which is the canonical schema source under
+ADR-0013 and was not touched. Any reader who previously planned against "run
+repository" or "path repository" as a live module was planning against nothing.
+
+**Production startup now enforces the documented refusals.** `Config.validate()`
+existed but had exactly one non-test call site, `run_preflight`, and
+`create_app` re-implemented only two of its checks. The consequence was measured:
+setting `SOURCE_INGESTION_V1_ENABLED=true` in production switched the mutating
+source routes live with no boot-time objection. `Config.validate_production_gates()`
+(`backend/app/config.py`) now separates the refusals that describe *accepting
+traffic the app cannot serve safely* from the ordinary capability checks, and
+`create_app` calls it, so the process refuses to start. It is scoped
+deliberately: `validate()` also requires `LLM_API_KEY` and `ZEP_API_KEY`, and
+turning those into boot requirements would impose a new restriction on
+deployments that currently start without them. Pinned by
+`backend/tests/test_startup_production_gate.py`.
 
 **Schema creation is now performed by something.** Measured 2026-10-02, this
 was the open half of exec-plan 08 fix 1, and both halves turned out to be broken

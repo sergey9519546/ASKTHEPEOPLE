@@ -403,9 +403,15 @@ in it as history.
 
 15. **Do not enable a feature flag to make a test pass.** The flags are
     fail-closed by design, and `Config.validate()` refuses several outright when
-    `DEBUG=False`: `SOURCE_INGESTION_V1_ENABLED` (default off — every mutating
-    source route returns 503 while off, and 501 when on, which is the honest
-    signal that the boundary is unfinished), `DEV_ACTOR_CONTEXT_ENABLED` (exists
+    `DEBUG=False`: `SOURCE_INGESTION_V1_ENABLED` (default off — mutating source
+    routes return 503 while the flag is off, which is a different fact from "on
+    and unfinished". The flag-on refusals are deliberately NOT uniform:
+    deletion 501s unconditionally, status and review 501 only when persistence
+    is also unconfigured, and `upload-intent` 501s only on the no-persistence
+    branch — with persistence configured it creates a real source and version
+    record and genuinely reaches the server-derived tenant gate. It previously
+    returned 200 with `upload_url` and `object_key` both null, which reported a
+    prepared upload with nothing usable), `DEV_ACTOR_CONTEXT_ENABLED` (exists
     only because the ADR-0009 OIDC/membership resolver is not built; it
     fabricates a tenant scope), `ENABLE_TRAIT_INFERENCE` (off),
     `ALLOW_RUNTIME_SETTINGS` (off), `ALLOW_PRIVATE_LLM_ENDPOINTS` (off),
@@ -523,6 +529,20 @@ block) and `Config.validate()` refuses `CORS_ORIGINS='*'` when `DEBUG=False`.
 
 ## 7. Security invariants worth knowing before you move anything
 
+- **Startup refuses documented-unsafe configuration.**
+  `Config.validate()` had exactly one non-test call site (`run_preflight`), so
+  none of its refusals stopped a process from starting; `create_app`
+  re-implemented only the two credential checks. The measured consequence was
+  that `SOURCE_INGESTION_V1_ENABLED=true` in production switched the mutating
+  source routes live with no boot-time objection.
+  `Config.validate_production_gates()` is now called by `create_app`, so
+  `SOURCE_INGESTION_V1_ENABLED`, `DEV_ACTOR_CONTEXT_ENABLED`, and an invalid
+  `SOURCE_INGESTION_V1_FORMATS` refuse to boot when `DEBUG=False`.
+  **It deliberately does not gate on `LLM_API_KEY`/`ZEP_API_KEY`** — those are
+  capability checks, and making them boot requirements would break deployments
+  that start without them. If you add a refusal, put it in the *gateway* and
+  not only in `validate()`, or it will not be enforced at startup. Pinned by
+  `backend/tests/test_startup_production_gate.py`.
 - **HTTP auth**: one global `before_request` hook in `create_app`
   (`require_auth`). `/health` is exempt; only `/api/*` is protected;
   `Authorization: Bearer` is compared with `hmac.compare_digest`. A falsy
