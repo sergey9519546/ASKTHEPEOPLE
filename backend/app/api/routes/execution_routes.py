@@ -441,6 +441,7 @@ def start_simulation():
                     "source_graph_id": state.graph_id,
                     "task_id": task_id,
                     "config_path": config_path,
+                    "population_tier": getattr(state, 'population_tier', None),
                 },
                 task_id=task_id,
             )

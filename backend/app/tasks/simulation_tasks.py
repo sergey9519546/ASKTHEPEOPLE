@@ -50,6 +50,7 @@ def run_simulation_task(
     source_graph_id: Optional[str] = None,
     task_id: Optional[str] = None,
     config_path: Optional[str] = None,
+    population_tier: Optional[str] = None,
     **kwargs
 ):
     """
@@ -86,6 +87,7 @@ def run_simulation_task(
             follower_distribution=follower_distribution,
             source_graph_id=source_graph_id,
             owner_id=effective_task_id,
+            population_tier=population_tier,
         )
 
         # Monitor execution until complete, failed, or stopped

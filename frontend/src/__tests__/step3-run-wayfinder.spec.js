@@ -183,6 +183,49 @@ describe("Step3RunWayfinder", () => {
     );
   });
 
+  it("shows the declared composition for a mass-population run", () => {
+    const wrapper = mount(Step3RunWayfinder, {
+      props: {
+        runStatus: {
+          runner_status: "running",
+          current_round: 2,
+          total_rounds: 8,
+          population_tier: "mass_population",
+          declared_population_total: 50000,
+          follower_actions_last_round: 2000,
+        },
+        actions: generatedActions,
+        diagnostics: { canonical_agents: new Array(5000).fill(null) },
+        phase: 1,
+        canReview: false,
+      },
+    });
+
+    const composition = wrapper.get('[data-testid="run-composition"]');
+    expect(composition.text()).toContain("50,000 generated characters");
+    expect(composition.text()).toContain("not a measure of real people");
+    const crowd = wrapper.get('[data-testid="crowd-actions"]');
+    expect(crowd.text()).toContain("2,000");
+  });
+
+  it("hides the composition block for runs on the default tier", () => {
+    const wrapper = mount(Step3RunWayfinder, {
+      props: {
+        runStatus: completedRun,
+        actions: generatedActions,
+        phase: 2,
+        canReview: true,
+        projectData: {
+          simulation_requirement:
+            "What could happen if weekend bus service is reduced?",
+        },
+      },
+    });
+
+    expect(wrapper.find('[data-testid="run-composition"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="crowd-actions"]').exists()).toBe(false);
+  });
+
   it("contains no fabricated agreement readout or continuous activity animation", () => {
     const source = readFileSync(
       resolve("src/components/Step3RunWayfinder.vue"),

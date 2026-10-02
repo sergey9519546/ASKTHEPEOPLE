@@ -418,7 +418,10 @@ def _write_run_manifest(
     return payload
 
 
-def run_preflight(simulation_dir: str) -> dict[str, Any]:
+def run_preflight(
+    simulation_dir: str,
+    population_tier: str | None = None,
+) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
 
     def add_check(name: str, passed: bool, details: Any = None):
@@ -429,6 +432,27 @@ def run_preflight(simulation_dir: str) -> dict[str, Any]:
                 "details": details,
             }
         )
+
+    # Population tier resolution: explicit parameter first, then the
+    # persisted preparation state in this simulation's directory. The tier is
+    # recorded at preparation time and preflight must be able to enforce the
+    # gate even for callers that don't know about tiers (report preflight,
+    # runner preflight on a staffed simulation).
+    if population_tier is None:
+        state_doc = read_json(
+            os.path.join(simulation_dir, "state.json"), default={}
+        )
+        population_tier = state_doc.get("population_tier")
+    is_tier4 = population_tier == "mass_population"
+    add_check(
+        "population_tier_gate",
+        (not is_tier4) or Config.POPULATION_TIER_4_ENABLED,
+        {
+            "population_tier": population_tier or "default",
+            "flag": "POPULATION_TIER_4_ENABLED",
+            "flag_enabled": bool(Config.POPULATION_TIER_4_ENABLED),
+        },
+    )
 
     admission: dict[str, Any] | None = None
     try:
@@ -526,24 +550,78 @@ def run_preflight(simulation_dir: str) -> dict[str, Any]:
             "reddit_profiles": len(reddit_profiles),
             "agent_configs": len(config.get("agent_configs", [])),
         }
+    # The prepared-profile ceiling is tier-resolved: a tier-4 composite
+    # run legitimately prepares 5,000 profiles (250 archetypes x 20), which
+    # the default 500 bound exists precisely to exclude.
+    profile_capacity_max = (
+        Config.TIER4_PREPARED_PROFILE_MAX if is_tier4 else PREPARED_PROFILE_MAX
+    )
     over_capacity = {
         name: count
         for name, count in profile_counts.items()
-        if count > PREPARED_PROFILE_MAX
+        if count > profile_capacity_max
     }
     add_check(
         "profile_capacity",
         not over_capacity,
         (
             {
-                "maximum": PREPARED_PROFILE_MAX,
+                "maximum": profile_capacity_max,
+                "population_tier": population_tier or "default",
                 "counts": profile_counts,
                 "over_capacity": over_capacity,
             }
             if over_capacity
-            else {"maximum": PREPARED_PROFILE_MAX, "counts": profile_counts}
+            else {
+                "maximum": profile_capacity_max,
+                "population_tier": population_tier or "default",
+                "counts": profile_counts,
+            }
         ),
     )
+
+    if is_tier4:
+        # Declared composition check: a tier-4 run is 250 archetypes x 20
+        # profiles = 5,000 LLM-tier characters + 45,000 crowd characters
+        # generated at run start. The crowd count is a declaration from
+        # Config — it must never be presented as a measured size, and the
+        # prepared profile set must match the declared matrix.
+        archetypes_path = os.path.join(simulation_dir, "archetypes.json")
+        archetypes_doc = read_json(archetypes_path, default=None)
+        composition_errors = []
+        if not isinstance(archetypes_doc, list) or not archetypes_doc:
+            composition_errors.append("archetypes.json missing or empty")
+        else:
+            if len(archetypes_doc) > Config.TIER4_ARCHETYPE_COUNT:
+                composition_errors.append(
+                    f"archetype count {len(archetypes_doc)} exceeds the "
+                    f"tier-4 ceiling of {Config.TIER4_ARCHETYPE_COUNT}"
+                )
+        prepared_count = profile_counts.get(
+            "canonical_agents", len(config.get("agent_configs", []))
+        )
+        declared_total = prepared_count + Config.TIER4_FOLLOWER_COUNT
+        if Config.TIER4_FOLLOWER_COUNT > Config.TIER4_FOLLOWER_COUNT_MAX:
+            composition_errors.append(
+                f"follower crowd {Config.TIER4_FOLLOWER_COUNT} exceeds the "
+                f"objective ceiling of {Config.TIER4_FOLLOWER_COUNT_MAX}"
+            )
+        add_check(
+            "population_composition",
+            not composition_errors,
+            composition_errors
+            or {
+                "archetypes": (
+                    len(archetypes_doc) if isinstance(archetypes_doc, list) else 0
+                ),
+                "prepared_profiles": prepared_count,
+                "crowd_characters": Config.TIER4_FOLLOWER_COUNT,
+                "declared_population_total": declared_total,
+                "declaration": (
+                    "composition declaration, not a measured or sampled size"
+                ),
+            },
+        )
 
     poster_errors = []
     valid_agent_ids = {
@@ -593,6 +671,7 @@ def run_preflight(simulation_dir: str) -> dict[str, Any]:
         "generated_at": datetime.now(UTC).isoformat(),
         "checks": checks,
         "failed_checks": failed_checks,
+        "population_tier": population_tier or "default",
     }
     if admission is not None:
         payload["admission"] = admission

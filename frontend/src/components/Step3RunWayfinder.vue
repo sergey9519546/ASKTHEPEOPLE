@@ -268,6 +268,14 @@
                 <dt>Generated profiles</dt>
                 <dd>{{ diagnostics?.canonical_agents?.length || "Not available" }}</dd>
               </div>
+              <div v-if="populationComposition" data-testid="run-composition">
+                <dt>Declared run composition</dt>
+                <dd>{{ populationComposition.totalLabel }} generated characters</dd>
+                <small>
+                  Declared counts of generated characters for this run — a
+                  composition declaration, not a measure of real people.
+                </small>
+              </div>
               <div>
                 <dt>Starting relationships</dt>
                 <dd>{{ diagnostics?.relationship_bootstrap?.length || "Not available" }}</dd>
@@ -294,6 +302,11 @@
               <div>
                 <dt>Last saved round</dt>
                 <dd>{{ currentRound || "Not available" }}</dd>
+              </div>
+              <div v-if="populationComposition" data-testid="crowd-actions">
+                <dt>Crowd actions last round</dt>
+                <dd>{{ populationComposition.crowdActionsLabel }}</dd>
+                <small>Generated crowd actions recorded inside this run</small>
               </div>
             </dl>
           </div>
@@ -638,6 +651,23 @@ const readinessLabel = computed(() => {
     return count ? `${count} checks need attention` : "Needs attention";
   }
   return "Ready";
+});
+
+// Declared composition for composite (mass_population) runs: generated
+// LLM-tier profile characters plus the declared crowd. Shown as declared
+// counts only — never as a measured population.
+const populationComposition = computed(() => {
+  if (props.runStatus?.population_tier !== "mass_population") return null;
+  const total = Number(props.runStatus?.declared_population_total);
+  const crowdActions = Number(props.runStatus?.follower_actions_last_round);
+  return {
+    totalLabel: Number.isFinite(total) && total > 0
+      ? total.toLocaleString("en-US")
+      : "Declared at start (exact count in run details)",
+    crowdActionsLabel: Number.isFinite(crowdActions)
+      ? crowdActions.toLocaleString("en-US")
+      : "Not available",
+  };
 });
 
 const formatDecimal = (value) => {

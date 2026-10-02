@@ -163,6 +163,15 @@ class SimulationRunState:
     # Follower action counts (populated when enable_followers=True)
     follower_twitter_count: int = 0
     follower_reddit_count: int = 0
+
+    # Population composition (recorded at start for tier-4 composite runs).
+    # population_tier: "mass_population" when the run is a composite of
+    # LLM-tier profiles plus a rule-based follower crowd. declared totals are
+    # composition declarations, never measured or sampled sizes.
+    population_tier: Optional[str] = None
+    declared_population_total: Optional[int] = None
+    # Crowd actions kept in the most recent round (post down-sample cap).
+    follower_actions_last_round: int = 0
     
     def add_action(self, action: AgentAction):
         """Add action to recent actions list"""
@@ -210,6 +219,9 @@ class SimulationRunState:
             "heartbeat_at": self.heartbeat_at,
             "follower_twitter_count": self.follower_twitter_count,
             "follower_reddit_count": self.follower_reddit_count,
+            "population_tier": self.population_tier,
+            "declared_population_total": self.declared_population_total,
+            "follower_actions_last_round": self.follower_actions_last_round,
         }
     
     def to_detail_dict(self) -> Dict[str, Any]:
@@ -389,6 +401,11 @@ class SimulationRunner:
                 owner_id=data.get("owner_id"),
                 fencing_token=data.get("fencing_token"),
                 heartbeat_at=data.get("heartbeat_at"),
+                follower_twitter_count=data.get("follower_twitter_count", 0),
+                follower_reddit_count=data.get("follower_reddit_count", 0),
+                population_tier=data.get("population_tier"),
+                declared_population_total=data.get("declared_population_total"),
+                follower_actions_last_round=data.get("follower_actions_last_round", 0),
             )
             
             # Load recent actions
@@ -558,17 +575,22 @@ class SimulationRunner:
         follower_count: int = 100,
         follower_distribution: Optional[Dict[str, float]] = None,
         owner_id: Optional[str] = None,
+        population_tier: Optional[str] = None,
     ) -> SimulationRunState:
         """
         Start simulation
-        
+
         Args:
             simulation_id: Simulation ID
             platform: Platform (twitter/reddit/parallel)
             max_rounds: Maximum rounds (optional)
             enable_graph_memory_update: Dynamically update Agent activities to Zep graph
             graph_id: Zep Graph ID (required if update enabled)
-            
+            population_tier: "mass_population" for a tier-4 composite run.
+                Defaults the follower crowd to Config.TIER4_FOLLOWER_COUNT
+                when no explicit follower_count was requested and records the
+                declared composition on the run state.
+
         Returns:
             SimulationRunState
         """
@@ -639,6 +661,11 @@ class SimulationRunner:
             canonical_path = canonical_agents_path(sim_dir)
             canonical_agents = read_json(canonical_path, default=[])
             id_base = max(len(canonical_agents), 1000)
+            if population_tier == "mass_population" and follower_count == 100:
+                # The caller passed the signature default; the tier-4 crowd
+                # declaration takes over. An explicit small follower_count
+                # always wins — bounded is bounded.
+                follower_count = Config.TIER4_FOLLOWER_COUNT
             engine = FollowerEngine(id_base=id_base)
             followers = engine.generate_followers(follower_count, follower_distribution)
             cls._follower_engines[simulation_id] = engine
@@ -647,6 +674,19 @@ class SimulationRunner:
         else:
             cls._follower_engines.pop(simulation_id, None)
             cls._follower_agents.pop(simulation_id, None)
+
+        state.population_tier = population_tier
+        if population_tier == "mass_population":
+            # Declared composition, never a measured size: prepared LLM-tier
+            # profiles plus the crowd count declared for this run.
+            canonical_path = os.path.join(sim_dir, "agent_profiles.canonical.json")
+            canonical_count = 0
+            if os.path.exists(canonical_path):
+                with open(canonical_path, "r", encoding="utf-8") as _f:
+                    canonical_count = len(json.load(_f) or [])
+            state.declared_population_total = canonical_count + (
+                follower_count if enable_followers else 0
+            )
 
         # All production modes use the same runtime implementation. Platform
         # flags only select which loop that implementation activates.
@@ -896,6 +936,9 @@ class SimulationRunner:
             )
             if not follower_dicts:
                 return
+            run_state = cls._run_states.get(simulation_id)
+            if run_state is not None:
+                run_state.follower_actions_last_round = len(follower_dicts)
             follower_log = os.path.join(sim_dir, platform, "follower_actions.jsonl")
             os.makedirs(os.path.dirname(follower_log), exist_ok=True)
             # Single buffered write: one open, one join, one syscall at scale.
