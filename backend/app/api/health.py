@@ -5,7 +5,7 @@ import os
 import threading
 import time
 
-from flask import Blueprint, jsonify, current_app
+from flask import Blueprint, jsonify, current_app, Response
 from redis import Redis
 from sqlalchemy import text
 
@@ -15,6 +15,10 @@ from ..services.zep_dependency_status import (
 )
 from ..utils.logger import get_logger
 from ..utils.build_revision import resolve_deployed_revision
+from ..utils.metrics import REGISTRY, render_prometheus
+
+# Prometheus text exposition format, including the UTF-8 charset parameter.
+CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
 
 health_bp = Blueprint('health', __name__)
 logger = get_logger('askthepeople.health')
@@ -318,4 +322,22 @@ def readiness():
         'redis': 'ok' if redis_ok else 'error',
     }
 
-    return jsonify(payload), 200 if ready else 503
+    return jsonify(payload), 200 if ready else 503
+
+
+@health_bp.route('/metrics', methods=['GET'], strict_slashes=False)
+def metrics():
+    """Prometheus exposition of in-process request metrics.
+
+    Deliberately NOT under the ``/api`` prefix and therefore not behind bearer
+    auth: a scraper cannot hold an ``APP_TOKEN``, and this endpoint exposes
+    only counts, latencies, and Flask endpoint names. It carries no user data,
+    no project or simulation identifiers, and no request paths — see
+    ``app/utils/metrics.py`` for why the labels are bounded that way.
+
+    Anyone who can reach it learns request volume and endpoint names, which is
+    the same information the already-public ``/health`` route exposes about
+    component state. If a deployment needs it hidden, put it behind the
+    ingress rather than adding a token check here that would break scraping.
+    """
+    return Response(render_prometheus(REGISTRY), mimetype=CONTENT_TYPE_LATEST)

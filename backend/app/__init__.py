@@ -31,6 +31,40 @@ except ImportError:
     SENTRY_AVAILABLE = False
 
 
+def _register_metrics(app, metrics_module):
+    """Install the request-metrics hooks that back GET /health/metrics.
+
+    Two hooks rather than one so the duration covers the response as well as
+    the handler, and so the in-flight gauge is decremented on an exception
+    path. ``request.endpoint`` is the Flask route rule, never the concrete URL,
+    so a project or simulation id cannot reach a metric label.
+    """
+    import time as _time
+
+    @app.before_request
+    def _metrics_start():
+        metrics_module.REGISTRY.enter_request()
+        # stashed on g so the after_request hook can read it without a lookup
+        from flask import g
+
+        g._metrics_started_at = _time.perf_counter()
+
+    @app.after_request
+    def _metrics_finish(response):
+        from flask import g
+
+        started = getattr(g, "_metrics_started_at", None)
+        metrics_module.REGISTRY.exit_request()
+        if started is not None:
+            metrics_module.REGISTRY.observe(
+                method=request.method,
+                route=metrics_module.route_label(request.endpoint),
+                status_code=response.status_code,
+                duration_seconds=max(0.0, _time.perf_counter() - started),
+            )
+        return response
+
+
 def _scrub_pii_from_sentry(event, hint):
     """
     Scrub PII and secrets from Sentry events before sending.
@@ -215,6 +249,14 @@ def create_app(config_class=Config):
     # constrain the application to one worker.
     from .api import limiter as _limiter
     _limiter.init_app(app)
+
+    # Gate 4 observability (exec-plan T29): request metrics for
+    # GET /health/metrics. Registered before the auth hook so that /health is
+    # measured too, and because the endpoint itself is deliberately outside
+    # /api. Labels are the Flask endpoint rule and status class only, so no
+    # project id, simulation id, or path can reach a metric label.
+    from .utils import metrics as _metrics
+    _register_metrics(app, _metrics)
     
     # Register simulation process cleanup function (ensure all simulation processes are terminated when server closes)
     from .services.simulation_runner import SimulationRunner

@@ -127,6 +127,7 @@ field of `entity_type_registry.json`.
 | `frontend/src/**` **visible text nodes** | nothing | **unenforced** — the linter's `VISIBLE_ATTRIBUTE_PATTERN` matches attributes only, so body text is invisible to it |
 | `docs/**`, root `README.md` | the two grep steps in `.github/workflows/docs.yml`, plus `scripts/release/check-docs-gates.sh` as gate 2 of `npm run verify` | **live** since 2026-10-01 |
 | `backend/app/**` string literals | `backend/tests/test_backend_truth_terms.py`, applied by `backend/tests/test_truth_term_sync.py`'s pattern source | **live** since 2026-10-01 — 100 of 135 modules gated; 35 on a reviewed allowlist with written reasons |
+| `backend/app/**` and `backend/scripts/**` imports | `backend/tests/test_no_phantom_imports.py` — static AST scan, every `app.*` import must resolve on disk | **live** since 2026-10-01; 2 known-broken files on a recorded allowance |
 | `frontend/dist/**`, `static/dist/**` | nothing | build output; never edit, never cite as source |
 
 Three structural facts about that CI job, all corrected on 2026-10-01:

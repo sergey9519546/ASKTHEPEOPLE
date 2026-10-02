@@ -501,7 +501,7 @@ both anchors were fabricated and have been removed.
 | 1 | Typed API boundary | `askthepeople-architect` | PARTIAL | Complete schema enforcement across legacy handlers; finish the route responsibility contract |
 | 2 | Durable workflows | `askthepeople-orchestration-engineer` | PARTIAL | Transactional (fenced) artifact writes; push-based event delivery; the four independent state machines; TARGET PostgreSQL job/event history; process-local `SimulationRunner` ownership |
 | 3 | Canonical persistence and provenance | `askthepeople-persistence-engineer` | PARTIAL | Production object-storage cutover; outbox events; soft-delete/audit-log; complete provenance-edge write-time validation |
-| 4 | Scale and operations | `askthepeople-release-operator` | **NOT STARTED** | Observability (no metrics/tracing; Sentry PARTIAL), SLOs/cost budgets, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`), alerting |
+| 4 | Scale and operations | `askthepeople-release-operator` | PARTIAL | Request metrics exist (`app/utils/metrics.py`, `GET /health/metrics`, bounded labels). Remaining: distributed tracing, SLOs/cost budgets, alerting, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`); Sentry PARTIAL |
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL | Most prompts still inlined; model-release gating; failure-mode catalogue; adversarial/sensitivity evals |
 
 ### Gate evidence
@@ -631,6 +631,24 @@ The check runs once on engine acquisition, not per query, and
 declared table is one a migration actually creates. Proven by neutering
 `require_tables`: two tests fail.
 
+**Phantom imports are now guarded.** Two modules import packages that do not
+exist, and nothing detected it:
+`backend/scripts/migrate_json_to_postgres.py:37-39` imports
+`app.db.database` and `app.db.models.*`, and
+`backend/app/optimization/learning_loop.py:26` imports `app.db.models`. Neither
+module exists — `backend/migrations/env.py:14` records that the same package
+"never existed", and the script's own docstring at line 6 says so before
+proceeding anyway. Both fail with a bare `ModuleNotFoundError` far from the
+cause.
+`backend/tests/test_no_phantom_imports.py` (6 tests) resolves every absolute
+`app.*` import against the filesystem. It is **static** — parsing each file's
+AST rather than importing it — because importing every module would execute
+Celery app construction and database engine creation, making the test
+order-dependent and environment-sensitive. Both known-broken files are on a
+recorded allowance with a reason, a staleness test fails if either is repaired,
+and another asserts the allowance is not decorative. Proven by planting
+`from app.services.does_not_exist import thing`: the guard fails.
+
 **The decision is recorded.**
 [ADR-0013](adr/ADR-0013-schema-source-convergence.md) declares migrations
 canonical, which *implements*
@@ -644,9 +662,42 @@ shows the divergence was a **trap, not active corruption**, because
 `RunRepository` and `PathRepository` have no production importer at all and
 both live repositories are behind flags that default off.
 
-**Gate 4.** No metrics or tracing; Sentry is PARTIAL. `../release/RUNBOOK.md`
-and [`../security/INCIDENT_RESPONSE.md`](../security/INCIDENT_RESPONSE.md) are
-concrete, but the procedures they describe are unimplemented.
+**Gate 4 — PARTIAL (was NOT STARTED before 2026-10-02).**
+`backend/app/utils/metrics.py` provides in-process request metrics, installed by
+`_register_metrics` in `backend/app/__init__.py` and exposed in Prometheus text
+format at `GET /health/metrics` (`backend/app/api/health.py`). It records
+request count, latency as a fixed-bucket histogram, cumulative duration, and
+in-flight depth.
+
+**Metric labels are bounded by construction, which is the privacy and
+cardinality requirement.** Only `method`, Flask `endpoint`, and `status_class`
+are labelled. Never the URL, never an id: `route_label` returns `"unmatched"`
+for anything that is not a short endpoint name, so a request to an unrouted
+path cannot become one time series per path, and a project or simulation id
+cannot reach a label. Storage is bounded by `method x endpoints x 4` regardless
+of traffic, and the histogram has fixed bucket boundaries rather than per-request
+samples.
+
+The endpoint sits **outside** `/api` and therefore outside bearer auth,
+because a scraper cannot hold an `APP_TOKEN`. It exposes only counts, latencies,
+and endpoint names — the same class of information the public `/health` route
+already exposes about component state. A deployment that needs it hidden should
+put it behind the ingress rather than add a token check that would break
+scraping.
+
+Tested by `backend/tests/test_metrics_gate4.py` (32 tests) and
+`backend/tests/test_metrics_wiring.py` (6 tests). The privacy property is
+asserted on the **output**, not the input: the exposition is scraped and checked
+for path separators and id-shaped hex, so a future change that passes
+`request.path` fails a test rather than leaking. The wiring tests prove the
+middleware is installed, that an exception path still returns the in-flight
+gauge to zero, and that a removed registration fails 4 of 6.
+
+**Still missing:** distributed tracing, SLO and cost-budget definitions,
+alerting rules, Redis-backed rate limiting, and horizontal scaling. Sentry is
+PARTIAL. `../release/RUNBOOK.md` and
+[`../security/INCIDENT_RESPONSE.md`](../security/INCIDENT_RESPONSE.md) remain
+concrete while the procedures they describe are still partly unimplemented.
 
 **Gate 5.** CoT scrubbing is implemented per ADR-0010
 (`strip_reasoning_scaffold()` in `backend/app/services/report_agent.py`, covered
