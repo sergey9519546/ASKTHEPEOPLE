@@ -883,14 +883,29 @@ class SimulationRunner:
             if not engine or not followers:
                 return
             round_leader_actions = cls._read_round_actions_raw(simulation_id, round_num, platform)
-            follower_dicts = engine.compute_round_actions(followers, round_leader_actions, round_num, platform)
+            # Volume is capped per round: a tier-4 crowd is 45,000 followers,
+            # and the unbounded write stream (~18k rows/round/platform) is
+            # throughput cost without added signal. The engine down-samples
+            # deterministically, so a round always keeps the same subset.
+            follower_dicts = engine.compute_round_actions(
+                followers,
+                round_leader_actions,
+                round_num,
+                platform,
+                max_actions=Config.TIER4_CROWD_ACTIONS_PER_ROUND_MAX,
+            )
             if not follower_dicts:
                 return
             follower_log = os.path.join(sim_dir, platform, "follower_actions.jsonl")
             os.makedirs(os.path.dirname(follower_log), exist_ok=True)
+            # Single buffered write: one open, one join, one syscall at scale.
             with open(follower_log, "a", encoding="utf-8") as _f:
-                for _d in follower_dicts:
-                    _f.write(json.dumps(_d, ensure_ascii=False) + "\n")
+                _f.write(
+                    "".join(
+                        json.dumps(_d, ensure_ascii=False) + "\n"
+                        for _d in follower_dicts
+                    )
+                )
             run_state = cls._run_states.get(simulation_id)
             if run_state:
                 if platform == "twitter":

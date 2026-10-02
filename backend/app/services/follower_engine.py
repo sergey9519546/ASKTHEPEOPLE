@@ -8,11 +8,18 @@ OASIS subprocess — zero changes to OASIS scripts.
 
 from __future__ import annotations
 
-import random
+import random as _random_module
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
+# Module-level handle so tests can seed determinism without touching the
+# interpreter-global RNG — every stochastic draw in this module goes through
+# this name. The stdlib module is bound privately as `_random_module` so that
+# nothing can rebind a bare `random` attribute on this module and shadow the
+# real module object underneath it.
+_rng = _random_module
 
 
 class FollowerBehavior(str, Enum):
@@ -95,20 +102,20 @@ class FollowerEngine:
 
         agents: List[FollowerAgent] = []
         for i in range(count):
-            behavior = random.choices(behaviors, weights=weights, k=1)[0]
+            behavior = _rng.choices(behaviors, weights=weights, k=1)[0]
 
             if behavior == FollowerBehavior.AMPLIFIER:
-                opinion_bias = random.uniform(0.3, 1.0)
-                activity_prob = random.uniform(0.5, 0.9)
+                opinion_bias = _rng.uniform(0.3, 1.0)
+                activity_prob = _rng.uniform(0.5, 0.9)
             elif behavior == FollowerBehavior.CONTRARIAN:
-                opinion_bias = random.uniform(-1.0, -0.3)
-                activity_prob = random.uniform(0.4, 0.8)
+                opinion_bias = _rng.uniform(-1.0, -0.3)
+                activity_prob = _rng.uniform(0.4, 0.8)
             elif behavior == FollowerBehavior.NEUTRAL:
-                opinion_bias = random.uniform(-0.2, 0.2)
-                activity_prob = random.uniform(0.2, 0.6)
+                opinion_bias = _rng.uniform(-0.2, 0.2)
+                activity_prob = _rng.uniform(0.2, 0.6)
             else:  # LURKER
-                opinion_bias = random.uniform(-0.5, 0.5)
-                activity_prob = random.uniform(0.02, 0.1)
+                opinion_bias = _rng.uniform(-0.5, 0.5)
+                activity_prob = _rng.uniform(0.02, 0.1)
 
             display_name = None
             if compose_names and role_rotation:
@@ -136,6 +143,7 @@ class FollowerEngine:
         round_actions: List[Dict[str, Any]],
         round_num: int,
         platform: str,
+        max_actions: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """
         Compute follower actions for one round based on leader actions.
@@ -145,6 +153,13 @@ class FollowerEngine:
             round_actions: Raw action dicts from this round's leader agents
             round_num: Current round number
             platform: "twitter" or "reddit"
+            max_actions: Optional ceiling on actions returned this round.
+                An uncapped 45,000-follower crowd produces ~18,000 writes per
+                round — pure volume, no additional signal. When the computed
+                set exceeds the ceiling, a deterministic (platform, round)-
+                seeded reduction keeps a stable subset, so the same round
+                always keeps the same followers and the log volume stays
+                bounded (Config.TIER4_CROWD_ACTIONS_PER_ROUND_MAX).
 
         Returns:
             List of follower action dicts (same schema as actions.jsonl entries)
@@ -157,12 +172,12 @@ class FollowerEngine:
         now = datetime.now().isoformat()
 
         for follower in followers:
-            if random.random() >= follower.activity_probability:
+            if _rng.random() >= follower.activity_probability:
                 continue
             if not candidates:
                 continue
 
-            target = random.choice(candidates)
+            target = _rng.choice(candidates)
             target_args = target.get("action_args") or {}
 
             action_type, action_args = self._pick_action(follower, target, target_args, platform)
@@ -181,6 +196,14 @@ class FollowerEngine:
                     "is_follower": True,
                 }
             )
+
+        if max_actions is not None and len(result) > max_actions:
+            # Deterministic per-round down-sample: the same (platform, round)
+            # always keeps the same subset, sorted back into agent order so
+            # the log reads in a stable sequence.
+            rng = _random_module.Random(f"{platform}:{round_num}")
+            keep = sorted(rng.sample(range(len(result)), max_actions))
+            result = [result[i] for i in keep]
         return result
 
     @staticmethod
@@ -198,18 +221,18 @@ class FollowerEngine:
 
         if platform == "twitter":
             if behavior == FollowerBehavior.AMPLIFIER:
-                if random.random() < 0.6:
+                if _rng.random() < 0.6:
                     return "LIKE_POST", {"tweet_id": post_id}
                 else:
                     return "REPOST", {"tweet_id": post_id}
             elif behavior == FollowerBehavior.CONTRARIAN:
-                phrase = random.choice(_CONTRARIAN_PHRASES)
+                phrase = _rng.choice(_CONTRARIAN_PHRASES)
                 return "QUOTE_POST", {
                     "tweet_id": post_id,
                     "content": f"Disagree: {content[:50]} — {phrase}",
                 }
             elif behavior == FollowerBehavior.NEUTRAL:
-                if random.random() < 0.5:
+                if _rng.random() < 0.5:
                     return "LIKE_POST", {"tweet_id": post_id}
                 else:
                     return "DO_NOTHING", {}
@@ -220,13 +243,13 @@ class FollowerEngine:
             if behavior == FollowerBehavior.AMPLIFIER:
                 return "LIKE_POST", {"post_id": post_id}
             elif behavior == FollowerBehavior.CONTRARIAN:
-                if random.random() < 0.5:
+                if _rng.random() < 0.5:
                     return "DISLIKE_POST", {"post_id": post_id}
                 else:
-                    phrase = random.choice(_CONTRARIAN_PHRASES)
+                    phrase = _rng.choice(_CONTRARIAN_PHRASES)
                     return "CREATE_COMMENT", {"post_id": post_id, "content": phrase}
             elif behavior == FollowerBehavior.NEUTRAL:
-                if random.random() < 0.5:
+                if _rng.random() < 0.5:
                     return "LIKE_POST", {"post_id": post_id}
                 else:
                     return "DO_NOTHING", {}
@@ -240,6 +263,7 @@ def apply_follower_round_in_proc(
     round_actions: List[Dict[str, Any]],
     round_num: int,
     platform: str,
+    max_actions: Optional[int] = None,
 ) -> int:
     """
     Executes follower reactions in-process against the active OASIS SQLite DB connection if provided.
@@ -250,7 +274,9 @@ def apply_follower_round_in_proc(
         return 0
 
     engine = FollowerEngine()
-    follower_actions = engine.compute_round_actions(followers, round_actions, round_num, platform)
+    follower_actions = engine.compute_round_actions(
+        followers, round_actions, round_num, platform, max_actions=max_actions
+    )
     
     written = 0
     try:
