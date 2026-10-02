@@ -38,6 +38,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, bindparam, create_engine, text
+from app.db import require_tables
 from sqlalchemy.engine import Engine
 
 from ..config import Config
@@ -109,6 +110,12 @@ class ProjectRepository:
 
     _engine: Optional[Engine] = None
 
+    # Tables this repository's SQL touches, read from its FROM/INTO/UPDATE/JOIN
+    # clauses. Verified on engine acquisition so a flag-enabled-but-unmigrated
+    # database fails here, naming the table, rather than at the first query with
+    # a driver-level UndefinedTable (exec-plan T6).
+    _REQUIRED_TABLES = frozenset({"projects", "sources", "ontologies"})
+
     @classmethod
     def _get_engine(cls) -> Engine:
         if cls._engine is None:
@@ -127,6 +134,7 @@ class ProjectRepository:
             elif database_url.startswith("postgres://"):
                 database_url = "postgresql+psycopg://" + database_url[len("postgres://"):]
             cls._engine = create_engine(database_url, future=True)
+            require_tables(cls._engine, cls._REQUIRED_TABLES)
         return cls._engine
 
     @staticmethod

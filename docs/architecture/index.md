@@ -548,6 +548,102 @@ sources, runs, decision lenses, and first-class path aggregates
 opt-in behind `USE_SUPABASE_PERSISTENCE`
 (`backend/app/config.py:321-322`).
 
+**The two schema sources, measured 2026-10-02.**
+`backend/app/db/schema.py` declares **6** tables; `backend/migrations/versions/`
+declares **16**. Exactly **2** appear in both (`projects`, `simulations`); **4**
+are ORM-only (`organizations`, `agent_profiles`, `attempts`, `observations`)
+and **14** are migration-only (the `dw_*` aggregates plus `graphs`,
+`ontologies`, `reports`, `sources`). The two shared tables declare
+**incompatible primary keys**: `sa.Integer()` autoincrement at
+`backend/migrations/versions/384c98f88d53_initial_schema.py:25` versus
+`Column(Uuid, ...)` at `backend/app/db/schema.py:11`.
+
+`backend/tests/test_schema_parity.py` now pins this divergence so it cannot
+grow silently. It fails if a table appears in one source and not the other
+outside the recorded `KNOWN_ORM_ONLY`, and if a table present in **both**
+sources declares different primary-key types outside `KNOWN_PK_MISMATCH`.
+Both allowances carry an exec-plan reference and the test fails if an entry
+becomes stale, so the known conflicts cannot quietly become unreported ones.
+Verified by planting a table in `schema.py` (one failure, the right one) and by
+declaring `graphs` with a `Uuid` key in the ORM (one failure,
+`graphs: ORM Uuid vs migration Integer`). Reconciling them is exec-plan T2/T3;
+this test does not claim they agree, only that new disagreement is visible.
+
+**The shared tables are not the same tables**, which is worse than the key
+mismatch. `projects` shares 4 of 6 ORM columns with its migration counterpart
+(16 columns); `simulations` shares 5. The ORM-only columns are
+`projects.organization_id`, `projects.version`, `simulations.version`; the
+migration adds `decision_text`, `analysis_summary`, `simulation_requirement`,
+`graph_id`, `chunk_size` and more. **The live code targets the migration** —
+`backend/app/services/project_repository.py:252` queries
+`WHERE project_id = :project_id`, and `project_id` exists only there.
+`backend/app/services/project_repository.py:19-26` already records the ORM as
+"a partial stub that does not match the migration".
+
+**Exec-plan T2 as written was rejected; the divergence is now closed.** Adding
+the four ORM-only tables as migrations would have enshrine a stub, and could not
+work: their foreign keys point at `projects.organization_id`, which the
+migration does not have. Instead `backend/app/db/schema.py` was **stripped to
+`Base` alone** on 2026-10-02, and its six stub classes removed rather than
+mirrored — 198 columns of hand-maintained duplication would have recreated a
+second source of truth with more places to forget than the six tables it
+replaced.
+
+**T4 is done.** `create_app` no longer materializes schema. It imports
+`get_engine` only, creates the engine and opens a connection — a real
+connectivity probe that still drives the existing fail-closed branch for an
+unreachable `DATABASE_URL` in production — and issues no DDL. `init_db()` now
+**raises** rather than being deleted, so any surviving caller fails loudly
+instead of silently reinstating the old behaviour. Removing `create_all` was
+safe precisely because it was harmful: it built a `projects` table with no
+`project_id`, which is the column
+`backend/app/services/project_repository.py:252` queries.
+
+Two guards pin this, both proven by planting a violation and watching them fail:
+
+- `backend/tests/test_startup_no_schema_creation.py` (3 tests) records calls to
+  `Base.metadata.create_all` while booting the real app factory. Recording is
+  required rather than raising, because `create_app` wraps the database block
+  in `except Exception` and would swallow an assertion from inside `create_all`.
+- `backend/tests/test_schema_parity.py` (9 tests) asserts the ORM declares **no**
+  tables, that `Base.metadata.tables` is empty so neither `create_all` nor
+  `drop_all` can touch schema, that the migrations still declare their 16
+  expected tables with one linear head, and that `Base` remains importable.
+
+**Known gap, recorded not fixed:** the `dw_*` aggregates carry
+`organization_id`/`workspace_id`
+(`backend/migrations/versions/a1b2c3d4e5f6_domain_aggregates.py:36-37`) with
+**no `organizations` table in any migration**, so those columns have no
+foreign-key target. Multi-tenancy is deferred by D2, so this is inert today;
+it is tracked under ADR-0009.
+
+**T6 is done.** A flag enabled against a reachable but never-migrated database
+now fails with a named error instead of a driver-level `UndefinedTable`.
+`backend/app/db/__init__.py` gains `require_tables`, raising
+`CanonicalSchemaMissing` with each missing table and the remedy
+(`alembic upgrade head`, or unset the flag).
+`backend/app/services/project_repository.py` requires `{projects, sources,
+ontologies}` and `backend/app/services/source_repository.py` requires
+`{dw_sources, dw_source_versions}` — sets **read from each repository's SQL**,
+not guessed; a first draft named five tables `ProjectRepository` never queries.
+The check runs once on engine acquisition, not per query, and
+`backend/tests/test_canonical_store_schema_guard.py` (5 tests) verifies each
+declared table is one a migration actually creates. Proven by neutering
+`require_tables`: two tests fail.
+
+**The decision is recorded.**
+[ADR-0013](adr/ADR-0013-schema-source-convergence.md) declares migrations
+canonical, which *implements*
+[ADR-0012](adr/ADR-0012-canonical-transactional-and-object-persistence.md)
+rather than re-deciding it — ADR-0012 already required "schema changes are
+Alembic-only; web and worker startup never call `create_all`". ADR-0013 records
+the measured divergence, the boot path
+(`backend/app/__init__.py:164` → `:167` → `backend/app/db/__init__.py:27`),
+and the verified reachability table. That table is the load-bearing part: it
+shows the divergence was a **trap, not active corruption**, because
+`RunRepository` and `PathRepository` have no production importer at all and
+both live repositories are behind flags that default off.
+
 **Gate 4.** No metrics or tracing; Sentry is PARTIAL. `../release/RUNBOOK.md`
 and [`../security/INCIDENT_RESPONSE.md`](../security/INCIDENT_RESPONSE.md) are
 concrete, but the procedures they describe are unimplemented.

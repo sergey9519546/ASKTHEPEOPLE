@@ -157,16 +157,32 @@ def create_app(config_class=Config):
     # Initialise WebSocket extension (must happen before ws routes are registered/imported)
     sock.init_app(app)
     
-    # Initialize database connection
+    # Initialize database connection.
     # Fail-closed only when DATABASE_URL is explicitly configured but unreachable.
     # No DATABASE_URL = intentional SQLite / filesystem mode (valid for current Railway setup).
+    #
+    # Schema is NOT created here. ADR-0012 requires "schema changes are
+    # Alembic-only; web and worker startup never call create_all", and ADR-0013
+    # makes backend/migrations/versions/ the single source of truth.
+    #
+    # This previously called init_db(engine) -> Base.metadata.create_all, which
+    # was not merely redundant but actively harmful: it materialized the ORM's
+    # stub `projects` table, which has no `project_id` column, while the only
+    # live canonical-store repository queries `WHERE project_id = :project_id`
+    # (services/project_repository.py:252). With USE_SUPABASE_PERSISTENCE=true
+    # against a create_all database, ProjectRepository would fail on a missing
+    # column. Engine creation is kept because it is a genuine connectivity
+    # probe and drives the fail-closed branch below.
     try:
-        from .db import get_engine, init_db
+        from .db import get_engine
         database_url = app.config.get('DATABASE_URL')
         engine = get_engine(database_url)
-        init_db(engine)
+        # Touch the connection so an unreachable DATABASE_URL fails here rather
+        # than at first query. This probes; it does not create schema.
+        with engine.connect():
+            pass
         if should_log_startup:
-            logger.info(f"Database initialized: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local SQLite'}")
+            logger.info(f"Database reachable: {database_url.split('@')[-1] if database_url and '@' in database_url else 'local SQLite'}")
     except Exception as db_error:
         # Fail closed when an explicit DATABASE_URL was set but is unreachable
         # in production. Production is determined by the app's DEBUG flag (the

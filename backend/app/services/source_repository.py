@@ -19,6 +19,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy import create_engine
 
 from ..config import Config
+from ..db import require_tables
 from ..domain.identifiers import new_public_id, new_uuid7
 from ..domain.source_ingestion import SourceIngestionState
 
@@ -34,6 +35,12 @@ class SourceRepository:
 
     _engine: Optional[Engine] = None
 
+    # Tables this repository's SQL touches, read from its FROM/INTO/UPDATE/JOIN
+    # clauses. Verified on engine acquisition so a flag-enabled-but-unmigrated
+    # database fails here, naming the table, rather than at the first query with
+    # a driver-level UndefinedTable (exec-plan T6).
+    _REQUIRED_TABLES = frozenset({"dw_sources", "dw_source_versions"})
+
     @classmethod
     def _get_engine(cls) -> Engine:
         if cls._engine is None:
@@ -44,6 +51,7 @@ class SourceRepository:
             cls._engine = create_engine(
                 _ensure_psycopg_driver(database_url), future=True
             )
+            require_tables(cls._engine, cls._REQUIRED_TABLES)
         return cls._engine
 
     # --- source --- #
