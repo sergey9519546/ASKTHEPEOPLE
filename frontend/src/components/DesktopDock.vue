@@ -1,74 +1,80 @@
 <template>
-  <nav aria-live="polite" aria-atomic="true"
-    class="desktop-dock"
-    :class="{ 'is-collapsed': props.collapsed }"
-    aria-label="Workspace launcher"
-    :aria-expanded="!props.collapsed"
-    :title="props.collapsed ? 'Expand workspace spine (click, Enter, or Space)' : 'Collapse workspace spine (click, Enter, or Space)'"
-    tabindex="0"
-    @click.self="emit('toggle')"
-    @keydown.self="onToggleKey($event)"
+  <nav
+    class="journey-spine desktop-dock"
+    :class="{ 'is-collapsed': collapsed }"
+    aria-label="Journey"
   >
-    <div class="dock-heading">
-      <h3 class="dock-heading-text">Journey</h3>
-      <span class="dock-heading-note">Sequence only</span>
+    <div class="spine-heading">
+      <h2 class="spine-heading-text">Journey</h2>
+      <button
+        class="spine-toggle u-target"
+        type="button"
+        :aria-expanded="!collapsed"
+        aria-controls="journey-spine-list"
+        :aria-label="collapsed ? 'Expand the journey spine' : 'Collapse the journey spine'"
+        @click="emit('toggle')"
+      >
+        <span aria-hidden="true">{{ collapsed ? ">" : "<" }}</span>
+      </button>
     </div>
+    <p v-if="!collapsed" class="spine-note">
+      Six steps in sequence. Spacing shows order only, not time or likelihood.
+    </p>
 
-    <ul class="dock-apps" role="list">
-      <li v-for="app in DESKTOP_APPS" :key="app.id">
+    <ol id="journey-spine-list" class="spine-steps" :class="{ 'is-compact': collapsed }">
+      <li v-for="entry in journey" :key="entry.id" class="spine-step">
         <button
           type="button"
-          class="dock-app"
-          :class="{
-            'is-active': isActive(app),
-            'is-open': isOpen(app),
-            'is-unavailable': !isAvailable(app),
-          }"
-          :aria-current="isActive(app) ? 'step' : undefined"
-          :aria-disabled="!isAvailable(app) && !isOpen(app)"
-          :aria-expanded="isOpen(app)"
-          :title="availabilityHint(app)"
-          @click="launch(app)"
+          class="spine-entry"
+          :class="[
+            `is-${entry.status}`,
+            { 'is-open': entry.open },
+          ]"
+          :aria-current="entry.status === 'current' ? 'step' : undefined"
+          :aria-disabled="entry.status === 'locked'"
+          :title="hint(entry)"
+          @click="launch(entry)"
         >
-          <span class="dock-code" aria-hidden="true">{{ app.code }}</span>
-          <span class="dock-title">{{ app.title }}</span>
-          <span v-if="isOpen(app)" class="dock-state" aria-hidden="true">
-            {{ isActive(app) ? "ACTIVE" : "OPEN" }}
+          <span class="spine-index" aria-hidden="true">
+            {{ String(entry.step).padStart(2, "0") }}
           </span>
-          <span v-else-if="isAvailable(app)" class="dock-state dock-state-ready" aria-hidden="true">
-            OPEN
+          <span class="spine-text">
+            <span class="spine-title">{{ entry.title }}</span>
+            <span v-if="!collapsed" class="spine-outcome">{{ entry.outcome }}</span>
+          </span>
+          <span v-if="!collapsed" class="spine-state" aria-hidden="true">
+            {{ STATE_LABEL[entry.status] }}
           </span>
         </button>
       </li>
-    </ul>
+    </ol>
 
-    <div class="dock-heading dock-heading-system">
-      <h3 class="dock-heading-text">System</h3>
+    <div class="spine-system">
+      <h2 class="spine-heading-text">System</h2>
+      <button class="spine-entry is-quiet" type="button" @click="openSettings">
+        <span class="spine-index" aria-hidden="true">CFG</span>
+        <span class="spine-text">
+          <span class="spine-title">Model settings</span>
+        </span>
+      </button>
+      <button class="spine-entry is-quiet is-danger" type="button" @click="startOver">
+        <span class="spine-index" aria-hidden="true">RST</span>
+        <span class="spine-text">
+          <span class="spine-title">Start over</span>
+        </span>
+      </button>
     </div>
-
-    <ul class="dock-apps dock-apps-system" role="list">
-      <li>
-        <button type="button" class="dock-app" @click="openSettings">
-          <span class="dock-code" aria-hidden="true">CFG</span>
-          <span class="dock-title">Model settings</span>
-        </button>
-      </li>
-      <li>
-        <button type="button" class="dock-app" @click="startOver">
-          <span class="dock-code" aria-hidden="true">RST</span>
-          <span class="dock-title">Start over</span>
-        </button>
-      </li>
-    </ul>
   </nav>
 </template>
 
 <script setup>
+import { computed } from "vue";
 import { useRouter } from "vue-router";
 import {
-  activeKey,
   DESKTOP_APPS,
+  JOURNEY_TOTAL,
   focusWindow,
+  journeyState,
   launchRouteFor,
   openApp,
   windowForApp,
@@ -77,46 +83,57 @@ import { openSettings } from "../composables/useCommandPalette.js";
 import { clearState } from "../composables/useWorkspaceState.js";
 import { toast } from "../utils/toast.js";
 
-const router = useRouter();
+/**
+ * The journey spine is the shell's only journey navigation.
+ *
+ * It replaces a dock that shipped collapsed by default, which meant a first-time
+ * user saw a 3rem column of two-letter codes - "D-01 SM-01 A-01" - with no
+ * labels and no explanation. Orientation is not a user preference; it is a
+ * precondition, so the spine opens expanded and the collapsed state is now the
+ * exception the user opts into.
+ *
+ * Semantics are `nav` + `aria-current="step"`, not a tablist. These are journey
+ * positions, not tabs over one canvas, and `aria-current="step"` is the pattern
+ * intended for exactly this case; a tablist here would misdescribe the
+ * relationship and drag in a keyboard contract that does not apply.
+ */
 const props = defineProps({ collapsed: Boolean });
 const emit = defineEmits(["toggle"]);
 
-const isOpen = (app) => Boolean(windowForApp(app.id));
-const isActive = (app) => {
-  const win = windowForApp(app.id);
-  return Boolean(win && activeKey.value === win.key);
-};
-const isAvailable = (app) => Boolean(launchRouteFor(app.id));
+const router = useRouter();
 
-function availabilityHint(app) {
-  if (isOpen(app)) return `Open ${app.title}`;
-  if (isAvailable(app)) return `Open ${app.title}`;
-  return `${app.title} is available after the earlier steps`;
+const STATE_LABEL = {
+  done: "DONE",
+  current: "NOW",
+  next: "NEXT",
+  locked: "LOCKED",
+};
+
+const journey = computed(() => journeyState());
+
+/** Why a step cannot be opened, named in terms of the step that unlocks it. */
+function hint(entry) {
+  if (entry.status === "current") return `Open ${entry.title}`;
+  if (entry.open) return `Return to ${entry.title}`;
+  if (entry.status === "locked") {
+    const gate = DESKTOP_APPS[entry.step - 2];
+    return `${entry.title} opens after "${gate ? gate.title : "the earlier step"}"`;
+  }
+  return `Continue to ${entry.title}`;
 }
 
-function launch(app) {
-  const win = windowForApp(app.id);
+function launch(entry) {
+  const win = windowForApp(entry.id);
   if (win) {
     focusWindow(win.key);
     return;
   }
-  const route = launchRouteFor(app.id);
+  const route = launchRouteFor(entry.id);
   if (!route) {
-    toast.warning(
-      "Complete the earlier journey steps first.",
-      `${app.title} is not ready`,
-    );
+    toast.warning(hint(entry), "That step is not ready");
     return;
   }
-  openApp(app.id, route);
-}
-
-function onToggleKey(event) {
-  if (event.key === "Enter" || event.key === " " || event.code === "Space") {
-    event.preventDefault();
-    emit("toggle");
-    requestAnimationFrame(function() { if (event && event.target) event.target.focus(); });
-  }
+  openApp(entry.id, route);
 }
 
 function startOver() {
@@ -125,187 +142,218 @@ function startOver() {
   router.replace({ name: "Home" });
   toast.info("Workspace reset. State a new decision.", "Start over");
 }
+
+void JOURNEY_TOTAL;
 </script>
 
 <style scoped>
-.desktop-dock.is-collapsed {
-  width: var(--dock-collapsed-width, 3rem);
-  min-width: 3rem;
-  overflow: hidden;
-}
-.desktop-dock.is-collapsed .dock-heading,
-.desktop-dock.is-collapsed .dock-heading-system,
-.desktop-dock.is-collapsed .dock-title,
-.desktop-dock.is-collapsed .dock-state,
-.desktop-dock.is-collapsed .dock-heading-note {
-  display: none;
-}
-.desktop-dock.is-collapsed .dock-app {
-  grid-template-columns: 2.6rem;
-  justify-content: center;
-  border-left: 0;
-  padding: var(--space-1);
-}
-.desktop-dock.is-collapsed .dock-code {
-  font-size: 0.55rem;
-  opacity: 1;
-  color: var(--attention) !important;
-}
-.desktop-dock {
+.journey-spine {
   display: flex;
   flex-direction: column;
-  width: var(--dock-width);
-  min-width: var(--dock-width);
+  width: var(--band-spine);
+  min-width: var(--band-spine);
   overflow-y: auto;
   border-right: 1px solid var(--line-dark);
   background: var(--ink-deep);
 }
 
-.dock-heading {
+.journey-spine.is-collapsed {
+  width: var(--band-spine-collapsed);
+  min-width: var(--band-spine-collapsed);
+}
+
+.spine-heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-1);
+  min-height: var(--band-masthead);
+  padding: 0 var(--space-2) 0 var(--space-4);
   border-bottom: 1px solid var(--line-dark);
 }
 
-.dock-heading-system {
-  border-top: 1px solid var(--line-dark);
-}
-
-.dock-heading-text {
+.spine-heading-text {
+  margin: 0;
   color: var(--paper-muted);
-  font-family: var(--font-display);
-  font-size: 0.72rem;
-  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
-.dock-heading-note {
-  color: var(--paper-dim);
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  letter-spacing: 0.04em;
+.journey-spine.is-collapsed .spine-heading {
+  justify-content: center;
+  padding: 0;
 }
 
-.dock-apps {
-  display: flex;
-  flex-direction: column;
+.journey-spine.is-collapsed .spine-heading-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.spine-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-h-md);
+  min-height: var(--control-h-md);
+  padding: 0;
+  border: 1px solid var(--line-dark);
+  background: transparent;
+  color: var(--paper-muted);
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+}
+
+.spine-toggle:hover {
+  border-color: var(--line-strong);
+  background: var(--ink-raised);
+  color: var(--paper);
+}
+
+.spine-note {
   margin: 0;
-  padding: var(--space-1) 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--line-dark);
+  color: var(--paper-dim);
+  font-size: 0.64rem;
+  line-height: var(--leading-snug);
+}
+
+.spine-steps {
+  margin: 0;
+  padding: var(--space-2) 0;
   list-style: none;
 }
 
-.dock-apps-system {
-  border-bottom: 1px solid var(--line-dark);
-}
-
-.dock-app {
+.spine-entry {
   display: grid;
-  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  grid-template-columns: 1.9rem minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
-  min-height: var(--space-7);
-  padding: var(--space-1) var(--space-4);
+  min-height: var(--control-h-lg);
+  padding: var(--space-2) var(--space-4);
   border: 0;
-  border-left: 3px solid transparent;
+  border-left: var(--edge-wayfinding) solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--paper-muted);
   text-align: left;
 }
 
-.dock-app:hover {
+.journey-spine.is-collapsed .spine-entry {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: var(--space-2) 0;
+  border-left: 0;
+}
+
+.spine-entry:hover {
   background: var(--ink-raised);
   color: var(--paper);
 }
 
-.dock-app.is-active {
+/* Step position is the job of signal red: the current step carries it as a
+   left wayfinding edge, and "NOW" as text. Filling the whole row in red would
+   make the spine read as a stack of equal alarms. */
+.spine-entry.is-current {
   border-left-color: var(--signal);
-  background: var(--signal);
-  color: var(--ink);
-}
-
-.dock-app.is-open:not(.is-active) {
-  border-left-color: var(--attention);
-  background: var(--ink-soft);
+  background: var(--signal-haze);
   color: var(--paper);
 }
 
-.dock-app:disabled,
-.dock-app.is-unavailable:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
+.spine-entry.is-done {
+  color: var(--paper);
 }
 
-.dock-app:disabled:hover {
-  background: transparent;
-  color: var(--paper-muted);
-}
-
-.dock-code {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: inherit;
-  opacity: 0.85;
-}
-
-.dock-app.is-active .dock-code {
-  color: var(--ink);
-}
-
-.dock-title {
-  overflow: hidden;
-  font-family: var(--font-display);
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-transform: uppercase;
-}
-
-.dock-state {
-  font-family: var(--font-mono);
-  font-size: 0.56rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  opacity: 0.85;
-}
-
-.dock-state-ready {
+.spine-entry.is-locked {
   color: var(--paper-dim);
 }
 
-@media (max-width: 860px) {
-  .desktop-dock.is-collapsed {
-  width: var(--dock-collapsed-width, 3rem);
-  min-width: 3rem;
+.spine-entry.is-locked:hover {
+  background: transparent;
+  color: var(--paper-dim);
+}
+
+.spine-index {
+  color: var(--attention);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  line-height: var(--leading-display);
+}
+
+.journey-spine.is-collapsed .spine-index {
+  font-size: 0.6rem;
+}
+
+.spine-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.05rem;
+}
+
+.spine-title {
   overflow: hidden;
+  color: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: var(--leading-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.desktop-dock.is-collapsed .dock-heading,
-.desktop-dock.is-collapsed .dock-heading-system,
-.desktop-dock.is-collapsed .dock-title,
-.desktop-dock.is-collapsed .dock-state,
-.desktop-dock.is-collapsed .dock-heading-note {
-  display: none;
+
+.spine-outcome {
+  overflow: hidden;
+  color: var(--paper-dim);
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: var(--leading-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.desktop-dock.is-collapsed .dock-app {
-  grid-template-columns: 2.6rem;
-  justify-content: center;
-  border-left: 0;
-  padding: var(--space-1);
+
+.spine-state {
+  color: var(--paper-dim);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
 }
-.desktop-dock.is-collapsed .dock-code {
-  font-size: 0.55rem;
-  opacity: 1;
-  color: var(--attention) !important;
+
+.spine-entry.is-current .spine-state {
+  color: var(--signal);
 }
-.desktop-dock {
-    flex-direction: row;
+
+.spine-system {
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--line-dark);
+}
+
+.spine-system .spine-heading-text {
+  display: block;
+  padding: var(--space-3) var(--space-4) var(--space-1);
+}
+
+.spine-entry.is-quiet .spine-index {
+  color: var(--paper-dim);
+}
+
+.spine-entry.is-danger:hover {
+  border-left-color: var(--error);
+  color: var(--error);
+}
+
+@media (max-width: 860px) {
+  .journey-spine,
+  .journey-spine.is-collapsed {
     width: 100%;
     min-width: 0;
     overflow-x: auto;
@@ -314,48 +362,42 @@ function startOver() {
     border-bottom: 1px solid var(--line-dark);
   }
 
-  .dock-heading,
-  .dock-state {
+  .spine-heading,
+  .spine-note,
+  .spine-state {
     display: none;
   }
 
-  .dock-apps,
-  .dock-apps-system {
+  .spine-steps {
+    display: flex;
     flex-direction: row;
-    padding: var(--space-1) var(--space-1);
-    border: 0;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
   }
 
-  .dock-app {
+  .journey-spine.is-collapsed .spine-entry {
     grid-template-columns: auto;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .spine-entry,
+  .journey-spine.is-collapsed .spine-entry {
     width: auto;
-    min-height: var(--space-6);
-    padding: var(--space-1) var(--space-2);
+    grid-template-columns: auto auto;
     border-left: 0;
     border-bottom: 2px solid transparent;
   }
 
-  .dock-app.is-active {
+  .spine-entry.is-current {
     border-bottom-color: var(--signal);
-    background: var(--signal);
   }
 
-  .dock-title {
-    font-size: var(--text-sm);
+  .spine-outcome {
+    display: none;
   }
-}
 
-
-@media (prefers-reduced-motion: reduce) {
-  .desktop-dock { transition: none !important; }
+  .spine-system {
+    display: none;
+  }
 }
 </style>
-
-
-
-
-
-
-
-
-

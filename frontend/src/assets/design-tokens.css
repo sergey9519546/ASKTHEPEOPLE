@@ -66,6 +66,38 @@
   --space-6: 2rem;
   --space-7: 3rem;
   --space-8: 4rem;
+  --space-9: 6rem;
+  --space-10: 8rem;
+
+  /* Control geometry. One scale for every interactive surface, so a 24px
+     target is a floor and never an accident of padding (WCAG 2.2 SC 2.5.8
+     Target Size, Minimum = 24x24 CSS px). --target-min is the number to
+     check against; the three heights are the sizes to actually use. */
+  --target-min: 1.5rem;
+  --control-h-sm: 1.75rem;
+  --control-h-md: 2.25rem;
+  --control-h-lg: 2.75rem;
+
+  /* Shell band geometry. The desktop stack is four bands - truth rail,
+     masthead, journey spine, panel switcher - sized here so the shell can be
+     reasoned about as a set rather than as four magic numbers scattered
+     across four components. */
+  --band-truth: 1.75rem;
+  --band-masthead: 3.25rem;
+  --band-spine: 15.5rem;
+  --band-spine-collapsed: 3.25rem;
+  --band-switcher: 2.5rem;
+
+  /* Signal red is a wayfinding edge, not a structural fill. One token keeps
+     the edge weight identical across the spine, panel headers, and the
+     masthead lockup instead of drifting per component. */
+  --edge-wayfinding: 3px;
+
+  /* Focus ring, one definition. Yellow is the reserved attention color and
+     the only ring color this palette allows. */
+  --focus-ring-color: var(--attention);
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
 
   /* Type scale. Body sits at 15px so dense workflow copy stays legible
      without the console feel; the hero is capped at 72px because the prior
@@ -79,6 +111,22 @@
   --text-2xl: 2rem;
   --text-3xl: clamp(2.25rem, 2.5vw, 3rem);
   --text-hero: clamp(3.5rem, 4vw, 4.5rem);
+
+  /* Leading scale. Line height was previously re-declared as a bare 1.2 /
+     1.45 / 1.5 / 1.65 in a dozen components, which is why dense panels and
+     long generated copy ended up visibly different densities at the same
+     measure. Display type needs tighter leading than body copy. */
+  --leading-display: 0.92;
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  /* Measure. Generated long-form copy (briefs, path write-ups, follow-up
+     answers) stops being readable past roughly 70 characters, and the shell
+     frequently has far more width than a paragraph should consume. */
+  --measure-prose: 68ch;
+  --measure-tight: 46ch;
 
   /* Motion. Three tiers: instant for focus/hover feedback, quick for
      controls, deliberate for panels and route transitions. */
@@ -250,7 +298,11 @@ button,
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.62rem 0.9rem;
+  /* Height comes from the control scale, not from padding arithmetic, so no
+     control can land under the WCAG 2.2 SC 2.5.8 minimum by accident. Padding
+     supplies the horizontal and vertical rhythm inside that height. */
+  min-height: var(--control-h-md);
+  padding: 0.45rem 0.9rem;
   border: 1px solid var(--line-dark);
   border-radius: 0;
   background: var(--ink-raised);
@@ -258,7 +310,7 @@ button,
   font-family: var(--font-sans);
   font-size: 0.8rem;
   font-weight: 650;
-  line-height: 1.2;
+  line-height: var(--leading-tight);
   /* Hover feedback belongs in the quick tier. At 240ms the press felt
      detached from the click. */
   transition:
@@ -277,7 +329,10 @@ button:hover,
 
 button:active,
 .btn:active {
-  transform: translateY(1px) scale(0.985);
+  /* Press feedback is a 1px settle, not a scale. Scaling text controls
+     resamples the label mid-press, which reads as a rendering fault and
+     makes small caps labels harder to parse at exactly the wrong moment. */
+  transform: translateY(1px);
 }
 
 button:disabled,
@@ -634,9 +689,10 @@ select:focus-visible {
 .panel-wrapper,
 .panel-container {
   overflow: hidden;
-  transition:
-    transform 280ms var(--ease-out),
-    opacity 280ms var(--ease-out) !important;
+  /* Opacity only. The previous transition animated panel position on the
+     scroll container itself, so every panel switch moved the thing the user
+     was trying to read. Panels no longer travel; they cross-fade. */
+  transition: opacity var(--duration-deliberate) var(--ease-out) !important;
 }
 
 .workbench-frame {
@@ -981,6 +1037,112 @@ select:focus-visible {
   }
 }
 
+/* ==========================================================================
+   Accessibility helpers
+   --------------------------------------------------------------------------
+   Small named affordances rather than per-component one-offs. Everything here
+   is additive; nothing in this block changes an existing selector unless the
+   component opts in by adding the class.
+   ========================================================================== */
+
+/* Expands a visually small control's hit area to the WCAG 2.2 SC 2.5.8 minimum
+   (24x24 CSS px) without changing what the user sees. Use on icon-only buttons,
+   the panel resize grip, and any close or menu affordance rendered under 24px. */
+.u-target {
+  position: relative;
+}
+
+.u-target::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--target-min));
+  height: max(100%, var(--target-min));
+  transform: translate(-50%, -50%);
+}
+
+/* Long-form generated copy: a readable measure plus the relaxed leading from
+   the token scale. Applied to briefs, path write-ups, and follow-up answers. */
+.u-prose {
+  max-width: var(--measure-prose);
+  line-height: var(--leading-relaxed);
+}
+
+/* A stack of sibling controls with one consistent gap. */
+.u-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Rows of siblings on one line that wrap instead of overflowing. */
+.u-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (prefers-contrast: more) {
+  /* The palette is built from four ink steps and a muted paper. At increased
+     contrast the muted tones stop carrying text, so text snaps to the two ends
+     of the ramp and structural lines thicken. Wayfinding red is unchanged: it
+     is already the most saturated token in the set. */
+  :root {
+    --paper-muted: #ded7ca;
+    --paper-dim: #b5b0a4;
+    --line-dark: #7b817d;
+    --ink-muted: #2b302d;
+  }
+
+  button,
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  textarea,
+  select,
+  .step-card,
+  .panel-wrapper,
+  .panel-container {
+    border-color: var(--line-strong);
+  }
+}
+
+@media (forced-colors: active) {
+  /* Windows High Contrast and forced-colors mode strips author backgrounds and
+     shadows, which is the right outcome for this palette: the ink fields and
+     the hard offset shadows were never load-bearing. What must survive is
+     structure and focus, so borders are reasserted. The film grain overlay is
+     dropped - a fixed full-viewport texture is pure noise in a mode where the
+     user has explicitly asked for none. */
+  body::after {
+    display: none;
+  }
+
+  button,
+  .btn,
+  input,
+  textarea,
+  select,
+  .step-card,
+  .panel-wrapper,
+  .panel-container,
+  .desktop-window {
+    border: 1px solid ButtonBorder;
+    forced-color-adjust: auto;
+  }
+
+  :focus-visible {
+    outline: 3px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .truth-rail-text strong {
+    color: Highlight;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -1021,11 +1183,6 @@ h3[id],
 #main-content {
   scroll-margin-top: 4rem;
 }
-
-
-/* Typography pairing: Archivo Narrow + Source Sans 3 (design decision applied) */
-@import ""@fontsource/archivo-narrow/latin.css"";
-@import ""@fontsource/source-sans-3/latin.css"";
 
 
 @media (max-width: 320px) { html { min-width: 20rem; font-size: 14px; } body { overflow-x: hidden; } .desktop-masthead { flex-direction: column; min-height: auto; } .masthead-lockup { min-width: 0; padding: 0.5rem; } .desktop-dock { width: 100% !important; flex-direction: row !important; } .step-card { padding: 0.75rem; } .stats-grid { grid-template-columns: 1fr; } }

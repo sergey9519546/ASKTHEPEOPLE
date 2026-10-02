@@ -117,7 +117,12 @@ describe("Step 5 Direction C interaction contracts", () => {
     expect(interactionView).toContain('const currentStatus = ref("processing")');
     expect(interactionView).toContain('error: "NEEDS ATTENTION"');
     expect(interactionView).toContain('aria-live="polite"');
-    expect(interactionView).toContain(':aria-pressed="viewMode === m"');
+    const viewHeader = readFileSync(
+      resolve("src/components/ViewHeader.vue"),
+      "utf8",
+    );
+    expect(viewHeader).toContain(':aria-pressed="activeMode === mode"');
+    expect(interactionView).toContain('@update:active-mode="viewMode = $event"');
     expect(interactionView).toContain('split: "Compare"');
     expect(interactionView).toContain('workbench: "Conversation"');
     expect(interactionView).toContain(':class="`mode-${viewMode}`"');

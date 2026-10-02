@@ -262,6 +262,7 @@ describe("Report shell and route recovery contracts", () => {
     const wrapper = shallowMount(ReportView, {
       global: {
         stubs: {
+          ViewHeader: false,
           GraphPanel: true,
           Step4Report: true,
         },
@@ -292,6 +293,7 @@ describe("Report shell and route recovery contracts", () => {
     const wrapper = shallowMount(ReportView, {
       global: {
         stubs: {
+          ViewHeader: false,
           GraphPanel: true,
           Step4Report: true,
         },

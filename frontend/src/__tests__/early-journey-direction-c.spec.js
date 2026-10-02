@@ -289,7 +289,12 @@ describe("early journey source contracts", () => {
     expect(graphPanel).toContain("Graph record · provenance unverified");
     expect(main).toContain('workbench: "Decision steps"');
     expect(run).toContain('workbench: "Run record"');
-    expect(run).toContain(':aria-pressed="viewMode === m"');
+    const viewHeader = readFileSync(
+      resolve("src/components/ViewHeader.vue"),
+      "utf8",
+    );
+    expect(viewHeader).toContain(':aria-pressed="activeMode === mode"');
+    expect(run).toContain('@update:active-mode="viewMode = $event"');
     expect(run).not.toContain("Routes unfolding");
     expect(run).not.toContain("animation: flash");
     expect(run).not.toContain('workbench: "Scenario paths"');

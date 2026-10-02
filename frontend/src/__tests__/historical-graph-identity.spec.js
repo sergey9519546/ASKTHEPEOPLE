@@ -47,6 +47,7 @@ const mountView = (component) => {
   const wrapper = shallowMount(component, {
     global: {
       stubs: {
+        ViewHeader: false,
         ForkRunControl: true,
         GraphPanel: true,
         Step2EnvSetup: true,

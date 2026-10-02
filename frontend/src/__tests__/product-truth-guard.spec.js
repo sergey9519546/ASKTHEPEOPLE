@@ -113,20 +113,17 @@ describe("frontend product-truth guard", () => {
         surface: "text",
         snippet: "Ask The People",
       })),
-      ...[
-        ["frontend/src/views/InteractionView.vue", "text", "ASK THE PEOPLE"],
-        ["frontend/src/views/MainView.vue", "text", "ASK THE PEOPLE"],
-        ["frontend/src/views/NotFoundView.vue", "text", "Ask The People · Route recovery"],
-        ["frontend/src/views/ReportView.vue", "text", "ASK THE PEOPLE"],
-        ["frontend/src/views/SimulationRunView.vue", "text", "ASK THE PEOPLE"],
-        ["frontend/src/views/SimulationView.vue", "text", "ASK THE PEOPLE"],
-        ["frontend/src/components/DesktopMasthead.vue", "text", "ASKTHEPEOPLE"],
-      ].map(([path, surface, snippet]) => ({
-        path,
+      // The route views and the desktop masthead used to appear here as seven
+      // separate naked-wordmark entries. They are gone: the shared ViewHeader
+      // replaced every per-view brand block with step identity, and the
+      // masthead lockup now carries the "Synthetic Decision Explorer"
+      // descriptor the product contract requires next to the wordmark.
+      {
+        path: "frontend/src/views/NotFoundView.vue",
         term: "product-name",
-        surface,
-        snippet,
-      })),
+        surface: "text",
+        snippet: "Ask The People · Route recovery",
+      },
       {
         path: "frontend/src/views/Home.vue",
         term: "product-name",
@@ -156,7 +153,25 @@ describe("frontend product-truth guard", () => {
       );
 
     expect(result.violations.filter((violation) => !isAcceptedDebt(violation))).toEqual([]);
-    expect(result.violations.filter(isAcceptedDebt)).toHaveLength(acceptedDebt.length);
+
+    // A ratchet only ratchets if it cannot rot. Every entry must still match a
+    // real violation, so fixing a source forces the matching entry to be
+    // deleted in the same commit instead of leaving stale debt on the books.
+    const stale = acceptedDebt.filter(
+      (accepted) =>
+        !result.violations.some(
+          (violation) =>
+            violation.path === accepted.path &&
+            violation.term === accepted.term &&
+            violation.surface === accepted.surface &&
+            violation.text.includes(accepted.snippet),
+        ),
+    );
+    expect(stale).toEqual([]);
+
+    // Eight entries cover nine violations: frontend/index.html carries the
+    // zero-human disclosure twice, in its description and its social copy.
+    expect(result.violations.filter(isAcceptedDebt)).toHaveLength(9);
   });
 
   it("keeps every primary route behind the permanent five-fact Truth Rail", () => {

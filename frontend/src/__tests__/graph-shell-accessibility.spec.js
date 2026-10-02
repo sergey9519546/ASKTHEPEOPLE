@@ -169,6 +169,7 @@ describe("report and follow-up shell accessibility contracts", () => {
     const wrapper = shallowMount(InteractionView, {
       global: {
         stubs: {
+          ViewHeader: false,
           GraphPanel: true,
           Step5Interaction: true,
         },
@@ -210,6 +211,7 @@ describe("report and follow-up shell accessibility contracts", () => {
     const interaction = shallowMount(InteractionView, {
       global: {
         stubs: {
+          ViewHeader: false,
           GraphPanel: true,
           Step5Interaction: true,
         },
@@ -246,6 +248,7 @@ describe("report and follow-up shell accessibility contracts", () => {
     const report = shallowMount(ReportView, {
       global: {
         stubs: {
+          ViewHeader: false,
           GraphPanel: true,
           Step4Report: true,
         },

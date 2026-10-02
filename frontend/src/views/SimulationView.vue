@@ -1,41 +1,15 @@
 <template>
   <div class="bauhaus-view-root">
-    <!-- HEADER -->
-    <header class="bauhaus-header">
-      <a class="header-left" href="/" aria-label="Ask The People / generated Decision Explorer — home">
-        <span class="brand-full">ASK THE PEOPLE</span>
-      </a>
-
-      <div class="header-center">
-        <div
-          class="view-mode-selector"
-          aria-label="View assumptions or inspect supporting material"
-        >
-          <button
-            v-for="m in ['workbench', 'graph', 'split']"
-            :key="m"
-            class="mode-btn"
-            :class="{ 'is-active': viewMode === m }"
-            type="button"
-            :aria-pressed="viewMode === m"
-            @click="viewMode = m"
-          >
-            {{ { graph: "Source map", split: "Compare", workbench: "Assumptions" }[m] }}
-          </button>
-        </div>
-      </div>
-
-      <div class="header-right">
-        <div class="step-indicator">
-          <span class="step-val">STEP 02/05</span>
-          <span class="step-label">Set assumptions</span>
-        </div>
-        <div class="status-box" :class="currentStatus">
-          <span class="status-dot"></span>
-          <span class="status-msg">{{ statusLabel }}</span>
-        </div>
-      </div>
-    </header>
+    <ViewHeader
+      :step="STEP"
+      :status="currentStatus"
+      :status-label="statusLabel"
+      :modes="MODES"
+      :active-mode="viewMode"
+      :mode-labels="MODE_LABELS"
+      mode-selector-label="View assumptions or inspect supporting material"
+      @update:active-mode="viewMode = $event"
+    />
 
     <div v-if="error" class="workspace-error" role="alert">
       <div>
@@ -45,9 +19,6 @@
       <button type="button" @click="loadSimulationData">Try again</button>
     </div>
 
-    <!-- CONTENT -->
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <h1 class="view-title">Set assumptions</h1>
     <main id="main-content" class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
@@ -92,17 +63,14 @@
       </div>
     </main>
 
-    <!-- FOOTER -->
-    <footer class="bauhaus-footer-mini">
-      <div class="f-block">generated scenarios · 0 human respondents</div>
-      <div class="f-block">Use outputs as hypotheses, not forecasts</div>
-    </footer>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import ViewHeader from "../components/ViewHeader.vue";
+import { appById } from "../composables/useDesktop.js";
 import { useWindowRoute } from "../composables/useWindowContext.js";
 import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import {
@@ -120,6 +88,16 @@ import {
 } from "../utils/recordedGraphIdentity";
 
 const router = useRouter();
+
+// Journey identity is read from the desktop store rather than typed in here, so
+// this header, the journey spine, and the panel switcher cannot drift apart.
+const STEP = appById("assumptions");
+const MODES = ["workbench", "graph", "split"];
+const MODE_LABELS = {
+  graph: "Source map",
+  split: "Compare",
+  workbench: "Assumptions",
+};
 const windowRoute = useWindowRoute();
 const { setContext } = useWorkspaceState();
 

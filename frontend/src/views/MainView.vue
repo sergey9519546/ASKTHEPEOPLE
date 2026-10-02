@@ -1,44 +1,23 @@
 <template>
   <div class="main-view">
-    <header class="app-header">
-      <a class="header-left brand-home" href="/" aria-label="ASK THE PEOPLE / generated Decision Explorer home">
-        <span class="brand">ASK THE PEOPLE</span>
-      </a>
+    <ViewHeader
+      :step="STEP"
+      :status="statusClass"
+      :status-label="statusText"
+      :modes="MODES"
+      :active-mode="viewMode"
+      :mode-labels="MODE_LABELS"
+      mode-selector-label="View decision steps or inspect supporting source material"
+      @update:active-mode="viewMode = $event"
+    />
 
-      <div class="header-center">
-        <div
-          class="view-switcher"
-          role="group"
-          aria-label="View decision steps or inspect supporting source material"
-        >
-          <button
-            v-for="mode in ['workbench', 'graph', 'split']"
-            :key="mode"
-            class="switch-btn"
-            :class="{ active: viewMode === mode }"
-            type="button"
-            :aria-pressed="viewMode === mode"
-            @click="viewMode = mode"
-          >
-            {{ { graph: "Source map", split: "Compare", workbench: "Decision steps" }[mode] }}
-          </button>
-        </div>
-      </div>
-
-      <div class="header-right">
-        <div class="workflow-step">
-          <span class="step-num">Step {{ currentStep }}/5</span>
-          <span class="step-name">{{ stepNames[currentStep - 1] }}</span>
-        </div>
-        <span class="status-indicator" :class="statusClass">
-          <span class="dot"></span>
-          {{ statusText }}
-        </span>
-      </div>
-    </header>
-
-    <nav ref="workflowPath" class="workflow-path" aria-label="Scenario workflow">
-      <a class="skip-link" href="#main-content">Skip to main content</a>
+    <!-- Two-level wayfinding. The journey spine in the shell answers "which
+         surface am I on"; this rail answers "which step inside this window",
+         because this one panel is a five-step workflow of its own. The permanent
+         disclosure is not restated here - the shell's Truth Rail already carries
+         it once for the whole workspace. -->
+    <nav ref="workflowPath" class="workflow-path" aria-label="Steps inside this workspace">
+      <p class="workflow-path-caption">Steps inside this workspace</p>
       <button
         v-for="(step, index) in stepNames"
         :key="step"
@@ -54,7 +33,6 @@
         <span>{{ String(index + 1).padStart(2, "0") }}</span>
         <strong>{{ step }}</strong>
       </button>
-      <p><strong>0 human respondents</strong> · generated scenarios, not a forecast</p>
     </nav>
     <label class="mobile-workflow-picker">
       <span>Workflow step</span>
@@ -86,7 +64,6 @@
     </div>
 
     <main id="main-content" class="content-area" :class="`view-${viewMode}`">
-      <h1 class="view-title">Decision explorer</h1>
       <section
         v-if="viewMode !== 'workbench'"
         class="panel-wrapper left"
@@ -175,6 +152,8 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import ViewHeader from "../components/ViewHeader.vue";
+import { appById } from "../composables/useDesktop.js";
 import { useWindowRoute } from "../composables/useWindowContext.js";
 import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import {
@@ -199,6 +178,17 @@ import { useStatusPresentation } from "../composables/useStatusPresentation.js";
 import { usePolling } from "../composables/usePolling.js";
 
 const router = useRouter();
+
+// Journey identity is read from the desktop store rather than typed in here, so
+// this header, the journey spine, and the panel switcher cannot drift apart.
+const STEP = appById("sources");
+const MODES = ["workbench", "graph", "split"];
+const MODE_LABELS = {
+  graph: "Source map",
+  split: "Compare",
+  workbench: "Decision steps",
+};
+
 const windowRoute = useWindowRoute();
 const { setContext } = useWorkspaceState();
 const { setPhase, WORKFLOW_PHASES } = useGuidedContext();

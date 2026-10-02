@@ -2,11 +2,16 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  DEFAULT_LAYOUT_MODE,
+  JOURNEY_TOTAL,
   activeKey,
   activeWindow,
   closeAllWindows,
   closeWindow,
+  cycleLayoutMode,
+  currentJourneyStep,
   focusWindow,
+  journeyState,
   launchRouteFor,
   layoutMode,
   minimizeWindow,
@@ -49,7 +54,7 @@ function installStorage() {
 
 function resetDesktop() {
   closeAllWindows();
-  layoutMode.value = "free";
+  layoutMode.value = DEFAULT_LAYOUT_MODE;
   clearState();
   storage.clear();
 }
@@ -104,15 +109,51 @@ describe("desktop window lifecycle", () => {
     expect(windows.value.find((w) => w.minimized)?.key).toBe("brief:r-1");
   });
 
-  it("toggles tiling across all windows", () => {
+  it("defaults to one panel at a time, because the journey is sequential", () => {
+    expect(DEFAULT_LAYOUT_MODE).toBe("focus");
+  });
+
+  it("toggles between a side-by-side pair and floating panels", () => {
     openApp("decision", { name: "Home" });
     openApp("brief", { name: "Report", params: { reportId: "r-1" } });
 
     tileWindows();
-    expect(layoutMode.value).toBe("tiled");
+    expect(layoutMode.value).toBe("split");
 
     tileWindows();
     expect(layoutMode.value).toBe("free");
+  });
+
+  it("cycles through every layout mode and returns to where it started", () => {
+    const start = layoutMode.value;
+    const seen = new Set([start]);
+    for (let i = 0; i < 3; i += 1) seen.add(cycleLayoutMode());
+    expect(seen.size).toBe(3);
+    expect(layoutMode.value).toBe(start);
+  });
+
+  it("restores a pre-redesign tiled session as a side-by-side pair", () => {
+    storage.setItem(
+      DESKTOP_KEY,
+      JSON.stringify({
+        activeKey: "decision",
+        layoutMode: "tiled",
+        windows: [
+          {
+            key: "decision",
+            appId: "decision",
+            minimized: false,
+            maximized: false,
+            params: {},
+            query: {},
+          },
+        ],
+      }),
+    );
+
+    restoreSession(true);
+
+    expect(layoutMode.value).toBe("split");
   });
 
   it("opens a route by its route name", () => {
@@ -158,6 +199,51 @@ describe("dock launch gating", () => {
       params: { simulationId: "s-4" },
       query: { maxRounds: "12" },
     });
+  });
+});
+
+describe("journey spine state", () => {
+  it("locks every step after the decision until its coordinate exists", () => {
+    openApp("decision", { name: "Home" });
+
+    const state = journeyState();
+    expect(state).toHaveLength(JOURNEY_TOTAL);
+    expect(state[0].status).toBe("current");
+    expect(state.slice(1).every((entry) => entry.status === "locked")).toBe(true);
+  });
+
+  it("does not offer a step whose predecessor has not been reached", () => {
+    openApp("decision", { name: "Home" });
+    // simulationId alone would make both "Set assumptions" and "Run scenarios"
+    // reachable if availability were read per-step instead of cumulatively.
+    setContext({ simulationId: "s-1" });
+
+    const state = journeyState();
+    expect(state.find((e) => e.id === "assumptions").status).toBe("locked");
+    expect(state.find((e) => e.id === "run").status).toBe("locked");
+  });
+
+  it("offers the next step once the workspace can reach it", () => {
+    openApp("decision", { name: "Home" });
+    setContext({ projectId: "p-1", simulationId: "s-1" });
+
+    openApp("assumptions", { name: "Simulation", params: { simulationId: "s-1" } });
+
+    const state = journeyState();
+    expect(state.find((e) => e.id === "assumptions").status).toBe("current");
+    expect(state.find((e) => e.id === "run").status).toBe("next");
+    expect(currentJourneyStep()).toBe(3);
+  });
+
+  it("keeps the step the user is looking at, not the furthest one reached", () => {
+    openApp("decision", { name: "Home" });
+    setContext({ projectId: "p-1", simulationId: "s-1" });
+    openApp("run", {
+      name: "SimulationRun",
+      params: { simulationId: "s-1" },
+    });
+
+    expect(currentJourneyStep()).toBe(4);
   });
 });
 

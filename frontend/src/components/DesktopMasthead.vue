@@ -1,234 +1,363 @@
 <template>
   <header class="desktop-masthead">
-    <a class="masthead-lockup" href="/" @click.prevent="goHome">
-      <span class="masthead-wordmark">ASKTHEPEOPLE</span>
-    </a>
-
     <a
-      class="masthead-context"
+      class="masthead-lockup"
       href="/"
-      :title="contextLabel || 'State a decision to begin'"
+      :aria-label="`ASKTHEPEOPLE, synthetic decision explorer. Go to the start.`"
       @click.prevent="goHome"
     >
-      <span class="context-label">Workspace</span>
-      <span class="context-value">
-        {{ contextLabel || "No decision open" }}
-      </span>
+      <span class="masthead-wordmark">ASKTHEPEOPLE</span>
+      <span class="masthead-descriptor">Synthetic Decision Explorer</span>
     </a>
 
-    <div class="masthead-right">
-      <span class="masthead-status">
-        <span class="status-mark" aria-hidden="true"></span>
-        GENERATED · NOT A FORECAST
+    <div class="masthead-context">
+      <span class="context-label">Workspace</span>
+      <span class="context-value">{{ contextLabel || "No decision open" }}</span>
+    </div>
+
+    <p class="masthead-position">
+      <span class="position-eyebrow">Step</span>
+      <span class="position-value">{{ position.step }}<span class="position-of">/{{ position.total }}</span></span>
+      <span class="position-name">{{ position.title }}</span>
+    </p>
+
+    <div class="masthead-actions">
+      <span class="masthead-truth">
+        <span class="truth-mark" aria-hidden="true"></span>
+        Generated output, not a forecast
       </span>
-      <time class="masthead-clock" :datetime="clockIso" aria-label="Local time">
-        {{ clockText }}
-      </time>
+
+      <button
+        v-if="nextStep"
+        class="masthead-next"
+        type="button"
+        :aria-label="`Continue to ${nextStep.title}, step ${nextStep.step} of ${DESKTOP_APPS.length}`"
+        @click="launchNext"
+      >
+        <span class="next-label">Next</span>
+        <span class="next-target">{{ nextStep.title }}</span>
+      </button>
+
       <button class="masthead-palette" type="button" @click="openPalette">
         <span>Commands</span>
-        <kbd>Ctrl K</kbd>
+        <kbd aria-hidden="true">Ctrl K</kbd>
       </button>
     </div>
   </header>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { openPalette } from "../composables/useCommandPalette.js";
 import { workspaceState } from "../composables/useWorkspaceState.js";
+import {
+  DESKTOP_APPS,
+  JOURNEY_TOTAL,
+  journeyState,
+  launchRouteFor,
+  openApp,
+} from "../composables/useDesktop.js";
 
+/**
+ * The masthead is the workspace's orientation band: what this workspace is,
+ * how far along the journey it is, and the single most likely next action.
+ *
+ * It previously carried a wall clock that re-rendered every 15 seconds. A clock
+ * has no bearing on any decision this product supports, and updating visible
+ * text on a timer is a live-region hazard for no benefit, so it is gone. That
+ * space now carries the step position and a resume affordance instead - the two
+ * things a person returning to a half-finished exploration actually needs.
+ */
 const router = useRouter();
-
-const now = ref(new Date());
-let clockTimer = null;
-
-const clockText = computed(() =>
-  now.value.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }),
-);
-
-const clockIso = computed(() => now.value.toISOString());
 
 const contextLabel = computed(() => {
   const state = workspaceState.value;
   const label = state.projectName || state.simulationRequirement || "";
   if (!label) return "";
-  return label.length > 64 ? `${label.slice(0, 61)}…` : label;
+  return label.length > 56 ? `${label.slice(0, 53)}…` : label;
 });
+
+const journey = computed(() => journeyState());
+
+const position = computed(() => {
+  const current = journey.value.find((entry) => entry.status === "current");
+  const fallback = current || journey.value[0];
+  return {
+    step: fallback.step,
+    total: JOURNEY_TOTAL,
+    title: fallback.title,
+  };
+});
+
+// The first step ahead of the user that is actually launchable. Absent when the
+// journey is locked at the current position - an offer to go somewhere you
+// cannot is worse than no offer.
+const nextStep = computed(
+  () => journey.value.find((entry) => entry.status === "next") || null,
+);
+
+function launchNext() {
+  const entry = nextStep.value;
+  if (!entry) return;
+  const route = launchRouteFor(entry.id);
+  if (!route) return;
+  openApp(entry.id, route);
+}
 
 function goHome() {
   router.push({ name: "Home" });
 }
 
-onMounted(() => {
-  now.value = new Date();
-  clockTimer = window.setInterval(() => {
-    now.value = new Date();
-  }, 15000);
-});
-
-onBeforeUnmount(() => {
-  if (clockTimer) window.clearInterval(clockTimer);
-});
+void DESKTOP_APPS;
 </script>
 
 <style scoped>
 .desktop-masthead {
   display: grid;
-  grid-template-columns: minmax(12rem, 0.7fr) minmax(18rem, 1fr) minmax(15rem, 0.9fr);
+  grid-template-columns: auto minmax(10rem, 1fr) auto auto;
   align-items: stretch;
-  min-height: 3.4rem;
+  min-height: var(--band-masthead);
   border-bottom: 1px solid var(--line-dark);
   background: var(--ink-deep);
 }
 
+/* The lockup is ink with a red wayfinding edge, not a red field: red is
+   reserved for action and position, so a brand block wearing it would compete
+   with both. The descriptor is part of the lockup, not optional decoration -
+   the product contract prohibits a naked wordmark. */
 .masthead-lockup {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 0.15rem;
-  min-width: 16rem;
-  padding: 0.5rem 1.1rem;
+  gap: 0.1rem;
+  padding: var(--space-2) var(--space-4);
   border: 0;
   border-right: 1px solid var(--line-dark);
+  border-left: var(--edge-wayfinding) solid var(--signal);
   border-radius: 0;
-  background: var(--signal);
-  color: var(--ink);
+  background: transparent;
+  color: var(--paper);
   text-align: left;
+  text-decoration: none;
 }
 
 .masthead-lockup:hover {
-  background: var(--signal-strong);
-  color: var(--ink);
+  background: var(--ink-raised);
+  color: var(--paper);
 }
 
 .masthead-wordmark {
   font-family: var(--font-display);
-  font-size: 1.15rem;
-  letter-spacing: 0.04em;
-  line-height: 1;
+  font-size: 1.05rem;
+  letter-spacing: 0.05em;
+  line-height: var(--leading-display);
 }
 
 .masthead-descriptor {
-  font-family: var(--font-mono);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  color: var(--paper-muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: var(--leading-tight);
+  text-transform: uppercase;
 }
 
 .masthead-context {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   justify-content: center;
-  gap: 0.1rem;
-  max-width: 26rem;
-  min-width: 12rem;
-  padding: 0.45rem 1.1rem;
-  border: 0;
-  border-right: 1px solid var(--line-dark);
-  border-radius: 0;
-  background: transparent;
-  color: var(--paper);
-  text-align: left;
-}
-
-.masthead-context:hover {
-  background: var(--ink-raised);
-  color: var(--paper);
+  min-width: 0;
+  padding: var(--space-2) var(--space-4);
 }
 
 .context-label {
   color: var(--paper-muted);
-  font-family: var(--font-display);
-  font-size: 0.66rem;
-  letter-spacing: 0.08em;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .context-value {
   overflow: hidden;
-  max-width: 100%;
-  font-size: 0.85rem;
+  color: var(--paper);
+  font-size: 0.82rem;
   font-weight: 600;
+  line-height: var(--leading-snug);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.masthead-right {
+/* Position is a numeral, so it keeps the display face and the attention
+   colour - the same signal the spine uses for the current step. */
+.masthead-position {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-left: 1px solid var(--line-dark);
+}
+
+.position-eyebrow {
+  color: var(--paper-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.position-value {
+  color: var(--attention);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  line-height: var(--leading-display);
+}
+
+.position-of {
+  color: var(--paper-muted);
+  font-size: 0.7rem;
+}
+
+.position-name {
+  max-width: 12rem;
+  overflow: hidden;
+  color: var(--paper);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: var(--leading-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.masthead-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-left: auto;
-  padding: 0.4rem 0.9rem;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-left: 1px solid var(--line-dark);
 }
 
-.masthead-status {
+/* The permanent five-fact disclosure lives in the Truth Rail directly above
+   this band. This is a short standing mark on the workspace band, not a
+   second copy of the disclosure. */
+.masthead-truth {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   color: var(--paper-muted);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.status-mark {
-  width: 0.5rem;
-  height: 0.5rem;
-  border: 1px solid var(--attention);
+.truth-mark {
+  width: 0.45rem;
+  height: 0.45rem;
   background: var(--attention);
 }
 
-.masthead-clock {
-  color: var(--paper);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  font-variant-numeric: tabular-nums;
+/* The single most likely next action, in signal red, at the right edge of the
+   workspace band. Red is spent here deliberately: it is the only persistent red
+   fill in the shell, which is why it reads as an instruction. */
+.masthead-next {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h-md);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--signal);
+  border-radius: 0;
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.masthead-next:hover {
+  border-color: var(--signal-strong);
+  background: var(--signal-strong);
+  color: var(--ink);
+}
+
+.next-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.next-target {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .masthead-palette {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.6rem;
+  gap: var(--space-2);
+  min-height: var(--control-h-md);
+  padding: var(--space-1) var(--space-3);
   border: 1px solid var(--line-dark);
   border-radius: 0;
   background: var(--ink-soft);
   color: var(--paper);
-  font-family: var(--font-display);
-  font-size: 0.74rem;
-  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .masthead-palette kbd {
-  padding: 0.1rem 0.35rem;
+  padding: 0.1rem var(--space-1);
   border: 1px solid var(--line-dark);
   background: var(--ink-deep);
   color: var(--paper-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 0.62rem;
   letter-spacing: 0.04em;
 }
 
-@media (max-width: 820px) {
-  .masthead-descriptor,
-  .masthead-context,
-  .masthead-status {
+@media (max-width: 1080px) {
+  .masthead-truth {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .desktop-masthead {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    flex-wrap: wrap;
+  }
+
+  .masthead-context {
     display: none;
   }
 
-  .masthead-lockup {
-    min-width: 0;
+  .masthead-position {
+    justify-content: flex-end;
+    border-left: 0;
+  }
+
+  .position-name {
+    display: none;
+  }
+
+  .next-target {
+    display: none;
+  }
+}
+
+@media (max-width: 620px) {
+  .masthead-descriptor {
+    display: none;
+  }
+
+  .masthead-palette span {
+    display: none;
   }
 }
 </style>
-
-

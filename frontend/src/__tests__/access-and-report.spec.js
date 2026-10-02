@@ -192,7 +192,15 @@ describe('report DTO normalization and safe rendering', () => {
   it('keeps the selected report mode exclusive and full-height on mobile', () => {
     const reportView = readFileSync(resolve('src/views/ReportView.vue'), 'utf8');
 
-    expect(reportView).toContain(':aria-pressed="viewMode === m"');
+    // The mode switcher is now one shared component, so the pressed-state
+    // contract is asserted where it is implemented and the view is asserted
+    // to actually wire it.
+    const viewHeader = readFileSync(
+      resolve('src/components/ViewHeader.vue'),
+      'utf8',
+    );
+    expect(viewHeader).toContain(':aria-pressed="activeMode === mode"');
+    expect(reportView).toContain('@update:active-mode="viewMode = $event"');
     expect(reportView).toContain('split: "Compare"');
     expect(reportView).toContain(':class="`mode-${viewMode}`"');
     expect(reportView).toContain(
@@ -200,7 +208,12 @@ describe('report DTO normalization and safe rendering', () => {
     );
     expect(reportView).toContain('display: none !important;');
     expect(reportView).toContain('height: calc(100dvh - 11rem) !important;');
-    expect(reportView).toContain('Review the run');
+    // The view's heading now comes from the desktop store's single journey
+    // definition, so it can no longer drift from the journey spine or the panel
+    // switcher. The view keeps its own scope note for the panel body.
+    expect(reportView).toContain('const STEP = appById("brief")');
+    expect(reportView).toContain('workbench: "Decision brief"');
+    expect(reportView).not.toContain('Review the run');
     expect(reportView).toContain(
       'Review findings, related records, and limits',
     );

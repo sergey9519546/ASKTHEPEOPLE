@@ -1,59 +1,60 @@
 <template>
   <section
-    v-show="!win.minimized"
+    v-if="visible"
     class="desktop-window"
-    :class="{
-      'is-active': isActive,
-      'is-maximized': win.maximized,
-      'is-tiled': tiled,
-    }"
+    :class="[
+      `layout-${mode}`,
+      { 'is-active': isActive, 'is-maximized': win.maximized },
+    ]"
     :style="windowStyle"
-    :aria-label="`${app.title} window`"
-    role="region"
+    :id="panelId"
+    role="tabpanel"
+    :aria-labelledby="tabId"
+    tabindex="0"
     @pointerdown="raise"
   >
-    <header class="window-titlebar" @pointerdown="startDrag">
+    <header class="window-titlebar">
       <div class="window-identity">
         <span class="window-code" aria-hidden="true">{{ app.code }}</span>
-        <h2 class="window-title">{{ app.title }}</h2>
+        <span :id="tabId" class="window-title">{{ app.title }}</span>
       </div>
+
+      <div class="window-position" v-if="mode === 'free'">
+        <button
+          class="window-control window-control-text"
+          type="button"
+          :aria-expanded="positionOpen"
+          aria-haspopup="menu"
+          :aria-label="`Placement options for ${app.title}`"
+          @click.stop="positionOpen = !positionOpen"
+          @keydown.down.prevent.stop="openPositionAndFocusFirst"
+        >
+          Placement
+        </button>
+        <div v-if="positionOpen" class="position-menu" role="menu">
+          <button
+            v-for="option in POSITION_OPTIONS"
+            :key="option.id"
+            class="position-option"
+            type="button"
+            role="menuitem"
+            @click.stop="applyPosition(option.id)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </div>
+
       <div class="window-controls">
         <button
+          class="window-control u-target"
           type="button"
-          class="window-control"
-          data-window-control
-          :aria-label="`Minimize ${app.title}`"
-          title="Minimize"
-          @click.stop="minimizeWindow(win.key)"
-        >
-          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 11h10" /></svg>
-        </button>
-        <button
-          type="button"
-          class="window-control"
-          data-window-control
-          :aria-label="win.maximized ? `Restore ${app.title}` : `Maximize ${app.title}`"
-          :title="win.maximized ? 'Restore' : 'Maximize'"
-          @click.stop="toggleMaximize(win.key)"
-        >
-          <svg v-if="win.maximized" viewBox="0 0 12 12" aria-hidden="true">
-            <path d="M3 3h6v6H3zM4 1h7v7" />
-          </svg>
-          <svg v-else viewBox="0 0 12 12" aria-hidden="true">
-            <path d="M1 1h10v10H1z" />
-          </svg>
-        </button>
-        <button
-          type="button"
-          class="window-control window-control-close"
           data-window-control
           :aria-label="`Close ${app.title}`"
-          title="Close"
+          title="Close panel"
           @click.stop="closeWindow(win.key)"
         >
-          <svg viewBox="0 0 12 12" aria-hidden="true">
-            <path d="M1 1l10 10M11 1L1 11" />
-          </svg>
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M1 1l10 10M11 1L1 11" /></svg>
         </button>
       </div>
     </header>
@@ -63,27 +64,69 @@
     </div>
 
     <div
-      v-if="!tiled && !locked && !win.maximized"
-      class="window-resize"
-      aria-hidden="true"
+      v-if="mode === 'free' && !win.maximized"
+      class="window-resize u-target"
+      role="separator"
+      :aria-label="`Resize ${app.title}. Use the arrow keys to change the size.`"
+      aria-orientation="horizontal"
+      tabindex="0"
       @pointerdown.prevent="startResize"
+      @keydown="onResizeKeydown"
     ></div>
   </section>
 </template>
 
 <script setup>
-import { computed, provide } from "vue";
-import { appById, activeKey, closeWindow, focusWindow, minimizeWindow, toggleMaximize, updateGeometry } from "../composables/useDesktop.js";
+import { computed, provide, ref } from "vue";
+import {
+  appById,
+  activeKey,
+  closeWindow,
+  focusWindow,
+  updateGeometry,
+} from "../composables/useDesktop.js";
 import { windowContextKey } from "../composables/useWindowContext.js";
 
 const props = defineProps({
   win: { type: Object, required: true },
-  tiled: { type: Boolean, default: false },
-  locked: { type: Boolean, default: false },
+  mode: { type: String, default: "focus" },
+  position: { type: Number, default: 0 },
 });
 
-const app = computed(() => appById(props.win.appId) || { title: "Workspace", code: "" });
+/**
+ * One open panel.
+ *
+ * Two things changed and both were defects rather than preferences.
+ *
+ * Geometry. The panel used to be an absolutely positioned floating window at a
+ * fixed size inside a viewport-height shell, which meant a long decision brief
+ * lived in a 48rem box with its own nested scrollbar, and the free layout's
+ * default was a cascading pile. Panels now participate in a deterministic
+ * layout: one at a time, or two side by side, or free-floating only when the
+ * user asks for it. Because most panels are no longer positioned by pointer at
+ * all, the dragging accessibility problem largely disappears rather than being
+ * patched.
+ *
+ * Roles. Panels are `tabpanel` and are labelled by the switcher tab that opens
+ * them. They were `region` with an `h2` that sat *before* the view's own `h1`,
+ * which inverted heading order in every window; the title is no longer a
+ * heading, so each view is the single owner of its heading structure.
+ */
+const app = computed(() => appById(props.win.appId) || { title: "Panel", code: "" });
 const isActive = computed(() => activeKey.value === props.win.key);
+const visible = computed(() => !props.win.minimized);
+
+const panelId = computed(() => `panel-body-${props.win.key}`);
+const tabId = computed(() => `panel-tab-${props.win.key}`);
+
+const positionOpen = ref(false);
+
+const POSITION_OPTIONS = [
+  { id: "fill", label: "Fill the workspace" },
+  { id: "centre", label: "Centre in the workspace" },
+  { id: "left", label: "Left half" },
+  { id: "right", label: "Right half" },
+];
 
 // Each window renders its view with an isolated route context so views that
 // read `useWindowRoute()` get their own decision/run params, never another
@@ -96,11 +139,12 @@ provide(windowContextKey, {
 
 const windowStyle = computed(() => {
   const win = props.win;
-  if (props.tiled || win.maximized) return {};
-  const width = Number.isFinite(win.w) && win.w ? `${win.w}px` : "min(72rem, calc(100% - 5rem))";
-  const height = Number.isFinite(win.h) && win.h ? `${win.h}px` : "min(48rem, calc(100% - 5rem))";
-  const left = Number.isFinite(win.x) ? `${win.x}px` : "3.5rem";
-  const top = Number.isFinite(win.y) ? `${win.y}px` : "3.5rem";
+  if (props.mode !== "free") return {};
+  if (win.maximized) return {};
+  const width = Number.isFinite(win.w) && win.w ? `${win.w}px` : "min(72rem, calc(100% - 3rem))";
+  const height = Number.isFinite(win.h) && win.h ? `${win.h}px` : "min(48rem, calc(100% - 3rem))";
+  const left = Number.isFinite(win.x) ? `${win.x}px` : "1.5rem";
+  const top = Number.isFinite(win.y) ? `${win.y}px` : "1.5rem";
   return { left, top, width, height, zIndex: win.z };
 });
 
@@ -108,32 +152,52 @@ function raise() {
   if (!isActive.value) focusWindow(props.win.key);
 }
 
-function startDrag(event) {
-  if (event.button !== 0) return;
-  if (event.target.closest("[data-window-control]")) return;
-  if (props.tiled || props.locked || props.win.maximized) return;
+function applyPosition(id) {
+  positionOpen.value = false;
+  if (id === "fill") {
+    updateGeometry(props.win.key, { x: 0, y: 0, w: null, h: null, maximized: true });
+    return;
+  }
+  if (id === "centre") {
+    updateGeometry(props.win.key, { x: 96, y: 64, w: null, h: null, maximized: false });
+    return;
+  }
+  updateGeometry(props.win.key, {
+    x: id === "left" ? 24 : 380,
+    y: 48,
+    w: 360,
+    h: null,
+    maximized: false,
+  });
+}
 
-  const originX = props.win.x ?? 56;
-  const originY = props.win.y ?? 56;
-  const startX = event.clientX;
-  const startY = event.clientY;
+function openPositionAndFocusFirst() {
+  positionOpen.value = true;
+}
 
-  const onMove = (moveEvent) => {
-    updateGeometry(props.win.key, {
-      x: Math.max(0, originX + moveEvent.clientX - startX),
-      y: Math.max(0, originY + moveEvent.clientY - startY),
-    });
-  };
-  const onUp = () => {
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-  };
-  window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
+/**
+ * Dragging Movements (WCAG 2.2 SC 2.5.7) requires a single-pointer, non-drag
+ * alternative - a modifier held while arrowing does not count, which is why the
+ * grip is a real focusable separator with its own arrow-key behaviour rather
+ * than a passive corner graphic.
+ */
+function onResizeKeydown(event) {
+  const step = event.shiftKey ? 48 : 16;
+  const win = props.win;
+  const currentW = Number.isFinite(win.w) && win.w ? win.w : 560;
+  const currentH = Number.isFinite(win.h) && win.h ? win.h : 360;
+  const next = {};
+  if (event.key === "ArrowRight") next.w = currentW + step;
+  else if (event.key === "ArrowLeft") next.w = Math.max(320, currentW - step);
+  else if (event.key === "ArrowDown") next.h = currentH + step;
+  else if (event.key === "ArrowUp") next.h = Math.max(240, currentH - step);
+  else return;
+  event.preventDefault();
+  updateGeometry(props.win.key, next);
 }
 
 function startResize(event) {
-  if (event.button !== 0 || props.locked) return;
+  if (event.button !== 0) return;
   const originW = props.win.w;
   const originH = props.win.h;
   const startX = event.clientX;
@@ -141,8 +205,8 @@ function startResize(event) {
 
   const onMove = (moveEvent) => {
     updateGeometry(props.win.key, {
-      w: Math.max(20, (originW || 560) + moveEvent.clientX - startX),
-      h: Math.max(12, (originH || 360) + moveEvent.clientY - startY),
+      w: Math.max(320, (originW || 560) + moveEvent.clientX - startX),
+      h: Math.max(240, (originH || 360) + moveEvent.clientY - startY),
     });
   };
   const onUp = () => {
@@ -156,81 +220,142 @@ function startResize(event) {
 
 <style scoped>
 .desktop-window {
-  position: absolute;
   display: flex;
   flex-direction: column;
-  min-width: 20rem;
-  border: 1px solid var(--line-dark);
+  min-width: 0;
+  min-height: 0;
   background: var(--ink);
-  box-shadow: var(--shadow-md);
   overflow: hidden;
-  transition: box-shadow var(--duration-quick) var(--ease-out);
 }
 
-.desktop-window.is-active {
+/* Focus layout: the panel is the whole workspace. No positioning, no nested
+   scroller fighting the shell's, and no floating chrome to occlude a focused
+   control (WCAG 2.2 SC 2.4.11 Focus Not Obscured, AA). */
+.layout-focus {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* Split layout: two panels share the width, both full height. */
+.layout-split {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  border: 0;
+  border-right: 1px solid var(--line-dark);
+  overflow: hidden;
+}
+
+.layout-free {
+  position: absolute;
+  border: 1px solid var(--line-dark);
+  box-shadow: var(--shadow-md);
+}
+
+.layout-free.is-active {
   border-color: var(--signal);
   box-shadow: 0.7rem 0.7rem 0 rgba(0, 0, 0, 0.62);
 }
 
-.desktop-window.is-maximized {
+.layout-free.is-maximized {
   inset: 0;
-  width: auto !important;
-  height: auto !important;
-}
-
-.desktop-window.is-tiled {
-  position: relative;
-  inset: auto;
-  left: auto !important;
-  top: auto !important;
-  width: auto !important;
-  height: auto !important;
+  width: auto;
+  height: auto;
+  border: 0;
+  box-shadow: none;
 }
 
 .window-titlebar {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  min-height: 2.5rem;
+  gap: var(--space-2);
+  min-height: var(--control-h-lg);
   border-bottom: 1px solid var(--line-dark);
-  background: var(--ink-deep);
-  cursor: default;
-  user-select: none;
-  touch-action: none;
+  background: var(--ink-raised);
+}
+
+.layout-focus .window-titlebar,
+.layout-split .window-titlebar {
+  border-left: var(--edge-wayfinding) solid transparent;
 }
 
 .desktop-window.is-active .window-titlebar {
-  background: var(--ink-raised);
   border-bottom-color: var(--signal);
+}
+
+.layout-focus.is-active .window-titlebar,
+.layout-split.is-active .window-titlebar {
+  border-left-color: var(--signal);
 }
 
 .window-identity {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
+  gap: var(--space-2);
   min-width: 0;
-  padding: 0.4rem 0.85rem;
+  padding: 0 var(--space-3);
 }
 
 .window-code {
   color: var(--attention);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
 }
 
 .window-title {
-  margin: 0;
   overflow: hidden;
   color: var(--paper);
-  font-family: var(--font-display);
-  font-size: 0.9rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
   text-overflow: ellipsis;
-  white-space: nowrap;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.window-position {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  margin-left: auto;
+}
+
+.position-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 2px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  min-width: 13rem;
+  border: 1px solid var(--line-strong);
+  background: var(--ink-deep);
+  box-shadow: var(--shadow-sm);
+}
+
+.position-option {
+  min-height: var(--control-h-md);
+  justify-content: flex-start;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--line-dark);
+  background: transparent;
+  color: var(--paper);
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.position-option:last-child {
+  border-bottom: 0;
+}
+
+.position-option:hover {
+  background: var(--ink-raised);
+  color: var(--paper);
 }
 
 .window-controls {
@@ -242,8 +367,9 @@ function startResize(event) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.9rem;
-  padding: 0;
+  width: var(--control-h-lg);
+  min-height: var(--control-h-lg);
+  padding: 0 var(--space-2);
   border: 0;
   border-left: 1px solid var(--line-dark);
   border-radius: 0;
@@ -251,22 +377,24 @@ function startResize(event) {
   color: var(--paper-muted);
 }
 
+.window-control-text {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
 .window-control svg {
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 0.85rem;
+  height: 0.85rem;
   fill: none;
   stroke: currentColor;
   stroke-width: 1.4;
 }
 
 .window-control:hover {
-  background: var(--ink-raised);
+  background: var(--ink-deep);
   color: var(--paper);
-}
-
-.window-control-close:hover {
-  background: var(--signal);
-  color: var(--ink);
 }
 
 .desktop-window-body {
@@ -295,8 +423,8 @@ function startResize(event) {
   bottom: 3px;
   width: 0.9rem;
   height: 0.9rem;
-  border-right: 1px solid var(--line-dark);
-  border-bottom: 1px solid var(--line-dark);
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
 }
 
 @media (prefers-reduced-motion: reduce) {

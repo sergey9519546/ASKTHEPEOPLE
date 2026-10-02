@@ -1,51 +1,16 @@
 <template>
   <div class="bauhaus-view-root">
-    <!-- HEADER -->
-    <header class="bauhaus-header">
-      <a
-        class="header-left"
-        href="/"
-        aria-label="Ask The People / generated Decision Explorer — home"
-      >
-        <span class="brand-monogram">ATP</span>
-        <span class="brand-full">ASK THE PEOPLE</span>
-      </a>
+    <ViewHeader
+      :step="STEP"
+      :status="currentStatus"
+      :status-label="statusLabel"
+      :modes="MODES"
+      :active-mode="viewMode"
+      :mode-labels="MODE_LABELS"
+      mode-selector-label="Choose source map, comparison, or decision-brief view"
+      @update:active-mode="viewMode = $event"
+    />
 
-      <div class="header-center">
-        <div
-          class="view-mode-selector"
-          role="group"
-          aria-label="Choose source map, comparison, or decision-brief view"
-        >
-          <button
-            v-for="m in ['graph', 'split', 'workbench']"
-            :key="m"
-            class="mode-btn"
-            type="button"
-            :class="{ 'is-active': viewMode === m }"
-            :aria-pressed="viewMode === m"
-            @click="viewMode = m"
-          >
-            {{ { graph: "Source map", split: "Compare", workbench: "Decision steps" }[m] }}
-          </button>
-        </div>
-      </div>
-
-      <div class="header-right">
-        <div class="step-indicator">
-          <span class="step-val">STEP 04/05</span>
-          <span class="step-label">Review the run</span>
-        </div>
-        <div class="status-box" :class="currentStatus" aria-live="polite">
-          <span class="status-dot"></span>
-          <span class="status-msg">{{ statusLabel }}</span>
-        </div>
-      </div>
-    </header>
-
-    <!-- CONTENT -->
-    <a class="skip-link" href="#main-content">Skip to main content</a>
-    <h1 class="view-title">Review the run</h1>
     <main id="main-content" class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
@@ -89,9 +54,9 @@
               <span aria-hidden="true">!</span>
               <div>
                 <p>Report needs attention</p>
-                <h1 id="report-shell-error-heading">
+                <h2 id="report-shell-error-heading">
                   This report could not be opened.
-                </h1>
+                </h2>
                 <p>{{ error }}</p>
                 <div>
                   <button
@@ -129,17 +94,14 @@
       </div>
     </main>
 
-    <!-- FOOTER -->
-    <footer class="bauhaus-footer-mini">
-      <div class="f-block">generated report · 0 human respondents</div>
-      <div class="f-block">Validate material decisions with people</div>
-    </footer>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
+import ViewHeader from "../components/ViewHeader.vue";
+import { appById } from "../composables/useDesktop.js";
 import { useWindowRoute } from "../composables/useWindowContext.js";
 import { useWorkspaceState } from "../composables/useWorkspaceState.js";
 import { getGraphData, getProject } from "../api/graph";
@@ -158,6 +120,17 @@ import {
 } from "../utils/recordedGraphIdentity";
 
 const router = useRouter();
+
+// Journey identity is read from the desktop store rather than typed in here, so
+// this header, the journey spine, and the panel switcher cannot drift apart.
+const STEP = appById("brief");
+const MODES = ["graph", "split", "workbench"];
+const MODE_LABELS = {
+  graph: "Source map",
+  split: "Compare",
+  workbench: "Decision brief",
+};
+
 const windowRoute = useWindowRoute();
 const { setContext } = useWorkspaceState();
 

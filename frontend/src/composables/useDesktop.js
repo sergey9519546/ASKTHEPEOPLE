@@ -8,11 +8,16 @@ import ReportView from "../views/ReportView.vue";
 import InteractionView from "../views/InteractionView.vue";
 
 /**
- * The journey is a launchable application suite, not a linear page stack.
- * Each "app" maps one step of the route grammar onto a window that hosts the
- * existing route view. The store owns window lifecycle (open / focus /
- * minimize / maximize / close / tile) and persists the desktop across
- * refreshes; the shell is responsible for syncing windows with the URL.
+ * The journey is a launchable suite of panels, not a page stack and not a
+ * window manager. Each entry maps one destination onto the route view that
+ * renders it; the store owns panel lifecycle (open / focus / minimize /
+ * maximize / close / layout) and persists the workspace across refreshes; the
+ * shell syncs panels with the URL.
+ *
+ * `step` is the journey position and `requires` is the workspace coordinate a
+ * step needs before it can be launched. Both live here, next to the title,
+ * because the journey spine and the availability messaging are two renderings
+ * of one list and must never disagree about what comes next.
  */
 
 const STORAGE_KEY = "atp_desktop_session_v1";
@@ -23,58 +28,90 @@ const CASCADE_ORIGIN = 56;
 export const DESKTOP_APPS = [
   {
     id: "decision",
+    step: 1,
     title: "State the decision",
     code: "D-01",
     group: "Journey",
     routeName: "Home",
     component: Home,
+    outcome: "One written decision to examine",
   },
   {
     id: "sources",
+    step: 2,
     title: "Map the sources",
     code: "SM-01",
     group: "Journey",
     routeName: "Process",
     param: "projectId",
     component: MainView,
+    requires: "projectId",
+    outcome: "Reviewed starting material",
   },
   {
     id: "assumptions",
+    step: 3,
     title: "Set assumptions",
     code: "A-01",
     group: "Journey",
     routeName: "Simulation",
     param: "simulationId",
     component: SimulationView,
+    requires: "simulationId",
+    outcome: "Named uncertainties and assumptions",
   },
   {
     id: "run",
+    step: 4,
     title: "Run scenarios",
     code: "P-01",
     group: "Journey",
     routeName: "SimulationRun",
     param: "simulationId",
     component: SimulationRunView,
+    requires: "simulationId",
+    outcome: "Equal-weight generated paths",
   },
   {
     id: "brief",
+    step: 5,
     title: "Decision brief",
     code: "DC-01",
     group: "Journey",
     routeName: "Report",
     param: "reportId",
     component: ReportView,
+    requires: "reportId",
+    outcome: "Findings, limits, and next steps",
   },
   {
     id: "followup",
+    step: 6,
     title: "Ask follow-ups",
     code: "VQ-01",
     group: "Journey",
     routeName: "Interaction",
     param: "reportId",
     component: InteractionView,
+    requires: "reportId",
+    outcome: "Questions to take to real people",
   },
 ];
+
+/**
+ * Layout modes, in the order the switcher offers them.
+ *
+ * `focus` is the default because this is a sequential journey: one panel at a
+ * time, full height and width, with the switcher flipping between open
+ * panels. `split` puts the active panel beside the most recently used other
+ * panel, which is the comparison case the source map exists for. `free` keeps
+ * the original draggable cascade for people who want two surfaces floating.
+ *
+ * `tiled` is retained as a persisted value so a session saved before this
+ * change still restores to something sensible; it now means `split`.
+ */
+export const LAYOUT_MODES = ["focus", "split", "free"];
+export const DEFAULT_LAYOUT_MODE = "focus";
 
 export const appById = (id) => DESKTOP_APPS.find((app) => app.id === id);
 export const appByRouteName = (name) =>
@@ -82,7 +119,7 @@ export const appByRouteName = (name) =>
 
 export const windows = ref([]);
 export const activeKey = ref(null);
-export const layoutMode = ref("free");
+export const layoutMode = ref(DEFAULT_LAYOUT_MODE);
 let zCounter = 10;
 let cascadeIndex = 0;
 let persisted = false;
@@ -174,7 +211,9 @@ export function restoreSession(force = false) {
       });
     }
     windows.value = restored.slice(0, MAX_WINDOWS);
-    layoutMode.value = parsed.layoutMode === "tiled" ? "tiled" : "free";
+    // "tiled" is the pre-redesign name for a side-by-side layout.
+    const savedLayout = parsed.layoutMode === "tiled" ? "split" : parsed.layoutMode;
+    layoutMode.value = LAYOUT_MODES.includes(savedLayout) ? savedLayout : DEFAULT_LAYOUT_MODE;
     const active = restored.find((window) => window.key === parsed.activeKey);
     activeKey.value = active ? active.key : restored[0]?.key || null;
     if (activeKey.value) {
@@ -273,16 +312,50 @@ export function toggleMaximize(key) {
   focusWindow(key);
 }
 
+/**
+ * Step through the layout modes. `tileWindows` is kept as the historical name
+ * because the command palette and the panel switcher both refer to a two-panel
+ * arrangement as "tiling"; internally that arrangement is `split`.
+ */
 export function tileWindows() {
   const visible = windows.value.filter((window) => !window.minimized);
   for (const win of visible) win.minimized = false;
-  layoutMode.value = layoutMode.value === "tiled" ? "free" : "tiled";
+  layoutMode.value = layoutMode.value === "split" ? "free" : "split";
   schedulePersist();
+}
+
+export function cycleLayoutMode() {
+  const index = LAYOUT_MODES.indexOf(layoutMode.value);
+  layoutMode.value = LAYOUT_MODES[(index + 1) % LAYOUT_MODES.length];
+  schedulePersist();
+  return layoutMode.value;
+}
+
+export function setLayoutMode(mode) {
+  if (!LAYOUT_MODES.includes(mode)) return layoutMode.value;
+  layoutMode.value = mode;
+  schedulePersist();
+  return layoutMode.value;
 }
 
 export function untileWindows() {
   layoutMode.value = "free";
   schedulePersist();
+}
+
+/**
+ * The panels a two-panel layout should show: the active one first, then the
+ * most recently focused other panel. Returning them in order lets the shell
+ * render a stable left/right pair instead of z-order accident.
+ */
+export function visiblePair() {
+  const open = windows.value.filter((window) => !window.minimized);
+  if (open.length <= 1) return open;
+  const active = open.find((window) => window.key === activeKey.value) || open[0];
+  const other = [...open]
+    .filter((window) => window.key !== active.key)
+    .sort((a, b) => b.z - a.z)[0];
+  return [active, other];
 }
 
 export function closeAllWindows() {
@@ -336,6 +409,66 @@ export function windowForApp(appId) {
   return windows.value.find((window) => window.appId === appId) || null;
 }
 
+/**
+ * One derivation of journey state, consumed by the spine, the masthead, and
+ * the switcher. Every surface that says "where am I" reads this, so the three
+ * can never tell three different stories about the same workspace.
+ *
+ * A step is `reached` once every step before it is reached, which is what the
+ * `requires` coordinate encodes. States:
+ *   - `done`     reached, and the workspace has moved past it
+ *   - `current`  the furthest step reached, or the open panel
+ *   - `next`     reached but not yet the furthest
+ *   - `locked`   a prerequisite coordinate is missing
+ */
+export function journeyState() {
+  const context = workspaceState.value;
+  const openSteps = DESKTOP_APPS.filter((app) => windowForApp(app.id)).map(
+    (app) => app.step,
+  );
+  const activeStep = activeWindow.value
+    ? (appById(activeWindow.value.appId)?.step ?? 0)
+    : 0;
+
+  // Reachability is cumulative: a step is launchable only if every step before
+  // it is launchable. Deriving each step's availability from its own
+  // coordinate alone would let "Run scenarios" appear while "Set assumptions"
+  // is still locked, because both read simulationId.
+  let reachable = true;
+  const entries = DESKTOP_APPS.map((app) => {
+    const hasCoordinate = !app.requires || Boolean(context[app.requires]);
+    const reached = reachable && hasCoordinate;
+    reachable = reached;
+    return { ...app, reached, open: openSteps.includes(app.step) };
+  });
+
+  const furthest = entries.reduce(
+    (acc, entry) => (entry.reached ? Math.max(acc, entry.step) : acc),
+    0,
+  );
+  const position = activeStep || (openSteps.length ? Math.min(...openSteps) : furthest) || 1;
+
+  return entries.map((entry) => {
+    let status = "locked";
+    if (entry.reached) {
+      if (entry.step === position) status = "current";
+      else if (entry.step < position) status = "done";
+      else status = "next";
+    }
+    return { ...entry, status, position };
+  });
+}
+
+export const JOURNEY_TOTAL = DESKTOP_APPS.length;
+
+/** "Step 3 of 6" for the surface the user is actually looking at. */
+export function currentJourneyStep() {
+  const state = journeyState();
+  const active = state.find((entry) => entry.status === "current");
+  if (active) return active.step;
+  return state.filter((entry) => entry.reached).length || 1;
+}
+
 export function useDesktop() {
   return {
     DESKTOP_APPS,
@@ -344,6 +477,8 @@ export function useDesktop() {
     activeWindow,
     activeRoute,
     layoutMode,
+    LAYOUT_MODES,
+    DEFAULT_LAYOUT_MODE,
     openApp,
     openRoute,
     focusWindow,
@@ -351,12 +486,18 @@ export function useDesktop() {
     minimizeWindow,
     toggleMaximize,
     tileWindows,
+    cycleLayoutMode,
+    setLayoutMode,
     untileWindows,
+    visiblePair,
     closeAllWindows,
     cycleWindow,
     updateGeometry,
     launchRouteFor,
     windowForApp,
+    journeyState,
+    currentJourneyStep,
+    JOURNEY_TOTAL,
     restoreSession,
     persistSession,
   };
