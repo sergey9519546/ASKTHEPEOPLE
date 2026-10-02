@@ -70,6 +70,7 @@ PLACEHOLDER_RE = re.compile(
     re.IGNORECASE,
 )
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(([^)]+)\)")
+HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 FOOTNOTE_REF_RE = re.compile(r"\[\^([^\]]+)\](?!:)")
 FOOTNOTE_DEF_RE = re.compile(r"^\[\^([^\]]+)\]:", re.MULTILINE)
 
@@ -132,6 +133,48 @@ def text_between(text: str, start_marker: str, end_marker: str) -> str:
 def normalized_prose(text: str) -> str:
     """Collapse Markdown wrapping so prose locks are line-ending agnostic."""
     return re.sub(r"\s+", " ", text).strip()
+
+
+def github_slug(heading: str) -> str:
+    """Approximate GitHub's heading-slug algorithm.
+
+    Lowercase, drop everything that is not a letter, digit, space or hyphen,
+    then replace each remaining space with a hyphen. Spaces are replaced
+    one-for-one and NOT collapsed: removing a punctuation character (for
+    example an em dash) leaves a double space, and GitHub turns that into a
+    double hyphen. Collapsing would make "P1 gaps — required" slug as
+    "...gaps-required" instead of GitHub's "...gaps--required".
+    """
+    text = re.sub(r"`([^`]*)`", r"\1", heading)
+    text = re.sub(r"\*\*([^*]*)\*\*", r"\1", text)
+    text = re.sub(r"\*([^*]*)\*", r"\1", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = text.strip().lower()
+    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
+    return text.replace(" ", "-")
+
+
+def _anchor_resolves(target: Path, fragment: str) -> bool:
+    """True if `fragment` matches a heading slug in `target`, or an explicit
+    HTML anchor id already present in the file."""
+    try:
+        text = target.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return True  # cannot read; do not manufacture an error
+    if re.search(rf'id\s*=\s*["\']{re.escape(fragment)}["\']', text):
+        return True
+    if not fragment.startswith("ll-"):
+        return any(github_slug(line) == fragment for line in HEADING_RE.findall(text))
+    # Explicit line anchors (`#Ll123`) come from highlighter widgets, not
+    # headings. Accept the conventional form even though it is not a heading.
+    return bool(re.fullmatch(r"ll-\d+", fragment))
+
+
+def _rel_to(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT.resolve())).replace("\\", "/")
+    except ValueError:
+        return str(path)
 
 
 def main() -> int:
@@ -215,23 +258,43 @@ def main() -> int:
             raw_target = match.group(1).strip()
             # Strip optional Markdown title: path "title".
             target = raw_target.split(" ", 1)[0].strip("<>")
-            if not target or target.startswith(("#", "https://", "http://", "mailto:")):
+            if not target or target.startswith(("https://", "http://", "mailto:")):
                 continue
-            target = unquote(target.split("#", 1)[0])
-            # Strip a `:line` or `:line-line` suffix (GitHub-style code
-            # references like `../../backend/app/foo.py:25-30`). URLs have
-            # already been filtered out above, so splitting on `:` is safe
-            # for relative paths here.
-            if ":" in target:
-                target = target.split(":", 1)[0]
-            resolved = (path.parent / target).resolve()
-            try:
-                resolved.relative_to(ROOT.resolve())
-            except ValueError:
-                fail(errors, f"relative link escapes package: {rel} -> {raw_target}")
-                continue
-            if not resolved.exists():
-                fail(errors, f"broken relative link: {rel} -> {raw_target}")
+            # Split the fragment BEFORE resolving the path, so an in-page
+            # anchor can be validated against the target file's headings.
+            target_path, _, fragment = target.partition("#")
+            # A bare "#anchor" links within the current document.
+            if not target_path:
+                anchor_target = path
+            else:
+                target_path = unquote(target_path)
+                # Strip a `:line` or `:line-line` suffix (GitHub-style code
+                # references like `../../backend/app/foo.py:25-30`). URLs have
+                # already been filtered out above, so splitting on `:` is safe
+                # for relative paths here.
+                if ":" in target_path:
+                    target_path = target_path.split(":", 1)[0]
+                resolved = (path.parent / target_path).resolve()
+                try:
+                    resolved.relative_to(ROOT.resolve())
+                except ValueError:
+                    fail(errors, f"relative link escapes package: {rel} -> {raw_target}")
+                    continue
+                if not resolved.exists():
+                    fail(errors, f"broken relative link: {rel} -> {raw_target}")
+                    continue
+                if resolved.is_dir():
+                    index_candidate = resolved / "README.md"
+                    if index_candidate.exists():
+                        resolved = index_candidate
+                anchor_target = resolved
+            if fragment and anchor_target.suffix == ".md" and anchor_target.exists():
+                if not _anchor_resolves(anchor_target, unquote(fragment)):
+                    fail(
+                        errors,
+                        f"broken anchor: {rel} -> {raw_target} "
+                        f"(no heading in {_rel_to(anchor_target)} matches #{fragment})",
+                    )
 
     # ADR numbers and index completeness.
     adr_files = sorted((DOCS / "architecture" / "adr").glob("ADR-*.md"))

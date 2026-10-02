@@ -13,6 +13,24 @@ note: "Forensic audit synthesis and implementation roadmap"
 # ASKTHEPEOPLE
 ## /GODMODE Product Audit, Research-Backed Build Plan, and Master Build Prompt
 
+> **Truth Rail string corrected 2026-10-01 (exec-plan T21).** This plan wrote
+> `ACTIONS + ANSWERS: SYNTHETIC` in two places (§36 Truth Rail and §PRODUCT
+> TRUTH CONTRACT) while writing `GENERATED` in a third (§13). The enforced
+> string is `GENERATED` — `REQUIRED_TRUTH_RAIL_FACTS` in
+> `tools/lint_frontend_truth.mjs:10-16`, asserted by
+> `frontend/src/__tests__/product-truth-guard.spec.js`. All three now agree.
+>
+> **Impact:** documentation only. No code, copy, or rendered surface changed;
+> neither block was ever the source of a rendered string. The direction is
+> toward the enforced contract, not away from it: this removes text instructing
+> the wrong literal and aligns the spec with the linter rather than the reverse.
+>
+> **Rollback:** revert the two blocks in this commit. Nothing else depends on
+> them.
+>
+> Do not "fix" the linter or the Truth Rail component to match `SYNTHETIC`; the
+> code is authoritative and a test asserts it.
+
 **Version:** 1.0  
 **Date:** July 29, 2026  
 **Status:** Supporting build synthesis; `docs/` is the normative authority  
@@ -320,7 +338,7 @@ The server—not only the prompt—must enforce this policy.
 Every primary workflow surface must expose the following facts in a persistent, non-dismissible Truth Rail:
 
 ```text
-ACTIONS + ANSWERS: SYNTHETIC
+ACTIONS + ANSWERS: GENERATED
 HUMAN RESPONDENTS: 0
 NOT A FORECAST
 SOURCES: STARTING CONDITIONS ONLY
@@ -1188,7 +1206,7 @@ The map is a controlled semantic system.
 Five rectangular cells separated by hard rules; 48–52 px high.
 
 ```text
-ACTIONS + ANSWERS: SYNTHETIC | HUMAN RESPONDENTS: 0 | NOT A FORECAST |
+ACTIONS + ANSWERS: GENERATED | HUMAN RESPONDENTS: 0 | NOT A FORECAST |
 SOURCES: STARTING CONDITIONS ONLY | HUMAN VALIDATION: OUTSIDE THIS RUN
 ```
 
@@ -3605,7 +3623,7 @@ Do not broaden v1 into a general-purpose market-research, polling, election, aud
 Every primary workflow screen must expose:
 
 ```text
-ACTIONS + ANSWERS: SYNTHETIC
+ACTIONS + ANSWERS: GENERATED
 HUMAN RESPONDENTS: 0
 NOT A FORECAST
 SOURCES: STARTING CONDITIONS ONLY

@@ -70,8 +70,18 @@ evidence, compatibility impact, migration sequence, rollback, and ownership.
 
 ## Project-specific implication (baseline `8b616dc7`)
 
-This ADR is the rollout order for the 6-gate refactor defined in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §13](../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#13-highest-value-implementation-order).
+This ADR is the rollout order for the 6-gate refactor. The gate *themes and
+owners* are recorded in
+[`docs/architecture/index.md` § Status of record](../index.md#status-of-record);
+the build plan's own gates are listed in
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §100](../ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#100-release-blockers).
+
+> **Correction (2026-10-01).** This ADR previously cited the build plan's
+> "§13" for the gate set. **That anchor was fabricated** — the build plan has no
+> implementation-order section, and its §13 is *Permanent truth statements*.
+> The build plan also defines no gate list at all. `tools/validate_docs.py` now
+> resolves `#fragment` against real headings, so this class of error fails CI
+> instead of shipping.
 
 > **Current gate status is not recorded here.** It lives in exactly one place:
 > [`docs/architecture/index.md` § Status of record](../index.md#status-of-record).

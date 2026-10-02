@@ -400,7 +400,7 @@ The deeper P1 finding — the single conflated `SimulationStatus` enum
 conflating preparation/execution/environment/report/task state — remains
 TARGET; resolving it needs the four independent state machines (gate 2). The
 full audit text is in
-[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §5 P1](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#5-release-blocking-findings).
+[`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §6 P1](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#6-p1-gaps--required-before-public-beta).
 
 ### Status of the target state machines
 
@@ -419,12 +419,19 @@ full audit text is in
 
 The doc's "Rules common to all state machines" require that **transitions
 occur through a domain command, never direct UI/database mutation**. The
-current code does not have a domain command surface. The audit's
-decomposition target
-([`ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §7](ASKTHEPEOPLE_GODMODE_BUILDPLAN.md#7-correct-target-architecture))
-names the application-command layer at
-`backend/app/application/commands/{create_simulation,prepare_simulation,start_run,stop_run,close_environment}.py`.
-None of these exists today. Tracked in
+current code does not have a domain command surface.
+`backend/app/application/` contains only `decision_workspace_service.py`; the
+five command modules named in an earlier revision of this document
+(`create_simulation`, `prepare_simulation`, `start_run`, `stop_run`,
+`close_environment`) **do not exist**.
+
+An earlier revision cited `ASKTHEPEOPLE_GODMODE_BUILDPLAN.md` §7 (anchor
+`#7-correct-target-architecture`) as the source of that decomposition. **That
+anchor was fabricated** — the build plan has no "correct target architecture"
+section, and its §7 is *P2 gaps*. `tools/validate_docs.py` now checks anchors,
+so it can no longer ship.
+The build plan does not define a Python application-command layer; §63 is a
+TypeScript greenfield reference. The target is tracked in
 [`docs/exec-plans/04-durable-orchestration-and-path-engine.md`](../exec-plans/04-durable-orchestration-and-path-engine.md).
 
 ### Optimistic concurrency — TARGET

@@ -608,7 +608,7 @@ response.headers["Link"] = f'</api/jobs/{task_id}>; rel="alternate"'
 - [ ] Production start fails when `DATABASE_URL` is unset *(intentional: unset DATABASE_URL means filesystem mode is valid today; full fail-closed is gate 3)*
 - [x] Production start fails when DB connection fails *(when DATABASE_URL is set + DEBUG=False)*
 - [x] Dev/test may fall back (logged warning)
-- [ ] Health check reports DB state accurately *(health check is a SELECT 1 liveness only; gate 3)*
+- [x] Health check reports DB state accurately *(re-verified 2026-10-02: the parenthetical "SELECT 1 liveness only" was stale. `backend/app/api/health.py:131-137` does still probe with `SELECT 1`, but the endpoint now runs database, Redis and Celery probes concurrently under a shared deadline (`backend/app/api/health.py:71-115`) and reports `degraded` on partial failure and `error` on total failure (`backend/app/api/health.py:206-210`). What `SELECT 1` cannot prove is *table* presence, so the schema-absence case remains open and is tracked as exec-plan T6, not here.)*
 
 ### Fix 4: Follower Counts
 - [x] No `random.randint` for `karma`, `follower_count`, `friend_count`, `statuses_count` *(only username suffix + jitter on real source-derived values remain)*

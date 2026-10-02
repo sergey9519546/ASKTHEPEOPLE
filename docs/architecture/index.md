@@ -683,6 +683,18 @@ open.
   **not** in the approved descriptor pattern (the approved form is
   `generated scenario *exploration*`). Extending the linter to visible text is
   a truth-gate change and needs the same review as above.
+- **The doc validator now checks link anchors (2026-10-01).** It previously
+  stripped `#fragment` and never resolved it, so two **fabricated** anchors
+  shipped and survived: `…BUILDPLAN.md#13-highest-value-implementation-order`
+  (§13 is *Permanent truth statements*) and
+  `…BUILDPLAN.md#7-correct-target-architecture` (§7 is *P2 gaps*). Neither
+  heading exists anywhere. `tools/validate_docs.py` now resolves a fragment
+  against the target file's headings using GitHub's slug rules and fails on a
+  mismatch, and it found four more on the first run — two in
+  `docs/architecture/adr/ADR-0011-incremental-modernization-over-rewrite.md`
+  and two in `docs/architecture/state-machines.md`. All are repointed to real
+  headings or de-linked with the fabrication recorded. It also accepts `#LlNNN`
+  highlighter anchors and explicit HTML `id=` targets.
 - **Step 1 progressive guidance** is live: `ProgressiveGuidance` and
   `ContextualHelp` are used in `frontend/src/components/Step1GraphBuild.vue`
   (5 and 2 references) with adaptive title copy.
