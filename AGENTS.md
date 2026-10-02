@@ -176,12 +176,12 @@ before quoting any of them.
 | `backend/app/__init__.py` | App factory, the global auth hook, CORS, security headers, error scrubbing |
 | `backend/app/utils/` | `safe_path.py`, `safe_url.py`, `llm_client.py`, `input_policy.py` — the security primitives |
 | `backend/app/celery_app.py` | Celery instance and the beat schedule |
-| `backend/tests/` | 123 test modules. **No custom pytest markers** — nothing is excluded from a default run |
+| `backend/tests/` | 118 test modules. **No custom pytest markers** — nothing is excluded from a default run |
 | `backend/migrations/versions/` | 3 revisions, linear, head `b2c3d4e5f6a7` |
 | `frontend/src/` | Vue 3 + Vite 7 + vue-router 4, **no Pinia** (module-level `reactive()` singletons), D3 |
 | `frontend/src/assets/design-tokens.css` | Brutal-Editorial token set. Contains a large deprecated-alias block kept for backward compatibility — see §5 rule 18 |
 | `frontend/src/components/` | Includes three dead files; see §9.2 |
-| `docs/` | The normative authority: 12 accepted ADRs, a validated validator, ~93 markdown files |
+| `docs/` | The normative authority: the accepted ADR set under `docs/architecture/adr/`, a validated validator, ~93 markdown files |
 | `tools/validate_docs.py` | The doc validator. **This is the real linter for this repo** |
 | `tools/lint_frontend_truth.mjs` | The frontend truth-contract linter |
 | `scripts/release/verify` | The single release verification entry point |
@@ -288,28 +288,50 @@ in it as history.
    complete.** Zero errors *and* zero warnings. Warnings are emitted for unused
    footnotes; they still fail the bar. CI blocks the PR otherwise.
 
-9. **Know which schema definition you are editing.** There are **two divergent
-    sources of database truth**, and no test compares them:
+9. **Know which schema definition you are editing.**
+    `backend/migrations/versions/` is the **single source of truth** — 3
+    revisions, 16 tables, head `b2c3d4e5f6a7`. `backend/app/db/schema.py`
+    declares **no tables at all**; it retains only `Base`, imported by
+    `backend/app/db/__init__.py` for `drop_db` (test cleanup, not on any runtime
+    path) and by `backend/migrations/env.py` as autogenerate's
+    `target_metadata`. This is
+    [ADR-0013](docs/architecture/adr/ADR-0013-schema-source-convergence.md),
+    implementing ADR-0012's rule that schema changes are Alembic-only.
 
-    | Path | Defines |
-    |---|---|
-    | `backend/migrations/versions/` (3 revisions, head `b2c3d4e5f6a7`) | 16 tables — the `dw_*` run/source/path aggregates, plus `graphs`, `ontologies`, `reports`, `projects`, `simulations`, `sources` |
-    | `backend/app/db/schema.py` | 6 tables — `organizations`, `projects`, `simulations`, `agent_profiles`, `attempts`, `observations` |
+    **Superseded 2026-10-02.** This rule previously described two divergent
+    sources and told you to decide which was canonical. That decision was made,
+    recorded, and enforced:
 
-    Only `projects` and `simulations` appear in both. **Alembic is not invoked by
-    any Dockerfile, compose service, or CI job** — `grep -rn alembic Dockerfile*
-    docker-compose.yml .github/workflows/` returns nothing. Instead `create_app`
-    calls `init_db` → `Base.metadata.create_all` at boot, which materializes
-    only the ORM's six tables.
+    - `backend/app/db/schema.py` was stripped to `Base`; its six stub classes
+      and ~198 columns of duplication were **removed rather than mirrored**.
+      They could never have become migrations anyway — their foreign keys point
+      at `projects.organization_id`, which the migration does not have.
+    - `create_app` no longer calls `init_db` → `Base.metadata.create_all`. It
+      imports `get_engine` only, opens a connection as a reachability probe
+      that still drives the fail-closed branch for an unreachable
+      `DATABASE_URL`, and issues no DDL. `init_db()` now **raises** rather than
+      being deleted, so a surviving caller fails loudly. Removing `create_all`
+      was safe precisely because it was harmful: it built a `projects` table
+      with no `project_id`, the column
+      `backend/app/services/project_repository.py:252` queries.
+    - A flag enabled against a reachable but never-migrated database now fails
+      with a named `CanonicalSchemaMissing` naming each missing table and the
+      remedy, not a driver-level `UndefinedTable`.
 
-    Consequences you must plan around: a schema change in one file does not
-    reach the other; a deployment that relies on `create_all` never gets the
-    `dw_*` aggregates; and `alembic upgrade head` against a `create_all` database
-    collides on the two shared tables. This is Gate 3 work under
-    `askthepeople-persistence-engineer` and belongs to exec-plan 08 fix 1 (dual
-    SQLAlchemy bases / Alembic), not to a feature change. **Do not "fix" it by
-    running `create_all` against production** — decide which definition is
-    canonical, record the decision, then converge.
+    **Still true, still your problem:**
+
+    - **Alembic is invoked by no Dockerfile, compose service, or CI job** —
+      `grep -rn alembic Dockerfile* docker-compose.yml .github/workflows/`
+      returns nothing. Schema creation is an explicit deploy step that no
+      automation performs yet. Gate 3 work.
+    - `dw_*` aggregates carry `organization_id`/`workspace_id` with **no
+      `organizations` table in any migration**, so those columns have no
+      foreign-key target. The tenant entity is undeclared. Inert while
+      multi-tenancy is deferred; tracked under ADR-0009.
+
+    **Do not** reintroduce table declarations in `schema.py`, and **do not**
+    restore `create_all` to make a deploy work. Adding a table means writing a
+    new Alembic revision.
 
 10. **Never edit build output or generated packaging.** `frontend/dist/`,
    `static/dist/` (an older second build, committed at the root), `*.db`,
@@ -543,14 +565,36 @@ Get-ChildItem frontend/src/components -Filter *.vue | Measure-Object
 Real, current, and not yet fixed. Do not "discover" them as if they were new; do
 not assume a document that says otherwise is right.
 
-- **Two divergent schema definitions, and no test compares them.**
-  `backend/migrations/versions/` defines 16 tables; `backend/app/db/schema.py`
-  defines 6. Only `projects` and `simulations` overlap. Alembic is not invoked by
-  any Dockerfile, compose service, or CI job — `create_app` runs
-  `Base.metadata.create_all` at boot instead, materializing only the ORM's six
-  tables. This is the largest unrecorded correctness risk in the repository, it
-  is invisible to `npm run verify`, and it is what exec-plan 08 fix 1 is for.
-  Read §5 rule 9 before touching either file.
+- ~~**Two divergent schema definitions, and no test compares them.**~~
+  **RESOLVED 2026-10-02** by
+  [ADR-0013](docs/architecture/adr/ADR-0013-schema-source-convergence.md).
+  The divergence was measured, then *removed* rather than reconciled:
+  `backend/app/db/schema.py` is stripped to `Base` alone with zero table
+  declarations, so there is no second source to drift. The two shared tables
+  had incompatible primary keys (`sa.Integer()` at
+  `backend/migrations/versions/384c98f88d53_initial_schema.py:25` versus
+  `Column(Uuid, ...)` in the ORM) and the four ORM-only tables had foreign keys
+  onto a column the migration does not have, so mirroring was never an option.
+  `create_app` no longer issues DDL. Four tests now pin all of it:
+  `backend/tests/test_schema_parity.py` (9), `test_startup_no_schema_creation.py`
+  (3), `test_canonical_store_schema_guard.py` (5), `test_no_phantom_imports.py`
+  (6). **Still open:** Alembic is invoked by no Dockerfile, compose service, or
+  CI job, so schema creation remains an explicit manual deploy step — Gate 3.
+  See §5 rule 9.
+- **A substantial, well-tested module may still be unreachable in production.
+  Verify reachability before you plan against any module.** A large file with
+  its own passing test suite and a clean export from an `__init__.py` can have
+  *no production importer at all*. Three cases measured in this repository:
+  `RunRepository` and `PathRepository` (`backend/app/services/`, ~525 lines
+  combined) are referenced only in docstrings; and
+  `DecisionLensRepository` is live and reachable, but is **filesystem-backed**
+  despite the name — it imports no engine and writes no SQL. The 30-task plan's
+  own first draft failed this check twice, and ADR-0013 records that the schema
+  divergence was a **trap, not active corruption**, precisely because both SQL
+  repositories were unreachable. Before treating a module as load-bearing,
+  grep its importers and note the runtime condition that gates them — several
+  live only behind a feature flag that defaults off
+  (`USE_SUPABASE_PERSISTENCE`, `config.py:321-322`).
 - ~~**`index.md` has ~12 stale citations into `backend/app/__init__.py`.**~~
   **Corrected on 2026-10-01.** At `b868477` the file was citing a version
   roughly 50-200 lines out of date: `create_app` at `:25` (real `:72`),

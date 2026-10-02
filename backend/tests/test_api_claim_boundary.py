@@ -4,10 +4,16 @@ import pytest
 
 from app import create_app
 from app.api import graph as graph_api
-from app.api import report as report_api
+from app.api.report_routes import (
+    report_evidence_routes,
+    report_log_routes,
+    report_read_routes,
+    report_tool_routes,
+)
 from app.api import simulation as simulation_api
 from app.api.routes import execution_routes, export_routes, prep_routes, read_routes
 from app.config import Config
+from app.models.project import ProjectManager
 from app.services.claim_boundary import (
     model_proposed_schema_disclosure,
     synthetic_output_disclosure,
@@ -197,16 +203,20 @@ def test_ontology_task_result_carries_schema_status(client, monkeypatch):
 
 def test_related_report_records_are_not_exposed_as_citations(client, monkeypatch):
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_evidence_routes.ReportManager,
         "get_report",
         lambda _report_id: SimpleNamespace(report_id="report_123"),
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_evidence_routes.ReportManager,
         "_get_report_folder",
         lambda _report_id: "unused",
     )
-    monkeypatch.setattr(report_api, "load_report_evidence", lambda _path: [])
+    monkeypatch.setattr(
+        report_evidence_routes,
+        "load_report_evidence",
+        lambda _path: [],
+    )
 
     response = client.get("/api/report/report_123/related-records")
 
@@ -247,12 +257,15 @@ def test_debug_search_keeps_legacy_facts_but_adds_canonical_records(
         }
     )
     monkeypatch.setattr(
-        report_api,
+        report_tool_routes,
         "ZepToolsService",
         lambda: SimpleNamespace(search_graph=lambda **_kwargs: result),
     )
     monkeypatch.setattr(
-        report_api.ProjectManager,
+        # Patched on the class, reached via its canonical module: the tool
+        # handler resolves the graph through resolve_project_graph and does not
+        # import ProjectManager itself, so report_tool_routes has no such name.
+        ProjectManager,
         "get_project",
         lambda project_id: SimpleNamespace(
             status="graph_completed",
@@ -554,29 +567,29 @@ def test_report_objects_and_standalone_sections_disclose_synthetic_origin(
 ):
     report = SimpleNamespace(
         report_id="report_123",
-        status=report_api.ReportStatus.COMPLETED,
+        status=report_read_routes.ReportStatus.COMPLETED,
         to_dict=lambda: {
             "report_id": "report_123",
             "markdown_content": "Generated claim text.",
         },
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_read_routes.ReportManager,
         "get_report",
         lambda _report_id: report,
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_read_routes.ReportManager,
         "get_report_by_simulation",
         lambda _simulation_id: report,
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_read_routes.ReportManager,
         "list_reports",
         lambda **_kwargs: [report],
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_read_routes.ReportManager,
         "get_generated_sections",
         lambda _report_id: [
             {"section_index": 1, "content": "Generated section claim."}
@@ -585,7 +598,7 @@ def test_report_objects_and_standalone_sections_disclose_synthetic_origin(
     section_path = tmp_path / "section_01.md"
     section_path.write_text("Generated section claim.", encoding="utf-8")
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_read_routes.ReportManager,
         "_get_section_path",
         lambda _report_id, _section_index: str(section_path),
     )
@@ -607,7 +620,7 @@ def test_report_log_surfaces_keep_the_synthetic_disclosure(
     monkeypatch,
 ):
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_log_routes.ReportManager,
         "get_agent_log",
         lambda _report_id, from_line=0: {
             "logs": [{"action": "llm_response", "content": "Generated text."}],
@@ -615,12 +628,12 @@ def test_report_log_surfaces_keep_the_synthetic_disclosure(
         },
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_log_routes.ReportManager,
         "get_agent_log_stream",
         lambda _report_id: [{"action": "llm_response"}],
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_log_routes.ReportManager,
         "get_console_log",
         lambda _report_id, from_line=0: {
             "logs": ["Generated report activity."],
@@ -628,7 +641,7 @@ def test_report_log_surfaces_keep_the_synthetic_disclosure(
         },
     )
     monkeypatch.setattr(
-        report_api.ReportManager,
+        report_log_routes.ReportManager,
         "get_console_log_stream",
         lambda _report_id: ["Generated report activity."],
     )

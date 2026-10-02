@@ -253,9 +253,10 @@ process, see the [release runbook](docs/release/RUNBOOK.md).
 
 **Start here:** the production documentation system is at
 [`docs/README.md`](docs/README.md). It is the normative authority for the
-product, methodology, security, privacy, and architecture. 12 ADRs; validated by
+product, methodology, security, privacy, and architecture. The ADR set is
+growing; validated by
 [`tools/validate_docs.py`](tools/validate_docs.py) — run it for the current
-document count rather than trusting a number quoted here.
+document and ADR count rather than trusting a number quoted here.
 
 For agents and CI, the operational contract is at
 [`AGENTS.md`](AGENTS.md).

@@ -240,8 +240,22 @@ Errors: 0
 RESULT: PASS
 ```
 
-Current measurement at `b868477` (2026-10-01, `npm run verify`): 93 markdown
-files, 39,281 lines, 186,202 words, 12 ADRs, 0 errors, 0 warnings, RESULT: PASS.
+### Validator output as recorded at the gate-0 baseline
+
+The block immediately above is a **historical snapshot** of
+`tools/validate_docs.py` output taken at the gate-0 baseline. It is retained as
+evidence of what that gate checked, not as a description of the tree today. The
+document set has grown since (the ADR count alone has moved), so do not read
+these figures as current and do not quote them forward.
+
+Run the validator for present-tense counts:
+
+```bash
+python tools/validate_docs.py
+```
+
+It prints the markdown-file count, the ADR count, line and word totals, and
+`RESULT: PASS`. The bar is `Errors: 0` **and** `Warnings: 0`.
 
 ## CI
 

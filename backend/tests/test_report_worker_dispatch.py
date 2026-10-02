@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app import create_app
-from app.api import report as report_api
+from app.api.report_routes import report_lifecycle_routes as report_api
 from app.config import Config
 from app.models.task import TaskIdempotencyConflict, TaskManager
 from app.services.report_agent import ReportConsoleLogger, ReportManager
@@ -550,9 +550,13 @@ def test_worker_import_failure_fails_created_task_and_releases_lease(
     import_rejected = []
 
     def reject_worker_import(name, globals=None, locals=None, fromlist=(), level=0):
+        # level 3: the handler does `from ...tasks.report_tasks import ...`.
+        # The route module sits at app/api/report_routes/, one package deeper
+        # than app/api/report.py did when this guard was written, so the
+        # relative level moved from 2 to 3.
         if (
             name == "tasks.report_tasks"
-            and level == 2
+            and level == 3
             and "generate_report_task" in fromlist
         ):
             import_rejected.append(True)

@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from app import create_app
-from app.api import report as report_api
+from app.api.report_routes import report_tool_routes as report_api
 from app.api.routes import entity_routes, prep_routes
 from app.config import Config
 from app.models.project import ProjectManager, ProjectStatus

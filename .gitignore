@@ -94,3 +94,7 @@ data/
 test_debug.py
 test_output.txt
 static/dist/
+
+# Local learning-course state (learn/<slug>/course-state.md). Machine-local
+# working state for the learn-everything skill, not project content.
+learn/

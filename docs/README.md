@@ -109,7 +109,9 @@ production observability are already implemented.
 
 All modular documents under this directory carry a
 **"Project-specific implementation status"** section grounded in the actual
-code at the baseline. The 12 ADRs are accepted. The validator at
+code at the baseline. Every ADR under `architecture/adr/` is accepted; the set
+is growing, so take the count from the validator rather than from this sentence.
+The validator at
 [`tools/validate_docs.py`](../tools/validate_docs.py) reports
 **PASS, 0 errors, 0 warnings**. The CI workflow at
 [`.github/workflows/docs.yml`](../.github/workflows/docs.yml) runs the
@@ -213,10 +215,11 @@ python tools/validate_docs.py
 #    push and PR that touches docs/ or the validator.
 #    .github/workflows/docs.yml
 
-# 3. The backend test suite must pass. The current measured baseline at
-#    b868477 is 9477 passed / 1 skipped / 1 xfailed with evals excluded
-#    (`npm run verify`); the 225-test figure once recorded in
-#    GATE_0_RELEASE_NOTES.md is long obsolete. Re-measure, never quote.
+# 3. The backend test suite must pass (`npm run verify`, evals excluded). Do
+#    not quote a test count from any document, including this one — the
+#    225-test and 9,477-test figures once recorded here and in
+#    GATE_0_RELEASE_NOTES.md were both correct only at the commit named beside
+#    them, and are long obsolete. Run the gate and read its own summary.
 cd backend && .\.venv\Scripts\pytest -q
 
 # 4. The Mavis specialist team is the operational contract for any

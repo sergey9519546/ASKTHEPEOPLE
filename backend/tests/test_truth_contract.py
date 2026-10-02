@@ -74,27 +74,52 @@ class TestAPIMetadataIntegration:
     """Test that API files import and use truth metadata"""
     
     def test_report_api_imports_truth_metadata(self):
-        """Verify report.py imports truth_metadata"""
-        api_path = os.path.join(
-            os.path.dirname(__file__),
-            "../app/api/report.py"
-        )
-        
-        with open(api_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        tree = ast.parse(content)
-        imports_truth_metadata = any(
-            isinstance(node, ast.ImportFrom)
-            and node.level == 2
-            and node.module == "utils.response"
-            and any(alias.name == "truth_metadata" for alias in node.names)
-            for node in ast.walk(tree)
-        )
+        """Verify every decomposed report route module imports truth_metadata.
 
-        assert imports_truth_metadata, "report.py does not import truth_metadata"
-        assert "**truth_metadata()" in content, \
-            "report.py does not use truth_metadata in responses"
+        Scoped to app/api/report_routes/ rather than app/api/report.py: exec-plan
+        T25 moved all 23 report handlers into that package, so report.py no
+        longer builds a single response and the guarantee now has to hold
+        across the modules that actually do. Checking only that *one* of them
+        imports it would let a module start answering without disclosure.
+        """
+        import glob
+
+        package_dir = os.path.join(
+            os.path.dirname(__file__),
+            "../app/api/report_routes",
+        )
+        modules = sorted(glob.glob(os.path.join(package_dir, "*_routes.py")))
+        assert modules, f"no report route modules found in {package_dir}"
+
+        importers, users = [], []
+        for module_path in modules:
+            with open(module_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            name = os.path.basename(module_path)
+            tree = ast.parse(content)
+            if any(
+                isinstance(node, ast.ImportFrom)
+                and node.level == 3
+                and node.module == "utils.response"
+                and any(alias.name == "truth_metadata" for alias in node.names)
+                for node in ast.walk(tree)
+            ):
+                importers.append(name)
+            if "**truth_metadata()" in content:
+                users.append(name)
+
+        # A module that emits truth metadata without importing it raises
+        # NameError on the first response instead of disclosing anything.
+        missing_import = [name for name in users if name not in importers]
+        assert not missing_import, (
+            f"{missing_import} use **truth_metadata() without importing it"
+        )
+        # And the guarantee must not be vacuous: pre-decomposition report.py
+        # both imported and used it, so at least one module must still do so.
+        assert users, (
+            "no decomposed report route module emits truth metadata; the "
+            "disclosure guarantee was lost in the T25 split"
+        )
     
     def test_simulation_api_entity_routes_return_truth_metadata(self):
         """The entity endpoints must attach truth metadata to their responses.

@@ -104,15 +104,17 @@ build exports.
 
 `simulation_bp` was the 3,526-line controller identified by the integration
 audit. The decomposition (ADR-0011) is complete: all simulation route
-handlers now live in `api/routes/`, and `simulation.py` is a 364-line helper
+handlers now live in `api/routes/`, and `simulation.py` is a 406-line helper
 module only — no route decorators remain in it. Line counts below were
-re-measured on 2026-10-01 at commit `b868477`; an earlier revision of this
+re-measured on 2026-10-02; an earlier revision of this
 table carried stale counts, including a 510-line figure for `simulation.py`
-that no longer matched the file. Re-measure before re-quoting.
+that no longer matched the file, and a later revision still carried 364. This
+class of drift is why §0 of `AGENTS.md` forbids quoting a number that was not
+produced by running the command. Re-measure before re-quoting.
 
 | Module | Route decorators | Lines | Holds |
 |---|---:|---:|---|
-| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 364 | shared helpers imported by `routes/` (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
+| [`api/simulation.py`](../../backend/app/api/simulation.py) | 0 | 406 | shared helpers imported by `routes/` (`_safe_sim_dir`, `_with_*_truth`, `_enrich_simulation_summary`, `_validate_prepare_controls`, `_check_simulation_prepared`) |
 | [`api/routes/read_routes.py`](../../backend/app/api/routes/read_routes.py) | 19 | 926 | list / history / profiles / config / observations / metrics / compare / status / actions / timeline / agent-stats / posts / comments / opinions |
 | [`api/routes/execution_routes.py`](../../backend/app/api/routes/execution_routes.py) | 10 | 891 | start / stop / status / inject / env / durable runtime controls |
 | [`api/routes/interview_routes.py`](../../backend/app/api/routes/interview_routes.py) | 8 | 501 | generated-response routes |
@@ -478,8 +480,19 @@ state persists across refresh and deep links resolve through the router.
 > can be checked rather than trusted. **Do not restate gate status in another
 > document.** If code changes, update this table.
 >
-> Verified 2026-10-01 against commit `b868477`. Line counts are from that
-> commit and go stale — re-measure before relying on them.
+> **Mixed baselines, declared.** This section is not measured at a single
+> commit and must not be read as if it were. Three kinds of statement appear
+> here, and each carries its own provenance:
+>
+> - **Gate and backlog claims** were reconciled against `b868477` on 2026-10-01.
+> - **Schema-convergence claims** were measured on 2026-10-02 and are recorded
+>   in [ADR-0013](adr/ADR-0013-schema-source-convergence.md).
+> - **Gate 4 observability** moved again in commit `6e71f39` and is described
+>   in its own subsection below with its own test citations.
+>
+> Line counts anywhere in this document were true at the commit named beside
+> them and go stale silently. Per `AGENTS.md` §0, re-measure before quoting: the
+> commands that produce each number are in `AGENTS.md` §9.1.
 
 There are **six** release gates and no seventh. An earlier roadmap in this
 directory listed a seventh; it was archived as
@@ -514,9 +527,9 @@ CORS refusal (`backend/app/config.py:117-121`, `backend/app/config.py:368-373`);
 5xx traceback scrubbing (`backend/app/__init__.py`). Remaining P0 coverage is
 specified in [`../security/THREAT_MODEL.md`](../security/THREAT_MODEL.md).
 
-**Gate 1.** `backend/app/api/simulation.py` is a **364-line** helper module
+**Gate 1.** `backend/app/api/simulation.py` is a **406-line** helper module
 that holds only shared helpers; it contains no request handler. Simulation
-handlers live in `backend/app/api/routes/` (10 route modules). Typed schemas and
+handlers live in `backend/app/api/routes/` (9 route modules). Typed schemas and
 the `app/application/` + `app/domain/` foundations are present —
 `backend/app/application/decision_workspace_service.py` and nine modules under
 `backend/app/domain/` (`run_attempt.py` 469 lines, `source_ingestion.py` 831
@@ -662,7 +675,10 @@ shows the divergence was a **trap, not active corruption**, because
 `RunRepository` and `PathRepository` have no production importer at all and
 both live repositories are behind flags that default off.
 
-**Gate 4 — PARTIAL (was NOT STARTED before 2026-10-02).**
+**Gate 4 — PARTIAL, re-scoped 2026-10-02.** Gate 4 previously had no
+implementation; before that date it had none, and the honest legend vocabulary
+for "approved but unbuilt" is `TARGET`. It is now PARTIAL because metrics
+exist and the remainder is open:
 `backend/app/utils/metrics.py` provides in-process request metrics, installed by
 `_register_metrics` in `backend/app/__init__.py` and exposed in Prometheus text
 format at `GET /health/metrics` (`backend/app/api/health.py`). It records
@@ -934,8 +950,9 @@ ADR.
 - [`state-machines.md`](state-machines.md) — the four independent state
   machines (preparation, execution, environment, report) and the four-state
   task envelope that wraps them.
-- [`adr/`](adr/README.md) — every accepted architecture decision. 12 ADRs
-  are accepted as of the baseline.
+- [`adr/`](adr/README.md) — every accepted architecture decision. The ADR set
+is growing; take the current count from `tools/validate_docs.py` rather than
+from a number quoted here.
 - [`../exec-plans/`](../exec-plans/README.md) — the implementation program
   in dependency order.
 - [`../release/ACCEPTANCE.md`](../release/ACCEPTANCE.md) — what every

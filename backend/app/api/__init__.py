@@ -54,3 +54,12 @@ from . import settings  # noqa: E402, F401
 from . import auth  # noqa: E402, F401
 from . import branching_routes  # noqa: E402, F401
 from . import routes  # noqa: E402, F401  # Decomposed simulation routes
+
+# Decomposed report routes (exec-plan T25, ADR-0011). Registration is explicit
+# rather than import-time decoration because Flask 3 forbids adding rules to a
+# blueprint that has already been registered on an app, and app/__init__.py
+# registers the blueprints. Called here, at package import, so it runs before
+# create_app() registers report_bp.
+from .report_routes import register_report_routes  # noqa: E402,F401
+
+register_report_routes(report_bp)
