@@ -7,7 +7,8 @@ import sys
 from pathlib import Path
 
 BLOCKED_REF = "block_legacy_railway_deploy"
-VERCEL_PATHS = [Path("vercel.json"), Path("frontend/vercel.json")]
+# The single static-frontend manifest; the duplicate frontend/ one was removed.
+VERCEL_PATHS = [Path("vercel.json")]
 
 
 def main() -> int:

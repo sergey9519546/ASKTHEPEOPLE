@@ -124,20 +124,33 @@ field of `entity_type_registry.json`.
 | Surface | Enforcement | Status |
 |---|---|---|
 | `frontend/src/**` visible copy **and** accessible labels | `tools/lint_frontend_truth.mjs`, imported by `product-truth-guard.spec.js` | **live** — runs on every `npm test` |
-| `docs/**`, root `README.md`, `INTEGRATION_GUIDE.md`, the build plan | the two grep steps at the end of `.github/workflows/docs.yml` | **live** |
+| `docs/**`, root `README.md` | the two grep steps in `.github/workflows/docs.yml`, plus `scripts/release/check-docs-gates.sh` as gate 2 of `npm run verify` | **live** since 2026-10-01 |
 | `backend/app/**` | nothing | **unenforced** — you are the linter |
 | `frontend/dist/**`, `static/dist/**` | nothing | build output; never edit, never cite as source |
 
-Two structural facts about that CI job that make it weaker than it looks:
+Three structural facts about that CI job, all corrected on 2026-10-01:
 
-- Its `SCAN_PATHS` and wordmark allowlist still name `docs/product/**`. **That
-  directory does not exist** — it was folded into ADR-0001 at `3f27ca7`. Those
-  entries are dead, and they were the main thing keeping the gates pointed at
-  the right files.
-- It is **path-filtered**. It runs only when `docs/**`,
-  `tools/validate_docs.py`, `.github/workflows/docs.yml`, `INTEGRATION_GUIDE.md`,
-  or the build plan change. **A frontend or backend change is not covered by the
-  docs gate at all.** Do not assume a doc gate will catch your commit.
+- **The two grep gates were silently inert and had never once fired.** Each used
+  a multi-line parenthesised ERE. GNU grep cannot compile that
+  (`Unmatched ( or \(`), and because both pipelines ended in `|| true` the error
+  was swallowed, the hit list came back empty, and the gates reported PASS
+  unconditionally. The wordmark gate had never caught a violation in the
+  repository's history. Both patterns are now single-line, and each gate asserts
+  its own patterns compile — grep exits 2 on a regex error and 1 on a clean
+  no-match, so testing "did it match?" would fail on a clean tree.
+- **The wordmark gate was also logically wrong.** It flagged *any* occurrence of
+  the wordmark, so a correctly branded line was a violation too, which is why it
+  needed an ever-growing allowlist. It now flags the wordmark only where an
+  approved descriptor does not accompany it, using the same five descriptors as
+  `tools/lint_frontend_truth.mjs`. Scope is the user-facing surfaces
+  (`README.md`, `docs/release/`, `docs/privacy/`) because an all-of-`docs/`
+  scope produced only internal-prose false positives. Current tree: zero
+  violations.
+- The dead `docs/product/**` `SCAN_PATHS` and allowlist entries are gone; the
+  truth contract is cited as ADR-0001, where that directory went. **The job is
+  still path-filtered**, but the filter now also covers `frontend/src/**`,
+  `backend/app/**`, `AGENTS.md` and `README.md`, so a frontend or backend change
+  no longer bypasses it entirely.
 
 ---
 
@@ -361,9 +374,10 @@ in it as history.
     rendering. Adding to it grows a debt you will have to unwind; consuming one
     is the actual fix.
 
-19. **Two `vercel.json` files exist and disagree** (root builds `frontend/dist`,
-    `frontend/vercel.json` builds `dist`). Fixing it is a real task; do not
-    create a third.
+19. **One `vercel.json` exists and is the single static-frontend manifest.**
+    The duplicate `frontend/vercel.json` was deleted on 2026-10-01 (root
+    builds `frontend/dist` via `npm --prefix frontend run build`, matching the
+    Dockerfile's build location). Do not create a second.
 
 ---
 
@@ -558,35 +572,47 @@ not assume a document that says otherwise is right.
 - **The build plan contradicts the code on the Truth Rail's first line.**
   It writes `ACTIONS + ANSWERS: SYNTHETIC` in three places; the enforced string
   is `GENERATED`. §2 gives the resolution.
-- **`docs/product/**` is gone but the CI job still references it.** The root
-  `README.md`'s seven dead links into that directory were repaired on
-  2026-10-01 (the truth contract now points at ADR-0001, and the appropriate-use
-  and validation-handoff links point at their archived originals), but
-  `.github/workflows/docs.yml`'s `SCAN_PATHS`/allowlist entries are still dead.
-  Those are the reason the wordmark and prohibited-language gates in `docs.yml`
-  are partly inert.
+- ~~**`docs/product/**` is gone but the CI job still references it.**~~ **The
+  root `README.md`'s seven dead links into that directory were repaired on
+  2026-10-01 (the truth contract now points at ADR-0001, and the
+  appropriate-use and validation-handoff links point at their archived
+  originals), and `.github/workflows/docs.yml`'s dead `SCAN_PATHS`/allowlist
+  entries were removed the same day — that removal was what made both grep gates
+  inert in the first place. All `docs/product/` references in the live workflow
+  are now explanatory comments, not live paths.
 - ~~**`docs/release/GATE_0_RELEASE_NOTES.md` still quotes the gate-0 snapshot**
   (`225 passed`, `Markdown files: 49`).~~ **Corrected on 2026-10-01.** It now
   labels that block a historical gate-0 snapshot, tells the reader to run the
   validator rather than quote its counts, and records the current measurement.
   `docs/README.md` and the root `README.md` were corrected the same way — none of
   them hardcode a document count any more.
-- **Three tracked Vue files are dead weight**: `Step1GraphBuildRefactored.vue`,
-  `EvidenceBadge.vue`, and `HistoryDatabase.vue` (the last removed from
-  `Home.vue` by the Direction C redesign). Delete them in a separate,
-  revertible commit — they are large enough that deleting them alongside a
-  feature change makes the review harder for no benefit.
+- ~~**Three tracked Vue files are dead weight**~~ **RESOLVED 2026-10-01**
+  (commit `74784b7`). `Step1GraphBuildRefactored.vue` (426 lines),
+  `EvidenceBadge.vue` (290), and `HistoryDatabase.vue` (1013) were deleted in
+  their own revertible commit. Nothing imported any of them, no route rendered
+  them, and the frontend suite passes without them (200 tests in 28 files). One
+  stale comment in `frontend/src/__tests__/branch-lineage.spec.js` still
+  described `HistoryDatabase.vue` as an existing alternative; corrected.
 - ~~**Exec plans 08 and 09 are not in the `docs/exec-plans/README.md` order
   table** and have no dependency narrative.~~ **Corrected on 2026-10-01.** All
   ten numbered plans are now in that table with a per-plan status, and root
   `README.md` no longer says "8 plans". Plans 08 and 09 still lack a dependency
   narrative — that half remains open.
-- **~2,900 lines of the backtest/optimization island have no production
-  importer**: `app/simulation/hybrid_simulator.py`, `app/optimization/*`,
-  `app/data/outcome_fetcher.py`, `app/models/baseline_library.py`, driven only
-  by `app/evals/first_backtest.py` — which is itself unimported.
-  `hybrid_simulator.py` still carries `TODO`s, and `baseline_library.py` raises
-  `NotImplementedError` by design (abstract base).
+- **2,652 lines across 6 files of the backtest/optimization island have no
+  production importer** (re-measured 2026-10-01; an earlier figure of "~2,900"
+  was wrong): `app/simulation/hybrid_simulator.py` (563),
+  `app/optimization/learning_loop.py` (474), `multi_objective_loss.py` (406),
+  `theta_optimizer.py` (456), `app/data/outcome_fetcher.py` (430),
+  `app/models/baseline_library.py` (323) — driven only by
+  `app/evals/first_backtest.py`, which is itself unimported.
+  `hybrid_simulator.py` still carries 5 `TODO`s, and `baseline_library.py`
+  raises `NotImplementedError` by design (abstract base). **All five artifacts
+  plus `backend/db/migrations/20260819_add_capability_registry.sql` carried an
+  "Authority: PREDICTIVE_SIMULATION_ROADMAP.md" line citing a document that was
+  archived as superseded on 2026-10-01.** That roadmap's objective is to fit
+  simulated output to observed real-world behaviour, which ADR-0001 forbids.
+  Each now carries a DO-NOT-WIRE warning. Do not wire them without a new
+  accepted ADR superseding ADR-0001.
 - **`constraint_engine`, `game_theory`, and `calibration_metrics` have no
   production importer** and are blocked on inputs the product does not have.
   Analysis in `docs/architecture/NEXT_STEPS_ROADMAP.md`, Phase 2.

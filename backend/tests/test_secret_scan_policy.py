@@ -157,8 +157,11 @@ def test_unsupported_split_platform_manifests_fail_closed() -> None:
 
     assert all(blocker in line for line in procfile.splitlines() if ":" in line)
     assert "services: []" in render
+    # The root manifest is the single static-frontend Vercel definition; the
+    # duplicate frontend/ one was removed (2026-10-01) — root builds
+    # frontend/dist via `npm --prefix frontend run build`, matching the
+    # Dockerfile's build location.
     assert {path.relative_to(REPO_ROOT).as_posix() for path in vercel_manifests} == {
-        "frontend/vercel.json",
         "vercel.json",
     }
     for manifest in vercel_manifests:
