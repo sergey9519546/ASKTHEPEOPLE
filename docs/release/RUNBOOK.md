@@ -882,9 +882,12 @@ read-only shadow mode. It does not make legacy product routes multi-tenant.
 
 ### Source, run, path, and brief admission
 
-- Source ingestion remains disabled unless the complete TXT-only quarantine,
-  scan, strict parse, review, deletion, RLS, object-store, and worker-isolation
-  evidence exists. `FAILED` operational states and `REJECTED` policy states
+- Source ingestion remains disabled unless the complete quarantine, scan,
+  strict parse, review, deletion, RLS, object-store, and worker-isolation
+  evidence exists for every configured format (the extraction layer supports
+  txt/md/markdown/pdf/docx/xlsx; format eligibility is configured per deploy,
+  and the master flag stays off until each enabled format's pipeline evidence
+  exists). `FAILED` operational states and `REJECTED` policy states
   are never interchanged. Deletion continues from every non-deleted source
   state during rollback.
 - Durable run creation remains disabled until organization/workspace
