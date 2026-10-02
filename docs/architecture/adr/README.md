@@ -43,3 +43,4 @@ ADR in the same pull request.
 | [0011](ADR-0011-incremental-modernization-over-rewrite.md) | Incremental modernization over framework rewrite | Accepted |
 | [0012](ADR-0012-canonical-transactional-and-object-persistence.md) | Canonical transactional and object persistence | Accepted |
 | [0013](ADR-0013-schema-source-convergence.md) | Schema source convergence (migrations canonical) | Accepted |
+| [0014](ADR-0014-removal-of-optimization-backtest-island.md) | Removal of the unreachable optimization and backtest island | Accepted |

@@ -52,14 +52,11 @@ FRONTEND_LINTER = REPO_ROOT / "tools" / "lint_frontend_truth.mjs"
 
 # Files whose every match was reviewed on 2026-10-02. Value = the reason.
 ALLOWED_FILES: dict[str, str] = {
-    # 1. Dead theta-optimization island, already DO-NOT-WIRE'd.
-    "app/optimization/learning_loop.py": "dead island: self-calibrating forecast loop",
-    "app/optimization/multi_objective_loss.py": "dead island: scores simulation against real outcomes",
-    "app/optimization/theta_optimizer.py": "dead island: parameter search fitted to real outcomes",
-    "app/models/baseline_library.py": "dead island: abstract baselines, NotImplementedError by design",
-    "app/data/outcome_fetcher.py": "dead island: fetches real-world outcomes to score against",
-    "app/evals/first_backtest.py": "dead island: unimported backtest driver",
-    "app/simulation/hybrid_simulator.py": "dead island: real observed state in, predictive distribution out",
+    # 1. Dead theta-optimization island, already DO-NOT-WIRE'd — the island
+    # was deleted in its entirety by ADR-0014 on 2026-10-02 (learning_loop,
+    # multi_objective_loss, theta_optimizer, baseline_library,
+    # outcome_fetcher, first_backtest, hybrid_simulator). The 61 hits it
+    # produced no longer exist, so the allowance has nothing to allow.
     "app/services/calibration_metrics.py": "dead island: Brier/ECE scoring; publishing these would assert calibration",
     "app/services/constraint_engine.py": "dead island: no production importer",
     "app/services/game_theory.py": "dead island: Nash-equilibrium maths; no production importer",

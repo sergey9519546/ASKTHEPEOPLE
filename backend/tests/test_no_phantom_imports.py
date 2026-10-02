@@ -1,17 +1,14 @@
 """No module may import a module that does not exist (exec-plan hygiene).
 
 This bug class had no detection at the time it was found. Two instances were
-located by hand while working on the schema divergence:
-
-* `backend/scripts/migrate_json_to_postgres.py:37-39` imports
-  `app.db.database` and `app.db.models.project`. Neither module exists — the
-  file's own docstring at line 6 says so, then the imports proceed anyway.
-* `backend/app/optimization/learning_loop.py:26` imports from `app.db.models`,
-  which also does not exist. `backend/migrations/env.py:14` records that the
-  same package "never existed".
-
-Both fail at import time with a bare `ModuleNotFoundError`, far from the cause,
-and both are silent until something executes the path.
+located by hand while working on the schema divergence —
+`backend/scripts/migrate_json_to_postgres.py` imported `app.db.database`, and
+`backend/app/optimization/learning_loop.py` imported `app.db.models`; neither
+target ever existed, and both would fail with a bare `ModuleNotFoundError` far
+from the cause if executed. Both files were deleted in ADR-0014 (the second
+was part of the dead theta-optimization island and carried a DO-NOT-WIRE
+warning citing an archived roadmap), so the allowance map below is empty and
+is kept in place to guard the pattern, not to grandfather anyone.
 
 The check is **static**: it parses each file's AST and resolves every absolute
 `app.*` import against the filesystem. Importing every module for real would
@@ -34,19 +31,11 @@ APP_PACKAGE = BACKEND_ROOT / "app"
 
 # Files allowed to import a module that does not exist, with the reason.
 #
-# The optimization island is dead code (each module carries a DO-NOT-WIRE
-# warning citing a roadmap archived as superseded on 2026-10-01). It is
-# tolerated rather than excluded from the scan, so that if the island is ever
-# deleted or repaired this allowance becomes stale and says so.
-KNOWN_UNRESOLVED: dict[str, str] = {
-    "backend/app/optimization/learning_loop.py": (
-        "dead DO-NOT-WIRE island; cites the archived predictive roadmap"
-    ),
-    "backend/scripts/migrate_json_to_postgres.py": (
-        "already-broken one-shot migration script; its own docstring "
-        "records that app.db.database and app.db.models do not exist"
-    ),
-}
+# Empty since ADR-0014: both predecessors of this map (the broken one-shot
+# migration script and the dead optimization island) were deleted rather than
+# allowed indefinitely. The map stays so the mechanism remains visible and so
+# the staleness guard below has something to iterate.
+KNOWN_UNRESOLVED: dict[str, str] = {}
 
 
 def _module_exists(dotted: str) -> bool:
@@ -121,24 +110,6 @@ def test_no_module_imports_a_module_that_does_not_exist():
         "module(s) import a target that does not exist; each fails with a bare "
         "ModuleNotFoundError far from the cause:\n" + "\n".join(problems)
     )
-
-
-def test_the_two_known_broken_imports_are_still_broken():
-    """The allowance is not decorative. If these were repaired, the guard
-    should notice and the entry should be removed rather than the file
-    continuing to be skipped."""
-    expected = {
-        "backend/app/optimization/learning_loop.py": "app.db.models",
-        "backend/scripts/migrate_json_to_postgres.py": "app.db.database",
-    }
-    for rel, dotted in expected.items():
-        path = REPO_ROOT / rel
-        assert not _module_exists(dotted), (
-            f"{dotted} now exists; the known-broken record is stale"
-        )
-        assert dotted in _absolute_imports(path), (
-            f"{rel} no longer imports {dotted}; remove it from KNOWN_UNRESOLVED"
-        )
 
 
 def test_known_unresolved_allowlist_is_not_stale():
