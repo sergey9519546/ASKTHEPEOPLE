@@ -24,16 +24,14 @@ Consequences that are asserted rather than assumed:
   decorator reads ``request.get_json(silent=True) or {}`` and can only ever
   validate an empty dict: it would add a code path that never fires.
 
-Two pre-existing defects in the file were recorded here as
-``xfail(strict=False)``. One has since been fixed: a malformed scalar used to
-become a 500 on ``/opinions`` and its ``/generated-interactions`` alias, leaking
-the Python exception text into the response body. ``read_routes.py`` now guards
-``int()`` the way ``/posts`` and ``/comments`` already did, and that case is a
-live assertion below. The other remains open: a malformed scalar silently
-becomes a default on ``/history``, ``/actions``, and ``/timeline``, because
-``request.args.get(..., type=int)`` swallows the parse error. That is the
-query-string counterpart of the coercion ``strict=True`` blocks on a body, and
-it is documented in ``app/api/schemas_read.py``.
+Both pre-existing defects in this file have since been fixed. A malformed
+scalar used to become a 500 on ``/opinions`` and its ``/generated-interactions``
+alias, leaking the Python exception text into the response body; ``read_routes``
+now guards ``int()`` the way ``/posts`` and ``/comments`` already did. It also
+used to be silently defaulted on ``/history``, ``/actions`` and ``/timeline``,
+because ``request.args.get(..., type=int)`` swallows the parse error -- the
+query-string counterpart of the coercion ``strict=True`` blocks on a body. Both
+are now live assertions below rather than ``xfail`` markers.
 """
 
 import ast
@@ -251,16 +249,20 @@ def test_compare_missing_parameters_keeps_its_400(client):
     assert "detail" not in body and "instance" not in body
 
 
-@pytest.mark.xfail(strict=False, reason="pre-existing: request.args.get(type=int) "
-                                       "silently substitutes the default")
 @pytest.mark.parametrize("path,param", SILENT_DEFAULT_ON_BAD_SCALAR)
 def test_malformed_scalar_is_rejected_not_defaulted(client, path, param):
-    """A malformed integer should be refused, not silently become the default.
+    """A malformed integer must be refused, not silently become the default.
 
-    ``/posts`` and ``/comments`` already answer 422 here. These three routes use
-    ``request.args.get(..., type=int)``, which yields the default when the value
-    will not parse, so a client typo is indistinguishable from an absent
-    parameter.
+    ``/posts`` and ``/comments`` already answered 422 here; ``/history``,
+    ``/actions`` and ``/timeline`` did not, because
+    ``request.args.get(..., type=int)`` yields the default when the value will
+    not parse, so a client typo was indistinguishable from an absent parameter
+    and the caller got a 200 built from the default.
+
+    Fixed in ``read_routes.py`` with ``int_query_arg``, which raises
+    ``MalformedQueryScalar`` and the handler answers with the same
+    ``422 invalid_limit_or_offset`` envelope the rest of the module uses. This
+    was an ``xfail`` while the defect was open; it is now a live assertion.
     """
     response = client.get(f"{path}?{param}=abc")
     assert response.status_code == 422

@@ -676,11 +676,11 @@ def get_simulation_actions(simulation_id: str):
         include_followers: Whether to include follower actions (default true)
     """
     try:
-        limit = request.args.get('limit', 100, type=int)
-        offset = request.args.get('offset', 0, type=int)
+        limit = int_query_arg('limit', 100)
+        offset = int_query_arg('offset', 0)
         platform = request.args.get('platform')
-        agent_id = request.args.get('agent_id', type=int)
-        round_num = request.args.get('round_num', type=int)
+        agent_id = int_query_arg('agent_id')
+        round_num = int_query_arg('round_num')
         include_followers = request.args.get('include_followers', 'true').lower() == 'true'
 
         actions = SimulationRunner.get_all_actions(
@@ -702,6 +702,8 @@ def get_simulation_actions(simulation_id: str):
             extra={"disclosure": synthetic_output_disclosure()},
         )
 
+    except MalformedQueryScalar as e:
+        return bad_scalar_response(e)
     except Exception as e:
         logger.error(f"Get action history failed: {str(e)}")
         return error_response(
@@ -723,8 +725,8 @@ def get_simulation_timeline(simulation_id: str):
         end_round: ending round (default all)
     """
     try:
-        start_round = request.args.get('start_round', 0, type=int)
-        end_round = request.args.get('end_round', type=int)
+        start_round = int_query_arg('start_round', 0)
+        end_round = int_query_arg('end_round')
 
         timeline = SimulationRunner.get_timeline(
             simulation_id=simulation_id,
@@ -740,6 +742,8 @@ def get_simulation_timeline(simulation_id: str):
             extra={"disclosure": synthetic_output_disclosure()},
         )
 
+    except MalformedQueryScalar as e:
+        return bad_scalar_response(e)
     except Exception as e:
         logger.error(f"Get timeline failed: {str(e)}")
         return error_response(

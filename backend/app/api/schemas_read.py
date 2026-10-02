@@ -88,12 +88,19 @@ QUERY_SHAPE_ERRORS: dict[str, Tuple[Tuple[int, Optional[str]], ...]] = {
     "compare_simulations_route": ((400, None),),
 }
 
+# Routes that used to substitute the default for a malformed scalar. All three
+# now answer 422 invalid_limit_or_offset via read_routes.int_query_arg, matching
+# /posts and /comments. Kept as data so test_read_typed_boundary.py can assert
+# the behaviour at the HTTP surface.
 SILENT_DEFAULT_ON_BAD_SCALAR: Tuple[Tuple[str, str], ...] = (
     ("/api/simulation/history", "limit"),
     ("/api/simulation/sim_x/actions", "limit"),
     ("/api/simulation/sim_x/timeline", "start_round"),
 )
 
+# Routes that used to answer 500 with the Python exception text in `error`.
+# strip_traceback_in_production scrubs tracebacks but never inspects JSON body
+# text, so error_response(str(e), ...) leaked. Now guarded, answering 422.
 RAISES_ON_BAD_SCALAR: Tuple[Tuple[str, str], ...] = (
     ("/api/simulation/sim_x/opinions", "limit"),
     ("/api/simulation/sim_x/generated-interactions", "limit"),
