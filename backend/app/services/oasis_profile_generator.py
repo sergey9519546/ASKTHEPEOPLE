@@ -207,13 +207,19 @@ class OasisProfileGenerator:
     # Individual entity types (generate specific personal personas)
     INDIVIDUAL_ENTITY_TYPES = [
         "student", "alumni", "professor", "person", "publicfigure", 
-        "expert", "faculty", "official", "journalist", "activist"
+        "expert", "faculty", "official", "journalist", "activist",
+        "teacher", "researcher", "scientist", "analyst", "councilmember",
+        "mayor", "resident", "citizen", "worker", "parent", "nurse",
+        "doctor", "engineer", "businessowner", "artist", "volunteer",
     ]
     
     # Group / institutional entity types (generate fictional account profiles)
     GROUP_ENTITY_TYPES = [
         "university", "governmentagency", "organization", "ngo", 
-        "mediaoutlet", "company", "institution", "group", "community"
+        "mediaoutlet", "company", "institution", "group", "community",
+        "school", "library", "hospital", "council", "agency", "charity",
+        "association", "union", "cooperative", "club", "business",
+        "neighborhood",
     ]
     
     def __init__(
@@ -846,6 +852,66 @@ class OasisProfileGenerator:
                 "interested_topics": ["Politics", "Economics", "Culture & Society"],
             }
         
+        elif entity_type_lower in ["teacher", "researcher", "scientist", "analyst"]:
+            return {
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
+                "profession": entity_attributes.get("occupation", entity_type.title()),
+                "interested_topics": ["Education", "Research", "Community Programs"],
+            }
+        
+        elif entity_type_lower in ["official", "councilmember", "mayor"]:
+            return {
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not an official position, authorized statement, or prediction of a real person.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
+                "profession": entity_attributes.get("occupation", "Public Official"),
+                "interested_topics": ["Public Policy", "Civic Programs", "Community"],
+            }
+        
+        elif entity_type_lower in ["nurse", "doctor"]:
+            return {
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not medical advice, a biography, or a prediction of a real person.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
+                "profession": entity_attributes.get("occupation", entity_type.title()),
+                "interested_topics": ["Healthcare Access", "Community Health", "Public Services"],
+            }
+        
+        elif entity_type_lower in ["worker", "engineer", "businessowner"]:
+            return {
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
+                "profession": entity_attributes.get("occupation", entity_type.title()),
+                "interested_topics": ["Local Economy", "Employment", "Community"],
+            }
+        
+        elif entity_type_lower in ["artist", "volunteer", "parent", "resident", "citizen"]:
+            return {
+                "bio": f"Fictional scenario account based on the role: {entity_type}.",
+                "persona": f"{entity_name} is a fictional scenario profile seeded from the {entity_type.lower()} role. Its communication and behavior are operating assumptions, not a biography, endorsement, or prediction of a real person.",
+                "age": 30,
+                "gender": "other",
+                "mbti": "ISTJ",
+                "country": "Unknown",
+                "profession": entity_attributes.get("occupation", entity_type.title()),
+                "interested_topics": ["Community", "Local Events", "Culture & Society"],
+            }
+        
         elif entity_type_lower in ["mediaoutlet", "socialmediaplatform"]:
             return {
                 "bio": f"Fictional scenario account seeded from {entity_name}.",
@@ -868,6 +934,42 @@ class OasisProfileGenerator:
                 "country": "Unknown",
                 "profession": entity_type,
                 "interested_topics": ["Public Policy", "Community", "Official Announcements"],
+            }
+
+        elif entity_type_lower in ["school", "library", "hospital", "council", "agency"]:
+            return {
+                "bio": f"Fictional scenario account seeded from {entity_name}.",
+                "persona": f"{entity_name} is a fictional civic-service scenario profile. Its posts and behavior are generated assumptions, not official positions, authorized statements, or predicted actions.",
+                "age": 30,  # Institutional virtual age
+                "gender": "other",  # Institutions use 'other'
+                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
+                "country": "Unknown",
+                "profession": entity_type,
+                "interested_topics": ["Public Services", "Community", "Service Updates"],
+            }
+
+        elif entity_type_lower in ["charity", "association", "union", "cooperative", "club", "neighborhood"]:
+            return {
+                "bio": f"Fictional scenario account seeded from {entity_name}.",
+                "persona": f"{entity_name} is a fictional member-organization scenario profile. Its posts and behavior are generated assumptions, not official positions, authorized statements, or predicted actions.",
+                "age": 30,  # Institutional virtual age
+                "gender": "other",  # Institutions use 'other'
+                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
+                "country": "Unknown",
+                "profession": entity_type,
+                "interested_topics": ["Community", "Member Updates", "Local Initiatives"],
+            }
+
+        elif entity_type_lower in ["company", "business"]:
+            return {
+                "bio": f"Fictional scenario account seeded from {entity_name}.",
+                "persona": f"{entity_name} is a fictional business scenario profile. Its posts and behavior are generated assumptions, not endorsements, authorized statements, or predicted actions.",
+                "age": 30,  # Institutional virtual age
+                "gender": "other",  # Institutions use 'other'
+                "mbti": "ISTJ",  # Institutional style: Rigorous and conservative
+                "country": "Unknown",
+                "profession": entity_type,
+                "interested_topics": ["Local Economy", "Business Updates", "Community"],
             }
 
         else:
