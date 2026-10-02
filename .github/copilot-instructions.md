@@ -26,7 +26,7 @@ This file provides essential guidance for AI coding agents (like GitHub Copilot)
   - Dev: `npm run dev`
   - Build: `npm run build`
 - **Backend:**
-  - Install: `cd backend && pip install -r requirements.txt`
+  - Install: `cd backend && uv sync --frozen --group dev` (dependency truth is pyproject.toml + uv.lock; requirements.txt is a do-not-install pointer, see AGENTS.md §5 rule 14)
   - Run: `python run.py` or use Docker
   - Tests: `pytest` in `backend/tests/`
 - **Docker:**

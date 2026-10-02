@@ -1,35 +1,19 @@
-# ===========================================
-# ASKTHEPEOPLE Backend Dependencies
-# ===========================================
-# Python 3.11+ required
-# Install: pip install -r requirements.txt
-# ===========================================
-
-# ============= Core Framework =============
-flask>=3.0.0
-flask-cors>=6.0.0
-
-# ============= LLM =============
-# OpenAI SDK (unified OpenAI-compatible LLM calls)
-openai>=1.0.0
-
-# ============= Zep Cloud =============
-zep-cloud==3.27.0
-
-# ============= OASIS Social Simulation =============
-# OASIS social simulation framework
-camel-oasis==0.2.5
-camel-ai==0.2.78
-
-# ============= File Processing =============
-PyMuPDF>=1.24.0
-# Encoding detection (supports non-UTF-8 text files)
-charset-normalizer>=3.0.0
-chardet>=5.0.0
-
-# ============= Utilities =============
-# Environment variable loading
-python-dotenv>=1.0.0
-
-# Data validation
-pydantic>=2.0.0
+# ============================================================
+# DO NOT INSTALL FROM THIS FILE
+# ============================================================
+# This file previously listed an 11-package subset of the real
+# dependency set. Installing it produced a backend that cannot
+# boot (no sqlalchemy / celery / redis / flask-limiter / ...).
+#
+# The single dependency source of truth is pyproject.toml,
+# locked by uv.lock. Install with:
+#
+#     uv sync --frozen --group dev
+#
+# CI and both Dockerfiles use exactly that command; a lock that
+# does not match fails the build. Adding a dependency means
+# editing pyproject.toml and re-locking — never editing this
+# file. This file remains only so that `pip install -r
+# requirements.txt` is answered by the pointer instead of
+# silently installing a broken environment.
+# ============================================================
