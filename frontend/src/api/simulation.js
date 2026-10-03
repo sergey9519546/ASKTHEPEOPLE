@@ -33,17 +33,6 @@ export const getSimulation = (simulationId) => {
 };
 
 /**
- * Get simulation Agent Profiles
- * @param {string} simulationId
- * @param {string} platform - 'reddit' | 'twitter'
- */
-export const getSimulationProfiles = (simulationId, platform = "reddit") => {
-  return service.get(`/api/simulation/${simulationId}/profiles`, {
-    params: { platform },
-  });
-};
-
-/**
  * Get Agent Profiles being generated in real-time
  * @param {string} simulationId
  * @param {string} platform - 'reddit' | 'twitter'
@@ -55,14 +44,6 @@ export const getSimulationProfilesRealtime = (
   return service.get(`/api/simulation/${simulationId}/profiles/realtime`, {
     params: { platform },
   });
-};
-
-/**
- * Get simulation configuration
- * @param {string} simulationId
- */
-export const getSimulationConfig = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/config`);
 };
 
 /**
@@ -135,50 +116,6 @@ export const getRunStatusDetail = (simulationId) => {
 };
 
 /**
- * Get posts from a simulation
- * @param {string} simulationId
- * @param {string} platform - 'reddit' | 'twitter'
- * @param {number} limit - Number of results
- * @param {number} offset - Offset for pagination
- */
-export const getSimulationPosts = (
-  simulationId,
-  platform = "reddit",
-  limit = 50,
-  offset = 0,
-) => {
-  return service.get(`/api/simulation/${simulationId}/posts`, {
-    params: { platform, limit, offset },
-  });
-};
-
-/**
- * Get simulation timeline (summarised by round)
- * @param {string} simulationId
- * @param {number} startRound - Starting round
- * @param {number} endRound - Ending round
- */
-export const getSimulationTimeline = (
-  simulationId,
-  startRound = 0,
-  endRound = null,
-) => {
-  const params = { start_round: startRound };
-  if (endRound !== null) {
-    params.end_round = endRound;
-  }
-  return service.get(`/api/simulation/${simulationId}/timeline`, { params });
-};
-
-/**
- * Get Agent statistics
- * @param {string} simulationId
- */
-export const getAgentStats = (simulationId) => {
-  return service.get(`/api/simulation/${simulationId}/agent-stats`);
-};
-
-/**
  * Get simulation action history
  * @param {string} simulationId
  * @param {Object} params - { limit, offset, platform, agent_id, round_num }
@@ -210,9 +147,6 @@ export const getEnvStatus = (data) => {
 export const askGeneratedProfiles = (data) => {
   return service.post("/api/simulation/generated-response/batch", data);
 };
-
-// Backwards-compatible export for existing integrations.
-export const interviewAgents = askGeneratedProfiles;
 
 /**
  * Export generated profile responses as CSV

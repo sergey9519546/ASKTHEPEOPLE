@@ -1,11 +1,11 @@
 ---
 title: "Framework Comparison Summary"
 status: "Reference"
-version: "1.0.0"
+version: "1.1.0"
 owner: "askthepeople-product-steward"
 created: "2026-08-02"
 baseline_commit: "67cd5484cb7b2dab22b6d134622cf9793b9c4e5d"
-last_reviewed: "2026-08-03"
+last_reviewed: "2026-10-02"
 research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
 ---
 
@@ -41,9 +41,20 @@ All verified against your actual code at HEAD (`67cd548`):
 ---
 
 ### 2. ✅ Eval Results: Fix Contradictory Counts
-**Problem:** `results.json` says 5 total / 52 passed / 8 failed (52+8≠5). Writer counts eval-only for total, full-suite for passed/failed.
+**Problem:** `results.json` said 5 total / 52 passed / 8 failed (52+8≠5). Writer counts eval-only for total, full-suite for passed/failed.
 
 **Fix:** Filter outcomes to eval tests only in `conftest.py:pytest_sessionfinish`.
+
+**Superseded 2026-10-02.** The counts are consistent, but the artifact was found to be
+*write-only*: it carried only `_test_summary` and none of the metrics it exists to
+record, because the fixture teardown's whole-file `shutil.copy` meant the bytes on
+disk were always whichever eval test finished last, and the `item.funcargs` read in
+`pytest_sessionfinish` returned nothing (pytest empties `funcargs` at teardown).
+Re-measured and re-run, the committed artifact now carries **31 top-level keys**
+including `diversity_rate`, `stereotype_rate`, `essentialism_rate`,
+`path_divergence_rate`, `assumption_isolation_rate`, and `truth_contract_pass_rate`.
+A module-level session accumulator now backs the merge. See
+[`ai/EVALS.md`](ai/EVALS.md) for the current harness state.
 
 **Impact:** Eval evidence becomes trustworthy for release bundles.
 

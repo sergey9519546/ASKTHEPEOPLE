@@ -13,7 +13,13 @@
  * disconnected copy and the guidance would never actually coordinate.
  */
 
-import { computed, readonly, ref } from "vue";
+import {
+  computed,
+  getCurrentInstance,
+  onScopeDispose,
+  readonly,
+  ref,
+} from "vue";
 
 // User capability levels (inferred from behavior, not explicit)
 export const CAPABILITY_LEVELS = {
@@ -60,18 +66,46 @@ const needsAttention = ref([]);
 const timeOnCurrentView = ref(0);
 const actionsSinceLastPause = ref(0);
 
-// A single interval owns the time-on-view counter regardless of how many
-// components mount the composable.
+/**
+ * One interval owns the time-on-view counter no matter how many consumers mount
+ * the composable - but it belongs to no component, so nothing unmounted it with
+ * the consumer that started it. `timeOnCurrentView` kept climbing after the user
+ * had left the phase, and `prominentLayer` reads that number on a 30s threshold,
+ * so the guidance could escalate to the attention layer on elapsed time nobody
+ * was spending. For the life of the tab, at 1 Hz.
+ *
+ * The lease count is what makes the interval's lifetime a property of the
+ * consumers rather than of whoever called first. The state is a singleton, so a
+ * bare start/stop pair would let one view's unmount silence the timer another
+ * live view is still reading. Start takes a lease, stop gives one back, and the
+ * interval is cleared only when the last lease is gone.
+ */
 let viewTimer = null;
+let viewTimerLeases = 0;
 
 const startViewTimer = () => {
-  if (viewTimer || typeof window === "undefined") return;
+  if (typeof window === "undefined") return;
+  viewTimerLeases += 1;
+  if (viewTimer) return;
   viewTimer = window.setInterval(() => {
     timeOnCurrentView.value += 1000;
   }, 1000);
 };
 
 const stopViewTimer = () => {
+  // A release with no lease outstanding belongs to a consumer torn down after a
+  // reset already dropped every lease. It must not be able to push the count
+  // negative and strand the interval running for good.
+  if (viewTimerLeases === 0) return;
+  viewTimerLeases -= 1;
+  if (viewTimerLeases > 0) return;
+  window.clearInterval(viewTimer);
+  viewTimer = null;
+};
+
+/** Test-only: drop every lease, and the interval with them. */
+const releaseAllViewTimers = () => {
+  viewTimerLeases = 0;
   if (!viewTimer) return;
   window.clearInterval(viewTimer);
   viewTimer = null;
@@ -246,8 +280,11 @@ const setPhase = (phase) => {
   if (phase === currentPhase.value) return;
   currentPhase.value = phase;
   actionsSinceLastPause.value = 0;
+  // Restarting the clock is not taking a lease. `setPhase` fires once per phase
+  // change for as long as a consumer is mounted, so acquiring here would add a
+  // lease on every change and the count could never reach zero again. The
+  // consumer that owns the phase owns the lease.
   timeOnCurrentView.value = 0;
-  startViewTimer();
 };
 
 const updateCapability = (level) => {
@@ -322,10 +359,25 @@ const resetGuidedContext = () => {
   needsAttention.value = [];
   timeOnCurrentView.value = 0;
   actionsSinceLastPause.value = 0;
-  stopViewTimer();
+  releaseAllViewTimers();
 };
 
+/**
+ * A lease per mounted consumer, taken at setup and returned when the consumer's
+ * scope is disposed.
+ *
+ * The registration is deliberately scoped to "is there a component instance
+ * here". Called outside one - a plain module, a test - there is nothing that
+ * could ever return the lease, so no lease is taken and no interval is started.
+ * A component that calls this twice holds two leases and returns two, which is
+ * why the count is taken at the call site rather than once per module.
+ */
 export function useGuidedContext() {
+  if (getCurrentInstance()) {
+    startViewTimer();
+    onScopeDispose(stopViewTimer);
+  }
+
   return {
     // State (read-only refs; mutate through the actions below)
     currentPhase: readonly(currentPhase),

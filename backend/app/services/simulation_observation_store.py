@@ -312,8 +312,22 @@ def _ingest_sqlite_platform(
         return
 
     conn = _connect(db_path)
-    db_cursor = conn.cursor()
+    # The three tolerant handlers below no longer swallow constraint violations,
+    # so an ingest can now abort partway. The source handle is released on that
+    # path explicitly; leaving a database file open for garbage collection is not
+    # a durability claim.
+    try:
+        _ingest_sqlite_platform_rows(cursor, conn.cursor(), platform, ingest_actions)
+    finally:
+        conn.close()
 
+
+def _ingest_sqlite_platform_rows(
+    cursor: sqlite3.Cursor,
+    db_cursor: sqlite3.Cursor,
+    platform: str,
+    ingest_actions: bool,
+) -> None:
     user_lookup: Dict[Any, Dict[str, Any]] = {}
     if _table_exists(db_cursor, "user"):
         try:
@@ -333,6 +347,25 @@ def _ingest_sqlite_platform(
                 }
         except sqlite3.Error:
             user_lookup = {}
+
+    # The three streams below read a platform runtime database and write the
+    # observation store. Each tolerates the source being absent or shaped
+    # differently -- that is what "schema differs" meant -- and nothing else.
+    #
+    # They previously caught sqlite3.Error, which is the BASE class of
+    # sqlite3.IntegrityError, so a constraint violation, a rejected value, or a
+    # malformed record left the write aborted with no signal: the caller could
+    # not distinguish a partial ingest from a complete one, which is the same
+    # defect class as the swallowed commit() in follower_engine. They now catch
+    # sqlite3.OperationalError only, which is the no-such-table/no-such-column
+    # family, and let an IntegrityError propagate to the caller.
+    #
+    # No "already stored, skip it" carve-out is added for any of them. The store
+    # deletes every table at the top of sync_observation_store before
+    # re-inserting, and actions/interviews/posts/comments carry an autoincrement
+    # primary key with no UNIQUE, NOT NULL, or CHECK constraint, so a duplicate
+    # key is not reachable through this path. Adding one would be inventing
+    # idempotency the schema does not implement.
 
     if ingest_actions and _table_exists(db_cursor, "trace"):
         try:
@@ -394,8 +427,8 @@ def _ingest_sqlite_platform(
                         trace_ref,
                     ),
                 )
-        except sqlite3.Error:
-            pass  # platform schema differs; this optional action stream is skipped and the rest of the ingest continues
+        except sqlite3.OperationalError:
+            pass  # Tolerance is scoped to the source stream's shape: a missing table or column, which is what "platform schema differs" means. IntegrityError is a subclass of sqlite3.Error and used to vanish here, so a constraint violation, a rejected value, or a malformed record aborted the write with no signal and the caller could not tell a partial ingest from a complete one. It now propagates. No duplicate-idempotency carve-out exists: this store deletes every table before re-inserting, and actions/interviews carry no uniqueness constraint, so "already stored" is not reachable here.
 
     if _table_exists(db_cursor, "post"):
         try:
@@ -423,8 +456,8 @@ def _ingest_sqlite_platform(
                         f"{platform}:post:{row['rowid']}",
                     ),
                 )
-        except sqlite3.Error:
-            pass  # platform post row rejected by this schema; posts are optional evidence
+        except sqlite3.OperationalError:
+            pass  # Posts are optional evidence, so a source table that is absent or shaped differently is tolerated. A row the destination store refuses is not a schema difference and must reach the caller rather than disappear. The old comment ("rejected by this schema") was ambiguous between the two readings; this narrows to the reading the caller can act on. IntegrityError is deliberately not caught.
 
     if _table_exists(db_cursor, "comment"):
         try:
@@ -452,15 +485,41 @@ def _ingest_sqlite_platform(
                         f"{platform}:comment:{row['rowid']}",
                     ),
                 )
-        except sqlite3.Error:
-            pass  # platform comment row rejected by this schema; comments are optional evidence
-
-    conn.close()
+        except sqlite3.OperationalError:
+            pass  # Comments are optional evidence, so a source table that is absent or shaped differently is tolerated. A row the destination store refuses is not a schema difference and must reach the caller rather than disappear. Same narrowing, and the same residual ambiguity in the old comment, as the post stream above. IntegrityError is deliberately not caught.
 
 
 def sync_observation_store(simulation_dir: str, run_state: Optional[Dict[str, Any]] = None) -> str:
     db_path = ensure_observation_store(simulation_dir)
     conn = _connect(db_path)
+    # This function deletes every evidence table and re-inserts from source
+    # before committing once, so an exception anywhere in the body must leave
+    # the store untouched rather than half-populated.
+    #
+    # That guarantee was previously implicit: nothing here could raise, because
+    # every per-row failure was swallowed. Narrowing those handlers to
+    # `sqlite3.OperationalError` (so an `IntegrityError` surfaces instead of
+    # silently dropping evidence) means exceptions CAN now propagate, so the
+    # rollback has to be explicit. Leaving it to connection finalisation would
+    # make data integrity depend on garbage-collection timing.
+    try:
+        _sync_observation_store_rows(conn, db_path, simulation_dir, run_state)
+    except BaseException:
+        try:
+            conn.rollback()
+        finally:
+            conn.close()
+        raise
+    conn.close()
+    return db_path
+
+
+def _sync_observation_store_rows(
+    conn: sqlite3.Connection,
+    db_path: str,
+    simulation_dir: str,
+    run_state: Optional[Dict[str, Any]],
+) -> None:
     cursor = conn.cursor()
 
     cursor.execute("DELETE FROM agent_index")
@@ -662,8 +721,6 @@ def sync_observation_store(simulation_dir: str, run_state: Optional[Dict[str, An
             )
 
     conn.commit()
-    conn.close()
-    return db_path
 
 
 def record_injected_event(

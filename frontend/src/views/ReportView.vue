@@ -11,7 +11,7 @@
       @update:active-mode="viewMode = $event"
     />
 
-    <main id="main-content" class="workbench-viewport" :class="`mode-${viewMode}`">
+    <main class="workbench-viewport" :class="`mode-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
         class="panel-container left"

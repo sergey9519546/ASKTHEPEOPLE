@@ -106,17 +106,6 @@ export const getAgentLog = (reportId, fromLine = 0) => {
 };
 
 /**
- * Get console logs (incremental)
- * @param {string} reportId
- * @param {number} fromLine - Start line for retrieval
- */
-export const getConsoleLog = (reportId, fromLine = 0) => {
-  return service.get(`/api/report/${reportId}/console-log`, {
-    params: { from_line: fromLine },
-  });
-};
-
-/**
  * Get report details
  * @param {string} reportId
  */
@@ -146,26 +135,6 @@ export const chatWithReport = (data) => {
  */
 export const exportReportPDF = (reportId) => {
   return service.get(`/api/report/${reportId}/export/pdf`, {
-    responseType: "blob",
-  });
-};
-
-/**
- * Export report as CSV
- * @param {string} reportId
- */
-export const exportReportCSV = (reportId) => {
-  return service.get(`/api/report/${reportId}/export/csv`, {
-    responseType: "blob",
-  });
-};
-
-/**
- * Export report as Executive HTML Slide Deck
- * @param {string} reportId
- */
-export const exportReportExecutive = (reportId) => {
-  return service.get(`/api/report/${reportId}/export/executive`, {
     responseType: "blob",
   });
 };

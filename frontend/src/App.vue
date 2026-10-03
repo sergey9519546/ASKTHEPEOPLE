@@ -1,4 +1,10 @@
 <template>
+  <!--
+    The target is owned by the shell, not by a view. `#main-content` is the
+    canvas in DesktopShell.vue, which is in the document exactly once whatever
+    the layout does, so this link resolves to one element instead of to whichever
+    view happened to render the id first. A view must not add that id back.
+  -->
   <a href="#main-content" class="skip-link">Skip to the working panel</a>
   <div
     id="app-root"

@@ -21,7 +21,7 @@
       </button>
     </div>
 
-    <main id="main-content" class="workbench-viewport" :class="`view-${viewMode}`">
+    <main class="workbench-viewport" :class="`view-${viewMode}`">
       <!-- LEFT: GRAPH -->
       <div
         v-if="viewMode !== 'workbench'"

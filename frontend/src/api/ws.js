@@ -15,7 +15,17 @@ import { ref } from 'vue'
 import service from './index.js'
 import { requireAccess } from '../composables/useAccessKey.js'
 
-export const globalWsStatus = ref('OFFLINE')
+/**
+ * Module-private record of the connection lifecycle.
+ *
+ * This was exported, which made it look like a live connection indicator that
+ * surfaces were expected to render. Nothing ever read it: no component, no
+ * view, no test. The ref itself stays because the writes are the only place this
+ * module records where a socket is in its lifecycle, and the reconnect and
+ * watchdog branches below are written against them. Only the export is removed,
+ * so the next reader cannot mistake it for an available signal.
+ */
+const globalWsStatus = ref('OFFLINE')
 
 function wsBaseUrl() {
   const httpBase = import.meta.env.VITE_API_BASE_URL ?? ''

@@ -8,12 +8,27 @@
       <DesktopDock :collapsed="dockCollapsed" @toggle="dockCollapsed = !dockCollapsed" />
 
       <section
+        id="main-content"
         class="desktop-surface"
         aria-label="Workspace panels"
         :class="[`layout-${isNarrow ? 'focus' : layoutMode}`]"
+        tabindex="-1"
       >
+        <!--
+          A route that maps to no journey panel gets the route-recovery view
+          rather than a silent redirect to the decision screen.
+
+          The previous behaviour opened the decision panel for any unmatched
+          route name, so a mistyped or stale deep link looked like a working
+          page. The workspace state survived, but the user was never told their
+          URL was wrong - the one thing they most needed to know.
+
+          This is deliberately NOT a DESKTOP_APPS entry: it is not a journey
+          step, and adding it there would put it in the spine.
+        -->
+        <NotFoundView v-if="routeUnmatched" class="route-recovery" />
         <DesktopWindow
-          v-for="win in renderedPanels"
+          v-for="win in routeUnmatched ? [] : renderedPanels"
           :key="win.key"
           :win="win"
           :mode="layoutMode"
@@ -48,6 +63,7 @@ import {
   windows,
 } from "../composables/useDesktop.js";
 import { loadSavedState } from "../composables/useWorkspaceState.js";
+import NotFoundView from "../views/NotFoundView.vue";
 
 /**
  * The shell owns four bands - truth rail, masthead, journey spine, panel
@@ -68,6 +84,19 @@ import { loadSavedState } from "../composables/useWorkspaceState.js";
  * There is deliberately no hand-written overlap animation - keeping both panels
  * in the DOM at once is exactly what causes reading-position loss and the
  * confusing live-region announcements MDN warns about.
+ *
+ * The canvas also owns the single `main-content` id, and that ownership is the
+ * reason no route view declares one. `App.vue`'s skip link points at
+ * `#main-content`, and a skip link has to resolve to exactly one element or it
+ * resolves to whichever one happens to be first in the document. In the focus
+ * layout only one panel is rendered, so a per-view id happened to work; the split
+ * and floating layouts render two panels at once, which put two elements with
+ * the same id in one document and sent the skip link to whichever panel came
+ * first rather than the one the user was on. The canvas is always present
+ * exactly once, it wraps whichever panels are live, and every panel is
+ * individually addressable by the unique `panelId` that `DesktopWindow` already
+ * puts on each one. `tabindex="-1"` is what lets the link land focus here
+ * instead of only scrolling.
  */
 const route = useRoute();
 const router = useRouter();
@@ -101,6 +130,17 @@ const renderedPanels = computed(() => {
   return windows.value;
 });
 
+/**
+ * True when the current URL names a route that is not a journey panel.
+ *
+ * There is no `<router-view>` in this application: panels render route views
+ * directly, so a route with no matching `DESKTOP_APPS` entry would otherwise
+ * have nowhere to render and silently fell through to the decision screen.
+ */
+const routeUnmatched = computed(
+  () => Boolean(route.name) && !appByRouteName(route.name),
+);
+
 /** Panels the switcher offers, which is every panel the user has open. */
 const switcherPanels = computed(() => windows.value);
 
@@ -130,9 +170,11 @@ watch(
     const app = appByRouteName(route.name);
     if (app) {
       openRoute({ name: route.name, params: route.params, query: route.query });
-    } else {
-      openApp("decision", { name: "Home" });
     }
+    // Unmatched route: show route recovery and leave the workspace alone.
+    // Redirecting to the decision panel here would also rewrite the persisted
+    // session, so a bad link would silently change what the user gets back on
+    // their next visit.
     nextTick(() => {
       syncing = false;
     });
@@ -244,6 +286,13 @@ onMounted(async () => {
   const app = appByRouteName(route.name);
   if (app) {
     openRoute({ name: route.name, params: route.params, query: route.query });
+  } else if (routeUnmatched.value) {
+    // A deep link to a route that is not a journey panel. Restore whatever the
+    // workspace already had open rather than replacing it; the recovery view
+    // overlays the canvas.
+    if (windows.value.length > 0) {
+      focusWindow(activeKey.value || windows.value[0].key);
+    }
   } else if (windows.value.length === 0) {
     openApp("decision", { name: "Home" });
   } else {
@@ -289,6 +338,13 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow: hidden;
   background: var(--ink);
+}
+
+/* Focus lands here from the skip link, so it is stated rather than left to the
+   user-agent default, which varies by engine and can be suppressed. */
+.desktop-surface:focus {
+  outline: 2px solid var(--signal);
+  outline-offset: -2px;
 }
 
 .layout-focus {

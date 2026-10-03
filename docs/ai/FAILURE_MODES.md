@@ -206,20 +206,38 @@ reviewer can revise inputs or create a new run, not bless an invalid artifact.
 ## Project-specific failure-modes status (baseline `8b616dc7`)
 
 The current code has the start of a failure-handling pipeline
-([`utils/retry.py`](../../backend/app/utils/retry.py) (8 KB) for
-bounded retries) but no failure-mode catalogue, no
-deterministic validation of model output, and no per-failure-mode
-regression test. Gate 5 is owned by `askthepeople-ai-eval-steward`.
+(bounded retries, implemented twice and not shared) but no
+failure-mode catalogue, no deterministic validation of model
+output, and no per-failure-mode regression test. Gate 5 is owned
+by `askthepeople-ai-eval-steward`.
 
 ### Current state — PARTIAL
 
-- `utils/retry.py` implements bounded retries with backoff and
-  jitter for transient provider failures. It does not implement
-  the doc's retry-category table (provider rate limit = yes
-  bounded; invalid schema = no; auth failure = no; worker crash =
-  reclaim with fencing; deterministic engine failure = no
-  automatic loop). The doc's classification is **TARGET** and
-  lands with gate 2.
+- **No shared retry utility exists for external API calls.** This
+  section previously cited `backend/app/utils/retry.py` as the
+  bounded-retry mechanism. That file had zero importers anywhere in
+  `backend/app/**`, `backend/tests/**`, and `backend/scripts/**`,
+  and its own docstring claim that it was "used for retry logic for
+  external API calls such as LLM" was false, so it was deleted
+  rather than wired. Two unshared mechanisms actually run, and
+  between them they are **CURRENT**:
+  - [`utils/llm_client.py`](../../backend/app/utils/llm_client.py)
+    retries an LLM chat call inline -- a fixed `max_retries = 3`
+    loop with a doubling delay and no jitter -- and re-raises on
+    the final attempt.
+  - [`utils/task_retry.py`](../../backend/app/utils/task_retry.py)
+    is the live retry path for Celery-owned external operations:
+    `is_retryable_task_exception` classifies a failure as transient
+    or deterministic, and `retry_transient_operation` retries one
+    replay-safe read with a bounded backoff. It is imported by
+    `services/graph_builder.py`, `services/project_repository.py`,
+    `services/zep_live_canary.py`, `tasks/graph_tasks.py`,
+    `tasks/simulation_tasks.py`, and `utils/zep_paging.py`.
+
+  Neither implements the doc's retry-category table (provider rate
+  limit = bounded; invalid schema = no; auth failure = no; worker
+  crash = reclaim with fencing; deterministic engine failure = no
+  automatic loop). The doc's classification is **TARGET**.
 - `validation_engine.py` runs schema-level checks on prompt
   outputs. The doc's deterministic truth and terminology
   validators are missing.

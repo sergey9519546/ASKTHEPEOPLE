@@ -34,6 +34,23 @@
 // No router here: the route-recovery page links home with a plain `href="/"` so
 // it still works when this view is rendered outside a router host (the shell's
 // 404 fallback, a static export, or a test mount).
+
+// This view owns its <h1> on purpose, and the shared ViewHeader must not be
+// added to "fix" it.
+//
+// The convention across the journey views is one <h1> each, and there it belongs
+// to ViewHeader. ViewHeader's job is to name a step of the workspace journey -
+// its step number, its title, its wayfinding. This page is not a step: it
+// renders with no shell, no panel, and no step identity, so a header here would
+// be inventing one. The other option, demoting this to an <h2>, leaves a
+// standalone page with no top-level heading, which is the outcome the convention
+// exists to prevent everywhere else. The rule being protected is "exactly one
+// <h1> per page", and this page has exactly one - so it keeps it.
+
+// The app-level skip link resolves against `#main-content`, which the shell's
+// canvas owns and which appears exactly once. That is also why the skip link
+// has a target on this page even though this page carries no id of its own: the
+// target belongs to the shell, not to the view being displayed.
 </script>
 
 <style scoped>

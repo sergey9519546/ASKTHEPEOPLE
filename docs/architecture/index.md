@@ -1,7 +1,7 @@
 ---
 title: "Architecture Overview — ASKTHEPEOPLE"
 status: "Normative"
-version: "1.3.0"
+version: "1.4.0"
 owner: "Architect + Security + Persistence + Orchestration"
 last_reviewed: "2026-10-02"
 review_cycle: "Per gate; at minimum quarterly"
@@ -165,6 +165,79 @@ The `/posts` and `/comments` read handlers dispatch to the
 service (read-only mode, typed `DatabaseUnavailable`/`Locked`/`Corrupt`
 exceptions) rather than opening SQLite inline, so the route layer now fully
 honors the auth → parse → authorize → dispatch → present contract.
+
+### Deliberate refusals at the request seam — CURRENT (refusal), TARGET (endpoint)
+
+Three endpoints answer **503 with a stable machine-readable error code** by
+design rather than by defect. The distinction is the point of this subsection: a
+refusal is correct behaviour and must not be "fixed" by calling the provider,
+while a missing endpoint is a gap. Each is recorded here because the refusal was
+previously documented only in archived material, and one archived document
+describes the first of them as completed work.
+
+| Endpoint | Error code | Fires when | Cited by symbol |
+|---|---|---|---|
+| `DELETE /api/graph/delete/<graph_id>` | `graph_delete_unavailable` | **Unconditional** — every call, after the canonical project↔graph association resolves | `delete_graph` in [`api/graph.py`](../../backend/app/api/graph.py) |
+| `POST /api/graph/ontology/generate` | `canonical_source_ingestion_unavailable` | Only when `USE_SUPABASE_PERSISTENCE` is true (default **false**) | `generate_ontology` in [`api/graph.py`](../../backend/app/api/graph.py) |
+| `POST /api/simulation/prepare` | `decision_lens_preparation_unavailable` | Only when `DECISION_LENS_V1_ENABLED` is false (default **true**) | `prepare_simulation` in [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py) |
+
+The URL prefixes are the blueprint registrations performed by `create_app`
+([`backend/app/__init__.py`](../../backend/app/__init__.py)) — `graph_bp` at
+`/api/graph`, `simulation_bp` at `/api/simulation`. Handlers are cited by
+**symbol, not line**, for the reason given under § *Authentication and security
+headers* below: that module changed size three times in one session and every
+line anchor moved with it.
+
+**Graph deletion is refused on every call, and that is the current design.**
+`delete_graph` resolves the canonical association through `_resolve_owned_graph`
+and then returns 503 `graph_delete_unavailable` with no further branch; there is
+no configuration in which it succeeds. The reason is carried in the handler's own
+comment: the `Project` aggregate has no owner-fenced graph-delete state and no
+recovery transition for an ambiguous provider response, so mutating ZEP here
+could orphan the canonical association. Deletion stays unavailable until that
+durable state machine exists. **CURRENT** is the refusal; **TARGET** is a
+working owner-fenced delete.
+
+> **Superseded.** [`../archive/misc/REPOSITORY_RECOVERY_LEDGER.md`](../archive/misc/REPOSITORY_RECOVERY_LEDGER.md)
+> item **P0-2** lists this endpoint under "What was completed" and, in the very
+> next row, "What was left unfinished: always returns error, never actually
+> deletes", concluding "Why incomplete: unknown — code structure suggests it
+> should work". That was written against the earlier handler shape the ledger
+> itself quotes, which called `GraphBuilderService.delete_graph` and could
+> therefore raise. It is superseded on both counts: the endpoint does not fail,
+> it refuses; and the cause is now stated in the handler's comment rather than
+> unknown. Its recommendation to "finish or remove endpoint" is not an
+> outstanding action — the missing work is a named state machine in the
+> `Project` aggregate, not the route, and the refusal is what keeps the
+> canonical association from being orphaned by an ambiguous provider response.
+
+**The canonical-ingestion seam is deliberately dark while canonical persistence
+is unfinished.** When `USE_SUPABASE_PERSISTENCE` is true, `generate_ontology`
+returns 503 `canonical_source_ingestion_unavailable` before parsing anything.
+The handler's comment gives the reason: the canonical repository returns an
+opaque object-store key from the upload seam, and passing that key to
+`FileParser` would treat it as a local path — either failing outright or
+bypassing the required scan-and-review lifecycle. The path stays dark until the
+object read, quarantine, parser attempt, and review state are owned end to end.
+Read the condition carefully, because it inverts: the refusal fires **only** when
+canonical persistence is switched **on**. The flag defaults to false, so a
+default deployment parses local paths exactly as before.
+
+**Decision-lens preparation is refused only in its off state, which is not the
+default.** `DECISION_LENS_V1_ENABLED` defaults to **true**
+([`backend/app/config.py`](../../backend/app/config.py)), so the reviewed
+decision-lens preparation path is what a default deployment runs. With the flag
+false, `prepare_simulation` answers 503
+`decision_lens_preparation_unavailable`, and
+`SimulationManager.prepare_simulation` raises `DecisionLensPreparationError`
+carrying the same code
+([`backend/app/services/simulation_manager.py`](../../backend/app/services/simulation_manager.py))
+so that a worker-side call cannot bypass the request-seam check. The flag is the
+only condition under which this route refuses, and it is off the default path;
+the error message ("Reviewed decision-lens preparation is unavailable") is the
+code's own wording. What this subsection does **not** claim is that the
+decision-lens preparation path is complete — it records only that the 503 is an
+operator-set off state, not a symptom of an unfinished default run.
 
 ### Authentication and security headers — CURRENT
 
@@ -911,8 +984,12 @@ They were deleted, not wired, by
 [ADR-0014](adr/ADR-0014-removal-of-optimization-backtest-island.md) (commit
 `8739d10`) together with their five tests; a grep for any of the three names
 under `backend/` now returns nothing. Their Phase 2 analysis survives in
-[`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md) and §B2 of
-[`ULTRAPLAN.md`](ULTRAPLAN.md), both of which describe modules that are gone —
+  [`NEXT_STEPS_ROADMAP.md`](NEXT_STEPS_ROADMAP.md) and §B2 of
+  [`ULTRAPLAN.md`](ULTRAPLAN.md), both of which described modules that are gone.
+  **Corrected 2026-10-02:** the roadmap's Phase 2 table is marked SUPERSEDED and
+  ULTRAPLAN §B2 is marked RESOLVED BY DELETION, each naming the ADR. This
+  paragraph previously said both still needed a correction pass, which was the
+  last remaining instance of that claim after the deletions landed.
 those two documents need a correction pass.
 
 **Character distinctness is measured, not assumed.** The distinctness eval
@@ -977,6 +1054,32 @@ outcome. Both contradict accepted
 [ADR-0001](adr/ADR-0001-product-category-and-truth-contract.md) and must not be
 implemented. Wiring `app/optimization/` would require a new accepted ADR that
 supersedes ADR-0001 — that is a product decision, not a refactor.
+
+### Flags whose off state is a deliberate HTTP refusal
+
+Two operator-facing flags gate a 503 rather than degrading silently. Both were
+absent from this section until 2026-10-02; the refusal they gate is described in
+full, with symbol citations, under § *Deliberate refusals at the request seam*.
+
+| Flag | Default | Off/on refusal | Where it is enforced |
+|---|---|---|---|
+| `DECISION_LENS_V1_ENABLED` | **true** | false → 503 `decision_lens_preparation_unavailable` on `POST /api/simulation/prepare` | `prepare_simulation` in [`api/routes/prep_routes.py`](../../backend/app/api/routes/prep_routes.py); re-checked in `SimulationManager.prepare_simulation` ([`services/simulation_manager.py`](../../backend/app/services/simulation_manager.py)) |
+| `USE_SUPABASE_PERSISTENCE` | **false** | **true** → 503 `canonical_source_ingestion_unavailable` on `POST /api/graph/ontology/generate` | `generate_ontology` in [`api/graph.py`](../../backend/app/api/graph.py) |
+
+`DECISION_LENS_V1_ENABLED` defaults to **true**, so reviewed decision-lens
+preparation is the default run and the 503 is an operator-set off state — not a
+signal that preparation is unimplemented on the default path. This inversion is
+easy to infer backwards, and inferring it backwards is why the flag is recorded
+here. Whether the preparation path itself is complete is not settled by this
+entry and is not claimed by it.
+
+`USE_SUPABASE_PERSISTENCE` is the mirror image and is the more dangerous of the
+two to infer: the refusal fires only when the flag is switched **on**, because
+canonical persistence is unfinished. With the default false, ontology
+generation parses local paths. Enabling the flag does not complete the canonical
+path; it turns it off explicitly. Remaining flags and their production refusals
+are in [`../deployment/README.md`](../deployment/README.md) § *Recommendations*
+and in `AGENTS.md` §5.
 
 ### Shipped work not previously reflected in any status table
 

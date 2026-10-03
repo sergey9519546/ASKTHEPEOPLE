@@ -386,7 +386,7 @@ describe("a nested component does not add a second route into the same landmark"
       props: { simulationId: "sim-1" },
     });
 
-    // OpinionMap renders inside InteractionView's <main id="main-content">, and
+    // OpinionMap renders inside InteractionView's <main>, and
     // App.vue already provides a skip link to that id at the top of the
     // document. A second one, mid-page, pointing at an ancestor it is already
     // inside of, bypasses nothing and announces twice.

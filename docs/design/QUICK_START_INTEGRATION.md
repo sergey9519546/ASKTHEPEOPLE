@@ -1,13 +1,21 @@
 ---
 title: "Quick Start: Integrating the Intelligent Guidance System"
-status: "Normative"
-version: "1.0.0"
+status: "Historical"
+version: "2.0.0"
 owner: "Frontend Design + Product"
-last_reviewed: "2026-09-01"
+last_reviewed: "2026-10-02"
 review_cycle: "Per release"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "integration guide, getting started, testing"
 ---
+> **HISTORICAL RECORD — NOT A LIVING GUIDE.** This document is a completion
+> record from a past tranche and describes components that were subsequently
+> deleted. `Step1GraphBuildRefactored.vue`, `EvidenceBadge.vue`, and
+> `HistoryDatabase.vue` were removed in commit `74784b7`: none had a production
+> importer, no route rendered them, and the frontend suite passes without them.
+> Code samples and `git add` lines below that name those files will fail if run.
+> For current state see the Status of record in
+> [`docs/architecture/index.md`](../architecture/index.md#status-of-record).
 
 # Quick Start: Integrating the Intelligent Guidance System
 

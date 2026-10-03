@@ -354,7 +354,7 @@ def test_essentialism_detection(profile_generator, sample_entity, eval_results_p
     )
 
 
-def test_profile_quality_summary(eval_results_path):
+def test_profile_quality_summary(recorded_results):
     """
     Summary test that prints overall quality metrics.
     
@@ -362,12 +362,19 @@ def test_profile_quality_summary(eval_results_path):
     """
     import json
     
-    if not eval_results_path.exists():
-        pytest.skip("No evaluation results available")
-    
-    with open(eval_results_path, 'r') as f:
-        results = json.load(f)
-    
+    # This threshold never ran. The test asked whether a per-test pytest tmp
+    # file existed, and a test asking that is asking whether a file written
+    # LATER has been written yet - so all three summary tests skipped
+    # unconditionally and the gate they implement was silently disabled.
+
+    # The recorded_results fixture is what this session has measured so far,
+    # measured so far, else the committed artifact from the previous run.
+    results = recorded_results
+    missing = [k for k in ['diversity_rate', 'stereotype_rate'] if k not in results]
+    assert not missing, (
+        f"evaluation metric(s) {missing} were never recorded, so this "
+        "threshold cannot be evaluated - the code that produces them did not run."
+    )
     print("\n" + "="*70)
     print("PROFILE QUALITY EVALUATION SUMMARY")
     print("="*70)

@@ -1,15 +1,53 @@
 ---
 title: "THE ARCHITECTURE THAT ACTUALLY OPTIMIZES THETA"
-status: "Reference"
-version: "1.0.0"
+status: "Superseded"
+version: "2.0.0"
 owner: "Architecture"
-last_reviewed: "2026-08-18"
+last_reviewed: "2026-10-02"
 review_cycle: "As needed"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
 applies_to: "architecture planning"
+superseded_by: "docs/architecture/adr/ADR-0001-product-category-and-truth-contract.md"
+archived: "2026-10-02"
 ---
 
 # The Architecture That Actually Optimizes θ*
+
+> **SUPERSEDED — RETAINED FOR AUDIT ONLY. DO NOT IMPLEMENT.**
+>
+> Archived 2026-10-02. This document contradicts accepted
+> [ADR-0001](../../architecture/adr/ADR-0001-product-category-and-truth-contract.md),
+> the normative product category and truth contract, and describes code that no
+> longer exists. Its sibling,
+> [PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md](PREDICTIVE_SIMULATION_ROADMAP-2026-08-19.md),
+> was archived on 2026-10-01 for the same reason and was missed here until a
+> deleted-file audit on 2026-10-02 found it.
+>
+> **Why it is superseded.** Its headline claim — "Phase 1 Complete — THE ENGINE
+> IS BUILT" — describes a calibration engine that minimises the distance
+> between simulated and subsequently observed real-world behaviour:
+> `θ* = argmin_θ D(P_simulation(Y|X,θ), P_real_world(Y|X))`. That is an
+> objective against observed human outcomes, which is exactly the class
+> ADR-0001 prohibits. ADR-0001 classifies ASKTHEPEOPLE as a **Synthetic
+> Decision Explorer** and fixes the truth rail: outputs are generated, human
+> respondents are zero, the run is not a forecast, and validation happens
+> outside the generated run. "FORECAST" is a linted-forbidden user-facing term in
+> both the frontend and the backend, so a live document asserting this engine
+> exists is not merely stale — it advertises a capability the product forbids
+> itself from claiming.
+>
+> **The code is also gone.** Every file this document lists as built was deleted
+> by [ADR-0014](../../architecture/adr/ADR-0014-removal-of-optimization-backtest-island.md)
+> in commit `8739d10`, having no production importer:
+> `backend/app/optimization/theta_optimizer.py`,
+> `multi_objective_loss.py`, and `learning_loop.py` are all absent, as are the
+> four capability files (`backend/app/api/capability.py`,
+> `backend/app/services/capability_registry.py`, `backend/app/schemas/capability.py`,
+> and its migration). None of the "What Was Actually Built" lists below can be
+> read as current.
+>
+> Retained unchanged below so the record of what was proposed, and why it was
+> rejected, survives.
 
 **Date:** 2026-08-19 (Final)  
 **Status:** Phase 1 Complete — THE ENGINE IS BUILT  

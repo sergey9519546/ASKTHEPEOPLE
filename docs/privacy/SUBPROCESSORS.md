@@ -276,11 +276,22 @@ registry and model release ledger).
 
 ### Rate limits and provider timeouts — PARTIAL
 
-Provider rate limits are not surfaced per call. The
-[`utils/retry.py`](../../backend/app/utils/retry.py) (8 KB) module
-implements bounded retries. Reaching the contract requires per-
-provider rate-limit visibility, per-call timeout, and an explicit
-per-attempt cost estimate, all part of gate 4.
+Provider rate limits are not surfaced per call, and **no shared
+retry utility exists for external API calls** -- this section
+previously cited `backend/app/utils/retry.py`, which had zero
+importers anywhere in `backend/app/**`, `backend/tests/**`, and
+`backend/scripts/**` and was deleted rather than wired. Two
+unshared bounded-retry mechanisms run instead:
+[`utils/llm_client.py`](../../backend/app/utils/llm_client.py)
+retries an LLM chat call inline with a fixed `max_retries = 3` loop,
+and
+[`utils/task_retry.py`](../../backend/app/utils/task_retry.py)
+classifies and retries Celery-owned external operations
+(`is_retryable_task_exception`, `retry_transient_operation`).
+Neither reports a rate-limit condition or a cost estimate per
+call. Reaching the contract requires per-provider rate-limit
+visibility, per-call timeout, and an explicit per-attempt cost
+estimate, all part of gate 4.
 
 ### Subprocessor UI / disclosure — TARGET
 

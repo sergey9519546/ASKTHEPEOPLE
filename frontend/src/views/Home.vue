@@ -39,7 +39,7 @@
       </div>
     </header>
 
-    <main id="main-content">
+    <main>
       <section id="decision" class="decision-section" aria-labelledby="decision-heading">
         <h2 id="decision-heading" class="section-title">The decision</h2>
 

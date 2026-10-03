@@ -22,7 +22,13 @@ research_source: "ASKTHEPEOPLE_SOCIAL_FORECASTING_MASTER_FRAMEWORK_2026.md"
 > - **Fix 2 (eval writer):** the contradictory-counts bug is **fixed**;
 >   `results.json` now reconciles (`passed + failed + skipped == total_tests`).
 >   The writer was further hardened to count setup-phase skips so the
->   contradiction cannot recur.
+>   contradiction cannot recur. **Re-verified 2026-10-02:** counts were never the
+>   whole defect. The committed artifact was *write-only* — it carried only
+>   `_test_summary` and none of the metrics it exists to record, because the
+>   fixture teardown replaced the file wholesale and the `item.funcargs` read in
+>   `pytest_sessionfinish` returned nothing. Both causes are fixed; a clean run now
+>   commits 31 top-level keys including all six headline metrics. See
+>   [`ai/EVALS.md`](../ai/EVALS.md).
 > - **Fix 3 (fail closed):** the fail-closed path **exists** and now keys off
 >   `Config.DEBUG` (the canonical production signal) rather than a
 >   Railway-specific env var, so it holds on any platform.

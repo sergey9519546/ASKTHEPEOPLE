@@ -1118,10 +1118,15 @@ select:focus-visible {
 /* Anchor scroll offset for sticky mastheads and truth rails. */
 h1[id],
 h2[id],
-h3[id],
-#main-content {
+h3[id] {
   scroll-margin-top: 4rem;
 }
+
+/* `#main-content` used to be listed here and was dropped on 2026-10-03. It is
+   now the shell's workspace canvas, which has `overflow: hidden` and does not
+   scroll — the scrolling element is the panel body inside it. An offset on a
+   non-scroll container does nothing. The heading selectors above still match,
+   so the rule keeps its purpose for real anchor targets. */
 
 
 @media (max-width: 320px) { html { min-width: 20rem; font-size: 14px; } body { overflow-x: hidden; } .desktop-masthead { flex-direction: column; min-height: auto; } .masthead-lockup { min-width: 0; padding: 0.5rem; } .desktop-dock { width: 100% !important; flex-direction: row !important; } .step-card { padding: 0.75rem; } .stats-grid { grid-template-columns: 1fr; } }

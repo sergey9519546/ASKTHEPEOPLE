@@ -63,7 +63,7 @@
       </div>
     </div>
 
-    <main id="main-content" class="content-area" :class="`view-${viewMode}`">
+    <main class="content-area" :class="`view-${viewMode}`">
       <section
         v-if="viewMode !== 'workbench'"
         class="panel-wrapper left"
