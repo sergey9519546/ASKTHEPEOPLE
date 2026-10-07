@@ -652,6 +652,57 @@ both anchors were fabricated and have been removed.
 | 4 | Scale and operations | `askthepeople-release-operator` | PARTIAL | Request metrics exist (`app/utils/metrics.py`, `GET /health/metrics`, bounded labels). Remaining: distributed tracing, SLOs/cost budgets, alerting, Redis-backed rate limiting, horizontal scaling (process-local runner, `--workers 1`); Sentry PARTIAL |
 | 5 | Advanced simulation methodology | `askthepeople-ai-eval-steward` + `askthepeople-architect` | PARTIAL | Most prompts still inlined; model-release gating; failure-mode catalogue; adversarial/sensitivity evals |
 
+### Build ledger — dependency order for the six PARTIAL gates
+
+Added 2026-10-05. The table above states *what* each gate lacks; this states
+*what to build, in what order, and what proves it done*. All six gates stay
+**PARTIAL** until their real workflow passes — a declared setting is not an
+enforced one, and a static guard is not a runtime proof.
+
+**Why this order.** Three dependencies force it. (1) Nothing can be proven on a
+real database while schema creation is a manual step, so Gate 3's verification
+precedes Gate 2's durable-history work. (2) Tenant identity (Gate 0) must exist
+before tenant-scoped query enforcement (Gate 3) can be non-vacuous — otherwise
+"isolated" means one tenant. (3) Cost accounting (Gate 4) is meaningless before
+admission control can act on it, and admission control needs the outbox (Gate 2)
+to be durable. Everything else is ordering by blast radius: cheapest
+correctness-first.
+
+| # | Item | Gates | Depends on | Acceptance receipt required |
+|---|---|---|---|---|
+| **ATP-01** | Prove the current lane: real PostgreSQL up/down against the pinned image, prompt fingerprints byte-equal to pre-migration text, truthful fallback semantics | 2, 4, 5 | — | Live PG apply/rollback transcript; SHA256 equality vs `git show HEAD`; every silent-degradation path named and asserted |
+| **ATP-02** | Production actor/membership resolver; tenant isolation; source rights, retention, privacy; canonical object storage; provenance-edge validation; audit + soft delete | 0, 3 | ATP-01 | Two-tenant isolation test that fails with one filter removed; every route resolving a tenant from the resolver, not a header |
+| **ATP-03** | Commit-time fencing/CAS on artifacts; transactional outbox + publisher; push delivery; durable PostgreSQL job/event history; independent state machines; recoverable worker ownership | 2, 3 | ATP-02 | Kill the worker mid-commit and prove no torn artifact and no orphan event; outbox row + state row committed or neither |
+| **ATP-04** | Hostile-document scan and sandbox; production ingestion; owner-fenced graph deletion with ambiguous-provider recovery | 0, 3 | ATP-02 | Ingestion boot-refusal lifted only with a passing hostile-document suite; ambiguous-provider delete recovers rather than 503-ing |
+| **ATP-05** | Enforce schemas on remaining legacy handlers; complete published route/API contracts | 1 | ATP-01 | Every route either typed or with a test asserting it needs no schema — the T26 pattern, no silent no-ops |
+| **ATP-06** | Reconcile competing prompt registries; adopt remaining prompts with fingerprints; model-release, adversarial and sensitivity evaluation gates | 5 | ATP-05 | One registry, not two; every adopted prompt fingerprinted against its pre-migration text |
+| **ATP-07** | Usage/cost accounting; admission enforcement; alert rules; distributed tracing; shared rate limiting; scaling and rollback | 4 | ATP-03, ATP-06 | A breached budget **refuses** a run rather than logging `warn`; rate limits shared across workers |
+| **ATP-08** | Unified verifier plus evals; complete operator/research/export/recovery desktop, mobile, browser and accessibility journeys; versioned release evidence; backup/rollback drill | 0–5 | ATP-07 | Journeys driven in a real browser, not only jsdom; human comprehension evidence arranged separately |
+
+**Sequencing note.** ATP-02 and ATP-05 can run in parallel once ATP-01 closes;
+they share no files. ATP-04 is gated on ATP-02's resolver because ingestion
+cannot attribute a source to a tenant that does not exist yet.
+
+**Two items are explicitly *not* in this ledger** because they are operator
+actions with no code change: credential rotation and usage review, and operator
+secrets/CORS configuration. Legacy autodeploy remains disabled on every connected
+provider. `OneDrive` is not a supported deployment location — a non-synced local
+checkout is required and must be prepared only after source and history are
+preserved.
+
+**Current position (2026-10-05).** ATP-01 is **closed** with an acceptance receipt at
+[`.kilo/acceptance-receipt-ATP-01.md`](../../.kilo/acceptance-receipt-ATP-01.md):
+PostgreSQL 17.11 (the CI-pinned digest) applies all three revisions, records head
+`b2c3d4e5f6a7` with 17 tables, and rolls back to base and forward again, with the
+canonical-table comparison falsified so it cannot pass vacuously; four adopted prompts
+are SHA256-identical to their pre-migration literals; and the `warn`-only cost-budget
+default is truthful because no usage meter exists. Four prompts remain inline by design —
+`str.format()` cannot express their slicing, `json.dumps` or conditional expressions, and
+templating them would have required rewording the disclosure.
+
+All six gates stay **PARTIAL**. ATP-02 is next and is blocked on nothing technical; it is
+the tenant-identity prerequisite for ATP-03's durable history and ATP-04's ingestion.
+
 ### Gate evidence
 
 **Gate 0.** Path-escape defense (`backend/app/utils/safe_path.py`); SSRF
@@ -938,6 +989,30 @@ exist and the remainder is open:
 format at `GET /health/metrics` (`backend/app/api/health.py`). It records
 request count, latency as a fixed-bucket histogram, cumulative duration, and
 in-flight depth.
+
+**SLO and cost-budget configuration landed 2026-10-05** (exec-plan T29). Both are
+**inert by default** — `SLO_ENABLED` and `COST_BUDGET_ENABLED` default `False` —
+because an SLO is a commitment an operator adopts, not a property the code
+confers, and adding this file must not change runtime behaviour without an opt-in.
+The SLO is declared over series `GET /health/metrics` actually exports, and
+`SLO_LATENCY_BUCKET_SECONDS` is constrained to the real `LATENCY_BUCKETS` set: a
+threshold between buckets names a percentile the endpoint cannot report, so the
+gateway refuses it. Refusals live in `Config._slo_and_cost_budget_errors` and are
+called from **both** `validate_production_gates` and `validate` so they cannot
+drift, per §7. See [`docs/observability/SLO_AND_COST_BUDGET.md`](../observability/SLO_AND_COST_BUDGET.md).
+
+**`COST_BUDGET_BREACH_ACTION` accepts `warn` only.** There is no cost meter:
+`llm_client.py` reads `response.choices[0].message.content` and discards
+`response.usage`, and no token accounting or price table exists under
+`backend/app`. Offering `refuse` today would let an operator read "runs over
+budget are refused" and receive an unbudgeted run; a boot failure is the cheaper
+wrong outcome. `degrade` is excluded rather than accepted-and-ignored because
+silently substituting a lower-fidelity run changes what the output claims to be
+(ADR-0001).
+
+Still absent from Gate 4: distributed tracing (needs a dependency plus a
+`uv.lock` relock — §5 rule 14), alerting, and horizontal scaling (process-local
+`SimulationRunner` still forces `--workers 1`).
 
 **Metric labels are bounded by construction, which is the privacy and
 cardinality requirement.** Only `method`, Flask `endpoint`, and `status_class`

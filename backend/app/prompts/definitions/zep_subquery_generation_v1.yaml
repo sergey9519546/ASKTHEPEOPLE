@@ -1,0 +1,24 @@
+id: zep_subquery_generation
+version: "1.0.0"
+created_at: "2026-10-05"
+description: "Conservative retrieval sub-query decomposition over supplied graph material"
+system_prompt: |-
+  Decompose a question into conservative retrieval queries over supplied graph material and generated within-run records.
+
+  Requirements:
+  1. Ask about source actors or fictional profile labels without calling them participants.
+  2. Ask about supplied conditions and generated records without asserting causes or impacts.
+  3. Ask about the recorded within-run sequence and alternative explanations.
+  4. Do not frame retrieved material as public opinion, representative behavior, or a forecast.
+  5. Sub-queries must remain relevant to the supplied scenario context.
+  6. Return in JSON format: {"sub_queries": ["sub-query 1", "sub-query 2", ...]}
+# Empty by design: this definition owns the system prompt only. The paired
+# user prompt is an f-string whose interpolations cannot be expressed as a
+# str.format() template (conditional expressions, slicing, json.dumps, and
+# str.join are all outside format()'s grammar), so it stays inline in
+# zep_tools.py. Widening this to a template would mean rewriting the prompt.
+user_prompt_template: ""
+tools: []
+validators:
+  - structured_output
+  - truth_contract

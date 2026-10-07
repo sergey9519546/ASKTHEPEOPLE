@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from zep_cloud.client import Zep
 
 from ..config import Config
+from ..prompts.registry import PromptRegistry
 from ..utils.logger import get_logger
 from ..utils.llm_client import LLMClient
 from ..utils.zep_paging import fetch_all_nodes, fetch_all_edges
@@ -43,6 +44,51 @@ GENERATED_PROBE_PROMPT_PREFIX = (
     "5. Separate each generated response with a blank line.\n"
     "6. Keep all claims inside the fictional scenario frame.\n\n"
 )
+
+# T30: the four static system prompts in this module are versioned registry
+# definitions under app/prompts/definitions/. Loaded lazily and fail-soft in the
+# same shape as utils/llm_client.py -- a registry failure logs and the call site
+# degrades through the try/except it already had, so a prompt-registry problem
+# can never escape as a 500. There is deliberately no inline copy of the wording
+# to fall back to: two copies of truth-contract text is how the two drift apart.
+_prompt_registry: Optional[PromptRegistry] = None
+
+
+def _get_prompt_registry() -> Optional[PromptRegistry]:
+    """Return the shared PromptRegistry, or None if the definitions are unusable."""
+    global _prompt_registry
+    if _prompt_registry is None:
+        try:
+            _prompt_registry = PromptRegistry()
+        except Exception as exc:
+            logger.warning(
+                "Prompt registry unavailable; registry-managed prompts disabled: "
+                "code=prompt_registry_unavailable, error_type=%s",
+                type(exc).__name__,
+                extra={"privacy_safe": True},
+            )
+            return None
+    return _prompt_registry
+
+
+def _registered_system_prompt(prompt_id: str, version: str = "1.0.0") -> str:
+    """Return the registry's system prompt for `prompt_id`.
+
+    Raises ValueError when the registry cannot be loaded or the id is unknown.
+    Every caller invokes this inside a try/except that already has a documented
+    fallback, so the raise is contained and never reaches an HTTP surface.
+    """
+    registry = _get_prompt_registry()
+    if registry is None:
+        raise ValueError(f"prompt registry unavailable for '{prompt_id}'")
+
+    prompt = registry.get_prompt(prompt_id, version)
+    system_prompt = prompt.get("system_prompt")
+    if not system_prompt:
+        raise ValueError(
+            f"prompt '{prompt_id}' v{version} defines no system_prompt"
+        )
+    return system_prompt
 
 
 @dataclass
@@ -1305,16 +1351,6 @@ class ZepToolsService:
         
         Decompose complex questions into multiple sub-queries that can be independently retrieved
         """
-        system_prompt = """Decompose a question into conservative retrieval queries over supplied graph material and generated within-run records.
-
-Requirements:
-1. Ask about source actors or fictional profile labels without calling them participants.
-2. Ask about supplied conditions and generated records without asserting causes or impacts.
-3. Ask about the recorded within-run sequence and alternative explanations.
-4. Do not frame retrieved material as public opinion, representative behavior, or a forecast.
-5. Sub-queries must remain relevant to the supplied scenario context.
-6. Return in JSON format: {"sub_queries": ["sub-query 1", "sub-query 2", ...]}"""
-
         user_prompt = f"""Simulation Requirement Context:
 {simulation_requirement}
 
@@ -1326,6 +1362,7 @@ Please decompose the following query into {max_queries} sub-queries:
 Return the list of sub-queries in JSON format."""
 
         try:
+            system_prompt = _registered_system_prompt("zep_subquery_generation")
             response = self.llm.chat_json(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1834,24 +1871,6 @@ Return the list of sub-queries in JSON format."""
             }
             agent_summaries.append(summary)
         
-        system_prompt = """You select fictional generated profiles for a synthetic scenario probe.
-
-These profiles are modelling devices, not human respondents or population
-samples. Selection must not imply testimony, public opinion, representative
-behavior, probability, or a forecast.
-
-Selection criteria:
-1. Cover scenario assumptions relevant to the probe brief.
-2. Exercise materially different generated profile states when available.
-3. Do not infer real-world views from profession, identity, or demographics.
-4. Describe the result as scenario coverage, never sample representativeness.
-
-Return in JSON format:
-{
-    "selected_indices": [list of selected Agent indices],
-    "reasoning": "scenario-coverage assumption for the selection"
-}"""
-
         user_prompt = f"""Synthetic Probe Brief:
 {interview_requirement}
 
@@ -1865,6 +1884,7 @@ Select up to {max_agents} generated profiles for scenario coverage and state
 the fictional modelling assumption behind the selection."""
 
         try:
+            system_prompt = _registered_system_prompt("zep_profile_selection")
             response = self.llm.chat_json(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1915,20 +1935,6 @@ the fictional modelling assumption behind the selection."""
         
         agent_roles = [a.get("profession", "Unknown") for a in selected_agents]
         
-        system_prompt = """Design 3-5 prompts for fictional generated scenario profiles.
-
-The outputs will be synthetic records with zero human respondents. They are not
-testimony, public opinion, representative behavior, or forecasts.
-
-Prompt requirements:
-1. Ask what the fictional profile might do or surface inside this one scenario.
-2. Exercise different stated scenario assumptions without treating roles as real behavior.
-3. Do not ask for personal facts, lived experience, feelings, or group representation.
-4. Keep each prompt concise (under 50 words).
-5. Use conditional language and never request prediction probabilities.
-
-Return in JSON format: {"questions": ["Question 1", "Question 2", ...]}"""
-
         user_prompt = f"""Synthetic Probe Brief: {interview_requirement}
 
 Synthetic Scenario Background: {simulation_requirement if simulation_requirement else "Not provided"}
@@ -1938,6 +1944,9 @@ Generated Profile Labels: {', '.join(agent_roles)}
 Generate 3-5 conditional scenario-probe prompts."""
 
         try:
+            system_prompt = _registered_system_prompt(
+                "zep_probe_prompt_generation"
+            )
             response = self.llm.chat_json(
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -1985,24 +1994,6 @@ Generate 3-5 conditional scenario-probe prompts."""
         for interview in interviews:
             interview_texts.append(f"[{interview.agent_name} ({interview.agent_role})]\n{interview.response[:500]}")
         
-        system_prompt = """Summarize patterns across fictional generated scenario records.
-
-The records contain zero human respondents. They are not testimony, public
-opinion, representative behavior, evidence of consensus, or forecasts.
-
-Summary requirements:
-1. Describe only patterns present in the generated records.
-2. Call similarities and differences generated-record patterns, never consensus.
-3. Do not use direct quotations or attribute lived experience.
-4. State material scenario assumptions and limitations.
-5. Keep it under 1000 words.
-
-Formatting Constraints (Strictly Follow):
-- Use plain text paragraphs, separating different sections with blank lines.
-- Do NOT use Markdown headers (e.g., #, ##, ###).
-- Do NOT use horizontal rules (e.g., ---, ***).
-- You may use **bold** to highlight keywords, but do NOT use other Markdown syntax."""
-
         user_prompt = f"""Synthetic Scenario Topic: {interview_requirement}
 
 Generated Scenario Records:
@@ -2013,6 +2004,7 @@ Summarize only generated-record patterns and begin with this exact disclosure:
 or a forecast." """
 
         try:
+            system_prompt = _registered_system_prompt("zep_probe_summary")
             summary = self.llm.chat(
                 messages=[
                     {"role": "system", "content": system_prompt},

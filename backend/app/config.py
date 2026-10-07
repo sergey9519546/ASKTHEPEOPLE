@@ -3,6 +3,7 @@ Configuration Management
 Uniformly loads configuration from the .env file in the project root directory
 """
 
+import math
 import os
 from urllib.parse import urlsplit
 
@@ -56,6 +57,54 @@ def credential_validation_error(name: str, value: str | None) -> str | None:
     if len(set(normalized)) < 8:
         return f"{name} does not contain enough variation"
     return None
+
+
+def _strict_float(name: str, default: str) -> float:
+    """Read a numeric setting that has no safe fallback.
+
+    `Config` reads its environment in the class body, so a malformed value
+    cannot be repaired after the fact. Falling back to the default would
+    silently substitute one number for another, and for a ceiling that is the
+    dangerous direction: a budget of `12.50` misread as `0.0` turns "refuse
+    this run" into "no ceiling at all". Refusing to build the configuration is
+    the only outcome that cannot understate a limit.
+
+    `nan` and `inf` are rejected alongside unparseable text for the same
+    reason. Both survive `float()` and both fail every comparison, so a `nan`
+    ceiling would read as "never breached" and stay unlimited while looking
+    configured.
+    """
+    raw = os.environ.get(name, default)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = None
+    if value is None or not math.isfinite(value):
+        raise RuntimeError(
+            f"{name} must be a finite number, got {raw!r}. Unset {name} to use "
+            f"the default ({default})."
+        )
+    return value
+
+
+def _strict_int(name: str, default: str) -> int:
+    """Whole-number variant of `_strict_float`, built on it so the failure
+    mode of the two cannot diverge."""
+    value = _strict_float(name, default)
+    if value != int(value):
+        raise RuntimeError(
+            f"{name} must be a whole number, got {value!r}. Unset {name} to "
+            f"use the default ({default})."
+        )
+    return int(value)
+
+
+# The only breach actions that name a real behaviour. 'warn' records and
+# continues. 'refuse' would stop the run -- correct for a pre-release product
+# with no cost meter, but it cannot be honoured until one exists, so it is
+# refused at the gateway rather than accepted as an unkeepable promise.
+# 'degrade' is deliberately absent: there is no reduced-fidelity run mode.
+COST_BUDGET_BREACH_ACTIONS = ('warn', 'refuse')
 
 
 def _trusted_hosts(debug: bool) -> list[str] | None:
@@ -318,6 +367,61 @@ class Config:
     # not. Operators running multiple web workers set this deliberately.
     RATELIMIT_STORAGE_URI = os.environ.get('RATELIMIT_STORAGE_URI', 'memory://')
 
+    # ============================================================
+    # Service level objectives and cost budgets (Gate 4, exec-plan T29)
+    # ============================================================
+    # Configuration only. No module in the tree consumes these values yet, so
+    # every default below leaves runtime behaviour byte-identical. That is
+    # deliberate: declaring an SLO and enforcing one are different changes,
+    # and the enforcement half needs a cost meter that does not exist.
+    # docs/observability/SLO_AND_COST_BUDGET.md records which half is which.
+    #
+    # The objectives are declared over the series that `app/utils/metrics.py`
+    # actually exposes at GET /health/metrics, not over invented metric names.
+    # The latency threshold must therefore be one of that module's bucket
+    # boundaries: the histogram can only answer "what share finished under
+    # X", so a threshold between two buckets would describe a percentile the
+    # metrics endpoint cannot report. `validate_production_gates` refuses any
+    # other value.
+    SLO_ENABLED = os.environ.get('SLO_ENABLED', 'False').lower() == 'true'
+    # 1.0s is the boundary between "a person is still waiting" and "they have
+    # navigated away"; it is also a real bucket in LATENCY_BUCKETS.
+    SLO_LATENCY_BUCKET_SECONDS = _strict_float('SLO_LATENCY_BUCKET_SECONDS', '1.0')
+    # 99%: one request in a hundred may be slow because a provider was cold,
+    # which is normal operation, not an incident.
+    SLO_LATENCY_TARGET_RATIO = _strict_float('SLO_LATENCY_TARGET_RATIO', '0.99')
+    # Stricter than the latency objective on purpose. A slow answer is a
+    # degraded experience; a 5xx is a broken contract. The error rate is
+    # measured over the same request counter, so the two objectives cannot be
+    # satisfied by dropping traffic.
+    SLO_ERROR_RATE_MAX_RATIO = _strict_float('SLO_ERROR_RATE_MAX_RATIO', '0.001')
+    # 30 days, the standard rolling SLO window: it spans a weekly cycle so a
+    # quiet weekend cannot pass an objective that a busy Monday would fail.
+    SLO_WINDOW_SECONDS = _strict_int('SLO_WINDOW_SECONDS', '2592000')
+    # Below this many requests in the window the ratios are arithmetic on a
+    # handful of points, and an objective evaluated on them is noise wearing a
+    # compliance number.
+    SLO_MIN_REQUESTS = _strict_int('SLO_MIN_REQUESTS', '20')
+
+    # Cost ceilings are declared per run and per day because they fail
+    # independently: a single expensive run is refused by the operator, while
+    # many cheap runs are only visible in the daily total that the provider
+    # invoice arrives as. 0.0 means "no ceiling declared for that scope", not
+    # "free" -- an enabled budget with both ceilings at 0.0 declares nothing
+    # and is refused.
+    COST_BUDGET_ENABLED = os.environ.get(
+        'COST_BUDGET_ENABLED', 'False'
+    ).lower() == 'true'
+    COST_BUDGET_MAX_USD_PER_RUN = _strict_float('COST_BUDGET_MAX_USD_PER_RUN', '0.0')
+    COST_BUDGET_MAX_USD_PER_DAY = _strict_float('COST_BUDGET_MAX_USD_PER_DAY', '0.0')
+    # 'warn' or 'refuse'. Default 'warn' because it is the only action that is
+    # honest today: no run's cost is measured anywhere in the tree, so 'warn'
+    # cannot overstate what is known. See COST_BUDGET_BREACH_ACTIONS and the
+    # refusal in `_slo_and_cost_budget_errors`.
+    COST_BUDGET_BREACH_ACTION = os.environ.get(
+        'COST_BUDGET_BREACH_ACTION', 'warn'
+    ).strip().lower()
+
     # Celery & Redis Configuration
     REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
@@ -370,6 +474,107 @@ class Config:
 
     
     @classmethod
+    def _slo_and_cost_budget_errors(cls) -> list[str]:
+        """Refusals for the Gate 4 SLO and cost-budget settings.
+
+        Shared by `validate_production_gates` and `validate` so the two cannot
+        drift into disagreeing about what makes an unsafe SLO or cost budget;
+        `test_startup_production_gate.py` asserts that relationship, and it has
+        caught exactly this kind of drift before.
+
+        Every check here is about a well-formed value that is nonetheless the
+        wrong value -- a threshold the histogram cannot answer, a ratio outside
+        its domain, an enabled budget with nothing to enforce. Unparseable text
+        never reaches this method: `_strict_float` and `_strict_int` refuse it
+        while the class body is still executing.
+        """
+        errors = []
+
+        if cls.SLO_ENABLED:
+            # Imported here rather than at module scope: `app.config` is
+            # imported by `app/__init__.py` while the `app` package is still
+            # initialising, and this keeps that import window closed. The lazy
+            # import is also what keeps one source of truth for the bucket
+            # list -- a copy of LATENCY_BUCKETS here would drift silently the
+            # next time the histogram changes.
+            from .utils.metrics import LATENCY_BUCKETS
+
+            if cls.SLO_LATENCY_BUCKET_SECONDS not in LATENCY_BUCKETS:
+                errors.append(
+                    f"SLO_LATENCY_BUCKET_SECONDS={cls.SLO_LATENCY_BUCKET_SECONDS} "
+                    "is not a latency bucket boundary. The metrics endpoint can "
+                    f"only answer at {sorted(LATENCY_BUCKETS)} seconds, so any "
+                    "other threshold names a percentile it cannot report. See "
+                    "docs/observability/SLO_AND_COST_BUDGET.md."
+                )
+            if not 0 < cls.SLO_LATENCY_TARGET_RATIO <= 1:
+                errors.append(
+                    "SLO_LATENCY_TARGET_RATIO must be greater than 0 and at "
+                    f"most 1, got {cls.SLO_LATENCY_TARGET_RATIO}. It is the "
+                    "share of requests that must finish inside the bucket, so "
+                    "a value above 1 would be met by any traffic at all."
+                )
+            if not 0 <= cls.SLO_ERROR_RATE_MAX_RATIO < 1:
+                errors.append(
+                    "SLO_ERROR_RATE_MAX_RATIO must be at least 0 and below 1, "
+                    f"got {cls.SLO_ERROR_RATE_MAX_RATIO}. A value of 1 would "
+                    "permit every request to fail and still report compliance."
+                )
+            if cls.SLO_WINDOW_SECONDS <= 0:
+                errors.append(
+                    "SLO_WINDOW_SECONDS must be positive, got "
+                    f"{cls.SLO_WINDOW_SECONDS}. The window is the period the "
+                    "objective is evaluated over."
+                )
+            if cls.SLO_MIN_REQUESTS < 1:
+                errors.append(
+                    "SLO_MIN_REQUESTS must be at least 1, got "
+                    f"{cls.SLO_MIN_REQUESTS}. A window below one request can "
+                    "never be evaluated, which would make the objective "
+                    "permanently unreportable rather than strict."
+                )
+
+        if cls.COST_BUDGET_ENABLED:
+            ceilings = (
+                ('COST_BUDGET_MAX_USD_PER_RUN', cls.COST_BUDGET_MAX_USD_PER_RUN),
+                ('COST_BUDGET_MAX_USD_PER_DAY', cls.COST_BUDGET_MAX_USD_PER_DAY),
+            )
+            negative = [name for name, value in ceilings if value < 0]
+            if negative:
+                errors.append(
+                    f"{', '.join(negative)} must not be negative. Use 0.0 to "
+                    "declare that scope unbounded."
+                )
+            elif all(value == 0 for _, value in ceilings):
+                errors.append(
+                    "COST_BUDGET_ENABLED=true with both ceilings at 0.0 declares "
+                    "a budget of nothing and enforces nothing. Set "
+                    "COST_BUDGET_MAX_USD_PER_RUN, COST_BUDGET_MAX_USD_PER_DAY, "
+                    "or both, or turn COST_BUDGET_ENABLED off."
+                )
+            if cls.COST_BUDGET_BREACH_ACTION not in COST_BUDGET_BREACH_ACTIONS:
+                errors.append(
+                    f"COST_BUDGET_BREACH_ACTION={cls.COST_BUDGET_BREACH_ACTION!r} "
+                    f"is not a supported breach action. Supported: "
+                    f"{list(COST_BUDGET_BREACH_ACTIONS)}."
+                )
+            elif cls.COST_BUDGET_BREACH_ACTION == 'refuse':
+                errors.append(
+                    "COST_BUDGET_BREACH_ACTION=refuse is not implemented and is "
+                    "refused rather than accepted as a promise. A run's cost is "
+                    "not measured anywhere in the tree: the provider response is "
+                    "read for content only (app/utils/llm_client.py) and its "
+                    "usage is discarded, so nothing can compare a run against a "
+                    "ceiling. Selecting 'refuse' today would advertise a "
+                    "guarantee the code does not make. Until a meter exists, "
+                    "run_preflight (app/services/simulation_preflight.py:421) "
+                    "is where the refusal must be wired. Keep 'warn'. See "
+                    "docs/observability/SLO_AND_COST_BUDGET.md."
+                )
+
+        return errors
+
+    @classmethod
     def validate_production_gates(cls):
         """Refusals that must stop the process from booting.
 
@@ -414,6 +619,13 @@ class Config:
                     f"SOURCE_INGESTION_V1_FORMATS contains unsupported format(s) "
                     f"{invalid}. V1 extraction supports: {sorted(eligible)}."
                 )
+        # An SLO whose threshold the metrics cannot answer, and a cost budget
+        # that declares nothing or names an action nothing implements, are the
+        # same class of defect as an unsafe flag: an operator would read a
+        # guarantee the process does not provide. Both stay inert unless the
+        # operator opts in, so neither changes a deployment that never sets
+        # them.
+        errors.extend(cls._slo_and_cost_budget_errors())
         return errors
 
     @classmethod
@@ -486,4 +698,10 @@ class Config:
                     f"SOURCE_INGESTION_V1_FORMATS contains unsupported format(s) "
                     f"{invalid}. V1 extraction supports: {sorted(eligible)}."
                 )
+        # Gate 4 SLO and cost-budget refusals. DEBUG-exempt for the same reason
+        # the ingestion checks are: a production safety rule must not make
+        # local development impossible, and the gateway is what stops a
+        # process from booting under an unsafe production configuration.
+        if not cls.DEBUG:
+            errors.extend(cls._slo_and_cost_budget_errors())
         return errors

@@ -43,6 +43,7 @@ behavioral forecast, or substitute for contact with real people.
 5. [`privacy/DATA_MAP.md`](privacy/DATA_MAP.md)
 6. [`release/ACCEPTANCE.md`](release/ACCEPTANCE.md)
 7. [`release/RUNBOOK.md`](release/RUNBOOK.md)
+8. [`observability/SLO_AND_COST_BUDGET.md`](observability/SLO_AND_COST_BUDGET.md) — Gate 4 SLO and cost-budget configuration (inert by default; distributed tracing is still absent)
 
 ## Authority hierarchy
 

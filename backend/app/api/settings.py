@@ -134,6 +134,9 @@ def _normalize_base_url(value: str) -> str:
         host = f"[{host}]"
     port = f":{parsed.port}" if parsed.port is not None else ""
     path = parsed.path.rstrip("/")
+    for suffix in ("/chat/completions", "/messages"):
+        if path.endswith(suffix):
+            path = path[: -len(suffix)]
     return urlunsplit((parsed.scheme.lower(), f"{host}{port}", path, "", ""))
 
 

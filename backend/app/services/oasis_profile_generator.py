@@ -248,6 +248,12 @@ class OasisProfileGenerator:
         if not self.api_key:
             raise ValueError("LLM_API_KEY is not configured")
         
+        normalized_url = (self.base_url or "").rstrip("/")
+        for suffix in ("/chat/completions", "/messages"):
+            if normalized_url.endswith(suffix):
+                normalized_url = normalized_url[: -len(suffix)]
+        self.base_url = normalized_url or Config.LLM_BASE_URL
+        
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url

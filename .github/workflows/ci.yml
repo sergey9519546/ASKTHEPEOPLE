@@ -370,12 +370,37 @@ jobs:
       run:
         working-directory: backend
 
-    # No SECRET_KEY, no APP_TOKEN, no provider keys. Schema creation must not
-    # depend on the web app's credentials: this job runs the migrations against a
-    # throwaway SQLite database, and `migrations/env.py` used to import
-    # `app.db.schema` at module scope, which executed `app/__init__.py` and its
-    # credential gate, so `alembic upgrade head` aborted before touching the
-    # database. See backend/tests/test_migrations_are_runnable.py.
+    # Every engine assertion below runs against a throwaway database created and
+    # destroyed with the runner. No SECRET_KEY, no APP_TOKEN, no provider keys.
+    # Schema creation must not depend on the web app's credentials:
+    # `migrations/env.py` used to import `app.db.schema` at module scope, which
+    # executed `app/__init__.py` and its credential gate, so `alembic upgrade
+    # head` aborted before touching the database -- even against a throwaway
+    # SQLite file. See backend/tests/test_migrations_are_runnable.py.
+    services:
+      postgres:
+        # Pinned by digest, like every other image reference in this repository.
+        # A floating `postgres:latest` would let the engine under test change
+        # without a commit, which is how a migration passes locally and fails on
+        # a deploy host. PostgreSQL rejects type and constraint behaviour SQLite
+        # accepts, so the two runs below are not redundant.
+        image: postgres:17.11-bookworm@sha256:639ab7ceb90e13123085b741fb31ef493fba25463002f6da665352e7b534b652
+        # `trust` means the service has no password to leak and nothing
+        # credential-shaped to commit. The alternative -- a literal throwaway
+        # password in a tracked file -- buys nothing on a runner that dies with
+        # the job.
+        env:
+          POSTGRES_USER: gate3
+          POSTGRES_DB: gate3
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gate3 -d gate3"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -408,31 +433,125 @@ jobs:
           fi
           uv run --frozen alembic history | head -n 20
 
-      - name: Apply every migration to an empty database
+      - name: Apply every migration to an empty SQLite database
         env:
           DATABASE_URL: sqlite:///${RUNNER_TEMP}/gate3.db
         run: |
           set -euo pipefail
+          # The expected head comes from the toolchain, not from a literal in
+          # this file. Hardcoding it here would be a fifth revision that passes
+          # this gate against a stale expectation.
+          export EXPECTED_HEAD="$(uv run --frozen alembic heads | awk 'NR==1 {print $1}')"
+          test -n "$EXPECTED_HEAD"
           uv run --frozen alembic upgrade head
           uv run --frozen python - <<'PY'
-          import os, sqlite3, sys
-          db = os.environ["DATABASE_URL"].split("///", 1)[1]
-          conn = sqlite3.connect(db)
-          tables = {r[0] for r in conn.execute(
-              "select name from sqlite_master where type='table'")}
-          head = conn.execute("select version_num from alembic_version").fetchone()[0]
+          import os, sys
+          import sqlalchemy as sa
+
+          url = os.environ["DATABASE_URL"]
+          expected_head = os.environ["EXPECTED_HEAD"]
           required = {"projects", "graphs", "simulations", "reports",
                       "dw_runs", "dw_paths"}
+
+          engine = sa.create_engine(url)
+          with engine.connect() as conn:
+              if engine.dialect.name == "sqlite":
+                  rows = conn.execute(
+                      sa.text("select name from sqlite_master where type = 'table'")
+                  )
+              else:
+                  rows = conn.execute(
+                      sa.text(
+                          "select table_name from information_schema.tables "
+                          "where table_schema = current_schema()"
+                      )
+                  )
+              tables = {row[0] for row in rows}
+              head = conn.execute(
+                  sa.text("select version_num from alembic_version")
+              ).scalar()
+
           missing = required - tables
           if missing:
-              print(f"::error::Migrations ran but created no {sorted(missing)}")
+              print(f"::error::{engine.dialect.name} created no {sorted(missing)}")
               sys.exit(1)
-          print(f"applied {head}: {len(tables)} tables")
+          if head != expected_head:
+              print(f"::error::{engine.dialect.name} recorded {head}, "
+                    f"expected {expected_head}")
+              sys.exit(1)
+          print(f"{engine.dialect.name}: applied {head}: {len(tables)} tables")
           PY
 
-      - name: Roll the migrations back and forward
+      - name: Apply every migration to an empty PostgreSQL database
+        # The assertion above is deliberately byte-identical, so a table that
+        # SQLite creates and PostgreSQL does not fails here rather than being
+        # noticed by whoever first migrates a real database.
+        # backend/tests/test_migrations_ci_postgres.py pins that identity.
+        #
+        # `postgresql+psycopg`, not a bare `postgresql://`: `migrations/env.py`
+        # leaves a bare scheme alone, and SQLAlchemy's default PostgreSQL
+        # dialect is psycopg2, which this project does not ship. It declares
+        # `psycopg[binary]` (psycopg 3), so a bare scheme aborts with
+        # ModuleNotFoundError: No module named 'psycopg2'.
+        env:
+          DATABASE_URL: postgresql+psycopg://gate3@127.0.0.1:5432/gate3
+        run: |
+          set -euo pipefail
+          export EXPECTED_HEAD="$(uv run --frozen alembic heads | awk 'NR==1 {print $1}')"
+          test -n "$EXPECTED_HEAD"
+          uv run --frozen alembic upgrade head
+          uv run --frozen python - <<'PY'
+          import os, sys
+          import sqlalchemy as sa
+
+          url = os.environ["DATABASE_URL"]
+          expected_head = os.environ["EXPECTED_HEAD"]
+          required = {"projects", "graphs", "simulations", "reports",
+                      "dw_runs", "dw_paths"}
+
+          engine = sa.create_engine(url)
+          with engine.connect() as conn:
+              if engine.dialect.name == "sqlite":
+                  rows = conn.execute(
+                      sa.text("select name from sqlite_master where type = 'table'")
+                  )
+              else:
+                  rows = conn.execute(
+                      sa.text(
+                          "select table_name from information_schema.tables "
+                          "where table_schema = current_schema()"
+                      )
+                  )
+              tables = {row[0] for row in rows}
+              head = conn.execute(
+                  sa.text("select version_num from alembic_version")
+              ).scalar()
+
+          missing = required - tables
+          if missing:
+              print(f"::error::{engine.dialect.name} created no {sorted(missing)}")
+              sys.exit(1)
+          if head != expected_head:
+              print(f"::error::{engine.dialect.name} recorded {head}, "
+                    f"expected {expected_head}")
+              sys.exit(1)
+          print(f"{engine.dialect.name}: applied {head}: {len(tables)} tables")
+          PY
+
+      - name: Roll the SQLite migrations back and forward
         env:
           DATABASE_URL: sqlite:///${RUNNER_TEMP}/gate3.db
+        run: |
+          set -euo pipefail
+          uv run --frozen alembic downgrade base
+          uv run --frozen alembic upgrade head
+
+      - name: Roll the PostgreSQL migrations back and forward
+        # Rollback that cannot run is not a rollback. The `drop_table` calls in
+        # each downgrade() are the only proof of that, and SQLite accepting them
+        # is not evidence PostgreSQL will.
+        env:
+          DATABASE_URL: postgresql+psycopg://gate3@127.0.0.1:5432/gate3
         run: |
           set -euo pipefail
           uv run --frozen alembic downgrade base
@@ -444,6 +563,11 @@ jobs:
         # database, reads all 16 canonical tables as removed, and writes a
         # revision whose upgrade() drops every one of them. It exits 0 and says
         # it succeeded. This step asserts it refuses and writes nothing.
+        #
+        # SQLite only, deliberately. `env.py` raises from
+        # `_load_target_metadata()` before it builds an engine, so the refusal
+        # is engine-independent; running it twice would cost a service container
+        # pull to re-prove a fact that cannot vary.
         env:
           DATABASE_URL: sqlite:///${RUNNER_TEMP}/gate3.db
         run: |

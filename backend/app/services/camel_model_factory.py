@@ -22,6 +22,13 @@ OPENAI_DEFAULT_URLS = {
     "https://api.openai.com/v1",
     "https://api.openai.com/v1/",
 }
+# Anthropic-compatible endpoints (use /v1/messages instead of /v1/chat/completions)
+ANTHROPIC_DEFAULT_URLS = {
+    "https://api.anthropic.com",
+    "https://api.anthropic.com/",
+    "https://api.anthropic.com/v1",
+    "https://api.anthropic.com/v1/",
+}
 
 
 @dataclass
@@ -42,11 +49,47 @@ class ResolvedModelConfig:
 
 
 def _clean_url(url: str | None) -> str:
-    return (url or "").strip() or Config.LLM_BASE_URL
+    raw = (url or "").strip()
+    if not raw:
+        return Config.LLM_BASE_URL
+    normalized = raw.rstrip("/")
+    for suffix in ("/chat/completions", "/messages"):
+        if normalized.endswith(suffix):
+            normalized = normalized[: -len(suffix)]
+    return normalized or Config.LLM_BASE_URL
 
 
 def _env_value(prefix: str, key: str, fallback: str = "") -> str:
     return os.environ.get(f"{prefix}_{key}", fallback)
+
+
+def _detect_provider_mode(base_url: str, model_name: str) -> tuple[str, str]:
+    """Detect provider mode and model platform from base URL and model name."""
+    normalized_url = base_url.rstrip("/")
+    for suffix in ("/chat/completions", "/messages"):
+        if normalized_url.endswith(suffix):
+            normalized_url = normalized_url[: -len(suffix)]
+    
+    # Check for OpenAI default URLs
+    if normalized_url in {url.rstrip("/") for url in OPENAI_DEFAULT_URLS}:
+        return "openai", "OPENAI"
+    
+    # Check for Anthropic default URLs
+    if normalized_url in {url.rstrip("/") for url in ANTHROPIC_DEFAULT_URLS}:
+        return "anthropic", "ANTHROPIC"
+    
+    # Check for Anthropic-compatible endpoints (e.g., Fluxlane /v1/messages)
+    # These typically have "messages" in the path or use known Anthropic-compatible providers
+    if "/messages" in normalized_url or "anthropic" in normalized_url.lower():
+        return "anthropic", "ANTHROPIC"
+    
+    # Check model name for Anthropic/Claude models
+    model_lower = model_name.lower()
+    if any(prefix in model_lower for prefix in ("claude-", "anthropic/")):
+        return "anthropic", "ANTHROPIC"
+    
+    # Default to OpenAI-compatible
+    return "openai_compatible", "OPENAI_COMPATIBLE_MODEL"
 
 
 def resolve_model_config(role: str, prefer_boost: bool = False) -> ResolvedModelConfig:
@@ -69,13 +112,7 @@ def resolve_model_config(role: str, prefer_boost: bool = False) -> ResolvedModel
         max_retries = int(_env_value(source_prefix, "MAX_RETRIES", os.environ.get("LLM_MAX_RETRIES", "3")))
         semaphore = int(_env_value(source_prefix, "SEMAPHORE", os.environ.get("LLM_SEMAPHORE", "30")))
 
-    normalized_url = base_url.rstrip("/")
-    if normalized_url in {url.rstrip("/") for url in OPENAI_DEFAULT_URLS}:
-        provider_mode = "openai"
-        model_platform = "OPENAI"
-    else:
-        provider_mode = "openai_compatible"
-        model_platform = "OPENAI_COMPATIBLE_MODEL"
+    provider_mode, model_platform = _detect_provider_mode(base_url, model_name)
 
     return ResolvedModelConfig(
         role=role,
@@ -164,6 +201,13 @@ def create_camel_model(role: str, prefer_boost: bool = False):
     if settings.provider_mode == "openai_compatible":
         kwargs["url"] = settings.base_url
         kwargs["api_key"] = api_key
+    elif settings.provider_mode == "anthropic":
+        # Anthropic uses a fixed endpoint; base_url is not needed for official Anthropic API
+        # For Anthropic-compatible providers (like Fluxlane), we may need to pass the base_url
+        kwargs["api_key"] = api_key
+        # For Anthropic-compatible providers that use a custom base URL, pass it as url
+        if settings.base_url and settings.base_url not in {url.rstrip("/") for url in ANTHROPIC_DEFAULT_URLS}:
+            kwargs["url"] = settings.base_url
     else:
         kwargs["api_key"] = api_key
 

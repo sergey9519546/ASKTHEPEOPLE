@@ -23,6 +23,8 @@ fail if the default regresses to a CWD-relative path.
 
 from pathlib import Path
 
+import yaml
+
 from app.services.prompt_registry_service import PromptRegistryService
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -79,22 +81,47 @@ def test_default_registry_parses_nothing_because_the_document_format_differs():
     )
 
 
-def test_yaml_registry_is_the_only_implementation_that_loads_real_content():
-    """``app/prompts/registry.py`` loads five real YAML definitions.
+def test_yaml_registry_loads_every_definition_file_on_disk():
+    """``app/prompts/registry.py`` loads and fingerprints every definition.
 
-    This is the implementation with actual content behind it. It still has no
-    production consumer, which is the open T30 work.
+    The count is derived from the definition files on disk rather than
+    hardcoded. A hardcoded count turns every legitimate adoption -- T30 moved four
+    `zep_tools` prompts into the registry -- into a failing test, which is how a
+    guard gets deleted instead of updated. Asserting "every file on disk loaded
+    and fingerprinted" still catches a malformed or unloadable definition, which
+    is the failure worth catching.
+
+    This is the implementation with real content behind it and a production
+    consumer: ``app/utils/llm_client.py`` imports it and instantiates it lazily.
     """
     from app.prompts.registry import PromptRegistry
 
-    yaml_registry = PromptRegistry()
-    assert len(yaml_registry.prompts) == 5, (
-        f"expected 5 YAML prompt definitions, found {len(yaml_registry.prompts)}"
-    )
-    prompt_id, versions = sorted(yaml_registry.prompts.items())[0]
-    version = sorted(versions)[0]
-    assert yaml_registry.get_sha256(prompt_id, version), (
-        "the YAML registry must produce a SHA256 audit fingerprint"
+    definitions_dir = Path(REPO_ROOT) / "backend" / "app" / "prompts" / "definitions"
+    definition_files = sorted(definitions_dir.glob("*.yaml"))
+    assert definition_files, f"no prompt definitions found in {definitions_dir}"
+
+    registry = PromptRegistry()
+    loaded = {
+        prompt_id
+        for prompt_id, versions in registry.prompts.items()
+        for version in versions
+    }
+    assert loaded, "the YAML registry loaded no prompts"
+
+    # Every definition file must contribute a loadable, fingerprinted prompt.
+    unresolved = []
+    for definition_file in definition_files:
+        definition = yaml.safe_load(definition_file.read_text(encoding="utf-8"))
+        prompt_id = definition["id"]
+        version = str(definition["version"])
+        if prompt_id not in registry.prompts or version not in registry.prompts[prompt_id]:
+            unresolved.append(f"{definition_file.name} ({prompt_id} {version})")
+            continue
+        assert registry.get_sha256(prompt_id, version), (
+            f"{prompt_id} {version} loaded without a SHA256 fingerprint"
+        )
+    assert not unresolved, (
+        "definition files exist but did not load: " + ", ".join(unresolved)
     )
 
 

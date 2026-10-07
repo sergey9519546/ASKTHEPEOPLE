@@ -196,6 +196,7 @@
                     maxlength="2048"
                     inputmode="url"
                     placeholder="https://provider.example/v1"
+                    @blur="onBaseUrlChange"
                   />
                 </label>
                 <label>
@@ -205,8 +206,20 @@
                     type="text"
                     maxlength="256"
                     placeholder="Provider model identifier"
+                    :list="`model-list-primary-${modalId}`"
                   />
+                  <datalist :id="`model-list-primary-${modalId}`">
+                    <option v-for="m in availableModels" :key="m.id" :value="m.id">{{ m.name || m.id }}</option>
+                  </datalist>
                 </label>
+                <button
+                  type="button"
+                  class="secondary-action"
+                  :disabled="loadingModels || !form.LLM_API_KEY.trim() || !form.LLM_BASE_URL.trim()"
+                  @click="fetchAvailableModels"
+                >
+                  {{ loadingModels ? "Fetching…" : "Fetch available models" }}
+                </button>
               </fieldset>
 
               <fieldset class="model-card">
@@ -244,10 +257,15 @@
                     type="text"
                     maxlength="256"
                     placeholder="Optional separate model"
+                    :list="`model-list-boost-${modalId}`"
                   />
+                  <datalist :id="`model-list-boost-${modalId}`">
+                    <option v-for="m in availableBoostModels" :key="m.id" :value="m.id">{{ m.name || m.id }}</option>
+                  </datalist>
                 </label>
               </fieldset>
             </div>
+            <p v-if="modelsError" class="feedback is-error" role="status">{{ modelsError }}</p>
           </section>
 
           <section class="support-section" aria-labelledby="support-title">
@@ -346,7 +364,10 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { getSettings, testConnection, updateSettings } from "../api/settings";
+import { getModels } from "../api/models";
 import { clearAccessKey, getAccessKey } from "../composables/useAccessKey.js";
+
+const modalId = `settings-modal-${Math.random().toString(36).slice(2, 9)}`;
 
 const emit = defineEmits(["close", "saved"]);
 
@@ -385,6 +406,10 @@ const form = ref({
   LLM_BOOST_BASE_URL: "",
   LLM_BOOST_MODEL_NAME: "",
 });
+const availableModels = ref([]);
+const availableBoostModels = ref([]);
+const loadingModels = ref(false);
+const modelsError = ref("");
 
 const presets = [
   {
@@ -424,6 +449,15 @@ const presets = [
     LLM_BOOST_MODEL_NAME: "gpt-4.1",
   },
   {
+    id: "fluxlane",
+    name: "Fluxlane",
+    sub: "Hosted API",
+    LLM_BASE_URL: "https://fluxlane.cn/v1/chat/completions",
+    LLM_MODEL_NAME: "gpt-4o",
+    LLM_BOOST_BASE_URL: "https://fluxlane.cn/v1/messages",
+    LLM_BOOST_MODEL_NAME: "claude-3-5-sonnet-20241022",
+  },
+  {
     id: "ollama",
     name: "Ollama",
     sub: "Local service",
@@ -446,12 +480,23 @@ const presets = [
 const normalizedAllowedBaseUrls = computed(
   () => new Set(allowedBaseUrls.value.map((url) => url.replace(/\/$/, ""))),
 );
+
+function normalizePresetUrl(url: string) {
+  let normalized = url.replace(/\/$/, "");
+  for (const suffix of ["/chat/completions", "/messages"]) {
+    if (normalized.endsWith(suffix)) {
+      normalized = normalized.slice(0, -suffix.length);
+    }
+  }
+  return normalized;
+}
+
 const availablePresets = computed(() =>
   presets.filter((preset) => {
-    const primary = preset.LLM_BASE_URL.replace(/\/$/, "");
-    const boost = preset.LLM_BOOST_BASE_URL.replace(/\/$/, "");
+    const primary = normalizePresetUrl(preset.LLM_BASE_URL);
+    const boost = normalizePresetUrl(preset.LLM_BOOST_BASE_URL);
     const isPrivate =
-      primary.startsWith("http://") || boost.startsWith("http://");
+      preset.LLM_BASE_URL.startsWith("http://") || preset.LLM_BOOST_BASE_URL.startsWith("http://");
     return (
       normalizedAllowedBaseUrls.value.has(primary) &&
       normalizedAllowedBaseUrls.value.has(boost) &&
@@ -479,11 +524,11 @@ function forgetAccessKey() {
 }
 
 function detectPreset() {
-  const baseUrl = form.value.LLM_BASE_URL.trim().replace(/\/$/, "");
+  const baseUrl = normalizePresetUrl(form.value.LLM_BASE_URL.trim());
   const model = form.value.LLM_MODEL_NAME.trim();
   const match = availablePresets.value.find(
     (preset) =>
-      baseUrl === preset.LLM_BASE_URL.replace(/\/$/, "") &&
+      baseUrl === normalizePresetUrl(preset.LLM_BASE_URL) &&
       model === preset.LLM_MODEL_NAME,
   );
   activePresetId.value = match?.id || "";
@@ -544,6 +589,38 @@ async function runConnectionTest() {
     };
   } finally {
     testing.value = false;
+  }
+}
+
+async function fetchAvailableModels() {
+  loadingModels.value = true;
+  modelsError.value = "";
+  availableModels.value = [];
+  availableBoostModels.value = [];
+  try {
+    const response = await getModels();
+    const data = response?.data || {};
+    const models = data.models || [];
+    availableModels.value = models;
+    availableBoostModels.value = models;
+    if (!models.length && data.configured_model) {
+      availableModels.value = [
+        { id: data.configured_model, name: data.configured_model, provider: data.provider || "unknown" }
+      ];
+    }
+  } catch (error) {
+    modelsError.value = error?.message || "Could not fetch models.";
+  } finally {
+    loadingModels.value = false;
+  }
+}
+
+function onBaseUrlChange() {
+  modelsError.value = "";
+  availableModels.value = [];
+  availableBoostModels.value = [];
+  if (form.value.LLM_API_KEY.trim() && form.value.LLM_BASE_URL.trim()) {
+    fetchAvailableModels();
   }
 }
 

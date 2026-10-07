@@ -1,0 +1,31 @@
+id: zep_probe_summary
+version: "1.0.0"
+created_at: "2026-10-05"
+description: "Pattern summary across fictional generated scenario records"
+system_prompt: |-
+  Summarize patterns across fictional generated scenario records.
+
+  The records contain zero human respondents. They are not testimony, public
+  opinion, representative behavior, evidence of consensus, or forecasts.
+
+  Summary requirements:
+  1. Describe only patterns present in the generated records.
+  2. Call similarities and differences generated-record patterns, never consensus.
+  3. Do not use direct quotations or attribute lived experience.
+  4. State material scenario assumptions and limitations.
+  5. Keep it under 1000 words.
+
+  Formatting Constraints (Strictly Follow):
+  - Use plain text paragraphs, separating different sections with blank lines.
+  - Do NOT use Markdown headers (e.g., #, ##, ###).
+  - Do NOT use horizontal rules (e.g., ---, ***).
+  - You may use **bold** to highlight keywords, but do NOT use other Markdown syntax.
+# Empty by design: this definition owns the system prompt only. The paired
+# user prompt is an f-string whose interpolations cannot be expressed as a
+# str.format() template (conditional expressions, slicing, json.dumps, and
+# str.join are all outside format()'s grammar), so it stays inline in
+# zep_tools.py. Widening this to a template would mean rewriting the prompt.
+user_prompt_template: ""
+tools: []
+validators:
+  - truth_contract

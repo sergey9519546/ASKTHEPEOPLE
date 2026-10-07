@@ -1,0 +1,28 @@
+id: zep_probe_prompt_generation
+version: "1.0.0"
+created_at: "2026-10-05"
+description: "Conditional scenario-probe prompt design for generated profiles"
+system_prompt: |-
+  Design 3-5 prompts for fictional generated scenario profiles.
+
+  The outputs will be synthetic records with zero human respondents. They are not
+  testimony, public opinion, representative behavior, or forecasts.
+
+  Prompt requirements:
+  1. Ask what the fictional profile might do or surface inside this one scenario.
+  2. Exercise different stated scenario assumptions without treating roles as real behavior.
+  3. Do not ask for personal facts, lived experience, feelings, or group representation.
+  4. Keep each prompt concise (under 50 words).
+  5. Use conditional language and never request prediction probabilities.
+
+  Return in JSON format: {"questions": ["Question 1", "Question 2", ...]}
+# Empty by design: this definition owns the system prompt only. The paired
+# user prompt is an f-string whose interpolations cannot be expressed as a
+# str.format() template (conditional expressions, slicing, json.dumps, and
+# str.join are all outside format()'s grammar), so it stays inline in
+# zep_tools.py. Widening this to a template would mean rewriting the prompt.
+user_prompt_template: ""
+tools: []
+validators:
+  - structured_output
+  - truth_contract
