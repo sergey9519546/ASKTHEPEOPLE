@@ -11,6 +11,7 @@ import json
 import os
 from dataclasses import asdict, dataclass
 from typing import Any, Dict
+from urllib.parse import urlsplit, urlunsplit
 
 from ..config import Config
 
@@ -21,13 +22,6 @@ OPENAI_DEFAULT_URLS = {
     "https://api.openai.com/",
     "https://api.openai.com/v1",
     "https://api.openai.com/v1/",
-}
-# Anthropic-compatible endpoints (use /v1/messages instead of /v1/chat/completions)
-ANTHROPIC_DEFAULT_URLS = {
-    "https://api.anthropic.com",
-    "https://api.anthropic.com/",
-    "https://api.anthropic.com/v1",
-    "https://api.anthropic.com/v1/",
 }
 
 
@@ -49,14 +43,14 @@ class ResolvedModelConfig:
 
 
 def _clean_url(url: str | None) -> str:
-    raw = (url or "").strip()
-    if not raw:
-        return Config.LLM_BASE_URL
-    normalized = raw.rstrip("/")
-    for suffix in ("/chat/completions", "/messages"):
-        if normalized.endswith(suffix):
-            normalized = normalized[: -len(suffix)]
-    return normalized or Config.LLM_BASE_URL
+    raw = (url or "").strip() or (Config.LLM_BASE_URL or "").strip()
+    parsed = urlsplit(raw)
+    path = parsed.path.rstrip("/")
+    # CAMEL appends chat/completions. Keep an explicit /messages suffix so
+    # unsupported native transport is rejected, not silently rewritten.
+    if path.endswith("/chat/completions"):
+        path = path[: -len("/chat/completions")]
+    return urlunsplit(parsed._replace(path=path))
 
 
 def _env_value(prefix: str, key: str, fallback: str = "") -> str:
@@ -64,32 +58,28 @@ def _env_value(prefix: str, key: str, fallback: str = "") -> str:
 
 
 def _detect_provider_mode(base_url: str, model_name: str) -> tuple[str, str]:
-    """Detect provider mode and model platform from base URL and model name."""
-    normalized_url = base_url.rstrip("/")
-    for suffix in ("/chat/completions", "/messages"):
-        if normalized_url.endswith(suffix):
-            normalized_url = normalized_url[: -len(suffix)]
-    
-    # Check for OpenAI default URLs
+    """Detect endpoint contracts; keep model_name for existing callers only."""
+    normalized_url = _clean_url(base_url)
+    parsed = urlsplit(normalized_url)
+    if parsed.hostname == "api.anthropic.com" or parsed.path.endswith("/messages"):
+        return "anthropic", "ANTHROPIC"
     if normalized_url in {url.rstrip("/") for url in OPENAI_DEFAULT_URLS}:
         return "openai", "OPENAI"
-    
-    # Check for Anthropic default URLs
-    if normalized_url in {url.rstrip("/") for url in ANTHROPIC_DEFAULT_URLS}:
-        return "anthropic", "ANTHROPIC"
-    
-    # Check for Anthropic-compatible endpoints (e.g., Fluxlane /v1/messages)
-    # These typically have "messages" in the path or use known Anthropic-compatible providers
-    if "/messages" in normalized_url or "anthropic" in normalized_url.lower():
-        return "anthropic", "ANTHROPIC"
-    
-    # Check model name for Anthropic/Claude models
-    model_lower = model_name.lower()
-    if any(prefix in model_lower for prefix in ("claude-", "anthropic/")):
-        return "anthropic", "ANTHROPIC"
-    
-    # Default to OpenAI-compatible
+
+    # Model names and provider-like URL substrings do not identify a wire
+    # protocol: OpenAI-compatible gateways can serve Claude models too.
     return "openai_compatible", "OPENAI_COMPATIBLE_MODEL"
+
+
+def _unsupported_transport_error(settings: ResolvedModelConfig) -> str | None:
+    # CAMEL 0.2.78's AnthropicModel inherits OpenAICompatibleModel: it sends
+    # chat/completions, not native Messages requests. Never silently convert.
+    if settings.provider_mode == "anthropic":
+        return (
+            f"{settings.role}: native Anthropic Messages transport is unsupported "
+            "by the pinned CAMEL adapter; configure an OpenAI-compatible endpoint"
+        )
+    return None
 
 
 def resolve_model_config(role: str, prefer_boost: bool = False) -> ResolvedModelConfig:
@@ -158,6 +148,9 @@ def validate_required_model_env(role: str, prefer_boost: bool = False) -> list[s
         errors.append(f"{role}: missing API key")
     if not settings.model_name:
         errors.append(f"{role}: missing model name")
+    transport_error = _unsupported_transport_error(settings)
+    if transport_error:
+        errors.append(transport_error)
     return errors
 
 
@@ -177,6 +170,9 @@ def validate_camel_runtime_imports() -> list[str]:
 
 def create_camel_model(role: str, prefer_boost: bool = False):
     settings = resolve_model_config(role, prefer_boost=prefer_boost)
+    transport_error = _unsupported_transport_error(settings)
+    if transport_error:
+        raise ValueError(transport_error)
     api_key = ""
 
     if settings.source_prefix == "LLM_BOOST":
@@ -200,15 +196,6 @@ def create_camel_model(role: str, prefer_boost: bool = False):
 
     if settings.provider_mode == "openai_compatible":
         kwargs["url"] = settings.base_url
-        kwargs["api_key"] = api_key
-    elif settings.provider_mode == "anthropic":
-        # Anthropic uses a fixed endpoint; base_url is not needed for official Anthropic API
-        # For Anthropic-compatible providers (like Fluxlane), we may need to pass the base_url
-        kwargs["api_key"] = api_key
-        # For Anthropic-compatible providers that use a custom base URL, pass it as url
-        if settings.base_url and settings.base_url not in {url.rstrip("/") for url in ANTHROPIC_DEFAULT_URLS}:
-            kwargs["url"] = settings.base_url
-    else:
-        kwargs["api_key"] = api_key
+    kwargs["api_key"] = api_key
 
     return ModelFactory.create(**kwargs)

@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .camel_model_factory import create_camel_model, load_model_resolution
+from .simulation_random import make_rng, seed_from_config
 from .claim_boundary import graph_record_disclosure
 from .simulation_artifacts import (
     append_jsonl,
@@ -478,9 +479,25 @@ def select_active_agent_ids(
     current_hour: int,
     round_num: int,
     event_boost_agent_ids: Optional[Iterable[int]] = None,
+    rng: Optional[random.Random] = None,
 ) -> List[int]:
+    """Select local activity, isolating seeded draws by platform/round/agent.
+
+    An injected RNG takes precedence over a valid config seed. Without either,
+    the existing module-global random stream remains in use. This controls the
+    scheduler only; it does not make model-generated actions reproducible.
+    """
+    seed = seed_from_config(config)
+    addressed_streams = seed is not None and rng is None
+    namespace = f"scheduler:{platform}"
+    local_rng = rng if rng is not None else random
+    count_rng = make_rng(seed, f"{namespace}:count", round_num=round_num) if addressed_streams else local_rng
+    selection_rng = make_rng(seed, f"{namespace}:selection", round_num=round_num) if addressed_streams else local_rng
     time_config = config.get("time_config", {})
     agent_configs = config.get("agent_configs", [])
+    if seed is not None or rng is not None:
+        by_id = {cfg.get("agent_id", 0): cfg for cfg in agent_configs}
+        agent_configs = [by_id[agent_id] for agent_id in sorted(by_id)]
     boost_ids = set(event_boost_agent_ids or [])
 
     base_min = time_config.get("agents_per_hour_min", 5)
@@ -496,7 +513,7 @@ def select_active_agent_ids(
     else:
         multiplier = 1.0
 
-    target_count = int(random.uniform(base_min, base_max) * multiplier)
+    target_count = int(count_rng.uniform(base_min, base_max) * multiplier)
     if boost_ids:
         target_count = max(target_count, min(len(agent_configs), len(boost_ids)))
 
@@ -534,7 +551,11 @@ def select_active_agent_ids(
             activity_probability = max(activity_probability, 0.92)
 
         activity_probability = max(0.02, min(0.98, activity_probability))
-        if random.random() < activity_probability:
+        activity_rng = (
+            make_rng(seed, f"{namespace}:activity", round_num=round_num, agent_id=agent_id)
+            if addressed_streams else local_rng
+        )
+        if activity_rng.random() < activity_probability:
             candidates.append(agent_id)
 
     selected = [agent_id for agent_id in candidates if agent_id in boost_ids]
@@ -542,10 +563,10 @@ def select_active_agent_ids(
     
     needed = max(0, target_count - len(selected))
     if needed > 0 and remaining:
-        selected.extend(random.sample(remaining, min(needed, len(remaining))))
+        selected.extend(selection_rng.sample(remaining, min(needed, len(remaining))))
     
     if not selected:
-        return list(boost_ids)[:target_count]
+        return sorted(boost_ids)[:target_count]
     return selected
 
 

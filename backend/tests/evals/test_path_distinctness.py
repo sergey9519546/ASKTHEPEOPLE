@@ -1,7 +1,7 @@
 """
-Path Distinctness Evaluation (Gate 5 requirement).
+Offline path-signature fixture heuristics.
 
-Tests that different profiles lead to distinct simulation paths:
+Checks a local test-only signature function, not the OASIS runtime:
 - Path divergence: Different profiles should produce different decisions/outcomes
 - Assumption isolation: Perturbing one assumption shouldn't affect unrelated paths
 
@@ -78,7 +78,7 @@ def create_diverse_profiles(profile_generator, count: int = 8) -> List[OasisAgen
 
 def simulate_decision(profile: OasisAgentProfile, scenario: str, ignore_age: bool = False) -> str:
     """
-    Simulate a decision based on profile characteristics.
+    Construct a deterministic, test-only signature from fixture attributes.
     
     This is a simplified simulation that creates a decision signature based on:
     - Profile profession
@@ -317,42 +317,5 @@ def test_assumption_isolation(profile_generator, eval_results_path):
     )
 
 
-def test_path_distinctness_summary(recorded_results):
-    """
-    Summary test that prints overall path distinctness metrics.
-    """
-    import json
-    
-    # This threshold never ran. The test asked whether a per-test pytest tmp
-    # file existed, and a test asking that is asking whether a file written
-    # LATER has been written yet - so all three summary tests skipped
-    # unconditionally and the gate they implement was silently disabled.
-
-    # The recorded_results fixture is what this session has measured so far,
-    # measured so far, else the committed artifact from the previous run.
-    results = recorded_results
-    missing = [k for k in ['path_divergence_rate', 'assumption_isolation_rate'] if k not in results]
-    assert not missing, (
-        f"evaluation metric(s) {missing} were never recorded, so this "
-        "threshold cannot be evaluated - the code that produces them did not run."
-    )
-    print("\n" + "="*70)
-    print("PATH DISTINCTNESS EVALUATION SUMMARY")
-    print("="*70)
-    
-    divergence_rate = results.get('path_divergence_rate', 0)
-    isolation_rate = results.get('assumption_isolation_rate', 0)
-    
-    print(f"\nPath Divergence Rate: {divergence_rate:.2%} (threshold: >60%)")
-    print(f"Assumption Isolation: {isolation_rate:.2%} (threshold: 100%)")
-    
-    # Overall pass/fail
-    divergence_pass = divergence_rate > 0.60
-    isolation_pass = isolation_rate == 1.0
-    
-    all_pass = divergence_pass and isolation_pass
-    
-    print(f"\nPath Divergence Check: {'✓ PASS' if divergence_pass else '✗ FAIL'}")
-    print(f"Isolation Check:       {'✓ PASS' if isolation_pass else '✗ FAIL'}")
-    print(f"\nOverall Distinctness:  {'✓ PASS' if all_pass else '✗ FAIL'}")
-    print("="*70 + "\n")
+# Thresholds belong to the producing tests above, not an order-dependent
+# aggregate that requires excluded tests or an old artifact to have run.

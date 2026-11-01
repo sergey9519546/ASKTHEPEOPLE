@@ -441,8 +441,8 @@ class SimulationConfigGenerator:
             event_schedule=self._build_event_schedule(event_config, context_profile, all_agent_configs),
             bootstrap_posts=list(event_config.initial_posts),
             platform_profiles=self._build_platform_profiles(context_profile, enable_twitter, enable_reddit),
-            llm_model=self.model_name,
-            llm_base_url=self.base_url,
+            llm_model=self.client.model,
+            llm_base_url=self.client.base_url,
             generation_reasoning=" | ".join(reasoning_parts)
         )
         

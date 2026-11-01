@@ -1,160 +1,87 @@
-# Evaluation Suite for ASKTHEPEOPLE
+# Offline evaluations for ASKTHEPEOPLE / Synthetic Decision Explorer
 
-This directory contains the automated quality gates for the ASKTHEPEOPLE system (Gate 5 requirement).
+This directory contains offline, fixture-backed quality checks for the
+ASKTHEPEOPLE Synthetic Decision Explorer. These checks exercise deterministic
+profile, path-signature, disclosure, and truth-contract helpers. They do not
+call a paid model, recruit human respondents, establish population fidelity, or
+validate a forecast.
 
-## Overview
+Version: 2.0.0. Last reviewed: 2026-10-31.
 
-The evaluation suite tests three critical quality dimensions:
+## Scope
 
-1. **Profile Quality** - Ensures generated profiles are diverse, non-stereotypical, and non-essentialist
-2. **Path Distinctness** - Verifies different profiles lead to distinct simulation outcomes
-3. **Truth Contract** - Validates all outputs contain proper synthetic data disclosure metadata
+- `test_profile_quality.py` checks rule-based profile fixture diversity and
+  scans generated fixture text for stereotype and essentialist markers.
+- `test_path_distinctness.py` checks deterministic decision signatures and
+  assumption-isolation behavior in the local test helper.
+- `test_truth_contract.py` checks disclosure structures and local API/test
+  fixtures; it does not measure API endpoint coverage.
+- `test_variant_persona_distinctness.py` checks fixture persona similarity
+  using word shingles (offline text similarity, not behavioral fidelity).
+- `test_results_artifact.py` checks artifact freshness, provenance, output-path
+  handling, and outcome/error accounting.
 
-## Test Files
+The numeric thresholds in the test files are acceptance thresholds for these
+offline heuristics only. A passing result is not a fidelity or accuracy claim.
 
-### `test_profile_quality.py`
+## Running
 
-Tests profile generation quality with three checks:
-
-- **Diversity Test**: Generates 100 profiles and measures uniqueness
-  - **Threshold**: >80% unique decision criteria
-  - **Purpose**: Ensures profiles represent diverse perspectives
-
-- **Stereotype Detection**: Checks 100 profiles for stereotype markers
-  - **Threshold**: <5% flagged
-  - **Purpose**: Prevents harmful stereotyping in generated personas
-
-- **Essentialism Detection**: Scans profiles for essentialist language
-  - **Threshold**: 0% (strict - no essentialist language allowed)
-  - **Purpose**: Avoids claims about inherent traits or deterministic behavior
-
-### `test_path_distinctness.py`
-
-Tests that different profiles produce different simulation paths:
-
-- **Path Divergence Test**: Runs same scenario with 8 diverse profiles
-  - **Threshold**: >60% unique decision paths
-  - **Purpose**: Ensures profiles lead to meaningfully different outcomes
-
-- **Assumption Isolation Test**: Perturbs one assumption, verifies unrelated paths unchanged
-  - **Threshold**: 100% isolation (unrelated scenarios must not change)
-  - **Purpose**: Validates that changing one profile attribute doesn't arbitrarily affect unrelated decisions
-
-### `test_truth_contract.py`
-
-Tests that all outputs contain required disclosure metadata:
-
-- **Synthetic Disclosure Metadata**: Validates disclosure functions return correct structure
-- **API Endpoints Truth Contract**: Tests API responses for required fields:
-  - `human_respondent_count` == 0
-  - `output_origin` == "synthetic"
-  - `is_forecast` == False
-  - `generated_at` is valid ISO8601
-- **Export Disclosure Blocks**: Verifies disclosure text is present and complete
-- **Profile Truth Metadata**: Ensures generated profiles are marked as fictional
-
-## Running the Evaluation Suite
-
-### Locally
+From `backend/`:
 
 ```bash
-cd backend
+# Fresh artifact is written to backend/.pytest_eval_results/results.json.
 pytest tests/evals/ -v --tb=short
+
+# Choose any output path; parent directories are created automatically.
+pytest tests/evals/ -v --eval-results C:/tmp/askthepeople-evals/results.json
 ```
 
-### In CI
+The `--eval-results` path is used by both the `eval_results_path` fixture and
+the pytest result plugin. Each run writes a complete fresh snapshot and does
+not merge from an existing output file.
 
-The evaluation suite runs automatically in CI after backend tests pass. See `.github/workflows/ci.yml`:
+The tracked `tests/evals/results.json` is historical evidence. It is never
+used as a fallback for current-session assertions and is never rewritten by the
+suite. Historical-byte checks may read it explicitly to verify its integrity.
 
-```yaml
-- name: Run evaluation suite
-  env:
-    FLASK_DEBUG: "true"
-    SECRET_KEY: "ci-secret-key-for-testing-only"
-    LLM_API_KEY: "ci-test-key"
-    ZEP_API_KEY: "ci-test-key"
-  run: uv run --frozen pytest tests/evals/ -v --tb=short
-```
+## Artifact contract
 
-## Evaluation Results
+A fresh artifact contains:
 
-After running the suite, results are saved to `backend/tests/evals/results.json`:
+- `artifact_schema_version` and `scope: "current_session"`;
+- `freshness: "session_only"`, a session id, and start/finish timestamps;
+- `status`: `complete`, `partial`, or `failed`. A selected subset with missing
+  required metrics remains `partial`; selected-test success is recorded separately.
+  Setup, call, teardown, or eval collection failures produce `failed`;
+- `selected_tests` and `_test_summary`, including `not_run`, setup/teardown
+  error counts, and error entries containing test identifiers and phases only;
+- `metrics` plus top-level metric compatibility keys;
+- `metric_provenance`, including producer test id, offline measurement class,
+  dataset-fixture identity, `dataset_fixture_id_sha256` (hash of that ID,
+  not dataset contents), and test-file SHA-256 of the inline fixture recipe;
+- `producers`, one record for each metric-producing test.
 
-```json
-{
-  "diversity_rate": 0.85,
-  "stereotype_rate": 0.02,
-  "essentialism_rate": 0.0,
-  "path_divergence_rate": 0.75,
-  "assumption_isolation_rate": 1.0,
-  "truth_contract_pass_rate": 1.0,
-  "_test_summary": {
-    "total_tests": 12,
-    "passed": 9,
-    "failed": 0,
-    "skipped": 3,
-    "exit_status": 0,
-    "session_exit_status": 0
-  }
-}
-```
+`offline_heuristic` is the expected measurement class for these tests. It
+labels how a metric was produced; it does not claim synthetic output matches
+real people or real-world outcomes.
 
-`exit_status` reflects the eval subset only (`0` unless an eval test failed).
-`session_exit_status` is pytest's status for the whole run, so it can be `1`
-because of an unrelated failure elsewhere while the evals themselves passed.
+## Adding an evaluation
 
-## Acceptance Criteria
+1. Add the test under `tests/evals/`.
+2. Use `eval_results_path` and call `save_eval_results(...)` for produced
+   metrics.
+3. Keep threshold assertions in the producer test so selecting a subset does
+   not depend on another test's execution order.
+4. Provide a stable `dataset_fixture` identity when the metric is tied to a
+   fixture population.
+5. Do not read or overwrite `tests/evals/results.json` from a normal test run.
 
-All tests must pass with these thresholds:
+## Impact and rollback
 
-| Metric | Threshold | Current |
-|--------|-----------|---------|
-| Profile Diversity | >80% | ✓ |
-| Stereotype Rate | <5% | ✓ |
-| Essentialism Rate | 0% | ✓ |
-| Path Divergence | >60% | ✓ |
-| Assumption Isolation | 100% | ✓ |
-| Truth Contract | 100% | ✓ |
-
-## Architecture
-
-### Fixtures (`conftest.py`)
-
-Shared fixtures for all evaluation tests:
-- `app`: Flask application instance
-- `client`: Test client for API requests
-- `profile_generator`: OasisProfileGenerator instance
-- `sample_entity`: Sample entity for testing
-- `eval_results_path`: Path for saving evaluation results
-
-### Result Collection Plugin
-
-The `EvalResultsPlugin` pytest plugin automatically collects and saves evaluation metrics to `results.json`.
-
-## Adding New Evaluation Tests
-
-1. Create test function in appropriate test file
-2. Use `eval_results_path` fixture to save metrics
-3. Call `save_eval_results(results, eval_results_path)` with your metrics
-4. Add assertions with clear error messages
-5. Update this README with new test documentation
-
-## Troubleshooting
-
-### Tests fail with "diversity too low"
-- Check that profile generation is creating varied attributes
-- Verify MBTI types, professions, and topics are distributed
-
-### Tests fail with "truth contract violations"
-- Ensure API responses include required disclosure fields
-- Check that disclosure functions are called in response handlers
-
-### CI failures
-- Verify all environment variables are set in CI config
-- Check that LLM_API_KEY and ZEP_API_KEY placeholders work for rule-based generation
-
-## Related Documentation
-
-- [Gate 5 Requirements](../../docs/gates/gate-5-quality.md)
-- [Truth Contract Specification](../../docs/truth-contract.md)
-- [Profile Generation Guide](../../docs/profile-generation.md)
+Current-session evidence no longer carries historical metrics. Consumers should
+use the configured output path, inspect status and producer outcomes, and treat
+metrics from failed or unfinished producers as diagnostic observations only.
+The suite retains top-level metric names alongside the explicit `metrics` map.
+No threshold was lowered. Production code, prompts, and stored user data are
+unaffected. Rolling back this harness change needs no data migration; preserve
+the tracked historical artifact and do not restore it as fresh run evidence.

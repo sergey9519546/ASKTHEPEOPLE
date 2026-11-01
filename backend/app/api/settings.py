@@ -18,6 +18,7 @@ from urllib.parse import urlsplit, urlunsplit
 from flask import current_app, jsonify, request
 
 from ..config import Config
+from ..services.camel_model_factory import _detect_provider_mode
 from ..utils.llm_client import LLMClient
 from ..utils.logger import get_logger
 from . import settings_bp
@@ -151,6 +152,17 @@ def _allowed_base_urls() -> set[str]:
 
 
 def _validate_base_url(value: str) -> str:
+    # Inspect the supplied endpoint before normalization erases /messages.
+    # Both the connection test and CAMEL adapter use chat-completions transport.
+    try:
+        provider_mode, _ = _detect_provider_mode(value, "")
+    except ValueError as exc:
+        raise SettingsValidationError("Invalid LLM base URL") from exc
+    if provider_mode == "anthropic":
+        raise SettingsValidationError(
+            "native Anthropic Messages transport is unsupported; "
+            "configure an OpenAI-compatible endpoint"
+        )
     normalized = _normalize_base_url(value)
     if normalized not in _allowed_base_urls():
         raise SettingsValidationError(

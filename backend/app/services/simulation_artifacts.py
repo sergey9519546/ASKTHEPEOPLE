@@ -115,12 +115,14 @@ def write_run_manifest(
     Writing is best-effort: provenance must never fail a run that otherwise
     produced valid artifacts.
     """
-    payload: Dict[str, Any] = {
-        "schema_version": 1,
-        "prompt_call_count": len(prompt_records),
-        "prompt_calls": list(prompt_records),
-    }
     try:
+        existing = read_json(run_manifest_path(simulation_dir), default={})
+        payload: Dict[str, Any] = dict(existing) if isinstance(existing, dict) else {}
+        payload.update({
+            "schema_version": 1,
+            "prompt_call_count": len(prompt_records),
+            "prompt_calls": list(prompt_records),
+        })
         write_json(run_manifest_path(simulation_dir), payload)
     except Exception as exc:  # pragma: no cover - provenance is not load-bearing
         logger.warning("Failed to write run manifest: %s", exc)

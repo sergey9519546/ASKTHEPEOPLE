@@ -481,7 +481,7 @@ const normalizedAllowedBaseUrls = computed(
   () => new Set(allowedBaseUrls.value.map((url) => url.replace(/\/$/, ""))),
 );
 
-function normalizePresetUrl(url: string) {
+function normalizePresetUrl(url) {
   let normalized = url.replace(/\/$/, "");
   for (const suffix of ["/chat/completions", "/messages"]) {
     if (normalized.endsWith(suffix)) {

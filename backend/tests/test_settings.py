@@ -1,5 +1,6 @@
 import json
 import os
+from types import SimpleNamespace
 
 import pytest
 
@@ -172,3 +173,157 @@ def test_production_runtime_settings_require_app_token(app, client):
 
     response = client.get("/api/settings")
     assert response.status_code == 401
+
+
+@pytest.mark.parametrize("url", [
+    "https://gateway.example/v1/messages",
+    " https://gateway.example/v1/messages/ ",
+    "https://api.anthropic.com",
+    "https://api.anthropic.com/v1/messages",
+    "https://API.ANTHROPIC.COM:443/v1/",
+])
+@pytest.mark.parametrize("url_key", ["LLM_BASE_URL", "LLM_BOOST_BASE_URL"])
+def test_settings_update_rejects_native_transport_before_normalization(
+    app, client, monkeypatch, url, url_key
+):
+    from app.api import settings
+
+    app.config.update({
+        "ALLOW_RUNTIME_SETTINGS": True,
+        "LLM_ALLOWED_BASE_URLS": url.strip(),
+    })
+    key_name = "LLM_BOOST_API_KEY" if url_key == "LLM_BOOST_BASE_URL" else "LLM_API_KEY"
+    original_url = Config.LLM_BASE_URL
+    original_key = Config.LLM_API_KEY
+    original_boost_url = os.environ.get("LLM_BOOST_BASE_URL")
+    original_boost_key = os.environ.get("LLM_BOOST_API_KEY")
+    monkeypatch.setattr(settings, "_persist_settings", lambda values: pytest.fail("Native settings must not persist"))
+    monkeypatch.setattr(settings.socket, "getaddrinfo", lambda *args, **kwargs: pytest.fail("Native transport must reject before DNS"))
+
+    response = client.post("/api/settings", json={url_key: url, key_name: "caller-only-fixture-key"})
+
+    assert response.status_code == 400
+    assert "native Anthropic Messages transport is unsupported" in response.get_json()["error"]
+    assert Config.LLM_BASE_URL == original_url
+    assert Config.LLM_API_KEY == original_key
+    assert os.environ.get("LLM_BOOST_BASE_URL") == original_boost_url
+    assert os.environ.get("LLM_BOOST_API_KEY") == original_boost_key
+    assert not os.path.exists(app.config["RUNTIME_SETTINGS_ENV_PATH"])
+
+
+@pytest.mark.parametrize("url", [
+    "https://gateway.example/v1/messages",
+    "https://api.anthropic.com/v1/",
+])
+def test_settings_connection_rejects_native_transport_before_client(
+    app, client, monkeypatch, url
+):
+    from app.api import settings
+
+    app.config.update({"ALLOW_RUNTIME_SETTINGS": True, "LLM_ALLOWED_BASE_URLS": url})
+    monkeypatch.setattr(settings, "LLMClient", lambda **kwargs: pytest.fail("Native transport must not construct OpenAI client"))
+    monkeypatch.setattr(settings.socket, "getaddrinfo", lambda *args, **kwargs: pytest.fail("Native transport must reject before DNS"))
+
+    response = client.post("/api/settings/test", json={
+        "LLM_API_KEY": "caller-only-fixture-key",
+        "LLM_BASE_URL": url,
+        "LLM_MODEL_NAME": "claude-offline-fixture",
+    })
+
+    assert response.status_code == 400
+    assert "native Anthropic Messages transport is unsupported" in response.get_json()["error"]
+
+
+@pytest.mark.parametrize("url", [
+    "https://api.openai.com/v1/chat/completions/",
+    "https://anthropic-gateway.example/v1/chat/completions/",
+])
+def test_settings_connection_accepts_canonical_chat_completion_url(
+    app, client, monkeypatch, url
+):
+    from app.api import settings
+
+    canonical = url.removesuffix("/chat/completions/")
+    app.config.update({"ALLOW_RUNTIME_SETTINGS": True, "LLM_ALLOWED_BASE_URLS": canonical})
+    monkeypatch.setattr(settings.socket, "getaddrinfo", lambda *args, **kwargs: [
+        (2, 1, 6, "", ("8.8.8.8", 443)),
+    ])
+    captured = {}
+
+    def make_client(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(chat=lambda **kwargs: "Connected")
+
+    monkeypatch.setattr(settings, "LLMClient", make_client)
+    response = client.post("/api/settings/test", json={
+        "LLM_API_KEY": "caller-only-fixture-key",
+        "LLM_BASE_URL": url,
+        "LLM_MODEL_NAME": "claude-on-chat-gateway",
+    })
+
+    assert response.status_code == 200
+    assert captured["base_url"] == canonical
+    assert captured["model"] == "claude-on-chat-gateway"
+    assert captured["api_key"] == "caller-only-fixture-key"
+
+
+@pytest.mark.parametrize("boost", [False, True])
+def test_saved_chat_endpoint_reaches_factory_without_changing_model(
+    app, client, monkeypatch, boost
+):
+    from app.api import settings
+    from app.services.camel_model_factory import resolve_model_config
+
+    prefix = "LLM_BOOST" if boost else "LLM"
+    canonical = "https://anthropic-gateway.example/v1"
+    app.config.update({"ALLOW_RUNTIME_SETTINGS": True, "LLM_ALLOWED_BASE_URLS": canonical})
+    monkeypatch.setattr(settings.socket, "getaddrinfo", lambda *args, **kwargs: [
+        (2, 1, 6, "", ("8.8.8.8", 443)),
+    ])
+    # Register all mutations for teardown before the route changes process state.
+    for suffix in ("API_KEY", "BASE_URL", "MODEL_NAME"):
+        monkeypatch.setenv(f"{prefix}_{suffix}", (
+            "https://previous.example/v1" if suffix == "BASE_URL" else "old-offline-fixture"
+        ))
+        if not boost:
+            monkeypatch.setattr(Config, f"LLM_{suffix}", (
+                "https://previous.example/v1" if suffix == "BASE_URL" else "old-offline-fixture"
+            ))
+    for suffix in ("API_KEY", "BASE_URL", "MODEL_NAME"):
+        monkeypatch.delenv(f"LLM_ACTOR_{suffix}", raising=False)
+
+    response = client.post("/api/settings", json={
+        f"{prefix}_API_KEY": "caller-only-fixture-key",
+        f"{prefix}_BASE_URL": canonical + "/chat/completions/",
+        f"{prefix}_MODEL_NAME": "claude-on-chat-gateway",
+    })
+
+    assert response.status_code == 200
+    assert response.get_json()["data"][f"{prefix}_BASE_URL"] == canonical
+    resolved = resolve_model_config("actor", prefer_boost=boost)
+    assert resolved.base_url == canonical
+    assert resolved.provider_mode == "openai_compatible"
+    assert resolved.model_name == "claude-on-chat-gateway"
+    assert os.path.isfile(app.config["RUNTIME_SETTINGS_ENV_PATH"])
+
+
+@pytest.mark.parametrize("url", [
+    "https://[invalid/v1",
+    "https://gateway.example:invalid/v1",
+    "gateway.example/v1",
+])
+def test_transport_classification_preserves_malformed_url_rejection(
+    app, client, monkeypatch, url
+):
+    from app.api import settings
+
+    app.config["ALLOW_RUNTIME_SETTINGS"] = True
+    monkeypatch.setattr(settings.socket, "getaddrinfo", lambda *args, **kwargs: pytest.fail("Invalid URL must reject before DNS"))
+    response = client.post("/api/settings/test", json={
+        "LLM_API_KEY": "caller-only-fixture-key",
+        "LLM_BASE_URL": url,
+        "LLM_MODEL_NAME": "offline-fixture",
+    })
+
+    assert response.status_code == 400
+    assert response.get_json()["success"] is False

@@ -689,6 +689,8 @@ class SimulationManager:
         population is a declared composition, never a sample size; the
         follower crowd never enters the OASIS subprocess.
         """
+        from .simulation_paths import SimulationPaths
+
         requirement = simulation_requirement.strip()
         if not requirement:
             raise DecisionLensPreparationError(

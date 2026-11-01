@@ -1,9 +1,9 @@
 ---
 title: "Architecture Decision Records"
 status: "Normative"
-version: "1.0.0"
+version: "1.1.0"
 owner: "Architecture Council"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-10-31"
 review_cycle: "Quarterly"
 research_cutoff: "2026-07-29"
 ---
@@ -44,3 +44,4 @@ ADR in the same pull request.
 | [0012](ADR-0012-canonical-transactional-and-object-persistence.md) | Canonical transactional and object persistence | Accepted |
 | [0013](ADR-0013-schema-source-convergence.md) | Schema source convergence (migrations canonical) | Accepted |
 | [0014](ADR-0014-removal-of-optimization-backtest-island.md) | Removal of the unreachable optimization and backtest island | Accepted |
+| [0015](ADR-0015-experimental-population-runtime.md) | Reviewed experimental synthetic populations; production routing remains blocked pending acceptance | Proposed |

@@ -1,7 +1,7 @@
 """
-Truth Contract Evaluation (Gate 5 requirement).
+Offline disclosure contract checks.
 
-Tests that all API responses and exports contain required truth metadata:
+Checks disclosure helper fixtures and rule-based profile metadata:
 - human_respondent_count == 0
 - output_origin == "synthetic"
 - is_forecast == False
@@ -147,136 +147,33 @@ def test_synthetic_disclosure_metadata():
     print("\n  All disclosure metadata functions passed!")
 
 
-def test_api_endpoints_truth_contract(client, eval_results_path):
+def test_disclosure_fixture_truth_contract(eval_results_path):
+    """Measure disclosure helper fixtures, not API endpoint coverage.
+
+    The previous test called only /health, then counted helper dictionaries as
+    synthetic endpoints. Preserve the raw contract check under its real scope.
     """
-    Test API endpoints for truth contract compliance.
-    
-    Makes requests to various endpoints and checks for required metadata.
-    """
-    print("\nTesting API endpoints for truth contract compliance...")
-    
-    # Define test endpoints (these should return synthetic data with truth metadata)
-    # Note: Most API endpoints require authentication or don't return synthetic data
-    # For this test, we primarily validate the disclosure metadata structures
-    test_endpoints = [
-        ('/health', 'GET', None, False),  # Health endpoint - not synthetic data
+    disclosures = [
+        synthetic_output_disclosure(),
+        fictional_profile_disclosure(),
+        synthetic_activity_disclosure(),
     ]
-    
-    passed_count = 0
-    failed_count = 0
-    total_synthetic = 0
-    violations_by_endpoint = []
-    
-    for endpoint, method, data, expect_metadata in test_endpoints:
-        print(f"\n  Testing {method} {endpoint}")
-        
-        try:
-            if method == 'GET':
-                response = client.get(endpoint)
-            elif method == 'POST':
-                response = client.post(endpoint, json=data)
-            else:
-                continue
-            
-            # Skip if endpoint requires auth or doesn't exist
-            if response.status_code in (401, 403, 404, 405):
-                print(f"    Skipped (status {response.status_code})")
-                continue
-            
-            # Parse response
-            try:
-                response_data = response.get_json()
-            except:
-                print(f"    Skipped (non-JSON response)")
-                continue
-            
-            if not response_data:
-                print(f"    Skipped (empty response)")
-                continue
-            
-            # Check if this endpoint should have metadata
-            if not expect_metadata:
-                print(f"    Skipped (not a synthetic data endpoint)")
-                continue
-            
-            total_synthetic += 1
-            
-            # Check truth metadata
-            check_result = check_truth_metadata(response_data)
-            
-            if check_result['passed']:
-                passed_count += 1
-                print(f"    ✓ PASS")
-            else:
-                failed_count += 1
-                print(f"    ✗ FAIL")
-                for violation in check_result['violations']:
-                    print(f"      - {violation}")
-                violations_by_endpoint.append({
-                    'endpoint': endpoint,
-                    'violations': check_result['violations']
-                })
-        
-        except Exception as e:
-            print(f"    Error: {str(e)}")
-    
-    # Calculate pass rate
-    if total_synthetic > 0:
-        pass_rate = passed_count / total_synthetic
-    else:
-        # If no synthetic endpoints were tested, we'll create mock tests
-        print("\n  No synthetic API endpoints available for testing.")
-        print("  Running mock validation tests instead...")
-        
-        # Test synthetic disclosure structures directly
-        test_disclosures = [
-            synthetic_output_disclosure(),
-            fictional_profile_disclosure(),
-            synthetic_activity_disclosure(),
-        ]
-        
-        total_synthetic = len(test_disclosures)
-        passed_count = 0
-        failed_count = 0
-        
-        for i, disclosure in enumerate(test_disclosures):
-            check_result = check_truth_metadata(disclosure)
-            if check_result['passed']:
-                passed_count += 1
-            else:
-                failed_count += 1
-                violations_by_endpoint.append({
-                    'endpoint': f'disclosure_{i}',
-                    'violations': check_result['violations']
-                })
-        
-        pass_rate = passed_count / total_synthetic
-    
-    print(f"\n\nAPI Truth Contract Results:")
-    print(f"  Total synthetic endpoints tested: {total_synthetic}")
-    print(f"  Passed: {passed_count}")
-    print(f"  Failed: {failed_count}")
-    print(f"  Pass rate: {pass_rate:.2%}")
-    
-    # Save results
-    results = {
-        "truth_contract_pass_rate": pass_rate,
-        "truth_contract_passed": passed_count,
-        "truth_contract_failed": failed_count,
-        "truth_contract_total": total_synthetic
-    }
-    save_eval_results(results, eval_results_path)
-    
-    # Assert 100% compliance
-    if failed_count > 0:
-        violation_summary = "\n".join([
-            f"  {v['endpoint']}: {', '.join(v['violations'])}"
-            for v in violations_by_endpoint
-        ])
-        assert False, (
-            f"Truth contract violations detected ({pass_rate:.2%} pass rate, expected 100%):\n"
-            f"{violation_summary}"
-        )
+    checks = [check_truth_metadata(disclosure) for disclosure in disclosures]
+    passed = sum(check["passed"] for check in checks)
+    failed = len(checks) - passed
+    pass_rate = passed / len(checks)
+    save_eval_results(
+        {
+            "truth_contract_pass_rate": pass_rate,
+            "truth_contract_passed": passed,
+            "truth_contract_failed": failed,
+            "truth_contract_total": len(checks),
+        },
+        eval_results_path,
+        measurement_class="offline_contract_fixture",
+        dataset_fixture="disclosure-helper-structures-v1",
+    )
+    assert pass_rate == 1.0, [check["violations"] for check in checks if not check["passed"]]
 
 
 def test_export_disclosure_blocks(eval_results_path):
@@ -318,7 +215,7 @@ def test_export_disclosure_blocks(eval_results_path):
         "disclosure_terms_complete": len(missing_terms) == 0,
         "disclosure_missing_terms": missing_terms
     }
-    save_eval_results(results, eval_results_path)
+    save_eval_results(results, eval_results_path, measurement_class="offline_contract_fixture")
     
     # Assert all terms present
     assert len(missing_terms) == 0, (
@@ -374,53 +271,11 @@ def test_profile_truth_metadata(profile_generator, sample_entity, eval_results_p
         "profile_has_source_tracking": profile.source_entity_uuid is not None,
         "profile_has_disclaimer": has_disclaimer,
     }
-    save_eval_results(results, eval_results_path)
+    save_eval_results(results, eval_results_path, measurement_class="offline_contract_fixture")
     
     print("\n  ✓ Profile truth metadata validation passed!")
 
 
-def test_truth_contract_summary(recorded_results):
-    """
-    Summary test that prints overall truth contract metrics.
-    """
-    import json
-    
-    # This threshold never ran. The test asked whether a per-test pytest tmp
-    # file existed, and a test asking that is asking whether a file written
-    # LATER has been written yet - so all three summary tests skipped
-    # unconditionally and the gate they implement was silently disabled.
-
-    # The recorded_results fixture is what this session has measured so far,
-    # measured so far, else the committed artifact from the previous run.
-    results = recorded_results
-    missing = [k for k in ['truth_contract_pass_rate'] if k not in results]
-    assert not missing, (
-        f"evaluation metric(s) {missing} were never recorded, so this "
-        "threshold cannot be evaluated - the code that produces them did not run."
-    )
-    print("\n" + "="*70)
-    print("TRUTH CONTRACT EVALUATION SUMMARY")
-    print("="*70)
-    
-    pass_rate = results.get('truth_contract_pass_rate', 0)
-    disclosure_complete = results.get('disclosure_terms_complete', False)
-    
-    print(f"\nAPI Truth Contract Pass Rate: {pass_rate:.2%} (threshold: 100%)")
-    print(f"Disclosure Block Complete:    {disclosure_complete} (required: True)")
-    
-    # Overall pass/fail
-    contract_pass = pass_rate == 1.0
-    disclosure_pass = disclosure_complete
-    
-    all_pass = contract_pass and disclosure_pass
-    
-    print(f"\nAPI Truth Contract: {'✓ PASS' if contract_pass else '✗ FAIL'}")
-    print(f"Disclosure Block:   {'✓ PASS' if disclosure_pass else '✗ FAIL'}")
-    print(f"\nOverall Truth Contract: {'✓ PASS' if all_pass else '✗ FAIL'}")
-    print("="*70 + "\n")
-    
-    # Final assertion for overall truth contract
-    assert all_pass, (
-        f"Truth contract evaluation failed. "
-        f"Pass rate: {pass_rate:.2%}, Disclosure complete: {disclosure_complete}"
-    )
+# The disclosure and endpoint checks above assert their own measured metrics.
+# Do not add a collection-order-dependent summary that can read historical
+# results or require excluded producers to run.

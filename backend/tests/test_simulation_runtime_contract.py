@@ -1,5 +1,9 @@
 import asyncio
+import copy
 import json
+import random
+
+import pytest
 
 from app.services.simulation_artifacts import write_json
 from app.services.simulation_runtime_contract import (
@@ -149,6 +153,88 @@ def test_select_active_agents_respects_platform_preference(monkeypatch):
     assert 0 in selected
     assert 2 in selected
     assert 1 not in selected
+
+
+def _scheduler_config(seed=23):
+    return {
+        "seed": seed,
+        "agent_configs": [
+            {
+                "agent_id": agent_id,
+                "activity_level": 0.6,
+                "active_hours": list(range(24)),
+                "platform_preference": "both",
+            }
+            for agent_id in range(80)
+        ],
+        "time_config": {"agents_per_hour_min": 5, "agents_per_hour_max": 12},
+    }
+
+
+def test_seeded_schedule_replays_after_unrelated_global_random_calls():
+    config = _scheduler_config()
+    before = random.getstate()
+    first = [select_active_agent_ids(config, "twitter", 12, r) for r in range(10)]
+    assert random.getstate() == before
+    try:
+        for _ in range(100):
+            random.random()
+        replay = [select_active_agent_ids(config, "twitter", 12, r) for r in range(10)]
+        assert replay == first
+    finally:
+        random.setstate(before)
+
+
+def test_different_root_seeds_can_change_schedule():
+    first = _scheduler_config(23)
+    other = _scheduler_config(24)
+    assert [select_active_agent_ids(first, "twitter", 12, r) for r in range(10)] != [
+        select_active_agent_ids(other, "twitter", 12, r) for r in range(10)
+    ]
+
+
+def test_seeded_schedule_is_isolated_by_platform_and_round():
+    config = _scheduler_config()
+    expected = select_active_agent_ids(config, "twitter", 12, 4)
+    other = select_active_agent_ids(config, "reddit", 12, 4)
+    later = select_active_agent_ids(config, "twitter", 12, 5)
+    assert expected != other
+    assert expected != later
+    assert select_active_agent_ids(config, "twitter", 12, 4) == expected
+
+
+def test_seeded_schedule_uses_stable_agent_order_and_unique_ids():
+    config = _scheduler_config()
+    reordered = copy.deepcopy(config)
+    reordered["agent_configs"].reverse()
+    reordered["agent_configs"].append(reordered["agent_configs"][0])
+    for round_num in range(5):
+        expected = select_active_agent_ids(config, "twitter", 12, round_num)
+        assert select_active_agent_ids(reordered, "twitter", 12, round_num) == expected
+        assert len(expected) == len(set(expected))
+
+
+def test_scheduler_accepts_an_injected_local_rng_without_a_config_seed():
+    config = _scheduler_config()
+    del config["seed"]
+    before = random.getstate()
+    first = select_active_agent_ids(config, "twitter", 12, 1, rng=random.Random(7))
+    assert select_active_agent_ids(config, "twitter", 12, 1, rng=random.Random(7)) == first
+    assert random.getstate() == before
+
+
+@pytest.mark.parametrize("seed", [True, -1, 2**63, "23", 23.0, None])
+def test_scheduler_rejects_invalid_root_seeds(seed):
+    with pytest.raises(ValueError, match="seed"):
+        select_active_agent_ids(_scheduler_config(seed), "twitter", 12, 1)
+
+
+def test_seeded_scheduler_boost_fallback_has_stable_order():
+    config = _scheduler_config()
+    for agent in config["agent_configs"]:
+        agent["active_hours"] = []
+    config["time_config"] = {"agents_per_hour_min": 2, "agents_per_hour_max": 2}
+    assert select_active_agent_ids(config, "twitter", 12, 1, {6, 3}) == [3, 6]
 
 
 def test_bootstrap_actions_require_explicit_graph_behavior_opt_in(tmp_path):

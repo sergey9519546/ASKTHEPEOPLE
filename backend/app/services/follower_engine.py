@@ -17,14 +17,12 @@ from typing import Any, Dict, List, Optional
 import sqlite3
 
 from ..utils.logger import get_logger
+from .simulation_random import make_rng, validate_seed
 
 logger = get_logger("askthepeople.follower_engine")
 
-# Module-level handle so tests can seed determinism without touching the
-# interpreter-global RNG — every stochastic draw in this module goes through
-# this name. The stdlib module is bound privately as `_random_module` so that
-# nothing can rebind a bare `random` attribute on this module and shadow the
-# real module object underneath it.
+# Legacy injection handle retained for existing callers and tests. Seeded
+# engines and explicitly injected local RNGs do not draw from this handle.
 _rng = _random_module
 
 
@@ -66,8 +64,36 @@ class FollowerEngine:
         "LURKER": 0.1,
     }
 
-    def __init__(self, id_base: int = 1000):
+    def __init__(
+        self,
+        id_base: int = 1000,
+        *,
+        seed: Optional[int] = None,
+        rng: Optional[_random_module.Random] = None,
+    ):
+        """Use addressed seed streams, an injected local RNG, or legacy draws.
+
+        Seeded results replay given the same inputs, excluding wall-clock
+        timestamps. Computing these observations never writes to OASIS.
+        """
+        if seed is not None:
+            validate_seed(seed)
+        if seed is not None and rng is not None:
+            raise ValueError("Provide either seed or rng, not both")
         self.id_base = id_base
+        self.seed = seed
+        self.rng = rng
+
+    def _stream(
+        self,
+        namespace: str,
+        *,
+        round_num: Optional[int] = None,
+        agent_id: Optional[int] = None,
+    ):
+        if self.seed is not None:
+            return make_rng(self.seed, namespace, round_num=round_num, agent_id=agent_id)
+        return self.rng if self.rng is not None else _rng
 
     def generate_followers(
         self,
@@ -121,20 +147,21 @@ class FollowerEngine:
 
         agents: List[FollowerAgent] = []
         for i in range(count):
-            behavior = _rng.choices(behaviors, weights=weights, k=1)[0]
+            rng = self._stream("followers:generation", agent_id=self.id_base + i)
+            behavior = rng.choices(behaviors, weights=weights, k=1)[0]
 
             if behavior == FollowerBehavior.AMPLIFIER:
-                opinion_bias = _rng.uniform(0.3, 1.0)
-                activity_prob = _rng.uniform(0.5, 0.9)
+                opinion_bias = rng.uniform(0.3, 1.0)
+                activity_prob = rng.uniform(0.5, 0.9)
             elif behavior == FollowerBehavior.CONTRARIAN:
-                opinion_bias = _rng.uniform(-1.0, -0.3)
-                activity_prob = _rng.uniform(0.4, 0.8)
+                opinion_bias = rng.uniform(-1.0, -0.3)
+                activity_prob = rng.uniform(0.4, 0.8)
             elif behavior == FollowerBehavior.NEUTRAL:
-                opinion_bias = _rng.uniform(-0.2, 0.2)
-                activity_prob = _rng.uniform(0.2, 0.6)
+                opinion_bias = rng.uniform(-0.2, 0.2)
+                activity_prob = rng.uniform(0.2, 0.6)
             else:  # LURKER
-                opinion_bias = _rng.uniform(-0.5, 0.5)
-                activity_prob = _rng.uniform(0.02, 0.1)
+                opinion_bias = rng.uniform(-0.5, 0.5)
+                activity_prob = rng.uniform(0.02, 0.1)
 
             display_name = None
             if compose_names and role_rotation:
@@ -191,15 +218,22 @@ class FollowerEngine:
         now = datetime.now().isoformat()
 
         for follower in followers:
-            if _rng.random() >= follower.activity_probability:
+            follower_rng = self._stream(
+                f"followers:reactions:{platform}",
+                round_num=round_num,
+                agent_id=follower.agent_id,
+            )
+            if follower_rng.random() >= follower.activity_probability:
                 continue
             if not candidates:
                 continue
 
-            target = _rng.choice(candidates)
+            target = follower_rng.choice(candidates)
             target_args = target.get("action_args") or {}
 
-            action_type, action_args = self._pick_action(follower, target, target_args, platform)
+            action_type, action_args = self._pick_action(
+                follower, target, target_args, platform, rng=follower_rng
+            )
 
             result.append(
                 {
@@ -216,11 +250,15 @@ class FollowerEngine:
                 }
             )
 
+        if self.seed is not None or self.rng is not None:
+            result.sort(key=lambda action: action["agent_id"])
         if max_actions is not None and len(result) > max_actions:
-            # Deterministic per-round down-sample: the same (platform, round)
-            # always keeps the same subset, sorted back into agent order so
-            # the log reads in a stable sequence.
-            rng = _random_module.Random(f"{platform}:{round_num}")
+            # A separate cap stream does not shift any follower's reactions.
+            rng = (
+                self._stream(f"followers:cap:{platform}", round_num=round_num)
+                if self.seed is not None or self.rng is not None
+                else _random_module.Random(f"{platform}:{round_num}")
+            )
             keep = sorted(rng.sample(range(len(result)), max_actions))
             result = [result[i] for i in keep]
         return result
@@ -231,8 +269,11 @@ class FollowerEngine:
         target: Dict[str, Any],
         target_args: Dict[str, Any],
         platform: str,
+        *,
+        rng: Optional[_random_module.Random] = None,
     ):
         """Return (action_type, action_args) for one follower reaction."""
+        rng = rng or _rng
         post_id = target_args.get("tweet_id") or target_args.get("post_id") or ""
         content = str(target_args.get("content") or target_args.get("tweet_content") or "")
 
@@ -240,18 +281,18 @@ class FollowerEngine:
 
         if platform == "twitter":
             if behavior == FollowerBehavior.AMPLIFIER:
-                if _rng.random() < 0.6:
+                if rng.random() < 0.6:
                     return "LIKE_POST", {"tweet_id": post_id}
                 else:
                     return "REPOST", {"tweet_id": post_id}
             elif behavior == FollowerBehavior.CONTRARIAN:
-                phrase = _rng.choice(_CONTRARIAN_PHRASES)
+                phrase = rng.choice(_CONTRARIAN_PHRASES)
                 return "QUOTE_POST", {
                     "tweet_id": post_id,
                     "content": f"Disagree: {content[:50]} — {phrase}",
                 }
             elif behavior == FollowerBehavior.NEUTRAL:
-                if _rng.random() < 0.5:
+                if rng.random() < 0.5:
                     return "LIKE_POST", {"tweet_id": post_id}
                 else:
                     return "DO_NOTHING", {}
@@ -262,13 +303,13 @@ class FollowerEngine:
             if behavior == FollowerBehavior.AMPLIFIER:
                 return "LIKE_POST", {"post_id": post_id}
             elif behavior == FollowerBehavior.CONTRARIAN:
-                if _rng.random() < 0.5:
+                if rng.random() < 0.5:
                     return "DISLIKE_POST", {"post_id": post_id}
                 else:
-                    phrase = _rng.choice(_CONTRARIAN_PHRASES)
+                    phrase = rng.choice(_CONTRARIAN_PHRASES)
                     return "CREATE_COMMENT", {"post_id": post_id, "content": phrase}
             elif behavior == FollowerBehavior.NEUTRAL:
-                if _rng.random() < 0.5:
+                if rng.random() < 0.5:
                     return "LIKE_POST", {"post_id": post_id}
                 else:
                     return "DO_NOTHING", {}

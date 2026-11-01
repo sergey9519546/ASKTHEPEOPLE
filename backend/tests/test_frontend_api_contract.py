@@ -100,6 +100,14 @@ def test_every_frontend_api_path_is_mounted():
     )
 
 
+def test_model_catalog_is_mounted_at_the_client_path():
+    app = create_app()
+    adapter = app.url_map.bind("localhost")
+    rule, _ = adapter.match("/api/models", method="GET", return_rule=True)
+    assert rule.endpoint == "models.list_models"
+    assert not _resolves_to_a_real_route(adapter, "/api/models/models")
+
+
 @pytest.mark.skipif(not FRONTEND_SRC.is_dir(), reason="frontend/src not present")
 def test_the_check_can_actually_fail():
     """Guard against the vacuous version of this test.

@@ -22,7 +22,7 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from app.services.archetype_engine import AgentArchetype, ArchetypeEngine
 from app.services.oasis_profile_generator import OasisAgentProfile
-from tests.evals.conftest import save_eval_results  # noqa: F401
+from .conftest import save_eval_results
 
 MAX_SIMILARITY = 0.60
 SHINGLE_SIZE = 3

@@ -1,9 +1,9 @@
 ---
 title: "Model Releases"
 status: "Normative"
-version: "1.1.0"
+version: "1.2.0"
 owner: "AI Platform + SRE + Research"
-last_reviewed: "2026-07-29"
+last_reviewed: "2026-10-31"
 review_cycle: "Every model release"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -275,3 +275,61 @@ Reaching the contract requires the adapter surface
 ([`services/camel_model_factory.py`](../../backend/app/services/camel_model_factory.py))
 to be the single seam that hides model changes. Provider-specific
 SDK calls must not appear elsewhere in the service code.
+
+### Transport correction — TRANSITION
+
+The working-tree correction in
+[`_detect_provider_mode`, `validate_required_model_env`, and `create_camel_model`](../../backend/app/services/camel_model_factory.py)
+selects transport from the endpoint contract, not a model-name substring.
+OpenAI-compatible gateways serving Claude-named models stay on chat completions.
+A full chat-completions URL is normalized to its base; an explicit Messages
+endpoint or the official Anthropic host is refused before model creation. The
+pinned CAMEL dependency does not supply native Messages transport through this
+factory; no new provider capability is claimed.
+
+[`settings._validate_base_url`](../../backend/app/api/settings.py) applies the
+same classification to raw input before normalization can erase the Messages
+suffix. Settings save and connection-test requests therefore reject native
+transport before DNS resolution, persistence, or client construction. The
+settings-to-factory regression lives in
+[`test_settings.py`](../../backend/tests/test_settings.py).
+
+The model catalog at `/api/models` uses the same explicitly enabled settings
+control plane and raw-URL validation
+([`models.list_models`](../../backend/app/api/models.py)). It keeps the selected
+endpoint and credential paired, refuses incomplete configuration, and returns a
+fixed error rather than provider exception text. A static list is not used as
+evidence that a native provider is supported. Offline route regressions live in
+[`test_models_catalog.py`](../../backend/tests/test_models_catalog.py). The
+blueprint export and route match are covered by
+[`test_frontend_api_contract.py`](../../backend/tests/test_frontend_api_contract.py).
+
+**Catalog compatibility:** requests now fail closed when runtime settings are
+disabled or the endpoint violates operator policy. This deliberately removes
+the earlier unguarded provider-request behavior; it grants no new data-transfer
+permission. Reverting catalog/settings corrections needs no data migration, but
+would restore the unsafe behavior. Keep the control plane disabled if a rollback
+is required pending review.
+
+Evidence is the offline conformance suite in
+[`test_camel_model_factory.py`](../../backend/tests/test_camel_model_factory.py),
+which exercises the pinned SDK using mocked HTTP and prohibits real network
+access. This is transport-contract evidence, not model-quality or population
+validation. Live-provider acceptance and canary evidence remain **TARGET**.
+
+**Impact:** previously ambiguous endpoint/model combinations can now fail early
+instead of being silently sent using the wrong protocol. No prompt, model alias,
+default provider, stored user data, or feature-flag default changes are part of
+this correction. Review configured native endpoints before rollout; any move to
+a different provider requires a separate explicit operator decision.
+
+**Migration and rollback:** no schema migration is required. Preserve existing
+run artifacts and review changed model-resolution metadata on new preparations.
+Reverting the factory and its focused regressions restores the old behavior but
+also restores the transport ambiguity; suspend affected runs rather than treating
+that rollback as evidence that native Messages is supported.
+
+**Review status:** this is an uncommitted implementation awaiting the pull request,
+named product/engineering reviewers, and applicable security/privacy review
+required by the [change-control rule](../README.md#change-control-rule).
+No approval, release-gate closure, deployment, or paid-provider run is asserted.

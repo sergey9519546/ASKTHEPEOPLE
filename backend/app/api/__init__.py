@@ -54,7 +54,7 @@ from . import settings  # noqa: E402, F401
 from . import auth  # noqa: E402, F401
 from . import branching_routes  # noqa: E402, F401
 from . import routes  # noqa: E402, F401  # Decomposed simulation routes
-from . import models  # noqa: E402, F401  # Model catalog endpoint
+from .models import models_bp  # noqa: E402, F401  # Model catalog endpoint
 
 # Decomposed report routes (exec-plan T25, ADR-0011). Registration is explicit
 # rather than import-time decoration because Flask 3 forbids adding rules to a

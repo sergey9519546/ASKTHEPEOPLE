@@ -400,6 +400,16 @@ def _write_run_manifest(
         "preflight_status": preflight.get("status"),
         "artifacts": artifacts,
     }
+    # Preparation owns prompt-call records; preflight owns admission and
+    # environment metadata. Do not erase one when refreshing the other.
+    previous = read_json(run_manifest_path(simulation_dir), default={})
+    prompt_calls = previous.get("prompt_calls") if isinstance(previous, dict) else None
+    if isinstance(prompt_calls, list) and all(
+        isinstance(record, dict) for record in prompt_calls
+    ):
+        payload["prompt_calls"] = prompt_calls
+        payload["prompt_call_count"] = len(prompt_calls)
+
     if admission is not None:
         payload["decision_lens"] = {
             "artifact_id": admission["artifact_id"],

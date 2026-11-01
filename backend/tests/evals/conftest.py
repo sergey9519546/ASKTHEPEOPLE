@@ -1,373 +1,377 @@
-"""Shared fixtures and pytest plugin for evaluation suite."""
+"""Offline eval fixtures and current-session artifact collection.
 
-import pytest
+The tracked results.json is historical only. No writer reads or merges it.
+Application imports are lazy so artifact regressions need only pytest.
+"""
+
+from __future__ import annotations
+
+import hashlib
 import json
 import os
 import sys
+import tempfile
+import uuid
+from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
 
-# Add parent directory to path for app imports
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+import pytest
 
-from app import create_app
-from app.services.oasis_profile_generator import (
-    OasisProfileGenerator,
-    OasisAgentProfile,
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+ARTIFACT_SCHEMA_VERSION = 2
+HISTORICAL_ARTIFACT = Path(__file__).resolve().with_name("results.json")
+# .pytest*/ is already ignored. The old .pytest_cache can be inaccessible locally.
+DEFAULT_RESULTS_PATH = Path(__file__).resolve().parents[2] / ".pytest_eval_results" / "results.json"
+REQUIRED_METRICS = (
+    "diversity_rate", "stereotype_rate", "essentialism_rate",
+    "path_divergence_rate", "assumption_isolation_rate", "truth_contract_pass_rate",
 )
-from app.services.zep_entity_reader import EntityNode
-
-
-# In-process record of everything the suite measured during THIS session.
-#
-# The obvious channel -- reading each test's own `tmp_path` file back out of
-# `item.funcargs` at session-finish time -- does not work. pytest populates
-# `funcargs` during setup and empties it again during teardown, so by the time
-# `pytest_sessionfinish` runs it is `None` (measured against the pinned pytest
-# in this repo). That is why the artifact used to end up carrying only
-# `_test_summary` no matter how the file was read: there was nothing to read.
-# `save_eval_results` is therefore also recorded here, and this accumulator is
-# the primary source the session-finish hook merges.
 _SESSION_RESULTS: dict = {}
+_SESSION_PROVENANCE: dict = {}
+_SESSION_PRODUCERS: dict = {}
+_SESSION_OUTCOMES: dict = {}
+_SESSION_SELECTED_TESTS: list = []
+_SESSION_ID = None
+_SESSION_STARTED_AT = None
+_SESSION_OUTPUT_PATH = None
+_CURRENT_TEST_ID = None
+_CURRENT_TEST_FILE_HASH = None
 
 
-def recorded_eval_results() -> dict:
-    """Metrics available to an in-session assertion.
+def _utc_now():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    Prefers what this session has measured so far, then falls back to the
-    committed artifact, which is the previous run's recorded evidence.
 
-    The per-test ``eval_results_path`` cannot be used for this. It is a fresh
-    pytest tmp file per test, so a test asking whether it exists is asking
-    whether a file written *later* has been written yet — which is why the
-    three summary tests skipped unconditionally and their thresholds never ran.
+def _sha256_file(path):
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
 
-    Returns an empty dict only when neither source has anything, which callers
-    must treat as a failure rather than a skip: a missing metric means the thing
-    that produces it did not run.
+
+def _reset_session_state():
+    global _SESSION_ID, _SESSION_STARTED_AT, _SESSION_OUTPUT_PATH
+    global _CURRENT_TEST_ID, _CURRENT_TEST_FILE_HASH
+    for state in (_SESSION_RESULTS, _SESSION_PROVENANCE, _SESSION_PRODUCERS, _SESSION_OUTCOMES):
+        state.clear()
+    _SESSION_SELECTED_TESTS.clear()
+    _SESSION_ID = uuid.uuid4().hex
+    _SESSION_STARTED_AT = _utc_now()
+    _SESSION_OUTPUT_PATH = None
+    _CURRENT_TEST_ID = None
+    _CURRENT_TEST_FILE_HASH = None
+
+
+def _is_eval_path(path):
+    return "evals" in str(path).replace("\\", "/").split("/")
+
+
+def _check_output_path(path):
+    path = Path(path).expanduser().resolve()
+    if path == HISTORICAL_ARTIFACT or (
+        path.exists() and HISTORICAL_ARTIFACT.exists()
+        and os.path.samefile(path, HISTORICAL_ARTIFACT)
+    ):
+        raise ValueError("The tracked eval results.json is historical and read-only")
+    return path
+
+
+def results_path_for_config(config=None):
+    configured = config.getoption("--eval-results") if config is not None else None
+    return _check_output_path(configured or DEFAULT_RESULTS_PATH)
+
+
+def _read_json_dict(path):
+    """Only for explicit historical-file inspection, never current metrics."""
+    try:
+        loaded = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def recorded_eval_results():
+    """Only current metrics whose producer passed setup, call AND teardown.
+
+    Producers assert their local measurements directly. An unfinished or failed
+    producer cannot satisfy a later consumer; missing metrics remain absent.
     """
-    if _SESSION_RESULTS:
-        return dict(_SESSION_RESULTS)
-    committed = Path(__file__).parent / "results.json"
-    return _read_json_dict(committed) or {}
+    return deepcopy({
+        key: value for key, value in _SESSION_RESULTS.items()
+        if _SESSION_OUTCOMES.get(
+            _SESSION_PROVENANCE.get(key, {}).get("producer_test_id")
+        ) == "passed"
+    })
 
 
-@pytest.fixture()
+@pytest.fixture
 def recorded_results():
-    """Metrics available to an in-session assertion.
-
-    Prefer this over importing the helper. Importing conftest from a test body
-    re-enters pytest's plugin machinery and hangs the run.
-    """
     return recorded_eval_results()
 
 
-def _read_json_dict(path: Path):
-    """Read ``path`` as a JSON object, or return ``None``.
+def _artifact_payload(metrics, *, selected_tests=None, summary=None, status="partial",
+                      finished_at=None, provenance=None, producers=None, errors=None):
+    global _SESSION_ID, _SESSION_STARTED_AT
+    if _SESSION_ID is None:
+        _SESSION_ID = uuid.uuid4().hex
+        _SESSION_STARTED_AT = _utc_now()
+    return {
+        **deepcopy(metrics),
+        "artifact_schema_version": ARTIFACT_SCHEMA_VERSION,
+        "scope": "current_session",
+        "freshness": "session_only",
+        "session_id": _SESSION_ID,
+        "started_at": _SESSION_STARTED_AT,
+        "finished_at": finished_at,
+        "status": status,
+        "selected_tests": list(selected_tests or []),
+        "metrics": deepcopy(metrics),
+        "metric_provenance": deepcopy(provenance or {}),
+        "producers": deepcopy(producers or []),
+        "errors": deepcopy(errors or []),
+        "_test_summary": summary,
+    }
 
-    A missing file is the ordinary case (a test that measured nothing, or a
-    first run with no artifact committed yet), and an unparseable one must
-    not take the session down: this artifact is evidence, not a gate. Every
-    failure mode collapses to ``None`` so the caller decides whether to warn
-    or stay quiet. ``json.JSONDecodeError`` and ``UnicodeDecodeError`` are
-    both ``ValueError``, and the ``OSError`` branch covers a missing,
-    unreadable, or directory-shaped path.
-    """
+
+def _write_json(path, payload):
+    path = _check_output_path(path)
+    # Serialize before touching the output. Never persist non-JSON/NaN metrics.
+    contents = json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
     try:
-        with open(path, 'r') as f:
-            loaded = json.load(f)
-    except (OSError, ValueError):
-        return None
-    if not isinstance(loaded, dict):
-        return None
-    return loaded
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8",
+                                         dir=path.parent, delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(contents)
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def save_eval_results(results, results_path=None, *, measurement_class="offline_heuristic",
+                      dataset_fixture=None, producer_id=None):
+    """Save only in-memory session measurements, never read output as input.
+
+    The fixture identifier digest hashes the ID, not dataset contents. The
+    separate test-file SHA-256 fingerprints the inline fixture recipe.
+    """
+    if not isinstance(results, dict):
+        raise TypeError("evaluation results must be a JSON object")
+    if any(not isinstance(key, str) for key in results):
+        raise ValueError("metric keys must be strings")
+    reserved = set(_artifact_payload({}))
+    if reserved.intersection(results):
+        raise ValueError("metrics must not overwrite artifact metadata")
+    json.dumps(results, allow_nan=False)
+    output = _check_output_path(results_path or _SESSION_OUTPUT_PATH or DEFAULT_RESULTS_PATH)
+    test_id = producer_id or _CURRENT_TEST_ID
+    if not test_id:
+        raise ValueError("metrics require a producer test identifier")
+    fixture_id = dataset_fixture or f"inline-fixtures:{test_id}"
+    file_hash = _CURRENT_TEST_FILE_HASH if test_id == _CURRENT_TEST_ID else _sha256_file(
+        test_id.split("::", 1)[0]
+    )
+    details = {
+        "producer_test_id": test_id,
+        "measurement_class": measurement_class,
+        "dataset_fixture": fixture_id,
+        "dataset_fixture_id_sha256": hashlib.sha256(fixture_id.encode("utf-8")).hexdigest(),
+        "test_file_sha256": file_hash,
+    }
+    for key in results:
+        previous = _SESSION_PROVENANCE.get(key)
+        if previous and previous["producer_test_id"] != test_id:
+            raise ValueError(f"metric {key} already belongs to another producer")
+    _SESSION_RESULTS.update(deepcopy(results))
+    for key in results:
+        _SESSION_PROVENANCE[key] = dict(details)
+    keys = set(_SESSION_PRODUCERS.get(test_id, {}).get("metric_keys", [])) | set(results)
+    _SESSION_PRODUCERS[test_id] = {**details, "test_id": test_id, "metric_keys": sorted(keys)}
+    _write_json(output, _artifact_payload(
+        _SESSION_RESULTS, selected_tests=_SESSION_SELECTED_TESTS,
+        provenance=_SESSION_PROVENANCE, producers=list(_SESSION_PRODUCERS.values()),
+    ))
 
 
 @pytest.fixture
 def app():
-    """Create Flask app for testing."""
-    app = create_app()
-    app.config.update({
-        "TESTING": True,
-    })
-    yield app
+    from app import create_app
+
+    application = create_app()
+    application.config.update({"TESTING": True})
+    yield application
 
 
 @pytest.fixture
 def client(app):
-    """Create test client."""
     return app.test_client()
 
 
 @pytest.fixture
 def profile_generator(monkeypatch):
-    """Create profile generator instance with mock test configuration."""
+    from app.services.oasis_profile_generator import OasisProfileGenerator
+
     monkeypatch.setenv("LLM_API_KEY", "test-eval-mock-key-32characterslong!")
     return OasisProfileGenerator(api_key="test-eval-mock-key-32characterslong!")
 
 
 @pytest.fixture
 def sample_entity():
-    """Create a sample entity for testing."""
+    from app.services.zep_entity_reader import EntityNode
+
     return EntityNode(
-        uuid="test-uuid-001",
-        name="Alex Chen",
-        labels=["Person", "Student"],
+        uuid="test-uuid-001", name="Alex Chen", labels=["Person", "Student"],
         summary="A computer science student interested in AI and ethics",
-        attributes={
-            "occupation": "Student",
-            "institution": "Test University"
-        },
-        related_edges=[
-            {
-                "fact": "Alex Chen studies at Test University",
-                "edge_name": "studies_at",
-                "direction": "outgoing"
-            }
-        ],
-        related_nodes=[
-            {
-                "name": "Test University",
-                "labels": ["University"],
-                "summary": "A research university"
-            }
-        ]
+        attributes={"occupation": "Student", "institution": "Test University"},
+        related_edges=[{
+            "fact": "Alex Chen studies at Test University",
+            "edge_name": "studies_at", "direction": "outgoing",
+        }],
+        related_nodes=[{
+            "name": "Test University", "labels": ["University"],
+            "summary": "A research university",
+        }],
     )
 
 
 @pytest.fixture
 def sample_decision_prompt():
-    """Sample decision prompt for profile generation."""
     return "Should universities implement stricter AI ethics guidelines for student research projects?"
 
 
 @pytest.fixture
-def eval_results_path(tmp_path):
-    """Path for saving evaluation results."""
-    results_path = tmp_path / "results.json"
-    yield results_path
+def eval_results_path(request):
+    """Exactly the path used by the registered session plugin; no teardown I/O."""
+    return request.config.pluginmanager.getplugin("eval_results").results_path
 
-    # Merge this test's results into the tracked artifact.
-    #
-    # `shutil.copy` used to sit here, and it was a second, independent way for
-    # a measured result to be thrown away: it replaced the artifact with one
-    # test's file, so the bytes on disk were always whichever eval test
-    # happened to finish last. Merging keeps every earlier contribution, which
-    # also means the artifact stays truthful if the process dies mid-run.
-    if results_path.exists():
-        actual_path = Path(__file__).parent / "results.json"
-        merged = _read_json_dict(actual_path) or {}
-        merged.update(_read_json_dict(results_path) or {})
-        with open(actual_path, 'w') as f:
-            json.dump(merged, f, indent=2)
-
-
-def save_eval_results(results: dict, results_path: Path):
-    """Save evaluation results to JSON file."""
-    # Load existing results if available
-    existing = {}
-    if results_path.exists():
-        try:
-            with open(results_path, 'r') as f:
-                existing = json.load(f)
-        except:
-            pass
-    
-    # Merge results
-    existing.update(results)
-
-    # Save
-    with open(results_path, 'w') as f:
-        json.dump(existing, f, indent=2)
-
-    # Record into the session accumulator too, so the result reaches the
-    # tracked artifact even though the per-test file is unreachable once
-    # pytest has torn the fixtures down.
-    _SESSION_RESULTS.update(results)
-
-
-# ============================================================================
-# Pytest Plugin for Result Collection
-# ============================================================================
 
 class EvalResultsPlugin:
-    """Plugin to collect and save evaluation results."""
-    
     def __init__(self, results_path=None, session_results=None):
-        self.results = {}
-        self.test_outcomes = {}
-        # Testability seams. Production leaves both None: it writes the tracked
-        # artifact beside this module and reads the live session accumulator.
-        # A test that exercises the merge passes a tmp artifact and an explicit
-        # accumulator, so it can assert the merge without mutating committed
-        # evidence or observing the running session's own measurements. There
-        # is no second production call site. `session_results={}` is therefore
-        # meaningful and distinct from the `None` default.
-        self.results_path = (
-            Path(results_path) if results_path is not None else None
-        )
+        self.results_path = _check_output_path(results_path or DEFAULT_RESULTS_PATH)
+        # Explicit dictionaries isolate harness tests from real session evidence.
         self.session_results = session_results
-    
+        self.results = {}
+        self.test_phases = {}
+        self.selected_tests = []
+        self.test_file_hashes = {}
+        self.collection_errors = []
+
+    def pytest_collection_finish(self, session):
+        # Runs after deselection/reordering plugins. Only actual selection is recorded.
+        selected = [item for item in session.items if _is_eval_path(item.fspath)]
+        self.selected_tests = [item.nodeid for item in selected]
+        self.test_file_hashes = {item.nodeid: _sha256_file(item.fspath) for item in selected}
+        if self.session_results is None:
+            _SESSION_SELECTED_TESTS[:] = self.selected_tests
+
+    @pytest.hookimpl(tryfirst=True)
+    def pytest_runtest_setup(self, item):
+        global _CURRENT_TEST_ID, _CURRENT_TEST_FILE_HASH
+        if self.session_results is None:
+            _CURRENT_TEST_ID = item.nodeid
+            _CURRENT_TEST_FILE_HASH = self.test_file_hashes.get(item.nodeid)
+
+    @pytest.hookimpl(hookwrapper=True, tryfirst=True)
+    def pytest_runtest_teardown(self, item, nextitem):
+        global _CURRENT_TEST_ID, _CURRENT_TEST_FILE_HASH
+        yield
+        if self.session_results is None:
+            _CURRENT_TEST_ID = None
+            _CURRENT_TEST_FILE_HASH = None
+
+    def pytest_collectreport(self, report):
+        if report.failed and _is_eval_path(report.nodeid.split("::", 1)[0]):
+            # Do not retain raw exception messages, locals, credentials or source data.
+            self.collection_errors.append({"test_id": report.nodeid, "phase": "collection"})
+
+    @staticmethod
+    def _outcome(phases):
+        outcomes = {phase: data["outcome"] for phase, data in phases.items()}
+        if "failed" in outcomes.values():
+            return "failed"
+        if "skipped" in outcomes.values():
+            return "skipped"
+        if all(outcomes.get(phase) == "passed" for phase in ("setup", "call", "teardown")):
+            return "passed"
+        return "not_run"
+
     def pytest_runtest_logreport(self, report):
-        """Collect test outcomes.
+        phases = self.test_phases.setdefault(report.nodeid, {})
+        phases[report.when] = {
+            "outcome": report.outcome, "duration": getattr(report, "duration", 0.0),
+        }
+        if self.session_results is None:
+            _SESSION_OUTCOMES[report.nodeid] = self._outcome(phases)
 
-        Records the definitive outcome per test. A test skipped during setup
-        never reaches ``when == "call"``, so we must capture the setup-phase
-        skip too — otherwise it lands in ``total`` (counted from session
-        items) but not in ``passed/failed/skipped`` (counted from call
-        outcomes), producing the contradictory ``passed + failed + skipped
-        != total`` the exec-plan 08 Fix 2 audit flagged. The rule: the last
-        non-passing setup/teardown outcome wins for that nodeid; a real
-        ``call`` outcome always supersedes a setup report.
-        """
-        if report.when == "call":
-            self.test_outcomes[report.nodeid] = {
-                "outcome": report.outcome,
-                "duration": report.duration,
-            }
-        elif report.skipped and report.nodeid not in self.test_outcomes:
-            # A skip in setup (e.g. a missing fixture) — record it so it is
-            # counted as skipped rather than dropped on the floor.
-            self.test_outcomes[report.nodeid] = {
-                "outcome": "skipped",
-                "duration": getattr(report, "duration", 0.0),
-            }
-    
     def pytest_sessionfinish(self, session, exitstatus):
-        """Save results at the end of the test session."""
-        # Only save if we're in the evals directory
-        if not any('evals' in str(item.fspath) for item in session.items):
-            return
-        
-        # Determine output path
-        evals_dir = Path(__file__).parent
-        results_path = self.results_path or (evals_dir / "results.json")
-
-        # Start from what the artifact already carries instead of from empty.
-        # The per-test `eval_results_path` fixture copies each test's own
-        # results into this same file, so the bytes already on disk are real
-        # contributions from this session. Overwriting them is what made this
-        # artifact write-only: the only thing that survived was the single
-        # per-test file read below plus `_test_summary`, so the committed
-        # evidence recorded that tests ran and never what they measured.
-        # Unreadable or absent is tolerated -- a corrupt artifact must not
-        # fail a passing eval session.
-        self.results = _read_json_dict(results_path) or {}
-        if self.results:
-            print(
-                f"\n\nEvaluation artifact carried "
-                f"{len(self.results)} existing key(s) into the merge"
-            )
-
-        # Merge EVERY eval test's result, accumulating across the session.
-        # Three sources, merged in this order; later writes win, and the key
-        # sets are complementary in practice.
-        #
-        # 1. The session accumulator: every `save_eval_results` call made
-        #    during this session, so this is the channel that actually
-        #    carries every test's measurement. It is read HERE rather than in
-        #    the constructor, because the constructor runs at
-        #    `pytest_configure` time -- before any test has measured anything.
-        session_results = (
-            _SESSION_RESULTS if self.session_results is None
-            else self.session_results
-        )
-        merged_from = len(session_results)
-        self.results.update(session_results)
-
-        # 2. Any test's own `tmp_path` file still reachable through
-        #    `funcargs`. Under the pinned pytest this is empty by now --
-        #    `funcargs` is cleared during teardown -- so this contributes
-        #    nothing today and is kept only as the fallback for a pytest that
-        #    retains it. Crucially there is no `break`: the old `break` read
-        #    one test's file and then discarded everything else on disk.
-        for item in session.items:
-            funcargs = getattr(item, 'funcargs', None) or {}
-            per_test_path = funcargs.get('eval_results_path')
-            if per_test_path is None:
-                continue
-            per_test = _read_json_dict(Path(per_test_path))
-            if per_test is None:
-                continue
-            self.results.update(per_test)
-            merged_from += 1
-
-        # 3. Nothing to do for a test that measured nothing: it contributes no
-        #    keys and must not hide the tests that did.
-
-        # Add test execution metadata
-        eval_tests = [
-            item for item in session.items
-            if 'evals' in str(item.fspath)
-        ]
-        
-        # Filter outcomes to eval tests only
-        eval_test_ids = {item.nodeid for item in eval_tests}
-        eval_outcomes = {
-            nodeid: outcome
-            for nodeid, outcome in self.test_outcomes.items()
-            if nodeid in eval_test_ids
+        selected = [item for item in session.items if _is_eval_path(item.fspath)]
+        outcomes = {item.nodeid: self._outcome(self.test_phases.get(item.nodeid, {}))
+                    for item in selected}
+        errors = list(self.collection_errors)
+        for test_id in outcomes:
+            errors.extend({"test_id": test_id, "phase": phase}
+                          for phase, data in self.test_phases.get(test_id, {}).items()
+                          if data["outcome"] == "failed")
+        summary = {
+            "total_tests": len(outcomes),
+            **{name: list(outcomes.values()).count(name)
+               for name in ("passed", "failed", "skipped", "not_run")},
+            "setup_errors": sum(error["phase"] == "setup" for error in errors),
+            "teardown_errors": sum(error["phase"] == "teardown" for error in errors),
+            "collection_errors": len(self.collection_errors),
+            "errors": len(errors),
+            "exit_status": 1 if errors else 0,
+            "session_exit_status": int(exitstatus),
         }
-        
-        passed = sum(
-            1 for outcome in eval_outcomes.values()
-            if outcome['outcome'] == 'passed'
+        selected_status = (
+            "failed" if errors else "partial"
+            if not selected or summary["not_run"] or summary["skipped"]
+            or int(exitstatus) in (2, 3, 4, 5) else "complete"
         )
-        failed = sum(
-            1 for outcome in eval_outcomes.values()
-            if outcome['outcome'] == 'failed'
+        live = self.session_results is None
+        metrics = deepcopy(_SESSION_RESULTS if live else self.session_results)
+        provenance = {key: {**value, "producer_outcome": outcomes.get(value["producer_test_id"], "not_run")}
+                      for key, value in _SESSION_PROVENANCE.items()} if live else {}
+        producers = [{**value, "outcome": outcomes.get(value["test_id"], "not_run")}
+                     for value in _SESSION_PRODUCERS.values()] if live else []
+        verified = {key for key, value in provenance.items() if value["producer_outcome"] == "passed"}
+        # Explicit session_results is a unit-test seam, never a production source.
+        if not live:
+            verified = set(metrics)
+        missing = sorted(set(REQUIRED_METRICS) - verified)
+        summary.update(selected_tests_status=selected_status, missing_required_metrics=missing)
+        status = "partial" if selected_status == "complete" and missing else selected_status
+        self.results = _artifact_payload(
+            metrics, selected_tests=list(outcomes), summary=summary, status=status,
+            finished_at=_utc_now(), provenance=provenance, producers=producers, errors=errors,
         )
-        skipped = sum(
-            1 for outcome in eval_outcomes.values()
-            if outcome['outcome'] == 'skipped'
-        )
-        
-        total = len(eval_test_ids)
-        
-        # Sanity check
-        if passed + failed + skipped != total:
-            print(f"\n\nWARNING: Eval count mismatch: {passed}+{failed}+{skipped} != {total}")
-        
-        # `exit_status` describes the EVAL subset, so it stays consistent with
-        # the counts beside it. pytest's `exitstatus` covers the whole session:
-        # in a full-suite run an unrelated failure anywhere would record
-        # "failed: 0, exit_status: 1" here, which reads as a broken eval suite.
-        # The session status is still recorded, under its own name.
-        self.results['_test_summary'] = {
-            'total_tests': total,
-            'passed': passed,
-            'failed': failed,
-            'skipped': skipped,
-            'exit_status': 0 if failed == 0 else 1,
-            'session_exit_status': int(exitstatus),
-        }
-        
-        # Save results
         try:
-            with open(results_path, 'w') as f:
-                json.dump(self.results, f, indent=2)
-            print(
-                f"\n\nEvaluation results saved to: {results_path} "
-                f"({len(self.results)} top-level key(s), "
-                f"per-test results merged from {merged_from} test(s))"
-            )
-        except Exception as e:
-            print(f"\n\nWarning: Failed to save evaluation results: {e}")
+            _write_json(self.results_path, self.results)
+        except OSError as exc:
+            session.exitstatus = pytest.ExitCode.INTERNAL_ERROR
+            raise pytest.UsageError(f"Could not write eval artifact: {exc}") from exc
+        print(f"\nEvaluation results saved to: {self.results_path} (status={status})")
+
+
+def pytest_addoption(parser):
+    parser.addoption("--eval-results", action="store", default=None, metavar="PATH",
+                     help=f"Current-session eval output (default: {DEFAULT_RESULTS_PATH})")
 
 
 def pytest_configure(config):
-    """Register custom markers and plugin."""
-    config.addinivalue_line(
-        "markers", "eval: mark test as an evaluation suite test"
-    )
-    
-    if config.pluginmanager.hasplugin('eval_results'):
+    config.addinivalue_line("markers", "eval: mark test as an evaluation suite test")
+    if config.pluginmanager.hasplugin("eval_results"):
         return
-
-    # One reset per session, here, before any test can call
-    # `save_eval_results`. Resetting inside the plugin constructor instead
-    # would let a plugin built inside a test erase the running session's
-    # measurements.
-    _SESSION_RESULTS.clear()
-
-    plugin = EvalResultsPlugin()
-    config.pluginmanager.register(plugin, 'eval_results')
+    _reset_session_state()
+    global _SESSION_OUTPUT_PATH
+    try:
+        _SESSION_OUTPUT_PATH = results_path_for_config(config)
+        # Invalidate old output even if collection fails or selects no tests.
+        _write_json(_SESSION_OUTPUT_PATH, _artifact_payload({}))
+    except (ValueError, OSError) as exc:
+        raise pytest.UsageError(str(exc)) from exc
+    config.pluginmanager.register(EvalResultsPlugin(_SESSION_OUTPUT_PATH), "eval_results")

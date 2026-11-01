@@ -130,13 +130,16 @@ def test_installer_is_inert_in_production_when_boot_is_forced(monkeypatch):
 
     # Bypass the startup gate deliberately: we are testing the installer hook
     # in a context where a process would never actually have started.
-    original_gates = _Config.validate_production_gates
+    original_gates = _Config.__dict__["validate_production_gates"]
     _Config.validate_production_gates = classmethod(lambda cls: [])
     try:
         app = create_app()
     finally:
+        # Restore the classmethod descriptor, not the bound method returned by
+        # attribute access; subclasses must continue to receive their own cls.
         _Config.validate_production_gates = original_gates
 
+    assert isinstance(_Config.__dict__["validate_production_gates"], classmethod)
     app.config.update(TESTING=True, APP_TOKEN=None)
     client = app.test_client()
 

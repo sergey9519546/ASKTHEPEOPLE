@@ -1,7 +1,7 @@
 """
-Profile Quality Evaluation (Gate 5 requirement).
+Offline profile fixture heuristics.
 
-Tests profile generation for:
+Rule-based generation and explicitly varied fixture attributes are checked for:
 - Diversity: Count unique decision criteria (should be >80% unique)
 - Stereotypes: Check for stereotype markers (should be <5% flagged)
 - Essentialism: Check for essentialist language (should be 0%)
@@ -58,7 +58,7 @@ def extract_decision_criteria(profile: OasisAgentProfile) -> str:
     """
     Extract key decision-making criteria from profile.
     
-    This creates a signature based on:
+    This offline fixture signature (not behavioral evidence) uses:
     - Profession
     - Age group
     - MBTI type
@@ -354,48 +354,6 @@ def test_essentialism_detection(profile_generator, sample_entity, eval_results_p
     )
 
 
-def test_profile_quality_summary(recorded_results):
-    """
-    Summary test that prints overall quality metrics.
-    
-    This test runs last and summarizes all quality checks.
-    """
-    import json
-    
-    # This threshold never ran. The test asked whether a per-test pytest tmp
-    # file existed, and a test asking that is asking whether a file written
-    # LATER has been written yet - so all three summary tests skipped
-    # unconditionally and the gate they implement was silently disabled.
-
-    # The recorded_results fixture is what this session has measured so far,
-    # measured so far, else the committed artifact from the previous run.
-    results = recorded_results
-    missing = [k for k in ['diversity_rate', 'stereotype_rate'] if k not in results]
-    assert not missing, (
-        f"evaluation metric(s) {missing} were never recorded, so this "
-        "threshold cannot be evaluated - the code that produces them did not run."
-    )
-    print("\n" + "="*70)
-    print("PROFILE QUALITY EVALUATION SUMMARY")
-    print("="*70)
-    
-    diversity_rate = results.get('diversity_rate', 0)
-    stereotype_rate = results.get('stereotype_rate', 0)
-    essentialism_rate = results.get('essentialism_rate', 0)
-    
-    print(f"\nDiversity Rate:      {diversity_rate:.2%} (threshold: >80%)")
-    print(f"Stereotype Rate:     {stereotype_rate:.2%} (threshold: <5%)")
-    print(f"Essentialism Rate:   {essentialism_rate:.2%} (threshold: 0%)")
-    
-    # Overall pass/fail
-    diversity_pass = diversity_rate > 0.80
-    stereotype_pass = stereotype_rate < 0.05
-    essentialism_pass = essentialism_rate == 0.0
-    
-    all_pass = diversity_pass and stereotype_pass and essentialism_pass
-    
-    print(f"\nDiversity Check:     {'✓ PASS' if diversity_pass else '✗ FAIL'}")
-    print(f"Stereotype Check:    {'✓ PASS' if stereotype_pass else '✗ FAIL'}")
-    print(f"Essentialism Check:  {'✓ PASS' if essentialism_pass else '✗ FAIL'}")
-    print(f"\nOverall Quality:     {'✓ PASS' if all_pass else '✗ FAIL'}")
-    print("="*70 + "\n")
+# Each metric is asserted by the producer that measures it.  There is no
+# aggregate test here: an aggregate would depend on collection order and could
+# accidentally read a result produced by a different selection of tests.

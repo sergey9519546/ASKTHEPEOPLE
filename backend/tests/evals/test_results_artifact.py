@@ -1,57 +1,27 @@
-"""The committed eval artifact must carry metrics, not only a summary.
+"""Focused integrity tests for current-session evaluation artifacts.
 
-`tests/evals/results.json` is this suite's evidence artifact and is tracked
-by git. It was write-only: the only top-level key it carried was
-`_test_summary`, so it recorded that tests ran and never what they measured.
-`docs/exec-plans/08-harvest-framework-engineering-fixes.md` names the same
-defect as its Fix 2.2 "CURRENT PROBLEM": "`results.json` contains only
-`_test_summary`, no actual eval metrics".
-
-Two independent guards live here because they fail for different reasons:
-
-* the merge itself, exercised against a `tmp_path` artifact so the
-  assertion never depends on session state -- this file runs INSIDE the suite
-  whose own `eval_results_path` teardown rewrites the tracked artifact;
-* the tracked artifact's committed bytes, snapshotted at collection time,
-  before any test in this session can run, so the guard cannot be fooled by
-  a file this very session rewrote.
-
-Neither guard reads the tracked artifact during a test body on purpose: by
-then the last-executed eval test's teardown has already copied its own
-single-test results over the top, which is transient state, not evidence.
+The tracked ``results.json`` is historical evidence.  These tests exercise the
+fresh output contract without writing it.
 """
+
+from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import pytest
+
 from . import conftest
-from .conftest import EvalResultsPlugin, save_eval_results, _read_json_dict
+from .conftest import EvalResultsPlugin, _artifact_payload, save_eval_results
 
-ARTIFACT = Path(__file__).resolve().parent / "results.json"
 
-#: The rates the suite measures. Each one has its own threshold, asserted by
-#: the test that measures it. None of them may be absent from the artifact:
-#: their absence is exactly what made the artifact write-only.
-REQUIRED_METRICS = (
-    "diversity_rate",
-    "stereotype_rate",
-    "essentialism_rate",
-    "path_divergence_rate",
-    "assumption_isolation_rate",
-    "truth_contract_pass_rate",
-)
-
-# Read during collection, before any test in this session executes.
-_COMMITTED_AT_IMPORT = _read_json_dict(ARTIFACT)
+HISTORICAL_ARTIFACT = Path(__file__).resolve().parent / "results.json"
 
 
 class _StubItem:
-    """The two attributes `pytest_sessionfinish` reads off an item."""
-
-    def __init__(self, nodeid, fspath, funcargs=None):
+    def __init__(self, nodeid, fspath):
         self.nodeid = nodeid
         self.fspath = fspath
-        self.funcargs = funcargs or {}
 
 
 class _StubSession:
@@ -60,290 +30,226 @@ class _StubSession:
 
 
 class _StubReport:
-    """Minimal stand-in for pytest's `TestReport`."""
-
-    def __init__(self, nodeid, when="call", outcome="passed"):
+    def __init__(self, nodeid, when="call", outcome="passed", message=""):
         self.nodeid = nodeid
         self.when = when
         self.outcome = outcome
         self.duration = 0.0
         self.skipped = outcome == "skipped"
+        self.longrepr = message
 
 
-def _eval_session(tmp_path, artifacts):
-    """Build a stub eval session.
-
-    `artifacts` maps a test name to the JSON object that test wrote to its
-    own `tmp_path`, or to `None` for a test that measured nothing.
-    """
-    fspath = str(tmp_path / "evals" / "test_example.py")
-    items = []
-    for name, payload in artifacts.items():
-        funcargs = {}
-        if payload is not None:
-            per_test = tmp_path / f"tmp-{name}" / "results.json"
-            per_test.parent.mkdir(parents=True, exist_ok=True)
-            per_test.write_text(json.dumps(payload), encoding="utf-8")
-            funcargs["eval_results_path"] = per_test
-        items.append(
-            _StubItem(f"evals/test_example.py::test_{name}", fspath, funcargs)
-        )
+def _eval_session(tmp_path, names=("alpha", "beta")):
+    fspath = tmp_path / "evals" / "test_example.py"
+    fspath.parent.mkdir()
+    fspath.write_text("def test_example(): pass\n", encoding="utf-8")
+    items = [_StubItem(f"evals/test_example.py::test_{name}", str(fspath)) for name in names]
     return _StubSession(items)
 
 
-def _finish(artifact, session, exitstatus=0, session_results=None, feed=True):
-    # `session_results={}` pins the primary merge source to empty so these
-    # tests observe only what they staged, never the running session's own
-    # measurements.
+def _finish(artifact, session, reports, *, session_results=None):
     plugin = EvalResultsPlugin(
         results_path=artifact,
         session_results={} if session_results is None else session_results,
     )
-    if feed:
-        # A stub session reports no outcomes unless asked, which makes the
-        # hook print its own count-mismatch warning. Feed one passing report
-        # per item so the staged session looks like a real one.
-        for item in session.items:
-            plugin.pytest_runtest_logreport(_StubReport(item.nodeid))
-    plugin.pytest_sessionfinish(session, exitstatus)
+    plugin.pytest_collection_finish(session)
+    for report in reports:
+        if report.when == "call":
+            plugin.pytest_runtest_logreport(_StubReport(report.nodeid, "setup"))
+        plugin.pytest_runtest_logreport(report)
+        if report.when == "call" and report.outcome == "passed":
+            plugin.pytest_runtest_logreport(_StubReport(report.nodeid, "teardown"))
+    plugin.pytest_sessionfinish(session, 0)
     return json.loads(artifact.read_text(encoding="utf-8"))
 
 
-# ---------------------------------------------------------------------------
-# Guard 1: the merge the session-finish hook performs.
-# ---------------------------------------------------------------------------
-
-def test_sessionfinish_merges_every_tests_results(tmp_path):
-    """Accumulate across every eval test, not just the first one.
-
-    pytest's `tmp_path` is unique per test, so each file holds one test's
-    metrics and the key sets are complementary. Breaking after the first
-    kept a single test's contribution and discarded the rest.
-    """
-    artifact = tmp_path / "results.json"
-    session = _eval_session(
-        tmp_path,
-        {
-            "alpha": {"alpha_rate": 0.1},
-            "beta": {"beta_rate": 0.2},
-            "gamma": {"gamma_rate": 0.3},
-            "silent": None,
-        },
-    )
-
-    written = _finish(artifact, session)
-
-    missing = {"alpha_rate", "beta_rate", "gamma_rate"} - written.keys()
-    assert not missing, (
-        f"per-test eval results missing from the artifact: {sorted(missing)}. "
-        "Only one test's results reached the file."
-    )
-
-
-def test_sessionfinish_preserves_keys_already_on_disk(tmp_path):
-    """Merge with the artifact, never replace it.
-
-    The bytes already on disk are real contributions -- the per-test
-    `eval_results_path` teardown copies each test's results into this same
-    file -- plus any legitimately maintained key. Replacing the file
-    destroyed all of them, which is why the committed artifact recorded
-    that tests ran and nothing about what they measured.
-    """
-    artifact = tmp_path / "results.json"
-    artifact.write_text(
-        json.dumps({"alpha_rate": "stale", "maintained_by_hand": True}),
-        encoding="utf-8",
-    )
-    session = _eval_session(
-        tmp_path,
-        {
-            "alpha": {"alpha_rate": 0.1},
-            "beta": {"beta_rate": 0.2},
-        },
-    )
-
-    written = _finish(artifact, session)
-
-    assert written["maintained_by_hand"] is True, (
-        "a top-level key the artifact legitimately carried was destroyed by "
-        "the session-finish write"
-    )
-    assert written["beta_rate"] == 0.2
-    assert written["alpha_rate"] == 0.1, (
-        "this session's measurement must supersede the previous run's value"
-    )
-
-
-def test_sessionfinish_merges_the_session_accumulator(tmp_path):
-    """The accumulator is the channel that actually carries every measurement.
-
-    pytest empties `item.funcargs` during teardown, so a session-finish hook
-    cannot read a test's own results file back out of it. `save_eval_results`
-    therefore also records in-process, and that record must reach the artifact
-    even when no per-test file is reachable.
-    """
-    artifact = tmp_path / "results.json"
-    session = _eval_session(tmp_path, {"measured_nothing": None})
-
-    written = _finish(
-        artifact,
-        session,
-        session_results={
-            "diversity_rate": 0.8,
-            "truth_contract_pass_rate": 1.0,
-        },
-    )
-
-    assert written["diversity_rate"] == 0.8
-    assert written["truth_contract_pass_rate"] == 1.0
-
-
-def test_save_eval_results_records_into_the_session_accumulator(tmp_path, monkeypatch):
-    """`save_eval_results` writes the file AND records in-process.
-
-    Round-tripped through a fresh plugin, so the assertion covers the real
-    wiring rather than a hand-staged accumulator.
-
-    `monkeypatch` rebinds the module-level accumulator for the duration of this
-    test, and `save_eval_results` plus the session-finish hook both resolve it
-    as a module global at call time. Without that, this test's staged key
-    would be merged into the tracked artifact by the real session-finish hook
-    and would ship as fabricated evidence.
-    """
+def test_current_session_does_not_fallback_to_historical_metrics(tmp_path, monkeypatch):
+    """Missing producers stay missing, even when historical bytes are present."""
+    historical = {"old_metric": 0.99, "_test_summary": {"passed": 99}}
     monkeypatch.setattr(conftest, "_SESSION_RESULTS", {})
+    monkeypatch.setattr(conftest, "_SESSION_PROVENANCE", {})
+    monkeypatch.setattr(conftest, "_SESSION_PRODUCERS", {})
+    monkeypatch.setattr(conftest, "_SESSION_ID", "current-session")
+    historical_path = tmp_path / "historical.json"
+    historical_path.write_text(json.dumps(historical), encoding="utf-8")
 
-    staged = tmp_path / "results.json"
-    save_eval_results({"staged_metric": 0.25}, staged)
-
-    assert json.loads(staged.read_text(encoding="utf-8"))["staged_metric"] == 0.25
-    assert conftest._SESSION_RESULTS["staged_metric"] == 0.25
-
-    artifact = tmp_path / "artifact.json"
+    artifact = tmp_path / "fresh" / "results.json"
     written = _finish(
         artifact,
-        _eval_session(tmp_path, {"measured_nothing": None}),
-        session_results=dict(conftest._SESSION_RESULTS),
-    )
-    assert written["staged_metric"] == 0.25
-    assert "staged_metric" not in _COMMITTED_AT_IMPORT, (
-        "a test-only key leaked into the committed artifact"
+        _eval_session(tmp_path, ("only",)),
+        [_StubReport("evals/test_example.py::test_only")],
     )
 
-
-def test_sessionfinish_tolerates_a_missing_artifact(tmp_path):
-    """No committed artifact yet is normal, not an error."""
-    artifact = tmp_path / "results.json"
-    assert not artifact.exists()
-    session = _eval_session(tmp_path, {"alpha": {"alpha_rate": 0.1}})
-
-    written = _finish(artifact, session)
-
-    assert written["alpha_rate"] == 0.1
+    assert "old_metric" not in written
+    assert written["scope"] == "current_session"
+    assert written["freshness"] == "session_only"
+    assert written["session_id"] == "current-session"
+    assert written["status"] == "partial"
+    assert written["_test_summary"]["selected_tests_status"] == "complete"
+    assert conftest.recorded_eval_results() == {}
 
 
-def test_sessionfinish_tolerates_an_unreadable_artifact(tmp_path):
-    """A corrupt artifact is evidence gone wrong, not a reason to fail the run."""
-    artifact = tmp_path / "results.json"
-    artifact.write_text("{ this is not json", encoding="utf-8")
-    session = _eval_session(tmp_path, {"alpha": {"alpha_rate": 0.1}})
+def test_save_results_never_merges_existing_output(tmp_path, monkeypatch):
+    """A stale output file cannot inject metrics into the new session."""
+    monkeypatch.setattr(conftest, "_SESSION_RESULTS", {})
+    monkeypatch.setattr(conftest, "_SESSION_PROVENANCE", {})
+    monkeypatch.setattr(conftest, "_SESSION_PRODUCERS", {})
+    output = tmp_path / "results.json"
+    output.write_text(json.dumps({"stale_metric": 0.75}), encoding="utf-8")
 
-    written = _finish(artifact, session)
+    save_eval_results({"fresh_metric": 0.25}, output, producer_id="test_fresh")
+    payload = json.loads(output.read_text(encoding="utf-8"))
 
-    assert written["alpha_rate"] == 0.1
-    assert "_test_summary" in written
-
-
-def test_sessionfinish_tolerates_a_non_object_artifact(tmp_path):
-    """A JSON array or scalar where an object was expected is likewise survivable."""
-    artifact = tmp_path / "results.json"
-    artifact.write_text("[1, 2, 3]", encoding="utf-8")
-    session = _eval_session(tmp_path, {"alpha": {"alpha_rate": 0.1}})
-
-    written = _finish(artifact, session)
-
-    assert written["alpha_rate"] == 0.1
+    assert payload["fresh_metric"] == 0.25
+    assert "stale_metric" not in payload
+    assert payload["metric_provenance"]["fresh_metric"]["producer_test_id"] == "test_fresh"
 
 
-def test_sessionfinish_keeps_eval_subset_exit_status_semantics(tmp_path):
-    """`exit_status` describes the EVAL subset; the session's own status is
-    recorded separately.
-
-    pytest's `exitstatus` covers the whole session, so in a full-suite run
-    an unrelated failure anywhere would otherwise record "failed: 0,
-    exit_status: 1" here, which reads as a broken eval suite. The careful
-    comment above the assignment in `conftest.py` must not regress.
-    """
-    artifact = tmp_path / "results.json"
-    session = _eval_session(
-        tmp_path,
-        {"alpha": {"alpha_rate": 0.1}, "beta": {"beta_rate": 0.2}},
+def test_arbitrary_output_directory_is_supported(tmp_path, monkeypatch):
+    """The explicit output option works outside the eval source directory."""
+    monkeypatch.setattr(conftest, "_SESSION_RESULTS", {})
+    monkeypatch.setattr(conftest, "_SESSION_PROVENANCE", {})
+    monkeypatch.setattr(conftest, "_SESSION_PRODUCERS", {})
+    output = tmp_path / "arbitrary" / "nested" / "artifact.json"
+    save_eval_results(
+        {"offline_metric": 1.0},
+        output,
+        measurement_class="offline_heuristic",
+        dataset_fixture="fixture:small-v1",
+        producer_id="evals/test_example.py::test_offline",
     )
-    plugin = EvalResultsPlugin(results_path=artifact, session_results={})
-    for item in session.items:
-        plugin.pytest_runtest_logreport(_StubReport(item.nodeid))
+    payload = json.loads(output.read_text(encoding="utf-8"))
 
-    plugin.pytest_sessionfinish(session, 1)
+    assert payload["metrics"] == {"offline_metric": 1.0}
+    assert payload["producers"][0]["dataset_fixture"] == "fixture:small-v1"
+    assert payload["producers"][0]["measurement_class"] == "offline_heuristic"
+    assert payload["producers"][0]["test_file_sha256"] is None
 
-    summary = json.loads(artifact.read_text(encoding="utf-8"))["_test_summary"]
-    assert summary["failed"] == 0
-    assert summary["exit_status"] == 0, (
-        "exit_status must describe the eval subset, not the whole session"
+
+def test_tracked_historical_artifact_is_read_only(tmp_path):
+    """No test helper can overwrite the committed historical artifact."""
+    before = HISTORICAL_ARTIFACT.read_bytes()
+    with pytest.raises(ValueError, match="historical and read-only"):
+        conftest._write_json(HISTORICAL_ARTIFACT, _artifact_payload({"x": 1}))
+    assert HISTORICAL_ARTIFACT.read_bytes() == before
+
+
+def test_setup_and_teardown_errors_are_accounted(tmp_path):
+    session = _eval_session(tmp_path, ("setup_error", "teardown_error", "skipped"))
+    reports = [
+        _StubReport(session.items[0].nodeid, "setup", "failed", "fixture failed"),
+        _StubReport(session.items[1].nodeid, "setup", "passed"),
+        _StubReport(session.items[1].nodeid, "call", "passed"),
+        _StubReport(session.items[1].nodeid, "teardown", "failed", "cleanup failed"),
+        _StubReport(session.items[2].nodeid, "setup", "skipped", "not selected"),
+    ]
+    payload = _finish(tmp_path / "out.json", session, reports)
+    summary = payload["_test_summary"]
+
+    assert payload["status"] == "failed"
+    assert summary["failed"] == 2
+    assert summary["skipped"] == 1
+    assert summary["setup_errors"] == 1
+    assert summary["teardown_errors"] == 1
+    assert summary["errors"] == 2
+    assert len(payload["errors"]) == 2
+
+
+def test_producer_scoped_artifact_has_no_unrun_metric(tmp_path):
+    session = _eval_session(tmp_path, ("producer", "excluded"))
+    payload = _finish(
+        tmp_path / "scoped.json",
+        session,
+        [_StubReport(session.items[0].nodeid)],
+        session_results={"producer_metric": 0.5},
     )
-    assert summary["session_exit_status"] == 1, (
-        "the whole-session status must still be recorded, under its own name"
-    )
-    assert summary["total_tests"] == 2
-    assert (
-        summary["passed"] + summary["failed"] + summary["skipped"]
-        == summary["total_tests"]
-    )
+    assert payload["metrics"] == {"producer_metric": 0.5}
+    assert "excluded_metric" not in payload
+    assert payload["_test_summary"]["not_run"] == 1
+    assert payload["status"] == "partial"
 
 
-# ---------------------------------------------------------------------------
-# Guard 2: the tracked artifact's committed bytes.
-# ---------------------------------------------------------------------------
-
-def test_committed_artifact_carries_every_metric():
-    """The committed evidence records what was measured, not just that tests ran."""
-    assert _COMMITTED_AT_IMPORT is not None, (
-        f"{ARTIFACT} is missing or is not a JSON object. The eval suite is "
-        "required to leave a parseable artifact; re-run "
-        "`pytest tests/evals/` and commit the result."
-    )
-
-    missing = [key for key in REQUIRED_METRICS if key not in _COMMITTED_AT_IMPORT]
-    assert not missing, (
-        f"{ARTIFACT.name} is write-only: it records that tests ran and never "
-        f"what they measured. Missing metrics: {missing}. Present keys: "
-        f"{sorted(_COMMITTED_AT_IMPORT)}."
-    )
+def test_sessionfinish_discards_old_output_and_funcargs(tmp_path):
+    output = tmp_path / "stale.json"
+    output.write_text('{"old_metric": 0.99}', encoding="utf-8")
+    session = _eval_session(tmp_path, ("only",))
+    session.items[0].funcargs = {"eval_results_path": output}
+    written = _finish(output, session, [_StubReport(session.items[0].nodeid)])
+    assert written["metrics"] == {}
+    assert "old_metric" not in written
 
 
-def test_committed_artifact_metrics_are_plausible_rates():
-    """Every required metric is a rate in [0, 1]."""
-    assert _COMMITTED_AT_IMPORT is not None, f"{ARTIFACT} is missing or unreadable"
-
-    for key in REQUIRED_METRICS:
-        value = _COMMITTED_AT_IMPORT[key]
-        assert isinstance(value, (int, float)) and not isinstance(value, bool), (
-            f"{key} should be a measured number, got {type(value).__name__}"
-        )
-        assert 0.0 <= value <= 1.0, f"{key} = {value} is outside [0, 1]"
+def test_recorded_results_never_reads_a_disk_fallback(monkeypatch):
+    monkeypatch.setattr(conftest, "_SESSION_RESULTS", {})
+    def forbidden_read(*args, **kwargs):
+        pytest.fail("Current-session results must not read historical files")
+    monkeypatch.setattr(conftest, "_read_json_dict", forbidden_read)
+    assert conftest.recorded_eval_results() == {}
 
 
-def test_committed_artifact_summary_is_internally_consistent():
-    """`passed + failed + skipped == total_tests`.
+def test_failed_or_unfinished_producer_cannot_satisfy_consumers(tmp_path, monkeypatch):
+    monkeypatch.setattr(conftest, "_SESSION_RESULTS", {"metric": 0.75})
+    monkeypatch.setattr(conftest, "_SESSION_PROVENANCE", {"metric": {"producer_test_id": "producer"}})
+    monkeypatch.setattr(conftest, "_SESSION_OUTCOMES", {})
+    plugin = EvalResultsPlugin(tmp_path / "out.json")
+    plugin.pytest_runtest_logreport(_StubReport("producer", "setup"))
+    plugin.pytest_runtest_logreport(_StubReport("producer"))
+    assert conftest.recorded_eval_results() == {}
+    plugin.pytest_runtest_logreport(_StubReport("producer", "teardown", "failed"))
+    assert conftest.recorded_eval_results() == {}
+    plugin.pytest_runtest_logreport(_StubReport("successful", "setup"))
+    plugin.pytest_runtest_logreport(_StubReport("successful"))
+    plugin.pytest_runtest_logreport(_StubReport("successful", "teardown"))
+    conftest._SESSION_PROVENANCE["metric"]["producer_test_id"] = "successful"
+    assert conftest.recorded_eval_results() == {"metric": 0.75}
 
-    This is the same contradiction exec-plan 08's Fix 2 audit flagged in the
-    writer; the guard belongs next to the artifact it describes.
-    """
-    assert _COMMITTED_AT_IMPORT is not None, f"{ARTIFACT} is missing or unreadable"
 
-    summary = _COMMITTED_AT_IMPORT.get("_test_summary")
-    assert summary is not None, f"{ARTIFACT.name} carries no _test_summary"
+def test_option_and_direct_save_refuse_historical_output(monkeypatch):
+    from types import SimpleNamespace
+    before = HISTORICAL_ARTIFACT.read_bytes()
+    config = SimpleNamespace(getoption=lambda name: str(HISTORICAL_ARTIFACT))
+    with pytest.raises(ValueError, match="historical and read-only"):
+        conftest.results_path_for_config(config)
+    with pytest.raises(ValueError, match="historical and read-only"):
+        save_eval_results({"test_only": 1}, HISTORICAL_ARTIFACT, producer_id="test_only")
+    assert HISTORICAL_ARTIFACT.read_bytes() == before
 
-    counted = summary["passed"] + summary["failed"] + summary["skipped"]
-    assert counted == summary["total_tests"], (
-        f"{counted} != {summary['total_tests']}: the committed counts contradict "
-        "each other"
-    )
+
+def test_fixture_and_plugin_share_configured_output(request, eval_results_path):
+    plugin = request.config.pluginmanager.getplugin("eval_results")
+    assert eval_results_path == plugin.results_path
+    assert eval_results_path == conftest.results_path_for_config(request.config)
+    assert eval_results_path != HISTORICAL_ARTIFACT
+
+
+def test_collection_error_without_items_writes_failed_artifact(tmp_path):
+    from types import SimpleNamespace
+    output = tmp_path / "out.json"
+    plugin = EvalResultsPlugin(output, session_results={})
+    plugin.pytest_collectreport(SimpleNamespace(
+        nodeid="tests/evals/test_broken.py", failed=True,
+    ))
+    plugin.pytest_sessionfinish(_StubSession([]), 2)
+    written = json.loads(output.read_text(encoding="utf-8"))
+    assert written["status"] == "failed"
+    assert written["metrics"] == {}
+    assert written["_test_summary"]["collection_errors"] == 1
+
+
+def test_incomplete_phase_reports_remain_partial(tmp_path):
+    session = _eval_session(tmp_path, ("interrupted",))
+    plugin = EvalResultsPlugin(tmp_path / "out.json", session_results={})
+    plugin.pytest_runtest_logreport(_StubReport(session.items[0].nodeid))
+    plugin.pytest_sessionfinish(session, 2)
+    assert plugin.results["status"] == "partial"
+    assert plugin.results["_test_summary"]["not_run"] == 1
+
+
+def test_historical_artifact_rates_are_valid_historical_bytes_only():
+    historical = json.loads(HISTORICAL_ARTIFACT.read_text(encoding="utf-8"))
+    for key in conftest.REQUIRED_METRICS:
+        value = historical[key]
+        assert isinstance(value, (int, float)) and not isinstance(value, bool)
+        assert 0 <= value <= 1
+    summary = historical["_test_summary"]
+    assert summary["total_tests"] == summary["passed"] + summary["failed"] + summary["skipped"]
