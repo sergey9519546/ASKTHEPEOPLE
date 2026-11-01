@@ -49,7 +49,8 @@ gui-test-screenshots/
 
 # Cursor
 .cursor/
-.claude/
+.claude/*
+!.claude/skills/
 
 # Agent / IDE tooling state
 .agents/
