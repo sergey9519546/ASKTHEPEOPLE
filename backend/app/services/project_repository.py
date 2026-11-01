@@ -249,6 +249,50 @@ class ProjectRepository:
         return result if isinstance(result, dict) else None
 
     @staticmethod
+    def _batch_load_latest_completed_ontologies(
+        conn, project_ids: List[int]
+    ) -> Dict[int, Dict[str, Any]]:
+        """Batch load the latest completed ontology for multiple project IDs.
+
+        Uses a SQL window function (ROW_NUMBER() OVER PARTITION BY project_id) to eliminate
+        N+1 queries when retrieving project lists, reducing database round-trips from O(N) to O(1).
+        """
+        if not project_ids:
+            return {}
+
+        unique_pids = list(dict.fromkeys(project_ids))
+        statement = text(
+            """
+            WITH ranked_ontologies AS (
+                SELECT
+                    project_id,
+                    result_json,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY project_id
+                        ORDER BY updated_at DESC, id DESC
+                    ) AS ontology_rank
+                FROM ontologies
+                WHERE project_id IN :project_ids
+                  AND status = :status
+            )
+            SELECT project_id, result_json
+            FROM ranked_ontologies
+            WHERE ontology_rank = 1
+            """
+        ).bindparams(bindparam("project_ids", expanding=True)).columns(result_json=JSON)
+
+        rows = conn.execute(
+            statement,
+            {"project_ids": unique_pids, "status": "completed"},
+        ).mappings().all()
+
+        return {
+            row["project_id"]: row["result_json"]
+            for row in rows
+            if isinstance(row["result_json"], dict)
+        }
+
+    @staticmethod
     def _persist_completed_ontology(
         conn,
         project_id: str,
@@ -672,10 +716,18 @@ class ProjectRepository:
                 ),
                 {"limit": limit},
             ).mappings().all()
+            if not rows:
+                return []
+
+            # Batch load ontologies for all project IDs in a single query (O(1) round trips instead of O(N))
+            project_db_ids = [row["id"] for row in rows]
+            ontologies_by_project_id = cls._batch_load_latest_completed_ontologies(conn, project_db_ids)
+
             projects = []
             for row in rows:
                 project = cls._row_to_project(row)
-                project.ontology = cls._load_latest_completed_ontology(conn, row["id"])
+                # Map preloaded ontology or default to None if not present
+                project.ontology = ontologies_by_project_id.get(row["id"])
                 projects.append(project)
             return projects
 
