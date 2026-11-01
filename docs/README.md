@@ -1,9 +1,9 @@
 ---
 title: "ASKTHEPEOPLE Documentation System"
 status: "Normative"
-version: "1.3.0"
+version: "1.4.0"
 owner: "Product, Engineering, Security, Research"
-last_reviewed: "2026-10-02"
+last_reviewed: "2026-11-01"
 review_cycle: "Per gate; at minimum quarterly"
 research_cutoff: "2026-07-29"
 baseline_commit: "8b616dc7fa02eeed5ada8c51998d8b197be28f8d"
@@ -176,6 +176,7 @@ Every production release MUST produce a release-evidence bundle containing:
 - [Accessibility](design/ACCESSIBILITY.md) — Normative. WCAG 2.2 AA target, keyboard contract, acceptance evidence.
 - [Content System](design/CONTENT_SYSTEM.md)
 - [Workspace shell UX redesign — rationale record](design/UX_REDESIGN_2026.md) — Reference. Why the workspace shell changed in October 2026, the computed palette contrast table, and the accepted-unresolved list. Read alongside [Direction C](design/DIRECTION_C.md) and [Accessibility](design/ACCESSIBILITY.md); it supersedes neither.
+- [Rig-aligned simulation workspace proposal](design/SIMULATION_WORKSPACE_PROPOSAL.md) — Proposed, read-only interaction direction; not implementation or acceptance evidence.
 
 ### Architecture
 
