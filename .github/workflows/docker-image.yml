@@ -229,7 +229,7 @@ jobs:
 
       - name: Attest a newly built candidate before it can be reused
         if: steps.candidate-cache.outputs.exists != 'true'
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
         with:
           subject-name: ${{ env.CANDIDATE_IMAGE }}
           subject-digest: ${{ steps.candidate.outputs.digest }}
@@ -360,7 +360,7 @@ jobs:
       # Attest after the scanned digest exists in the final repository, but
       # before publishing the human-facing immutable version.
       - name: Add GitHub build-provenance attestation
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6 # v4
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/askthepeople
           subject-digest: ${{ steps.selected-candidate.outputs.digest }}
