@@ -1,7 +1,7 @@
 ---
 title: "Rig-aligned simulation workspace proposal"
 status: "Proposed"
-version: "0.1.0"
+version: "0.2.0"
 owner: "Product + Frontend + Accessibility"
 last_reviewed: "2026-11-01"
 review_cycle: "Before implementation or material direction change"
@@ -55,8 +55,8 @@ be redrawn as action dependencies or real-world causal relationships.
 | CURRENT | Loaded fonts are Staatliches and Barlow. | [`design-tokens.css`](../../frontend/src/assets/design-tokens.css), font imports |
 | CURRENT | The shell owns the Truth Rail; journey navigation and the panel tablist have distinct keyboard semantics. | [`DesktopShell.vue`](../../frontend/src/components/DesktopShell.vue), [`DesktopDock.vue`](../../frontend/src/components/DesktopDock.vue), [`DesktopTaskbar.vue`](../../frontend/src/components/DesktopTaskbar.vue) |
 | CURRENT | Simulation WebSocket state frames are emitted on a two-second polling loop and include at most ten recent actions. This is a bounded snapshot, not complete delivery. | [`ws.py`](../../backend/app/api/ws.py), `_SIM_POLL_INTERVAL`, `_MAX_RECENT_ACTIONS`, `_simulation_state_frame`, `simulation_ws` |
-| PARTIAL | Client action identity prefers a server ID but falls back to a composite containing the incoming array index. Stable cross-snapshot identity is not established by that fallback. | [`Step3Simulation.vue`](../../frontend/src/components/Step3Simulation.vue), `actionIdentity`, `mergeActions` |
-| CURRENT | Initial saved-action loading exists; it must be traced with server pagination/retention before claiming complete replay. | [`Step3Simulation.vue`](../../frontend/src/components/Step3Simulation.vue), `loadSavedActions` |
+| TRANSITION | The client projects allowlisted public action data into a bounded reader. Server IDs are preferred; no-ID matching remains a local heuristic and does not establish cross-snapshot identity. | [`useRunActivity.js`](../../frontend/src/composables/useRunActivity.js), [`Step3Simulation.vue`](../../frontend/src/components/Step3Simulation.vue) |
+| TRANSITION | Saved activity reads the first page with `limit=200, offset=0`; the server supports offset/limit but this change adds no cursor or complete-history guarantee. | [`Step3Simulation.vue`](../../frontend/src/components/Step3Simulation.vue), [`read_routes.py`](../../backend/app/api/routes/read_routes.py), `get_simulation_actions` |
 | CURRENT | A completed-run fork control exists. It is not proof of a changed-assumption or paired-analysis workflow. | [`ForkRunControl.vue`](../../frontend/src/components/ForkRunControl.vue), [`SimulationRunView.vue`](../../frontend/src/views/SimulationRunView.vue), `canBranch` |
 | CURRENT | Split layout already exists and places the active panel beside another panel. Structured record comparison remains a separate capability. | [`useDesktop.js`](../../frontend/src/composables/useDesktop.js), `LAYOUT_MODES` and layout contract |
 | TARGET | Map/list parity is required by ADR-0006. Direction C documents a gap; a documentation statement alone is not a fresh exhaustive proof of code absence. | [ADR-0006](../architecture/adr/ADR-0006-route-map-list-parity.md), [Direction C](DIRECTION_C.md) |
@@ -64,10 +64,46 @@ be redrawn as action dependencies or real-world causal relationships.
 The workflow's description of an action ledger as the canonical record is
 rejected for the first slice. Use **recent recorded activity** and disclose
 incomplete or unavailable history. Do not interpret a WebSocket arrival as an
-actor's thinking time or as the time an action occurred. Reconnect recovery,
-backfill, ordering and duplicate suppression require explicit tests.
+actor's thinking time or as the time an action occurred. The bounded client
+change has tests for reconnect handling, ordering and duplicate suppression;
+server-side backfill completeness remains unasserted.
 
-## First implementation slice — TARGET
+## First implementation slice — TRANSITION (bounded recent-activity reader)
+
+Implemented as a bounded transition; this records current implementation and
+does not assert proposal approval:
+
+- A new `useRunActivity` composable retains up to 200 projected public records,
+  bounds remembered identities to that window, assigns monotonic local display
+  keys, and keeps a held snapshot and selected record as separate copies.
+  `frontend/src/composables/useRunActivity.js` explicitly labels no-ID matching
+  as heuristic and does not claim complete event identity. It accepts only
+  allowlisted public fields; retention is by record count, not payload bytes or
+  string/array length.
+- `Step3Simulation.vue` requests the existing saved-action endpoint with
+  `limit=200, offset=0`, continues state/action ingestion while the view is held,
+  ingests terminal-frame actions before stopping, and rejects stale callbacks or
+  async replies after retry/run changes/unmount. Reconnect preserves the held
+  view and selected record; a new run resets them.
+- `Step3RunWayfinder.vue` provides Hold view / Show latest, an explicit statement
+  that holding the view does not pause the run, pending/overflow/eviction and
+  history-unavailable messages, and an Inspect record control. The list count is
+  “shown,” not total actions or people.
+- `RunActivityInspector.vue` displays the copied public record fields and
+  explicit public references, marks fallback identity as local, renders text
+  literally, and restores focus to the originating row or toolbar on close.
+
+The interaction remains a bounded view over recent snapshots and a bounded first
+page of saved history. `backend/app/api/ws.py` sends at most ten recent actions
+per state frame; the current action API offers offset/limit but no asserted
+complete-history cursor in this change. Missing server IDs mean the heuristic
+cannot prove two equal actions from different snapshots are the same event.
+An old held snapshot is preserved for reading, but Show latest returns only the
+retained current window. A history-fetch failure is not represented as an empty
+run. No pause request, API/schema change, server identity, full replay guarantee,
+or durable buffer was added.
+
+## Remaining workspace contract — TARGET
 
 1. **Activity reading mode:** let a user hold the displayed list while incoming
    updates continue to be collected within a documented bounded buffer. Label
@@ -83,10 +119,12 @@ backfill, ordering and duplicate suppression require explicit tests.
    current request contract. Do not advertise editing assumptions, live parameter
    manipulation or automatic side-by-side differences until supported and tested.
 
-Before implementing the first two items, settle record identity and a bounded
-buffer policy with the runtime owner. A view hold must never silently discard
-records while implying completeness. Do not add a new canonical store or
-invent a client-only provenance ID as a server identity.
+The first two items have a bounded partial implementation, not complete-history
+or accessibility acceptance. The local identity and buffer policy are explicit
+heuristics; validate any stronger identity or backfill contract with the runtime
+owner before extending it. A view hold must never silently discard records while
+implying completeness. Do not add a new canonical store or treat a client-only
+display key as a server identity.
 
 ## Motion and interaction contract — TARGET
 
@@ -122,24 +160,48 @@ Required before an implementation is called complete:
   quantitative or predictive interpretations; no comprehension evidence exists
   from this workflow.
 
-The workflow's test-count claim was stale. Use current command output rather
-than copying counts from the artifact. A direct coordinator run of
-`node tools/lint_frontend_truth.mjs` after the workflow returned nonzero with
-copy violations and no Truth Rail gaps. Passing Vitest therefore must not be
-reported as a passing standalone truth scan. These copy findings require a
-separate scoped review; do not weaken the linter or remove required disclosures.
+Implementation verification for the bounded slice (2026-11-01): the five
+focused activity suites passed **76 tests across five files**; the full frontend
+suite passed **390 tests across 38 files**; and the production build completed
+successfully. `npm run verify` passed gates 1–5, including **10,032 backend
+tests passed, 1 skipped, 1 xfailed**; gate 6 was skipped because gitleaks is not
+installed locally. The backend run emitted two warnings (a dependency
+deprecation and a Windows pytest-cache permission warning).
 
-Server heartbeat alignment, full action-history completeness, font rights,
-manual accessibility acceptance and structured comparison behavior were not
-established by the design workflow. Source inspection is not live runtime proof.
+Browser checks used a temporary local Vite harness with synthetic records, not
+a live backend. Keyboard activation opened inspection, focus moved to its
+heading, and closing returned focus to the originating row. Holding the view
+preserved its snapshot while a new action arrived; Show latest displayed the
+retained current window. At 390 px the activity layout remained one column with
+no horizontal overflow; at 1365 px it used two columns. Reduced-motion and
+forced-colors media modes were emulated. axe-core 4.12.1 reported zero
+violations, 25 passes, and one incomplete check; a status-chip contrast issue
+found in the first browser pass was corrected. The standalone axe CLI could not
+start because its bundled ChromeDriver 151 did not match installed Chrome 156;
+axe-core was run in the integrated browser instead. No screen-reader or human
+accessibility evaluation was performed.
+
+The standalone truth linter reports the same **six copy violations and zero
+Truth Rail gaps** on the clean `HEAD` baseline and this worktree; the measured
+delta is **zero**. Existing findings are in `frontend/index.html`,
+`frontend/public/mark.svg`, `frontend/public/social-card.svg`,
+`frontend/src/components/Step4Report.vue`, and
+`frontend/src/views/NotFoundView.vue`. Do not silence or weaken those findings
+as part of this slice. `python tools/validate_docs.py` passed with zero warnings
+and errors after this document update. The Vitest harness uses synthetic
+fixtures; it is not live backend, screen-reader, or human comprehension
+evidence.
+
 
 ## Impact, approval and rollback
 
-No code, font dependencies, API contracts, product claims, default settings or
-retention policy changes are authorized by this document. Named product,
-engineering and accessibility reviewers have not been assigned; no human
-approval is asserted. A later implementation requires a reviewed PR with the
-acceptance evidence above and applicable security/privacy review.
+This proposal does not itself authorize code, font dependency, API contract,
+product claim, default setting or retention-policy changes. The bounded slice
+remains a transition, not acceptance of the broader design; named product,
+engineering and accessibility reviewers have not been assigned, and no human
+approval is asserted. A reviewed PR with the acceptance evidence above and
+applicable security/privacy review is still required before treating the broader
+design as accepted.
 
 The first slice should be independently revertible to the current run view
 without mutating run artifacts. A documentation rollback removes this proposal

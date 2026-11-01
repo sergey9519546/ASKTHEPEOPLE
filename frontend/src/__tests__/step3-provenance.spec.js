@@ -1,5 +1,6 @@
-import { flushPromises, shallowMount } from '@vue/test-utils';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { enableAutoUnmount, flushPromises, shallowMount } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { RUN_ACTIVITY_LIMIT } from '../composables/useRunActivity';
 
 const apiMocks = vi.hoisted(() => ({
   startSimulation: vi.fn(),
@@ -25,6 +26,8 @@ vi.mock('../api/ws', () => ({
 }));
 
 import Step3Simulation from '../components/Step3Simulation.vue';
+
+enableAutoUnmount(afterEach);
 
 describe('Step3Simulation provenance separation', () => {
   beforeEach(() => {
@@ -87,7 +90,10 @@ describe('Step3Simulation provenance separation', () => {
 
     expect(apiMocks.getRunStatus).toHaveBeenCalledWith('sim-1');
     expect(apiMocks.startSimulation).not.toHaveBeenCalled();
-    expect(apiMocks.getSimulationActions).toHaveBeenCalledWith('sim-1');
+    expect(apiMocks.getSimulationActions).toHaveBeenCalledWith('sim-1', {
+      limit: RUN_ACTIVITY_LIMIT,
+      offset: 0,
+    });
   });
 
   it('does not start a run when saved status cannot be verified', async () => {

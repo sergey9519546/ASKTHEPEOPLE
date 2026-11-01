@@ -55,11 +55,11 @@
     <section class="run-record" aria-labelledby="run-record-heading">
       <header class="record-heading">
         <div>
-          <span class="section-index">Run record / generated activity</span>
-          <h3 id="run-record-heading">Generated activity, in recorded order</h3>
+          <span class="section-index">Recent activity / generated</span>
+          <h3 id="run-record-heading">Recent recorded activity</h3>
           <p>
-            Generated activity is the run record. Possible paths are created
-            later in the decision brief.
+            This is a bounded view of received records, not complete history.
+            Possible paths are created later in the decision brief.
           </p>
         </div>
         <span class="record-status" :class="`is-${statusTone}`" aria-live="polite">
@@ -67,6 +67,25 @@
           {{ statusLabel }}
         </span>
       </header>
+
+      <div class="activity-toolbar" data-testid="activity-toolbar">
+        <button ref="readingControl" type="button" :disabled="!activityHeld && recordItems.length === 0"
+          :aria-pressed="activityHeld" @click="$emit(activityHeld ? 'show-latest' : 'hold-view')">
+          {{ activityHeld ? "Show latest" : "Hold view" }}
+        </button>
+        <p>Holding this view does not pause the run.</p>
+        <p v-if="activityHeld" role="status" data-testid="activity-held-status">
+          View held · {{ pendingActivityLabel }}
+        </p>
+      </div>
+      <p class="activity-limit-note">
+        Up to {{ activityLimit }} recent records are retained in this view.
+        Records without server IDs use approximate local matching; counts are not unique event totals.
+      </p>
+      <p v-if="activityEvicted || pendingOverflow" class="activity-limit-note" data-testid="activity-overflow">
+        Older received entries are outside the retained window. Show latest displays only retained recent activity, not every intervening action.
+      </p>
+      <p v-if="historyError" class="detail-error" role="status" data-testid="activity-history-error">{{ historyError }}</p>
 
       <div
         v-if="hasRunError"
@@ -96,10 +115,10 @@
       >
         <span class="state-code" aria-hidden="true">REC</span>
         <div>
-          <strong>No generated action has been saved yet.</strong>
+          <strong>No recent activity has been received yet.</strong>
           <p>
-            The run is active. This area will show each saved generated action
-            without making claims about people or outcomes outside this run.
+            The run is active. Received generated records will appear here;
+            missing updates do not mean no actions occurred.
           </p>
         </div>
       </div>
@@ -111,17 +130,14 @@
       >
         <span class="state-code" aria-hidden="true">00</span>
         <div>
-          <strong v-if="hasCompleted">
-            The run finished without a saved generated action.
-          </strong>
-          <strong v-else>No generated actions are recorded.</strong>
-          <p v-if="hasCompleted">
-            This is an empty generated run record, not evidence about people
-            or any real-world outcome.
+          <strong v-if="historyError">Recent history is unavailable.</strong>
+          <strong v-else-if="hasCompleted">No recent records are shown for this finished run.</strong>
+          <strong v-else>No recent activity is shown.</strong>
+          <p v-if="hasCompleted || historyError">
+            This view cannot establish that the run had no actions. It is not complete history.
           </p>
           <p v-else>
-            Begin the run to create a generated activity record under the
-            reviewed assumptions.
+            Received generated records will appear here after the run starts.
           </p>
         </div>
       </div>
@@ -134,7 +150,7 @@
         <div class="record-ledger">
           <div class="record-list-heading">
             <span>Recorded order</span>
-            <strong>Oldest to newest · {{ recordItems.length }} saved</strong>
+            <strong>Oldest to newest · {{ recordItems.length }} shown</strong>
           </div>
           <ol class="run-record-list" data-testid="run-record-list">
             <li
@@ -150,14 +166,16 @@
                 </header>
                 <p>{{ item.text }}</p>
                 <footer>
-                  generated generated action · recorded inside this run
+                  generated action · received inside this run
+                  <button :ref="(element) => rememberRecordButton(item.id, element)" type="button" class="inspect-record-button" :aria-label="`Inspect recorded activity ${item.sequence}`" @click="$emit('inspect-record', item.id)">Inspect record</button>
                 </footer>
               </article>
             </li>
           </ol>
         </div>
 
-        <aside class="meaning-boundary" aria-labelledby="meaning-boundary-heading">
+        <RunActivityInspector v-if="selectedRecord" :record="selectedRecord" @close="closeInspector" />
+        <aside v-else class="meaning-boundary" aria-labelledby="meaning-boundary-heading">
           <ContextualHelp
             helpId="step3-boundaries"
             concept="run_boundaries"
@@ -292,11 +310,11 @@
         <section class="detail-section" aria-labelledby="activity-heading">
           <span class="detail-number">02</span>
           <div>
-            <h3 id="activity-heading">Record inventory</h3>
-            <p>Counts saved generated actions only. They are not a sample size.</p>
+            <h3 id="activity-heading">View inventory</h3>
+            <p>Counts describe records shown here, not the complete run or real people.</p>
             <dl class="readiness-list">
               <div>
-                <dt>Saved actions</dt>
+                <dt>Records shown</dt>
                 <dd>{{ recordItems.length }}</dd>
               </div>
               <div>
@@ -388,8 +406,10 @@
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, nextTick, ref } from "vue";
+import { compareRunActivityRecords } from "../composables/useRunActivity.js";
 import ContextualHelp from "./ContextualHelp.vue";
+import RunActivityInspector from "./RunActivityInspector.vue";
 
 const props = defineProps({
   runStatus: {
@@ -400,6 +420,13 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  activityHeld: Boolean,
+  pendingCount: { type: Number, default: 0 },
+  pendingOverflow: Boolean,
+  activityEvicted: Boolean,
+  activityLimit: { type: Number, default: 200 },
+  selectedRecord: { type: Object, default: null },
+  historyError: String,
   phase: {
     type: Number,
     default: 0,
@@ -433,7 +460,24 @@ const emit = defineEmits([
   "retry-run",
   "start-over",
   "reconnect",
+  "hold-view",
+  "show-latest",
+  "inspect-record",
+  "close-inspector",
 ]);
+
+const readingControl = ref(null);
+const recordButtons = new Map();
+const rememberRecordButton = (id, element) => {
+  if (element) recordButtons.set(id, element);
+  else recordButtons.delete(id);
+};
+const closeInspector = async () => {
+  const origin = props.selectedRecord?._uniqueId;
+  emit("close-inspector");
+  await nextTick();
+  (recordButtons.get(origin) || readingControl.value)?.focus({ preventScroll: true });
+};
 
 const failedStatuses = new Set(["failed", "interrupted"]);
 
@@ -507,7 +551,7 @@ const progressLabel = computed(() => {
 
 const statusLabel = computed(() => {
   if (hasRunError.value) return "Run stopped";
-  if (hasCompleted.value) return "Record complete";
+  if (hasCompleted.value) return "Run finished";
   if (isRunning.value) return "Recording generated activity";
   return "Not started";
 });
@@ -523,6 +567,14 @@ const statusCode = computed(() => ({
   running: "REC",
   waiting: "WAIT",
 })[statusTone.value]);
+const pendingActivityLabel = computed(() => {
+  const count = props.pendingOverflow
+    ? `${props.activityLimit}+`
+    : props.pendingCount;
+  const noun =
+    props.pendingOverflow || props.pendingCount !== 1 ? "entries" : "entry";
+  return `${count} newer ${noun} received.`;
+});
 
 const actionText = (action) => {
   const args = action?.action_args || {};
@@ -602,15 +654,10 @@ const chronologicalActions = computed(() =>
   props.actions
     .map((action, index) => ({ action, index }))
     .sort((left, right) => {
-      const roundDifference =
-        Number(left.action?.round_num || 0) -
-        Number(right.action?.round_num || 0);
-      if (roundDifference) return roundDifference;
-
-      const timeDifference = String(left.action?.timestamp || "").localeCompare(
-        String(right.action?.timestamp || ""),
+      return (
+        compareRunActivityRecords(left.action, right.action) ||
+        left.index - right.index
       );
-      return timeDifference || left.index - right.index;
     }),
 );
 
@@ -873,7 +920,7 @@ const handleDetailsToggle = (event) => {
   min-height: 1.8rem;
   place-items: center;
   background: var(--ink-raised);
-  color: var(--signal);
+  color: var(--signal-soft);
   font-family: var(--font-mono);
   font-size: 0.65rem;
 }
@@ -890,7 +937,7 @@ const handleDetailsToggle = (event) => {
 
 .record-status.is-running {
   border-color: var(--signal);
-  color: var(--signal);
+  color: var(--signal-soft);
 }
 
 .record-state {
@@ -957,6 +1004,36 @@ const handleDetailsToggle = (event) => {
 .record-state button {
   grid-column: 2;
   justify-self: start;
+}
+
+.activity-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin: 1rem 0 0.5rem;
+}
+
+.activity-toolbar p { margin: 0; line-height: 1.5; }
+.activity-limit-note { margin: 0.5rem 0 1rem; color: var(--paper-muted); line-height: 1.6; }
+.activity-toolbar button, .inspect-record-button {
+  min-height: 44px;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--line-structural);
+  background: var(--ink-raised);
+  color: var(--paper);
+  font-family: var(--font-body);
+  cursor: pointer;
+}
+.activity-toolbar button:disabled { opacity: 0.6; cursor: not-allowed; }
+.activity-toolbar button:focus-visible, .inspect-record-button:focus-visible {
+  outline: 3px solid var(--attention);
+  outline-offset: 3px;
+}
+.inspect-record-button { display: block; margin-top: 0.75rem; }
+@media (forced-colors: active) {
+  .activity-toolbar button, .inspect-record-button { border-color: CanvasText; }
+  .activity-toolbar button:focus-visible, .inspect-record-button:focus-visible { outline-color: Highlight; }
 }
 
 .record-layout {

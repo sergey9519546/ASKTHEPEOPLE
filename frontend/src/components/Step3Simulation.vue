@@ -1,8 +1,16 @@
 <template>
   <div class="simulation-panel">
     <Step3RunWayfinder
+      :key="runSessionKey"
       :run-status="runStatus"
-      :actions="chronologicalActions"
+      :actions="displayedRecords"
+      :activity-held="held"
+      :pending-count="pendingCount"
+      :pending-overflow="pendingOverflow"
+      :activity-evicted="hasEvicted"
+      :activity-limit="RUN_ACTIVITY_LIMIT"
+      :selected-record="selectedRecord"
+      :history-error="historyError"
       :phase="phase"
       :is-starting="isStarting"
       :start-error="startError"
@@ -19,6 +27,10 @@
       :metrics-loading="loadingMetrics"
       :metrics-error="metricsError"
       :system-logs="systemLogs"
+      @hold-view="holdView"
+      @show-latest="showLatest"
+      @inspect-record="selectRecord"
+      @close-inspector="clearSelection"
       @review="handleNextStep"
       @load-metrics="fetchMetrics"
       @retry-run="retryRun"
@@ -41,6 +53,7 @@ import {
   startSimulation,
 } from "../api/simulation";
 import { connectSimulationWs } from "../api/ws";
+import { RUN_ACTIVITY_LIMIT, useRunActivity } from "../composables/useRunActivity";
 import Step3RunWayfinder from "./Step3RunWayfinder.vue";
 
 const props = defineProps({
@@ -74,8 +87,22 @@ const startError = ref(null);
 const liveUpdateError = ref(null);
 const reportError = ref(null);
 const runStatus = ref({});
-const allActions = ref([]);
-const actionIds = ref(new Set());
+const historyError = ref(null);
+const runSessionKey = ref(0);
+const {
+  displayedRecords,
+  held,
+  pendingCount,
+  pendingOverflow,
+  hasEvicted,
+  selectedRecord,
+  mergeActions,
+  holdView,
+  showLatest,
+  selectRecord,
+  clearSelection,
+  reset: resetActivity,
+} = useRunActivity();
 const preflight = ref(null);
 const diagnostics = ref(null);
 const diagnosticsError = ref(null);
@@ -86,19 +113,20 @@ const previousShortPostRound = ref(0);
 const previousCommunityRound = ref(0);
 
 let simulationWs = null;
+let sessionGeneration = 0;
+let socketGeneration = 0;
+let historyRequest = 0;
+let disposed = false;
 
-const chronologicalActions = computed(() =>
-  [...allActions.value].sort((left, right) => {
-    const roundDifference =
-      Number(left.round_num || 0) - Number(right.round_num || 0);
-    if (roundDifference) return roundDifference;
-
-    const timeDifference = String(left.timestamp || "").localeCompare(
-      String(right.timestamp || ""),
-    );
-    return timeDifference || Number(left._sequence || 0) - Number(right._sequence || 0);
-  }),
-);
+// An ID check alone cannot distinguish a retry or an A -> B -> A switch.
+const captureSession = () => ({
+  simulationId: props.simulationId,
+  generation: sessionGeneration,
+});
+const isCurrentSession = (session) =>
+  !disposed &&
+  session.generation === sessionGeneration &&
+  session.simulationId === props.simulationId;
 
 const canGenerateReport = computed(
   () =>
@@ -111,13 +139,14 @@ const addLog = (message) => emit("add-log", message);
 const readableError = (error, fallback) =>
   error?.message || String(error || "").trim() || fallback;
 
-const fetchMetrics = async (force = false) => {
-  if (!props.simulationId || loadingMetrics.value) return;
+const fetchMetrics = async (force = false, session = captureSession()) => {
+  if (!isCurrentSession(session) || !session.simulationId || loadingMetrics.value) return;
 
   loadingMetrics.value = true;
   metricsError.value = null;
   try {
-    const response = await getSimulationMetrics(props.simulationId, force);
+    const response = await getSimulationMetrics(session.simulationId, force);
+    if (!isCurrentSession(session)) return;
     if (response.success && response.data) {
       metricsData.value = response.data;
     } else {
@@ -125,26 +154,26 @@ const fetchMetrics = async (force = false) => {
         response.error || "The interaction summary is not available.";
     }
   } catch (error) {
+    if (!isCurrentSession(session)) return;
     metricsError.value = readableError(
       error,
       "The interaction summary is not available.",
     );
   } finally {
-    loadingMetrics.value = false;
+    if (isCurrentSession(session)) loadingMetrics.value = false;
   }
 };
 
-const fetchExecutionContracts = async () => {
-  const simulationId = props.simulationId;
-  if (!simulationId) return;
+const fetchExecutionContracts = async (session = captureSession()) => {
+  if (!isCurrentSession(session) || !session.simulationId) return;
 
   diagnosticsError.value = null;
   const [preflightResult, diagnosticsResult] = await Promise.allSettled([
-    getSimulationPreflight(simulationId),
-    getSimulationDiagnostics(simulationId),
+    getSimulationPreflight(session.simulationId),
+    getSimulationDiagnostics(session.simulationId),
   ]);
 
-  if (simulationId !== props.simulationId) return;
+  if (!isCurrentSession(session)) return;
 
   if (
     preflightResult.status === "fulfilled" &&
@@ -171,69 +200,61 @@ const fetchExecutionContracts = async () => {
 };
 
 const stopWs = () => {
+  // Invalidate callbacks before close(), which can synchronously call onClose.
+  socketGeneration += 1;
   const connection = simulationWs;
   simulationWs = null;
   connection?.close();
 };
 
-const resetRuntime = () => {
+const invalidateSession = () => {
+  sessionGeneration += 1;
   stopWs();
-  phase.value = 0;
+  loadingMetrics.value = false;
   isStarting.value = false;
   isGeneratingReport.value = false;
+};
+
+const resetRuntime = () => {
+  invalidateSession();
+  runSessionKey.value += 1;
+  resetActivity();
+  phase.value = 0;
   startError.value = null;
   liveUpdateError.value = null;
   reportError.value = null;
+  historyError.value = null;
   runStatus.value = {};
-  allActions.value = [];
-  actionIds.value = new Set();
+  preflight.value = null;
+  diagnostics.value = null;
+  diagnosticsError.value = null;
   previousShortPostRound.value = 0;
   previousCommunityRound.value = 0;
   metricsData.value = null;
   metricsError.value = null;
 };
 
-const actionIdentity = (action, index) =>
-  String(
-    action?.id ||
-      [
-        action?.timestamp,
-        action?.platform,
-        action?.round_num,
-        action?.agent_id,
-        action?.action_type,
-        JSON.stringify(action?.action_args || {}),
-        index,
-      ].join("|"),
-  );
+const loadSavedActions = async (session = captureSession()) => {
+  if (!isCurrentSession(session) || !session.simulationId) return;
 
-const mergeActions = (incoming) => {
-  if (!Array.isArray(incoming)) return;
-
-  incoming.forEach((action, index) => {
-    const identity = actionIdentity(action, index);
-    if (actionIds.value.has(identity)) return;
-
-    actionIds.value.add(identity);
-    allActions.value.push({
-      ...action,
-      _uniqueId: identity,
-      _sequence: allActions.value.length,
-    });
-  });
-};
-
-const loadSavedActions = async () => {
-  if (!props.simulationId) return;
-
+  const request = ++historyRequest;
+  const isCurrentRequest = () =>
+    isCurrentSession(session) && request === historyRequest;
   try {
-    const response = await getSimulationActions(props.simulationId);
-    if (response.success && response.data) {
-      mergeActions(response.data.actions || response.data);
-    }
+    const response = await getSimulationActions(session.simulationId, {
+      limit: RUN_ACTIVITY_LIMIT,
+      offset: 0,
+    });
+    if (!isCurrentRequest()) return;
+    const actions = response.data?.actions ?? response.data;
+    if (!response.success || !Array.isArray(actions)) throw new Error();
+    mergeActions(actions);
+    historyError.value = null;
   } catch {
-    // The primary run state remains usable when its optional activity feed is
-    // temporarily unavailable.
+    if (!isCurrentRequest()) return;
+    // Do not expose server/provider text or describe an unavailable read as empty.
+    historyError.value =
+      "Recent activity history is unavailable. Displayed records may be incomplete.";
   }
 };
 
@@ -257,7 +278,8 @@ const platformsAreComplete = (state) => {
   return true;
 };
 
-const finishRun = async (state) => {
+const finishRun = async (state, session) => {
+  if (!isCurrentSession(session)) return;
   runStatus.value = {
     ...runStatus.value,
     ...(state || {}),
@@ -269,13 +291,17 @@ const finishRun = async (state) => {
   addLog("Scenario run complete.");
   emit("update-status", "completed");
 
-  await Promise.all([fetchMetrics(), loadSavedActions()]);
+  await Promise.all([fetchMetrics(false, session), loadSavedActions(session)]);
 };
 
-const handleWsFrame = async (frame) => {
+const handleWsFrame = async (frame, session) => {
+  if (!isCurrentSession(session)) return;
   if (frame.type === "state") {
     const state = frame;
     runStatus.value = state;
+    // Terminal frames can carry the last saved records too. Holding affects
+    // presentation only, never ingestion or the server's run state.
+    mergeActions(state.recent_actions);
 
     if (["failed", "interrupted"].includes(state.runner_status)) {
       phase.value = 2;
@@ -286,6 +312,7 @@ const handleWsFrame = async (frame) => {
         }`,
       );
       emit("update-status", "error");
+      await loadSavedActions(session);
       return;
     }
 
@@ -313,19 +340,18 @@ const handleWsFrame = async (frame) => {
       previousCommunityRound.value = Number(state.reddit_current_round);
     }
 
-    mergeActions(state.recent_actions);
-
     if (
       ["completed", "stopped"].includes(state.runner_status) ||
       platformsAreComplete(state)
     ) {
-      await finishRun(state);
+      await finishRun(state, session);
     }
     return;
   }
 
   if (frame.type === "done") {
-    await finishRun(frame);
+    mergeActions(frame.recent_actions);
+    await finishRun(frame, session);
     return;
   }
 
@@ -336,16 +362,22 @@ const handleWsFrame = async (frame) => {
   }
 };
 
-const startWs = () => {
-  if (!props.simulationId) return;
+const startWs = (session) => {
+  if (!isCurrentSession(session) || !session.simulationId) return;
 
   stopWs();
+  const generation = socketGeneration;
+  const isCurrentSocket = () =>
+    isCurrentSession(session) && generation === socketGeneration;
   liveUpdateError.value = null;
-  let connection = null;
-  connection = connectSimulationWs(props.simulationId, {
-    onMessage: handleWsFrame,
+  const connection = connectSimulationWs(session.simulationId, {
+    onMessage: (frame) => {
+      if (!isCurrentSocket()) return;
+      return handleWsFrame(frame, session);
+    },
     onClose: () => {
-      if (simulationWs !== connection) return;
+      if (!isCurrentSocket()) return;
+      socketGeneration += 1;
       simulationWs = null;
       if (phase.value === 1) {
         liveUpdateError.value =
@@ -353,6 +385,7 @@ const startWs = () => {
       }
     },
     onError: (error) => {
+      if (!isCurrentSocket()) return;
       liveUpdateError.value =
         "Live updates stopped. Reconnect to check the saved run.";
       if (import.meta.env.DEV) {
@@ -360,23 +393,25 @@ const startWs = () => {
       }
     },
   });
-  simulationWs = connection;
+  if (isCurrentSocket()) simulationWs = connection;
+  else connection?.close();
 };
 
-const doStartSimulation = async () => {
-  if (!props.simulationId) {
+const doStartSimulation = async (session) => {
+  if (!isCurrentSession(session)) return;
+  if (!session.simulationId) {
     addLog("The scenario workspace reference is missing.");
     return;
   }
 
-  resetRuntime();
+  // The caller resets once for a new attempt, before status hydration.
   isStarting.value = true;
   addLog("Starting both generated conversation spaces…");
   emit("update-status", "processing");
 
   try {
     const params = {
-      simulation_id: props.simulationId,
+      simulation_id: session.simulationId,
       platform: "parallel",
       force: false,
       // Generated observations remain separate from the source-backed graph.
@@ -389,15 +424,18 @@ const doStartSimulation = async () => {
     }
 
     const response = await startSimulation(params);
+    if (!isCurrentSession(session)) return;
     if (!response.success || !response.data) {
       throw new Error(response.error || "The scenario run could not start.");
     }
 
     runStatus.value = response.data;
+    mergeActions(response.data.recent_actions);
     phase.value = 1;
     addLog("Scenario run started.");
-    startWs();
+    startWs(session);
   } catch (error) {
+    if (!isCurrentSession(session)) return;
     startError.value = readableError(
       error,
       "The scenario run could not start.",
@@ -405,16 +443,17 @@ const doStartSimulation = async () => {
     addLog(`Scenario run could not start: ${startError.value}`);
     emit("update-status", "error");
   } finally {
-    isStarting.value = false;
+    if (isCurrentSession(session)) isStarting.value = false;
   }
 };
 
-const hydrateOrStartSimulation = async () => {
-  if (!props.simulationId) return;
+const hydrateOrStartSimulation = async (session, resetOnStart = false) => {
+  if (!isCurrentSession(session) || !session.simulationId) return;
 
   startError.value = null;
   try {
-    const response = await getRunStatus(props.simulationId);
+    const response = await getRunStatus(session.simulationId);
+    if (!isCurrentSession(session)) return;
     if (!response.success || !response.data) {
       throw new Error(
         response.error || "The saved run status is not available.",
@@ -426,6 +465,7 @@ const hydrateOrStartSimulation = async () => {
 
     if (["starting", "running", "stopping"].includes(runnerStatus)) {
       runStatus.value = savedState;
+      mergeActions(savedState.recent_actions);
       phase.value = 1;
       previousShortPostRound.value = Number(
         savedState.twitter_current_round || 0,
@@ -435,8 +475,9 @@ const hydrateOrStartSimulation = async () => {
       );
       addLog("Reconnected to the saved scenario run.");
       emit("update-status", "processing");
-      await loadSavedActions();
-      startWs();
+      // A slow history read must not prevent incoming state/actions.
+      startWs(session);
+      await loadSavedActions(session);
       return;
     }
 
@@ -444,6 +485,7 @@ const hydrateOrStartSimulation = async () => {
       ["completed", "stopped", "failed", "interrupted"].includes(runnerStatus)
     ) {
       runStatus.value = savedState;
+      mergeActions(savedState.recent_actions);
       phase.value = 2;
       const completed = ["completed", "stopped"].includes(runnerStatus);
       addLog(
@@ -452,18 +494,28 @@ const hydrateOrStartSimulation = async () => {
           : "Opened a scenario run that needs attention.",
       );
       emit("update-status", completed ? "completed" : "error");
-      await loadSavedActions();
-      if (completed) await fetchMetrics();
+      await Promise.all([
+        loadSavedActions(session),
+        completed ? fetchMetrics(false, session) : Promise.resolve(),
+      ]);
       return;
     }
 
     if (runnerStatus === "idle") {
-      await doStartSimulation();
+      // Reconnecting an existing reader preserves it unless the saved state
+      // actually requires a new run; then its held view/inspection is obsolete.
+      if (resetOnStart) {
+        resetRuntime();
+        session = captureSession();
+        void fetchExecutionContracts(session);
+      }
+      await doStartSimulation(session);
       return;
     }
 
     throw new Error(`Saved run has an unsupported status: ${runnerStatus}`);
   } catch (error) {
+    if (!isCurrentSession(session)) return;
     startError.value = `Saved run status could not be read: ${readableError(
       error,
       "unknown error",
@@ -474,18 +526,26 @@ const hydrateOrStartSimulation = async () => {
 };
 
 const retryRun = async () => {
-  if (isStarting.value) return;
-  await hydrateOrStartSimulation();
+  if (isStarting.value || !props.simulationId) return;
+  resetRuntime();
+  const session = captureSession();
+  void fetchExecutionContracts(session);
+  await hydrateOrStartSimulation(session);
 };
 
 const reconnectRun = async () => {
-  if (!props.simulationId) return;
+  if (!props.simulationId || isStarting.value) return;
+  // Invalidate requests/connections, not the reader snapshot or its child key.
+  invalidateSession();
+  const session = captureSession();
   liveUpdateError.value = null;
-  await hydrateOrStartSimulation();
+  void fetchExecutionContracts(session);
+  await hydrateOrStartSimulation(session, true);
 };
 
 const handleNextStep = async () => {
-  if (!props.simulationId || isGeneratingReport.value) return;
+  const session = captureSession();
+  if (!isCurrentSession(session) || !session.simulationId || isGeneratingReport.value) return;
 
   isGeneratingReport.value = true;
   reportError.value = null;
@@ -493,9 +553,10 @@ const handleNextStep = async () => {
 
   try {
     const response = await generateReport({
-      simulation_id: props.simulationId,
+      simulation_id: session.simulationId,
       force_regenerate: true,
     });
+    if (!isCurrentSession(session)) return;
     const reportId = response.success ? response.data?.report_id : null;
     if (!reportId) {
       throw new Error(response.error || "The decision brief could not be prepared.");
@@ -504,13 +565,12 @@ const handleNextStep = async () => {
     addLog("Decision brief preparation started.");
     await router.push({ name: "Report", params: { reportId } });
   } catch (error) {
+    if (!isCurrentSession(session)) return;
     reportError.value = readableError(
       error,
       "The decision brief could not be prepared. Try again.",
     );
-    addLog(
-      `Decision brief preparation failed: ${reportError.value}`,
-    );
+    addLog(`Decision brief preparation failed: ${reportError.value}`);
     isGeneratingReport.value = false;
   }
 };
@@ -521,19 +581,20 @@ watch(
     if (simulationId === previousSimulationId && previousSimulationId) return;
 
     resetRuntime();
-    preflight.value = null;
-    diagnostics.value = null;
-    diagnosticsError.value = null;
     if (!simulationId) return;
 
+    const session = captureSession();
     addLog("Scenario run opened.");
-    void fetchExecutionContracts();
-    void hydrateOrStartSimulation();
+    void fetchExecutionContracts(session);
+    void hydrateOrStartSimulation(session);
   },
-  { immediate: true },
+  { immediate: true, flush: "sync" },
 );
 
-onUnmounted(stopWs);
+onUnmounted(() => {
+  disposed = true;
+  invalidateSession();
+});
 </script>
 
 <style scoped>

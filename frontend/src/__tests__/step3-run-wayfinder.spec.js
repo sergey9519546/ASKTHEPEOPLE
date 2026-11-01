@@ -47,7 +47,7 @@ const generatedActions = [
 ];
 
 describe("Step3RunWayfinder", () => {
-  it("renders a canonical chronological run record without presenting it as possible paths", async () => {
+  it("renders recent chronological activity without claiming complete history", async () => {
     const wrapper = mount(Step3RunWayfinder, {
       props: {
         runStatus: completedRun,
@@ -80,7 +80,7 @@ describe("Step3RunWayfinder", () => {
       record.text().indexOf("Transit advocate"),
     );
     expect(wrapper.text()).toContain(
-      "Generated activity is the run record. Possible paths are created later in the decision brief.",
+      "This is a bounded view of received records, not complete history.",
     );
     expect(wrapper.text()).toContain(
       "Fewer buses could make weekend work shifts harder to reach.",
@@ -107,6 +107,42 @@ describe("Step3RunWayfinder", () => {
     expect(wrapper.emitted("review")).toHaveLength(1);
   });
 
+  it("uses numeric timestamp order and display-order numbering", () => {
+    const wrapper = mount(Step3RunWayfinder, {
+      props: {
+        runStatus: { runner_status: "running", current_round: 1, total_rounds: 2 },
+        actions: [
+          {
+            id: "late",
+            round_num: 1,
+            timestamp: 10,
+            _sequence: 1,
+            agent_name: "Later generated profile",
+            action_type: "CREATE_POST",
+            action_args: { content: "Later timestamp" },
+          },
+          {
+            id: "early",
+            round_num: 1,
+            timestamp: 2,
+            _sequence: 2,
+            agent_name: "Earlier generated profile",
+            action_type: "CREATE_POST",
+            action_args: { content: "Earlier timestamp" },
+          },
+        ],
+        phase: 1,
+      },
+    });
+
+    const rows = wrapper.findAll('[data-testid="run-record-list"] li');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].text()).toContain("Earlier generated profile");
+    expect(rows[0].text()).toContain("01");
+    expect(rows[1].text()).toContain("Later generated profile");
+    expect(rows[1].text()).toContain("02");
+  });
+
   it("shows a static loading state while the first generated record is pending", () => {
     const wrapper = mount(Step3RunWayfinder, {
       props: {
@@ -124,7 +160,7 @@ describe("Step3RunWayfinder", () => {
     expect(wrapper.text()).toContain("Recording generated activity");
     expect(wrapper.text()).toContain("Round 2 of 8");
     expect(wrapper.get('[data-testid="run-record-loading"]').text()).toContain(
-      "No generated action has been saved yet.",
+      "No recent activity has been received yet.",
     );
     expect(wrapper.get(".review-button").attributes("disabled")).toBeDefined();
   });
@@ -134,7 +170,7 @@ describe("Step3RunWayfinder", () => {
       props: { runStatus: { runner_status: "idle" }, phase: 0 },
     });
     expect(empty.get('[data-testid="run-record-empty"]').text()).toContain(
-      "No generated actions are recorded.",
+      "No recent activity is shown.",
     );
 
     const failed = mount(Step3RunWayfinder, {
@@ -176,7 +212,7 @@ describe("Step3RunWayfinder", () => {
     expect(wrapper.text()).toContain("See how the run unfolded.");
     expect(wrapper.find('[data-testid="run-record-loading"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="run-record-empty"]').text()).toContain(
-      "The run finished without a saved generated action.",
+      "No recent records are shown for this finished run.",
     );
     expect(wrapper.get('[role="progressbar"]').attributes("aria-valuetext")).toBe(
       "Run complete",
