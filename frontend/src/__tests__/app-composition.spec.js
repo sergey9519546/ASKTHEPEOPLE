@@ -67,6 +67,10 @@ afterEach(() => {
 import App from "../App.vue";
 import appRouter from "../router/index.js";
 import { layoutMode, windows } from "../composables/useDesktop.js";
+import {
+  clearPendingUpload,
+  setPendingUpload,
+} from "../store/pendingUpload.js";
 
 function buildRouter() {
   return createRouter({
@@ -155,6 +159,17 @@ describe("the application composes", () => {
     expect(describeFailures()).toBe("");
     expect(router.currentRoute.value.name).toBe("SimulationRun");
     expect(wrapper.find(".desktop-window").exists()).toBe(true);
+  });
+
+  it("redirects a stale new-project route but allows the submitted Home handoff", async () => {
+    clearPendingUpload();
+    await appRouter.push("/process/new");
+    expect(appRouter.currentRoute.value.name).toBe("Home");
+
+    setPendingUpload([], "A decision question with enough detail", true);
+    await appRouter.push("/process/new");
+    expect(appRouter.currentRoute.value.name).toBe("Process");
+    clearPendingUpload();
   });
 
   it("opens a second route without a reload", async () => {

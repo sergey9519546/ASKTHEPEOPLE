@@ -33,6 +33,30 @@ function mountReader() {
 }
 
 describe("recent activity reading controls", () => {
+  it("announces connection state separately from run state and exposes reconnect", async () => {
+    wrapper = mount(Step3RunWayfinder, {
+      props: {
+        runStatus: { runner_status: "running" },
+        phase: 1,
+        connectionStatus: "reconnecting",
+      },
+    });
+
+    const status = wrapper.get('[data-testid="run-connection-status"]');
+    expect(status.attributes("role")).toBe("status");
+    expect(status.attributes("data-connection-state")).toBe("reconnecting");
+    expect(status.text()).toContain("Live updates reconnecting.");
+    expect(status.text()).toContain("server-side run may still be continuing");
+    await status.get("button").trigger("click");
+    expect(wrapper.emitted("reconnect")).toHaveLength(1);
+
+    await wrapper.setProps({ connectionStatus: "connected" });
+    expect(wrapper.get('[data-testid="run-connection-status"]').text()).toContain(
+      "Live updates connected.",
+    );
+    expect(wrapper.find('[data-testid="run-connection-status"] button').exists()).toBe(false);
+  });
+
   it("uses a singular status label for one received record", async () => {
     const activity = mountReader();
     await wrapper.get('[data-testid="activity-toolbar"] button').trigger("click");

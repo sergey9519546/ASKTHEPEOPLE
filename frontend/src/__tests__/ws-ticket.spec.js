@@ -68,15 +68,21 @@ describe('short-lived WebSocket tickets', () => {
   });
 
   it('gets a fresh ticket before every reconnect', async () => {
+    const statuses = [];
     service.post
       .mockResolvedValueOnce({ success: true, ticket: 'ticket-one' })
       .mockResolvedValueOnce({ success: true, ticket: 'ticket-two' });
 
-    const connection = connectReportWs('report-7');
+    const connection = connectReportWs('report-7', {
+      onStatus: (status) => statuses.push(status),
+    });
     await flushPromises();
+    expect(statuses).toEqual(['connecting']);
     const firstSocket = MockWebSocket.instances[0];
     firstSocket.onopen?.();
+    expect(statuses).toEqual(['connecting', 'connected']);
     firstSocket.onclose?.({ code: 1006 });
+    expect(statuses).toEqual(['connecting', 'connected', 'reconnecting']);
 
     await vi.advanceTimersByTimeAsync(1000);
     await flushPromises();
@@ -90,6 +96,23 @@ describe('short-lived WebSocket tickets', () => {
     expect(MockWebSocket.instances[1].url).toContain('ticket=ticket-two');
     expect(MockWebSocket.instances[1].url).not.toContain('ticket-one');
 
+    MockWebSocket.instances[1].onopen?.();
+    expect(statuses.at(-1)).toBe('connected');
     connection.close();
+    expect(statuses.at(-1)).toBe('disconnected');
+  });
+
+  it('reports an access-rejected ticket request as disconnected without retrying', async () => {
+    const statuses = [];
+    service.post.mockRejectedValueOnce({ status: 401 });
+
+    connectSimulationWs('sim-1', {
+      onStatus: (status) => statuses.push(status),
+    });
+    await flushPromises();
+
+    expect(statuses).toEqual(['connecting', 'disconnected']);
+    expect(service.post).toHaveBeenCalledTimes(1);
+    expect(MockWebSocket.instances).toHaveLength(0);
   });
 });

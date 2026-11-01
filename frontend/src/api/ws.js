@@ -53,12 +53,14 @@ async function requestWsTicket(scope, resourceId) {
 }
 
 class ResilientWebSocket {
-  constructor(path, ticketRequest, { onMessage, onClose, onError } = {}) {
+  constructor(path, ticketRequest, { onMessage, onClose, onError, onStatus } = {}) {
     this.path = path;
     this.ticketRequest = ticketRequest;
     this.onMessage = onMessage;
     this.onClose = onClose;
     this.onError = onError;
+    this.onStatus = onStatus;
+    this.status = null;
     this.ws = null;
     this.closedByUser = false;
     this.reconnectAttempts = 0;
@@ -70,10 +72,17 @@ class ResilientWebSocket {
     this.connect();
   }
 
+  setStatus(status) {
+    if (this.status === status) return;
+    this.status = status;
+    globalWsStatus.value = status.toUpperCase();
+    this.onStatus?.(status);
+  }
+
   async connect() {
     if (this.closedByUser) return;
 
-    globalWsStatus.value = this.reconnectAttempts > 0 ? 'RECONNECTING' : 'CONNECTING'
+    this.setStatus(this.reconnectAttempts > 0 ? 'reconnecting' : 'connecting');
     try {
       const ticket = await this.ticketRequest()
       if (this.closedByUser) return
@@ -81,7 +90,7 @@ class ResilientWebSocket {
     } catch (err) {
       if (err?.status === 401 || err?.code === 'ACCESS_REQUIRED') {
         requireAccess('A valid access key is required for live updates.')
-        globalWsStatus.value = 'OFFLINE'
+        this.setStatus('disconnected');
         this.onError?.(err)
         return
       }
@@ -91,7 +100,7 @@ class ResilientWebSocket {
     }
 
     this.ws.onopen = () => {
-      globalWsStatus.value = 'ONLINE'
+      this.setStatus('connected');
       this.reconnectAttempts = 0;
       this.startWatchdog();
     };
@@ -116,17 +125,17 @@ class ResilientWebSocket {
     this.ws.onclose = (e) => {
       this.stopWatchdog();
       if (this.closedByUser) {
-        globalWsStatus.value = 'OFFLINE';
+        this.setStatus('disconnected');
         this.onClose?.(e);
       } else {
         if (e.code === 1008 || e.code === 4401) {
           requireAccess('The live connection needs a valid access key.')
           this.closedByUser = true
-          globalWsStatus.value = 'OFFLINE'
+          this.setStatus('disconnected');
           this.onClose?.(e)
           return
         }
-        globalWsStatus.value = 'RECONNECTING';
+        this.setStatus('reconnecting');
         this.handleDisconnect(e);
       }
     };
@@ -139,10 +148,10 @@ class ResilientWebSocket {
 
   handleDisconnect(e) {
     if (this.closedByUser) {
-      globalWsStatus.value = 'OFFLINE';
+      this.setStatus('disconnected');
       return;
     }
-    globalWsStatus.value = 'RECONNECTING';
+    this.setStatus('reconnecting');
     
     // The close/error path already owns the native socket lifecycle.
     this.ws = null;
@@ -165,7 +174,7 @@ class ResilientWebSocket {
     if (this.closedByUser) return;
     this.watchdogTimer = setTimeout(() => {
       if (import.meta.env.DEV) console.warn('[WS] Live updates timed out. Reconnecting.')
-      globalWsStatus.value = 'RECONNECTING';
+      this.setStatus('reconnecting');
       if (this.ws) {
         try { this.ws.close(); } catch (_) {}
       } else {
@@ -183,7 +192,7 @@ class ResilientWebSocket {
 
   close() {
     this.closedByUser = true;
-    globalWsStatus.value = 'OFFLINE';
+    this.setStatus('disconnected');
     this.stopWatchdog();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -199,10 +208,10 @@ class ResilientWebSocket {
 /**
  * Open a resilient WebSocket to /ws/simulation/<simulationId>.
  * @param {string} simulationId
- * @param {{ onMessage, onClose, onError }} handlers
+ * @param {{ onMessage, onClose, onError, onStatus }} handlers
  * @returns {ResilientWebSocket}
  */
-export function connectSimulationWs(simulationId, { onMessage, onClose, onError } = {}) {
+export function connectSimulationWs(simulationId, { onMessage, onClose, onError, onStatus } = {}) {
   return new ResilientWebSocket(
     `/ws/simulation/${encodeURIComponent(simulationId)}`,
     () => requestWsTicket('simulation', simulationId),
@@ -210,6 +219,7 @@ export function connectSimulationWs(simulationId, { onMessage, onClose, onError 
       onMessage,
       onClose,
       onError,
+      onStatus,
     },
   );
 }
@@ -217,10 +227,10 @@ export function connectSimulationWs(simulationId, { onMessage, onClose, onError 
 /**
  * Open a resilient WebSocket to /ws/report/<reportId>.
  * @param {string} reportId
- * @param {{ onMessage, onClose, onError }} handlers
+ * @param {{ onMessage, onClose, onError, onStatus }} handlers
  * @returns {ResilientWebSocket}
  */
-export function connectReportWs(reportId, { onMessage, onClose, onError } = {}) {
+export function connectReportWs(reportId, { onMessage, onClose, onError, onStatus } = {}) {
   return new ResilientWebSocket(
     `/ws/report/${encodeURIComponent(reportId)}`,
     () => requestWsTicket('report', reportId),
@@ -228,6 +238,7 @@ export function connectReportWs(reportId, { onMessage, onClose, onError } = {}) 
       onMessage,
       onClose,
       onError,
+      onStatus,
     },
   );
 }

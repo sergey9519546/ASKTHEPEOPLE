@@ -58,7 +58,7 @@
         <span>{{ error }}</span>
       </div>
       <div class="workspace-error-actions">
-        <button type="button" @click="recoverWorkspace">Try again</button>
+        <button v-if="recoveryAction" type="button" @click="recoverWorkspace">Try again</button>
         <button type="button" @click="router.push('/')">Return to the decision</button>
       </div>
     </div>
@@ -441,6 +441,7 @@ const handleNewProject = async () => {
   // ("explore with the decision alone"), and the backend builds the source
   // map from the user's own decision text when no files are carried over.
   if (!pending.isPending) {
+    recoveryAction = null;
     error.value =
       "No decision was carried into this workspace. Return to the decision and start again.";
     return;

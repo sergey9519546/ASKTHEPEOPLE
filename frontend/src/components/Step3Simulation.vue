@@ -15,6 +15,7 @@
       :is-starting="isStarting"
       :start-error="startError"
       :live-update-error="liveUpdateError"
+      :connection-status="connectionStatus"
       :report-error="reportError"
       :can-review="canGenerateReport"
       :is-reviewing="isGeneratingReport"
@@ -85,6 +86,7 @@ const isStarting = ref(false);
 const isGeneratingReport = ref(false);
 const startError = ref(null);
 const liveUpdateError = ref(null);
+const connectionStatus = ref("disconnected");
 const reportError = ref(null);
 const runStatus = ref({});
 const historyError = ref(null);
@@ -205,6 +207,7 @@ const stopWs = () => {
   const connection = simulationWs;
   simulationWs = null;
   connection?.close();
+  connectionStatus.value = "disconnected";
 };
 
 const invalidateSession = () => {
@@ -357,7 +360,7 @@ const handleWsFrame = async (frame, session) => {
 
   if (frame.type === "error") {
     liveUpdateError.value =
-      "Live updates stopped. Reconnect to check the saved run.";
+      "The live connection reported an update error. Reconnect to check the saved run.";
     addLog(`Live updates were interrupted: ${frame.message || "unknown error"}`);
   }
 };
@@ -370,15 +373,27 @@ const startWs = (session) => {
   const isCurrentSocket = () =>
     isCurrentSession(session) && generation === socketGeneration;
   liveUpdateError.value = null;
+  connectionStatus.value = "connecting";
   const connection = connectSimulationWs(session.simulationId, {
     onMessage: (frame) => {
       if (!isCurrentSocket()) return;
       return handleWsFrame(frame, session);
     },
+    onStatus: (status) => {
+      if (!isCurrentSocket()) return;
+      connectionStatus.value = status;
+      if (status === "connected" || status === "reconnecting") {
+        liveUpdateError.value = null;
+      } else if (status === "disconnected" && phase.value === 1) {
+        liveUpdateError.value =
+          "Live updates stopped. Reconnect to check the saved run.";
+      }
+    },
     onClose: () => {
       if (!isCurrentSocket()) return;
       socketGeneration += 1;
       simulationWs = null;
+      connectionStatus.value = "disconnected";
       if (phase.value === 1) {
         liveUpdateError.value =
           "Live updates stopped. Reconnect to check the saved run.";
@@ -386,8 +401,6 @@ const startWs = (session) => {
     },
     onError: (error) => {
       if (!isCurrentSocket()) return;
-      liveUpdateError.value =
-        "Live updates stopped. Reconnect to check the saved run.";
       if (import.meta.env.DEV) {
         console.warn("Scenario live-update connection error", error);
       }

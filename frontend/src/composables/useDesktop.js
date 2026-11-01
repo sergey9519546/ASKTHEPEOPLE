@@ -189,6 +189,9 @@ export function restoreSession(force = false) {
       const routeName = app.routeName;
       const params = entry.params || {};
       const query = entry.query || {};
+      // "new" is only a transient destination for the in-memory Home form.
+      // It cannot be resumed after a reload; the real project ID replaces it.
+      if (routeName === "Process" && params.projectId === "new") continue;
       restored.push({
         key: entry.key || keyFor(app, { params }),
         appId: app.id,
@@ -208,7 +211,7 @@ export function restoreSession(force = false) {
     // "tiled" is the pre-redesign name for a side-by-side layout.
     const savedLayout = parsed.layoutMode === "tiled" ? "split" : parsed.layoutMode;
     layoutMode.value = LAYOUT_MODES.includes(savedLayout) ? savedLayout : DEFAULT_LAYOUT_MODE;
-    const active = restored.find((window) => window.key === parsed.activeKey);
+    const active = windows.value.find((window) => window.key === parsed.activeKey);
     activeKey.value = active ? active.key : restored[0]?.key || null;
     if (activeKey.value) {
       const focused = windows.value.find((w) => w.key === activeKey.value);
@@ -492,4 +495,3 @@ export function currentJourneyStep() {
   if (active) return active.step;
   return state.filter((entry) => entry.reached).length || 1;
 }
-

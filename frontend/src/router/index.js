@@ -6,6 +6,7 @@ import SimulationRunView from '../views/SimulationRunView.vue'
 import ReportView from '../views/ReportView.vue'
 import InteractionView from '../views/InteractionView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
+import { getPendingUpload } from '../store/pendingUpload.js'
 
 const routes = [
   {
@@ -72,6 +73,13 @@ router.beforeEach((to) => {
     if (!value || value === 'undefined') {
       return { path: '/' }
     }
+  }
+  if (
+    to.name === 'Process' &&
+    to.params.projectId === 'new' &&
+    !getPendingUpload().isPending
+  ) {
+    return { name: 'Home' }
   }
   return true
 })

@@ -156,6 +156,44 @@ describe("desktop window lifecycle", () => {
     expect(layoutMode.value).toBe("split");
   });
 
+  it("does not restore the transient new-project panel without its in-memory form", () => {
+    storage.setItem(
+      DESKTOP_KEY,
+      JSON.stringify({
+        activeKey: "sources:new",
+        layoutMode: "focus",
+        windows: [
+          {
+            key: "decision",
+            appId: "decision",
+            params: {},
+            query: {},
+          },
+          {
+            key: "sources:new",
+            appId: "sources",
+            params: { projectId: "new" },
+            query: {},
+          },
+          {
+            key: "sources:project-7",
+            appId: "sources",
+            params: { projectId: "project-7" },
+            query: {},
+          },
+        ],
+      }),
+    );
+
+    restoreSession(true);
+
+    expect(windows.value.map((window) => window.key)).toEqual([
+      "decision",
+      "sources:project-7",
+    ]);
+    expect(activeKey.value).toBe("decision");
+  });
+
   it("opens a route by its route name", () => {
     const win = openRoute({ name: "Simulation", params: { simulationId: "s-1" } });
 

@@ -241,16 +241,27 @@
     </section>
 
     <div
-      v-if="liveUpdateError && isRunning"
+      v-if="isRunning"
       class="live-update-alert"
       role="status"
       aria-live="polite"
+      data-testid="run-connection-status"
+      :data-connection-state="connectionStatus"
     >
       <span>
-        <strong>Run updates are disconnected.</strong>
-        The server-side run may still be continuing.
+        <strong>{{ connectionStatusLabel }}</strong>
+        {{ connectionStatusDescription }}
+        <span v-if="liveUpdateError && connectionStatus === 'connected'">
+          {{ liveUpdateError }}
+        </span>
       </span>
-      <button type="button" @click="$emit('reconnect')">Reconnect updates</button>
+      <button
+        v-if="connectionStatus !== 'connected' || liveUpdateError"
+        type="button"
+        @click="$emit('reconnect')"
+      >
+        Reconnect live updates
+      </button>
     </div>
 
     <div class="run-capability-note">
@@ -434,6 +445,10 @@ const props = defineProps({
   isStarting: Boolean,
   startError: String,
   liveUpdateError: String,
+  connectionStatus: {
+    type: String,
+    default: "disconnected",
+  },
   reportError: String,
   canReview: Boolean,
   isReviewing: Boolean,
@@ -575,6 +590,17 @@ const pendingActivityLabel = computed(() => {
     props.pendingOverflow || props.pendingCount !== 1 ? "entries" : "entry";
   return `${count} newer ${noun} received.`;
 });
+const connectionStatusLabel = computed(() => ({
+  connecting: "Live updates connecting.",
+  connected: "Live updates connected.",
+  reconnecting: "Live updates reconnecting.",
+  disconnected: "Live updates disconnected.",
+})[props.connectionStatus] || "Live update status unavailable.");
+const connectionStatusDescription = computed(() =>
+  ["reconnecting", "disconnected"].includes(props.connectionStatus)
+    ? "The server-side run may still be continuing."
+    : "The run state is reported separately.",
+);
 
 const actionText = (action) => {
   const args = action?.action_args || {};

@@ -1,7 +1,7 @@
 ---
 title: "Rig-aligned simulation workspace proposal"
 status: "Proposed"
-version: "0.2.0"
+version: "0.3.0"
 owner: "Product + Frontend + Accessibility"
 last_reviewed: "2026-11-01"
 review_cycle: "Before implementation or material direction change"
@@ -56,6 +56,8 @@ be redrawn as action dependencies or real-world causal relationships.
 | CURRENT | The shell owns the Truth Rail; journey navigation and the panel tablist have distinct keyboard semantics. | [`DesktopShell.vue`](../../frontend/src/components/DesktopShell.vue), [`DesktopDock.vue`](../../frontend/src/components/DesktopDock.vue), [`DesktopTaskbar.vue`](../../frontend/src/components/DesktopTaskbar.vue) |
 | CURRENT | Simulation WebSocket state frames are emitted on a two-second polling loop and include at most ten recent actions. This is a bounded snapshot, not complete delivery. | [`ws.py`](../../backend/app/api/ws.py), `_SIM_POLL_INTERVAL`, `_MAX_RECENT_ACTIONS`, `_simulation_state_frame`, `simulation_ws` |
 | TRANSITION | The client projects allowlisted public action data into a bounded reader. Server IDs are preferred; no-ID matching remains a local heuristic and does not establish cross-snapshot identity. | [`useRunActivity.js`](../../frontend/src/composables/useRunActivity.js), [`Step3Simulation.vue`](../../frontend/src/components/Step3Simulation.vue) |
+| TRANSITION | The client exposes connecting, connected, reconnecting and disconnected WebSocket states separately from the server-side run status. A disconnected client does not establish that the run stopped. | [`ws.js`](../../frontend/src/api/ws.js), [`Step3Simulation.vue`](../../frontend/src/components/Step3Simulation.vue), [`Step3RunWayfinder.vue`](../../frontend/src/components/Step3RunWayfinder.vue) |
+| TRANSITION | The transient `Process/new` route is accepted only while the Home form handoff exists in memory. It redirects to Home on a fresh load, and the desktop restore skips stale `new` panels because they have no resumable project ID. | [`router/index.js`](../../frontend/src/router/index.js), [`useDesktop.js`](../../frontend/src/composables/useDesktop.js), [`pendingUpload.js`](../../frontend/src/store/pendingUpload.js) |
 | TRANSITION | Saved activity reads the first page with `limit=200, offset=0`; the server supports offset/limit but this change adds no cursor or complete-history guarantee. | [`Step3Simulation.vue`](../../frontend/src/components/Step3Simulation.vue), [`read_routes.py`](../../backend/app/api/routes/read_routes.py), `get_simulation_actions` |
 | CURRENT | A completed-run fork control exists. It is not proof of a changed-assumption or paired-analysis workflow. | [`ForkRunControl.vue`](../../frontend/src/components/ForkRunControl.vue), [`SimulationRunView.vue`](../../frontend/src/views/SimulationRunView.vue), `canBranch` |
 | CURRENT | Split layout already exists and places the active panel beside another panel. Structured record comparison remains a separate capability. | [`useDesktop.js`](../../frontend/src/composables/useDesktop.js), `LAYOUT_MODES` and layout contract |
@@ -103,6 +105,35 @@ retained current window. A history-fetch failure is not represented as an empty
 run. No pause request, API/schema change, server identity, full replay guarantee,
 or durable buffer was added.
 
+## Run connection status — TRANSITION
+
+The resilient WebSocket helper reports `connecting`, `connected`,
+`reconnecting`, and `disconnected` transitions to the simulation screen. The
+run screen presents these as connection status, independently of the saved
+runner status. A transport error during automatic retry is shown as
+`reconnecting`, not as a stopped run; a disconnected connection states that
+the server-side run may still be continuing and offers a manual reconnect.
+An update-error frame is identified separately from an open/closed transport.
+Status callbacks are guarded by the same run-session and socket generations as
+activity frames, so an invalidated socket cannot overwrite current status.
+
+This is client connection feedback only. It adds no server status endpoint,
+does not prove delivery completeness, and is not evidence that the underlying
+run is progressing or has stopped.
+
+## Transient new-workspace route recovery — TRANSITION
+
+The Home submission handoff is held in module memory, while the desktop saves
+panel routes for reload. `Process/new` is therefore not a resumable destination.
+The router now sends a fresh load of that route back to Home unless the pending
+form handoff exists; desktop restoration also drops old `Process/new` entries,
+while retaining a completed project's real ID route. When the error is rendered
+without a retryable recovery action, the UI no longer offers a misleading
+“Try again” that would attempt to load the placeholder ID.
+
+This does not persist the decision text or uploaded files. A reload before
+project creation completes still requires the user to submit again from Home.
+
 ## Remaining workspace contract — TARGET
 
 1. **Activity reading mode:** let a user hold the displayed list while incoming
@@ -114,6 +145,8 @@ or durable buffer was added.
    to the originating row on close. Show absent data as unavailable, not inferred.
 3. **Run-state clarity:** distinguish starting, receiving updates, reconnecting,
    failed, interrupted, stopped and completed states from the actual response
+   contract. The connection states are now exposed in the client; the remaining
+   run lifecycle labels still require validation against the actual response
    contract. An inactive connection must not imply that the simulation stopped.
 4. **Existing fork affordance:** retain the completed-run branch control and its
    current request contract. Do not advertise editing assumptions, live parameter
@@ -191,6 +224,18 @@ as part of this slice. `python tools/validate_docs.py` passed with zero warnings
 and errors after this document update. The Vitest harness uses synthetic
 fixtures; it is not live backend, screen-reader, or human comprehension
 evidence.
+
+Follow-on verification (2026-11-01): the frontend suite passed **396 tests in
+38 files** with Vitest limited to one worker, and the production build and docs
+validator passed. The frontend truth linter still reports the same six
+pre-existing violations and zero Truth Rail gaps. In the full `npm run verify`
+attempt, gates 1, 2, 4 and 5 passed; gate 3 exhausted process/JavaScript heap
+memory under its default worker count, despite the standalone one-worker suite
+passing, and gate 6 was skipped because gitleaks is not installed locally.
+Native Python Playwright verification confirmed that opening `/process/new`
+without the in-memory handoff redirects to `/` and does not render the missing-
+decision alert. Restoring stale desktop-panel state is covered separately by a
+desktop-store test.
 
 
 ## Impact, approval and rollback

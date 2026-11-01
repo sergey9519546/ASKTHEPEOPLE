@@ -79,5 +79,8 @@ describe("M1 — prompt-only workspaces are not a dead-end", () => {
     expect(main).toContain(
       "No decision was carried into this workspace. Return to the decision and start again.",
     );
+    expect(main).toContain(
+      'v-if="recoveryAction" type="button" @click="recoverWorkspace">Try again',
+    );
   });
 });

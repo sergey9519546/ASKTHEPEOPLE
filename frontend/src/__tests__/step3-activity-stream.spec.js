@@ -26,7 +26,7 @@ const Reader = defineComponent({
   props: [
     'actions', 'activityHeld', 'pendingCount', 'pendingOverflow', 'activityEvicted',
     'activityLimit', 'selectedRecord', 'historyError', 'runStatus', 'phase',
-    'isStarting', 'startError', 'liveUpdateError', 'metrics', 'metricsLoading',
+    'isStarting', 'startError', 'liveUpdateError', 'connectionStatus', 'metrics', 'metricsLoading',
     'metricsError', 'diagnostics', 'diagnosticsError', 'preflight', 'reportError',
     'isReviewing', 'canReview',
   ],
@@ -80,6 +80,52 @@ beforeEach(() => {
 });
 
 describe('Step3 recent activity ownership', () => {
+  it('keeps connection lifecycle separate from the server-side run status', async () => {
+    const wrapper = mountRun();
+    await flushPromises();
+    const callbacks = transport.sockets[0].callbacks;
+
+    expect(reader(wrapper).props('connectionStatus')).toBe('connecting');
+    callbacks.onStatus('connected');
+    await nextTick();
+    expect(reader(wrapper).props()).toMatchObject({
+      connectionStatus: 'connected',
+      liveUpdateError: null,
+      runStatus: { runner_status: 'running' },
+    });
+
+    callbacks.onStatus('reconnecting');
+    await nextTick();
+    expect(reader(wrapper).props('connectionStatus')).toBe('reconnecting');
+    expect(reader(wrapper).props('runStatus').runner_status).toBe('running');
+
+    callbacks.onStatus('disconnected');
+    await nextTick();
+    expect(reader(wrapper).props()).toMatchObject({
+      connectionStatus: 'disconnected',
+      liveUpdateError: 'Live updates stopped. Reconnect to check the saved run.',
+      runStatus: { runner_status: 'running' },
+    });
+
+    callbacks.onStatus('connected');
+    await nextTick();
+    expect(reader(wrapper).props()).toMatchObject({
+      connectionStatus: 'connected',
+      liveUpdateError: null,
+    });
+  });
+
+  it('ignores connection lifecycle updates from an invalidated socket', async () => {
+    const wrapper = mountRun();
+    await flushPromises();
+    const old = transport.sockets[0].callbacks;
+    await event(wrapper, 'reconnect');
+    await flushPromises();
+    old.onStatus('disconnected');
+    await nextTick();
+    expect(reader(wrapper).props('connectionStatus')).toBe('connecting');
+  });
+
   it('keeps collecting and updating run status while the display and inspection are held', async () => {
     const wrapper = mountRun();
     await flushPromises();
