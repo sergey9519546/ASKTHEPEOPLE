@@ -1,0 +1,14 @@
+{
+	"mcpServers": {
+		"flash-ai-claude": {
+			"type": "http",
+			"url": "https://prod.api.market/api/mcp/flash-ai/claude",
+			"tools": [
+				"*"
+			],
+			"headers": {
+				"x-api-market-key": "cmjgtcjea0001jr04c5ckyyk0"
+			}
+		}
+	}
+}

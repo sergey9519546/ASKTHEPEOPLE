@@ -27,11 +27,10 @@ The OASIS/CAMEL simulation libraries are separately licensed under Apache-2.0.
 | Staatliches font files | 5.3.0 package | SIL Open Font License 1.1 |
 
 The current `mark.svg` and `social-card.svg` are project artwork. The legacy
-`frontend/public/icon.png`, the unreferenced legacy logo files, and the media
-under `static/image` descend through the MiroFish repository history. The
-current Vue source does not reference the legacy logos or `static/image`
-material; they should not be reused outside the project without a separate
-asset review.
+`frontend/public/icon.png`, removed unused logo files, and removed media formerly
+under `static/image` descend through the MiroFish repository history. The Vue
+source did not reference those assets; they are omitted from the current source
+tree.
 
 ## Frontend development and release tooling
 
